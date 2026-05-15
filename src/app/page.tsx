@@ -3,6 +3,7 @@ import SocialProofStrip from "@/components/sections/SocialProofStrip";
 import Problem from "@/components/sections/Problem";
 import HowItWorks from "@/components/sections/HowItWorks";
 import ProductDemo from "@/components/sections/ProductDemo";
+import Features from "@/components/sections/Features";
 
 export default function Home() {
   return (
@@ -19,6 +20,7 @@ export default function Home() {
         <Problem />
         <HowItWorks />
         <ProductDemo />
+        <Features />
       </main>
     </>
   );
