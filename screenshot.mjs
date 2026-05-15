@@ -8,6 +8,7 @@ const viewports = [
   { name: "hero-375x667", width: 375, height: 667, dpr: 2 },
   { name: "hero-375", width: 375, height: 812, dpr: 2 },
   { name: "hero-768", width: 768, height: 1024, dpr: 2 },
+  { name: "hero-1024", width: 1024, height: 768, dpr: 1 },
   { name: "hero-1440", width: 1440, height: 900, dpr: 1 },
 ];
 
