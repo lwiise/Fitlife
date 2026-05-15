@@ -1,4 +1,5 @@
 import Hero from "@/components/sections/Hero";
+import SocialProofStrip from "@/components/sections/SocialProofStrip";
 import Problem from "@/components/sections/Problem";
 
 export default function Home() {
@@ -12,6 +13,7 @@ export default function Home() {
       </a>
       <main id="main" className="flex flex-1 flex-col">
         <Hero />
+        <SocialProofStrip />
         <Problem />
       </main>
     </>
