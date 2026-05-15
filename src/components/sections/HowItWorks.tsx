@@ -1,127 +1,244 @@
-import Image from "next/image";
-import { ChevronLeft } from "lucide-react";
+"use client";
+
+import { useRef } from "react";
+import {
+  motion,
+  useInView,
+  useReducedMotion,
+  type Variants,
+} from "motion/react";
+import {
+  ChevronLeft,
+  ClipboardList,
+  LineChart,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 type Step = {
   num: string;
+  Icon: LucideIcon;
+  iconClass: string;
   title: string;
   description: string;
-  image: string;
-  alt: string;
 };
 
 const steps: Step[] = [
   {
-    num: "01",
-    title: "نص تجريبي للخطوة الأولى",
+    num: "٠١",
+    Icon: ClipboardList,
+    iconClass: "text-brand-purple-600",
+    title: "جاوبي على 20 سؤال",
     description:
-      "وصف تجريبي للخطوة الأولى — نص يشغل سطرين أو ثلاثة لاختبار الارتفاع والمحاذاة في الاتجاه العربي.",
-    image: "/step-1.png",
-    alt: "صورة تجريبية للخطوة الأولى",
+      "عن صحة عائلتك، أهدافك، وأكلكم المفضل. الأسئلة بالعربي، وسهلة.",
   },
   {
-    num: "02",
-    title: "نص تجريبي للخطوة الثانية",
+    num: "٠٢",
+    Icon: Users,
+    iconClass: "text-brand-pink",
+    title: "استلمي خطة لكل فرد",
     description:
-      "وصف تجريبي للخطوة الثانية — نص يشغل سطرين أو ثلاثة لاختبار الارتفاع والمحاذاة في الاتجاه العربي.",
-    image: "/step-2.png",
-    alt: "صورة تجريبية للخطوة الثانية",
+      "خطة للأم، الأب، الأولاد، والخادمة — كل واحد بلغته، وحسب احتياجه الصحي.",
   },
   {
-    num: "03",
-    title: "نص تجريبي للخطوة الثالثة",
+    num: "٠٣",
+    Icon: LineChart,
+    iconClass: "text-brand-yellow-dark",
+    title: "تابعي تقدمك يومياً",
     description:
-      "وصف تجريبي للخطوة الثالثة — نص يشغل سطرين أو ثلاثة لاختبار الارتفاع والمحاذاة في الاتجاه العربي.",
-    image: "/step-3.png",
-    alt: "صورة تجريبية للخطوة الثالثة",
+      "تشات بالعربي يجاوب على أسئلتك، صور قبل/بعد، وقياسات في مكان واحد.",
   },
 ];
 
-function ConnectingLine() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 100 20"
-      preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-x-0 top-[8%] -z-0 hidden h-24 w-full text-brand-lavender lg:block"
-    >
-      <path
-        d="M 4 16 C 28 4, 72 4, 96 16"
-        stroke="currentColor"
-        strokeWidth="0.6"
-        fill="none"
-        strokeDasharray="1.4 2.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+const listVariants: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.15 } },
+};
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: "easeOut",
+      staggerChildren: 0.08,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: "easeOut" },
+  },
+};
 
 export default function HowItWorks() {
+  const reduce = useReducedMotion();
+  const topRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
+  const topInView = useInView(topRef, { amount: 0.3, once: true });
+  const cardsInView = useInView(cardsRef, { amount: 0.3, once: true });
+
+  const topItem = (delayMs: number) => ({
+    initial: reduce ? false : { opacity: 0, y: 20 },
+    animate: topInView ? { opacity: 1, y: 0 } : undefined,
+    transition: {
+      duration: 0.4,
+      ease: "easeOut" as const,
+      delay: delayMs / 1000,
+    },
+  });
+
   return (
     <section
       id="how-it-works"
       aria-labelledby="how-title"
-      className="relative scroll-mt-24 bg-surface py-16 lg:py-24"
+      className="relative scroll-mt-24 bg-surface bg-noise py-20 lg:py-28"
     >
-      <div className="container-page">
-        {/* TOP BLOCK — centered */}
-        <header className="flex flex-col items-center gap-3 text-center">
-          <span className="text-xs font-bold uppercase tracking-[0.22em] text-brand-purple-700">
-            نص تجريبي للتسمية
-          </span>
-          <h2
-            id="how-title"
-            className="max-w-[24ch] text-balance text-h2 text-foreground"
+      <div className="container-page flex flex-col gap-14 lg:gap-20">
+        {/* TOP BLOCK */}
+        <div ref={topRef} className="flex flex-col gap-4">
+          <motion.span
+            className="text-sm font-semibold tracking-wide text-primary"
+            {...topItem(0)}
           >
-            نص تجريبي طويل للعنوان الرئيسي للقسم
-          </h2>
-        </header>
-
-        {/* STEP CARDS GRID */}
-        <div className="relative mt-16 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3 lg:gap-8">
-          <ConnectingLine />
-
-          {steps.map(({ num, title, description, image, alt }) => (
-            <article key={num} className="relative">
-              <span
-                aria-hidden="true"
-                className="absolute -top-4 -start-4 z-10 text-[64px] font-extrabold leading-none tabular-nums text-brand-pink lg:text-[80px]"
-              >
-                {num}
-              </span>
-              <div className="overflow-hidden rounded-2xl shadow-sm">
-                <Image
-                  src={image}
-                  alt={alt}
-                  width={640}
-                  height={800}
-                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="aspect-[3/4] w-full object-cover"
-                />
-              </div>
-              <h3 className="mt-6 text-[22px] font-bold text-foreground">
-                {title}
-              </h3>
-              <p className="mt-2 text-base leading-[1.7] text-ink-muted">
-                {description}
-              </p>
-            </article>
-          ))}
+            3 خطوات. مدة الإعداد: دقيقتين.
+          </motion.span>
+          <motion.h2
+            id="how-title"
+            className="max-w-[20ch] text-[2rem] font-bold leading-[1.1] tracking-tight text-balance text-foreground lg:text-[2.5rem]"
+            {...topItem(100)}
+          >
+            بسيطة بقدر ما تحتاجين.
+          </motion.h2>
         </div>
 
-        {/* BOTTOM CTA — centered secondary text button */}
-        <div className="mt-16 flex justify-center">
-          <a
-            href="#problem"
-            className="group/cta inline-flex min-h-11 items-center gap-2 py-2 text-base font-semibold text-brand-purple-700 transition-colors duration-200 hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+        {/* CARDS WITH DOTTED LINE */}
+        <div ref={cardsRef} className="relative">
+          {/* Dotted line — desktop only, behind cards, draws RTL (right→left) */}
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-[8%] top-[24px] -z-10 hidden h-[2px] md:block"
+            initial={reduce ? false : { clipPath: "inset(0 0 0 100%)" }}
+            animate={
+              reduce
+                ? undefined
+                : cardsInView
+                  ? { clipPath: "inset(0 0 0 0)" }
+                  : { clipPath: "inset(0 0 0 100%)" }
+            }
+            transition={{ duration: 1.5, delay: 0.6, ease: "easeInOut" }}
           >
-            نص الزر التجريبي الثانوي
+            <svg
+              viewBox="0 0 1000 4"
+              preserveAspectRatio="none"
+              className="h-full w-full"
+            >
+              <path
+                d="M 4 2 L 996 2"
+                stroke="var(--brand-purple-300)"
+                strokeWidth="2"
+                strokeDasharray="3 6"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </svg>
+          </motion.div>
+
+          <motion.ul
+            variants={listVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.3 }}
+            className="grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8 lg:gap-12"
+          >
+            {steps.map(({ num, Icon, iconClass, title, description }) => (
+              <motion.li
+                key={num}
+                variants={cardVariants}
+                className="group/step list-none"
+              >
+                <article className="flex flex-col items-start gap-5">
+                  <motion.div
+                    variants={itemVariants}
+                    className="text-[44px] font-bold leading-none tracking-tight tabular-nums text-brand-pink transition-colors duration-300 group-hover/step:text-brand-pink-dark"
+                    aria-hidden="true"
+                  >
+                    {num}
+                  </motion.div>
+
+                  <motion.div
+                    variants={itemVariants}
+                    className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-ink/15 bg-surface-elevated"
+                  >
+                    {/* Corner perforation marks — recipe-card metaphor */}
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-1 start-1 h-1 w-1 rounded-full bg-ink/25"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-1 end-1 h-1 w-1 rounded-full bg-ink/25"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute bottom-1 start-1 h-1 w-1 rounded-full bg-ink/25"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute bottom-1 end-1 h-1 w-1 rounded-full bg-ink/25"
+                    />
+
+                    <div className="flex h-full w-full items-center justify-center transition-transform duration-300 group-hover/step:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover/step:scale-100">
+                      <Icon
+                        className={`size-12 ${iconClass}`}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    variants={itemVariants}
+                    className="flex flex-col gap-2"
+                  >
+                    <h3 className="text-xl font-bold leading-tight text-foreground">
+                      {title}
+                    </h3>
+                    <p className="text-base leading-[1.7] text-ink-muted">
+                      {description}
+                    </p>
+                  </motion.div>
+                </article>
+              </motion.li>
+            ))}
+          </motion.ul>
+        </div>
+
+        {/* BOTTOM CTA */}
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 16 }}
+          animate={cardsInView ? { opacity: 1, y: 0 } : undefined}
+          transition={{ duration: 0.4, ease: "easeOut", delay: 1.2 }}
+          className="flex"
+        >
+          <a
+            href="#pricing"
+            className="group/cta inline-flex min-h-11 items-center gap-2 py-2 text-base font-bold text-brand-purple-700 transition-colors duration-200 hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          >
+            جربيها مجاناً
             <ChevronLeft
-              className="size-4 transition-transform duration-200 group-hover/cta:-translate-x-1 rtl:group-hover/cta:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover/cta:translate-x-0"
+              className="size-4 transition-transform duration-200 group-hover/cta:-translate-x-1 motion-reduce:transition-none motion-reduce:group-hover/cta:translate-x-0"
               aria-hidden="true"
             />
           </a>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
