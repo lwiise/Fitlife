@@ -22,12 +22,19 @@ for (const v of viewports) {
   });
   const page = await ctx.newPage();
   await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
-  // Wait long enough for entrance stagger (last delay 450ms + 400ms duration + callouts at 1.25s)
+  // Wait for hero entrance stagger (last delay 450ms + 400ms duration + callouts at 1.25s)
   await page.waitForTimeout(2000);
+  // Capture viewport-bound (above-fold)
   await page.screenshot({
     path: `${OUT}/${v.name}.png`,
     fullPage: false,
   });
+  // Scroll through page to trigger useInView observers in lower sections, then back to top
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(2500); // let NumberTicker + star stagger + logo fade complete
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(400);
+  // Capture full-page after observers have fired
   await page.screenshot({
     path: `${OUT}/${v.name}-full.png`,
     fullPage: true,
