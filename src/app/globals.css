@@ -39,7 +39,7 @@
   --surface: oklch(0.95 0.006 238); /* #EBEFF2 */
   --surface-elevated: oklch(0.978 0.004 238); /* slightly whiter, for cards */
   --ink: oklch(0.196 0.04 308); /* #1A1023 */
-  --ink-muted: oklch(0.196 0.04 308 / 0.6); /* 60% ink, secondary text */
+  --ink-muted: oklch(0.196 0.04 308 / 0.72); /* 72% ink, secondary text — passes WCAG AA at 14px */
 
   --radius: 0.625rem;
 

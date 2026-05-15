@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Tajawal } from "next/font/google";
 import "./globals.css";
 
@@ -13,6 +13,12 @@ export const metadata: Metadata = {
   title: "فيت لايف ٢٫٠ — تغذية ذكية للعائلة الخليجية",
   description:
     "اشتراك واحد يخدم العائلة كاملة، كل فرد بلغته. خطط وجبات مخصصة بالذكاء الاصطناعي.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#EBEFF2",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
