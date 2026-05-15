@@ -1,3 +1,7 @@
+"use client";
+
+import { useRef } from "react";
+import { motion, useInView, useReducedMotion } from "motion/react";
 import {
   ChefHat,
   Globe,
@@ -6,30 +10,53 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { RevealOnScroll } from "@/components/motion/RevealOnScroll";
-
-type Pain = { Icon: LucideIcon; text: string };
+type Pain = {
+  Icon: LucideIcon;
+  iconClass: string;
+  text: string;
+};
 
 const pains: Pain[] = [
   {
     Icon: ChefHat,
+    iconClass: "text-primary",
     text: "تطبخين 4 وجبات مختلفة كل ليلة. واحدة لك، وحدة لزوجك الحمية، ثالثة للأولاد، ورابعة للخادمة.",
   },
   {
     Icon: Globe,
+    iconClass: "text-brand-pink",
     text: "كل تطبيقات التغذية بالإنجليزي. خادمتك من الفلبين، إندونيسيا، أو إثيوبيا — وما تفهم وش لازم تطبخ لك.",
   },
   {
     Icon: Receipt,
+    iconClass: "text-brand-yellow-dark",
     text: "تدفعين 200 ريال للجلسة عند اختصاصية. بعد شهرين ترجعين للصفر، وللاختصاصية مرة ثانية.",
   },
   {
     Icon: HelpCircle,
-    text: "ما تعرفين كم بروتين يحتاج طفلك بعمر 8 سنوات، ولا كم سعرة لازم تأكل أنتِ بعد الولادة.",
+    iconClass: "text-brand-lavender",
+    text: "ما تعرفين كم بروتين يحتاج طفلك بعمر 8 سنوات، ولا كم سعرة لازم تأكلين أنتِ بعد الولادة.",
   },
 ];
 
 export default function Problem() {
+  const reduce = useReducedMotion();
+
+  const headerRef = useRef<HTMLElement>(null);
+  const cardsRef = useRef<HTMLUListElement>(null);
+  const headerInView = useInView(headerRef, { amount: 0.3, once: true });
+  const cardsInView = useInView(cardsRef, { amount: 0.3, once: true });
+
+  const headerItem = (delayMs: number) => ({
+    initial: reduce ? false : { opacity: 0, y: 20 },
+    animate: headerInView ? { opacity: 1, y: 0 } : undefined,
+    transition: {
+      duration: 0.4,
+      ease: "easeOut" as const,
+      delay: delayMs / 1000,
+    },
+  });
+
   return (
     <section
       id="problem"
@@ -37,46 +64,70 @@ export default function Problem() {
       className="relative scroll-mt-24 bg-surface py-20 lg:py-28"
     >
       <div className="container-page grid grid-cols-1 gap-12 lg:grid-cols-5 lg:gap-16">
-        <RevealOnScroll
-          as="header"
+        {/* HEADER — end side (left in RTL), sticky */}
+        <motion.header
+          ref={headerRef}
           className="flex flex-col gap-4 lg:sticky lg:top-24 lg:col-span-2 lg:col-start-4 lg:row-start-1 lg:self-start"
         >
-          <span className="text-sm font-semibold text-primary">نعرف بالضبط</span>
-          <h2
+          <motion.span
+            className="text-sm font-semibold tracking-wider text-primary"
+            {...headerItem(0)}
+          >
+            نعرف بالضبط
+          </motion.span>
+
+          <motion.h2
             id="problem-title"
-            className="text-h2 text-balance text-foreground"
+            className="text-[2rem] font-bold leading-[1.1] tracking-tight text-balance text-foreground lg:text-[2.5rem]"
+            {...headerItem(100)}
           >
             أعراف يومك يا أم البيت.
-          </h2>
-          <p className="text-lg leading-loose text-ink-muted">
+          </motion.h2>
+
+          <motion.p
+            className="max-w-[36ch] text-lg leading-[1.7] text-ink-muted"
+            {...headerItem(250)}
+          >
             كل تطبيقات التغذية اللي جربتيها كانت مصممة لعائلة غربية بشخص واحد.
             لكن بيتك مختلف.
-          </p>
-        </RevealOnScroll>
+          </motion.p>
+        </motion.header>
 
-        <ul className="flex flex-col gap-6 lg:col-span-3 lg:col-start-1 lg:row-start-1">
-          {pains.map(({ Icon, text }, i) => (
-            <RevealOnScroll
+        {/* CARDS — start side (right in RTL) */}
+        <motion.ul
+          ref={cardsRef}
+          className="flex flex-col gap-6 lg:col-span-3 lg:col-start-1 lg:row-start-1"
+        >
+          {pains.map(({ Icon, text, iconClass }, i) => (
+            <motion.li
               key={text}
-              as="li"
-              delayIndex={i}
-              axis="x"
-              offset={30}
               className="list-none"
+              initial={reduce ? false : { opacity: 0, x: -30 }}
+              animate={cardsInView ? { opacity: 1, x: 0 } : undefined}
+              transition={{
+                duration: 0.5,
+                ease: "easeOut",
+                delay: i * 0.1,
+              }}
+              whileHover={
+                reduce
+                  ? undefined
+                  : { scale: 1.005, transition: { duration: 0.2 } }
+              }
             >
-              <article className="transform-gpu rounded-2xl border border-ink/10 bg-surface-elevated p-7 transition-[transform,border-color] duration-200 ease-out hover:scale-[1.01] hover:border-brand-pink/30 motion-reduce:transition-none motion-reduce:hover:scale-100">
+              <article className="transform-gpu rounded-2xl border border-ink/[0.08] bg-surface-elevated p-7 transition-colors duration-200 ease-out hover:border-brand-pink/30 hover:bg-brand-pink/[0.01]">
                 <Icon
-                  className="size-6 text-primary"
-                  strokeWidth={1.75}
+                  className={`size-6 ${iconClass}`}
+                  strokeWidth={2}
                   aria-hidden="true"
                 />
-                <p className="mt-5 text-lg leading-relaxed text-balance text-foreground">
+                <p className="mt-5 text-base font-medium leading-[1.7] text-balance text-foreground lg:text-[17px]">
                   {text}
                 </p>
               </article>
-            </RevealOnScroll>
+            </motion.li>
           ))}
-        </ul>
+        </motion.ul>
       </div>
     </section>
   );
