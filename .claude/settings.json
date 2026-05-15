@@ -10,7 +10,8 @@
       "Bash",
       "PowerShell",
       "WebFetch",
-      "WebSearch"
+      "WebSearch",
+      "Skill"
     ],
     "deny": [
       "Bash(rm -rf /*)",
