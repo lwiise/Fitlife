@@ -1,0 +1,264 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ */
+/*  Brand palette — OKLCH for perceptual consistency                  */
+/*  Anchors: purple-600 = #4E2490, yellow = #F2BB16, pink = #C5458F,  */
+/*  lavender = #D9B0FC, surface = #EBEFF2, ink = #1A1023              */
+/* ------------------------------------------------------------------ */
+:root {
+  /* Deep purple scale derived from #4E2490 (hue ~295) */
+  --brand-purple-50: oklch(0.971 0.014 295);
+  --brand-purple-100: oklch(0.94 0.03 295);
+  --brand-purple-200: oklch(0.885 0.06 295);
+  --brand-purple-300: oklch(0.8 0.1 295);
+  --brand-purple-400: oklch(0.66 0.15 295);
+  --brand-purple-500: oklch(0.52 0.175 295);
+  --brand-purple-600: oklch(0.385 0.165 295); /* #4E2490 */
+  --brand-purple-700: oklch(0.33 0.14 295);
+  --brand-purple-800: oklch(0.28 0.115 295);
+  --brand-purple-900: oklch(0.235 0.088 295);
+  --brand-purple-950: oklch(0.175 0.06 295);
+
+  /* Accent yellow #F2BB16 + hover-dark variant */
+  --brand-yellow: oklch(0.819 0.164 86.6);
+  --brand-yellow-dark: oklch(0.745 0.155 84);
+
+  /* Accent pink #C5458F + hover-dark variant */
+  --brand-pink: oklch(0.589 0.18 348);
+  --brand-pink-dark: oklch(0.52 0.172 348);
+
+  /* Lavender #D9B0FC + softer variant for large fills */
+  --brand-lavender: oklch(0.82 0.113 309);
+  --brand-lavender-soft: oklch(0.9 0.06 309);
+
+  /* Surfaces & ink */
+  --surface: oklch(0.95 0.006 238); /* #EBEFF2 */
+  --surface-elevated: oklch(0.978 0.004 238); /* slightly whiter, for cards */
+  --ink: oklch(0.196 0.04 308); /* #1A1023 */
+  --ink-muted: oklch(0.196 0.04 308 / 0.6); /* 60% ink, secondary text */
+
+  --radius: 0.625rem;
+
+  /* ---- shadcn semantic tokens mapped onto the brand ---- */
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-elevated);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand-purple-600);
+  --primary-foreground: oklch(0.985 0.004 295);
+  --secondary: var(--brand-purple-100);
+  --secondary-foreground: var(--brand-purple-700);
+  --muted: var(--brand-purple-50);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--brand-lavender-soft);
+  --accent-foreground: var(--brand-purple-700);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.012 295);
+  --input: oklch(0.9 0.012 295);
+  --ring: var(--brand-purple-500);
+  --chart-1: var(--brand-purple-600);
+  --chart-2: var(--brand-pink);
+  --chart-3: var(--brand-yellow);
+  --chart-4: var(--brand-lavender);
+  --chart-5: var(--brand-purple-300);
+  --sidebar: var(--surface-elevated);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--brand-purple-600);
+  --sidebar-primary-foreground: oklch(0.985 0.004 295);
+  --sidebar-accent: var(--brand-lavender-soft);
+  --sidebar-accent-foreground: var(--brand-purple-700);
+  --sidebar-border: oklch(0.9 0.012 295);
+  --sidebar-ring: var(--brand-purple-500);
+}
+
+.dark {
+  --background: var(--brand-purple-950);
+  --foreground: var(--surface);
+  --card: var(--brand-purple-900);
+  --card-foreground: var(--surface);
+  --popover: var(--brand-purple-900);
+  --popover-foreground: var(--surface);
+  --primary: var(--brand-purple-400);
+  --primary-foreground: var(--brand-purple-950);
+  --secondary: var(--brand-purple-800);
+  --secondary-foreground: var(--surface);
+  --muted: var(--brand-purple-800);
+  --muted-foreground: oklch(0.95 0.006 238 / 0.6);
+  --accent: var(--brand-purple-800);
+  --accent-foreground: var(--surface);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--brand-purple-400);
+  --chart-1: var(--brand-purple-400);
+  --chart-2: var(--brand-pink);
+  --chart-3: var(--brand-yellow);
+  --chart-4: var(--brand-lavender);
+  --chart-5: var(--brand-purple-200);
+  --sidebar: var(--brand-purple-900);
+  --sidebar-foreground: var(--surface);
+  --sidebar-primary: var(--brand-purple-400);
+  --sidebar-primary-foreground: var(--brand-purple-950);
+  --sidebar-accent: var(--brand-purple-800);
+  --sidebar-accent-foreground: var(--surface);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--brand-purple-400);
+}
+
+@theme inline {
+  /* Tajawal as the body font, with Arabic-aware fallbacks */
+  --font-sans: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --font-mono: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --font-heading: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+
+  /* Brand palette → Tailwind color utilities (bg-brand-purple-600, etc.) */
+  --color-brand-purple-50: var(--brand-purple-50);
+  --color-brand-purple-100: var(--brand-purple-100);
+  --color-brand-purple-200: var(--brand-purple-200);
+  --color-brand-purple-300: var(--brand-purple-300);
+  --color-brand-purple-400: var(--brand-purple-400);
+  --color-brand-purple-500: var(--brand-purple-500);
+  --color-brand-purple-600: var(--brand-purple-600);
+  --color-brand-purple-700: var(--brand-purple-700);
+  --color-brand-purple-800: var(--brand-purple-800);
+  --color-brand-purple-900: var(--brand-purple-900);
+  --color-brand-purple-950: var(--brand-purple-950);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-yellow-dark: var(--brand-yellow-dark);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-pink-dark: var(--brand-pink-dark);
+  --color-brand-lavender: var(--brand-lavender);
+  --color-brand-lavender-soft: var(--brand-lavender-soft);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+
+  /* shadcn semantic tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    /* Arabic script reads poorly with tracking — neutralise it by default.
+       Opt back in per-element with Tailwind's tracking-* utilities. */
+    letter-spacing: normal;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+    line-height: 1.7; /* Arabic needs more leading than Latin */
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Headings: tighter leading, no tracking, heading font */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    line-height: 1.2;
+    letter-spacing: normal;
+    text-wrap: balance;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom utilities                                                  */
+/* ------------------------------------------------------------------ */
+
+/* Hero-scale display text: 40px (mobile) → 72px (desktop) */
+@utility text-display {
+  font-size: clamp(2.5rem, 1.8rem + 3vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: normal;
+}
+
+/* H1: 32px → 48px, weight 800, line-height 1.1 */
+@utility text-h1 {
+  font-size: clamp(2rem, 1.65rem + 1.5vw, 3rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: normal;
+}
+
+/* H2: 24px → 36px, weight 700, line-height 1.2 */
+@utility text-h2 {
+  font-size: clamp(1.5rem, 1.24rem + 1.13vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+}
+
+/* H3: 20px → 24px, weight 700, line-height 1.3 */
+@utility text-h3 {
+  font-size: clamp(1.25rem, 1.16rem + 0.38vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+
+/* Page container: max 1280px, centred, responsive inline padding */
+@utility container-page {
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 0.5rem + 3vw, 2.5rem);
+}
+
+/* Subtle grayscale grain — layers over the element's background-color
+   to add warmth and kill the flat "AI website" look. */
+@utility bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px;
+}

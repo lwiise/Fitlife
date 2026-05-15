@@ -1,0 +1,10 @@
+.next
+node_modules
+out
+build
+package-lock.json
+next-env.d.ts
+
+# Project memory — must stay byte-exact, not Prettier-formatted
+CLAUDE.md
+AGENTS.md
