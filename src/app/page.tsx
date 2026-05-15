@@ -1,6 +1,7 @@
 import Hero from "@/components/sections/Hero";
 import SocialProofStrip from "@/components/sections/SocialProofStrip";
 import Problem from "@/components/sections/Problem";
+import HowItWorks from "@/components/sections/HowItWorks";
 
 export default function Home() {
   return (
@@ -15,6 +16,7 @@ export default function Home() {
         <Hero />
         <SocialProofStrip />
         <Problem />
+        <HowItWorks />
       </main>
     </>
   );
