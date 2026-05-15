@@ -116,8 +116,8 @@
   --font-sans: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
   --font-heading: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
-  /* Reem Kufi for editorial display headlines — Kufic-derived, characterful */
-  --font-display: var(--font-reem-kufi), "Tajawal", "Noto Sans Arabic", serif;
+  /* Display headlines use Tajawal at heaviest weight per CLAUDE.md (Tajawal ONLY) */
+  --font-display: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
 
   /* Brand palette → Tailwind color utilities (bg-brand-purple-600, etc.) */
   --color-brand-purple-50: var(--brand-purple-50);

@@ -1,6 +1,5 @@
 import Hero from "@/components/sections/Hero";
 import Problem from "@/components/sections/Problem";
-import BrandSwatches from "@/components/sections/BrandSwatches";
 
 export default function Home() {
   return (
@@ -12,8 +11,6 @@ export default function Home() {
         تخطّ إلى المحتوى
       </a>
       <main id="main" className="flex flex-1 flex-col">
-        {/* TEMPORARY — delete after design-system sign-off */}
-        <BrandSwatches />
         <Hero />
         <Problem />
       </main>

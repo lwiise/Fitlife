@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Tajawal, Reem_Kufi } from "next/font/google";
+import { Tajawal } from "next/font/google";
 import "./globals.css";
 
 import { DirProvider } from "@/components/providers/direction-provider";
@@ -8,13 +8,6 @@ const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
   weight: ["400", "500", "700", "800"],
   variable: "--font-tajawal",
-  display: "swap",
-});
-
-const reemKufi = Reem_Kufi({
-  subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-reem-kufi",
   display: "swap",
 });
 
@@ -39,7 +32,7 @@ export default function RootLayout({
     <html
       lang="ar"
       dir="rtl"
-      className={`${tajawal.variable} ${reemKufi.variable} h-full antialiased`}
+      className={`${tajawal.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
         <DirProvider>{children}</DirProvider>
