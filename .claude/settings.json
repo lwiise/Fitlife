@@ -1,13 +1,27 @@
 {
   "permissions": {
     "allow": [
+      "Read",
       "Edit",
       "Write",
-      "Bash(npm run *)",
-      "Bash(curl *)",
-      "Bash(grep *)",
-      "Bash(git *)"
-    ]
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "Bash",
+      "PowerShell",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf $HOME*)",
+      "Bash(git push --force* origin main*)",
+      "Bash(git push -f* origin main*)",
+      "Bash(git reset --hard origin/*)",
+      "PowerShell(Remove-Item -Recurse -Force /*)"
+    ],
+    "defaultMode": "acceptEdits"
   },
   "hooks": {
     "Stop": [
