@@ -114,8 +114,10 @@
 @theme inline {
   /* Tajawal as the body font, with Arabic-aware fallbacks */
   --font-sans: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
-  --font-mono: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
   --font-heading: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  /* Reem Kufi for editorial display headlines — Kufic-derived, characterful */
+  --font-display: var(--font-reem-kufi), "Tajawal", "Noto Sans Arabic", serif;
 
   /* Brand palette → Tailwind color utilities (bg-brand-purple-600, etc.) */
   --color-brand-purple-50: var(--brand-purple-50);

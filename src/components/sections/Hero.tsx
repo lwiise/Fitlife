@@ -1,128 +1,213 @@
-import Image from "next/image";
-import { ChevronLeft, Languages, Shield, Users, type LucideIcon } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/motion/Reveal";
-import { RevealScale } from "@/components/motion/RevealScale";
-import { HeroBackdrop } from "@/components/sections/HeroBackdrop";
-import { HeroCallout } from "@/components/sections/HeroCallout";
 
-type Trust = { Icon: LucideIcon; text: string };
+type Plan = {
+  num: string;
+  who: string;
+  dish: string;
+  meta: string;
+  lang: "ar" | "en" | "tl";
+};
 
-const trust: Trust[] = [
-  { Icon: Shield, text: "متوافق مع نظام حماية البيانات السعودي" },
-  { Icon: Languages, text: "يدعم 7 لغات" },
-  { Icon: Users, text: "+500 عائلة سعودية" },
+const plans: Plan[] = [
+  {
+    num: "٠١",
+    who: "أنتِ",
+    dish: "دجاج مشوي مع حمص وخضار مشكّلة",
+    meta: "٣٢٠ سعرة · عربي",
+    lang: "ar",
+  },
+  {
+    num: "٠٢",
+    who: "زوجكِ",
+    dish: "Grilled chicken & quinoa, low-carb",
+    meta: "480 kcal · English",
+    lang: "en",
+  },
+  {
+    num: "٠٣",
+    who: "أطفالكِ",
+    dish: "أرز بالخضار ودجاج مفروم",
+    meta: "٢٨٠ سعرة · عربي",
+    lang: "ar",
+  },
+  {
+    num: "٠٤",
+    who: "خادمتكِ",
+    dish: "Inihaw na manok at gulay, ulam",
+    meta: "340 kcal · Tagalog",
+    lang: "tl",
+  },
+  {
+    num: "٠٥",
+    who: "أمكِ",
+    dish: "دجاج بالأرز قليل الملح والدهون",
+    meta: "٢٩٠ سعرة · عربي",
+    lang: "ar",
+  },
+  {
+    num: "٠٦",
+    who: "ضيوفكِ",
+    dish: "كبسة دجاج خفيفة لـ ٨ أشخاص",
+    meta: "٤١٠ سعرة · عربي",
+    lang: "ar",
+  },
 ];
+
+const tilts = [
+  "lg:-rotate-[1.2deg] lg:translate-y-2",
+  "lg:rotate-[1.5deg] lg:-translate-y-3",
+  "lg:-rotate-[1deg] lg:translate-y-3",
+  "lg:rotate-[2deg] lg:-translate-y-1",
+  "lg:-rotate-[1.5deg] lg:translate-y-1",
+  "lg:rotate-[0.8deg] lg:translate-y-4",
+];
+
+const indents = ["ms-0", "ms-6", "ms-3", "ms-8", "ms-2", "ms-5"];
+
+function PlanCard({ plan, idx }: { plan: Plan; idx: number }) {
+  const isLatin = plan.lang !== "ar";
+  return (
+    <Reveal
+      delayMs={500 + idx * 80}
+      offset={14}
+      className={`${tilts[idx]} ${indents[idx]} lg:ms-0 transform-gpu`}
+    >
+      <article className="group/card border border-ink/15 bg-surface-elevated/80 backdrop-blur-[2px] px-5 py-4 transition-colors duration-200 hover:border-ink/30">
+        <header className="flex items-baseline gap-3 border-b border-ink/10 pb-2">
+          <span
+            className="font-display text-base font-semibold tracking-[0.05em] text-brand-purple-700 tabular-nums"
+            aria-hidden="true"
+          >
+            {plan.num}
+          </span>
+          <span className="h-px flex-1 bg-ink/20" aria-hidden="true" />
+          <span className="text-sm font-semibold text-foreground">
+            {plan.who}
+          </span>
+        </header>
+        <p
+          dir={isLatin ? "ltr" : "rtl"}
+          lang={plan.lang}
+          className={`mt-3 text-[15px] leading-snug text-foreground ${isLatin ? "text-start" : ""}`}
+        >
+          {plan.dish}
+        </p>
+        <p
+          dir="ltr"
+          className="mt-2 text-start text-xs font-medium uppercase tracking-[0.08em] text-ink-muted tabular-nums"
+        >
+          {plan.meta}
+        </p>
+      </article>
+    </Reveal>
+  );
+}
 
 export default function Hero() {
   return (
     <section
+      id="hero"
       aria-label="القسم الرئيسي"
-      className="relative flex min-h-svh items-center overflow-hidden py-12 lg:h-svh lg:py-16"
+      className="relative bg-surface bg-noise overflow-hidden py-16 sm:py-20 lg:flex lg:min-h-svh lg:items-center lg:py-12"
     >
-      <HeroBackdrop />
-
-      <div className="container-page relative grid w-full grid-cols-1 items-center gap-10 lg:grid-cols-5 lg:gap-12">
-        <div className="flex flex-col gap-5 lg:col-span-3">
+      <div className="container-page relative grid w-full grid-cols-1 gap-14 lg:grid-cols-12 lg:items-center lg:gap-12">
+        {/* TEXT COLUMN — START side (right in RTL) */}
+        <div className="flex flex-col gap-7 lg:col-span-5 lg:col-start-1">
           <Reveal
             as="span"
             delayMs={0}
-            className="text-sm font-semibold tracking-wide text-brand-pink"
+            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-purple-700"
           >
-            للعائلة الخليجية
+            <span
+              aria-hidden="true"
+              className="inline-block h-px w-8 bg-brand-purple-700"
+            />
+            للعائلة الخليجية · ٢٠٢٦
           </Reveal>
 
           <Reveal
             as="h1"
-            delayMs={50}
-            className="text-display max-w-[16ch] text-balance text-foreground"
+            delayMs={80}
+            className="font-display text-[clamp(2.6rem,1.6rem+5vw,5.5rem)] font-bold leading-[1.02] tracking-tight text-foreground"
           >
-            خطة غذائية لكل البيت — حتى الخادمة.
+            <span className="block">خطة لكل فردٍ</span>
+            <span className="block">في البيت،</span>
+            <span className="relative inline-block">
+              <span className="relative z-10">بلغته</span>
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-[-4px] bottom-[8%] -z-0 h-[28%] -skew-y-2 bg-brand-yellow/90"
+              />
+            </span>
+            <span className="text-foreground/90">.</span>
+          </Reveal>
+
+          <Reveal as="p" delayMs={180} className="max-w-[34ch] text-lg leading-[1.7] text-ink-muted">
+            ذكاء اصطناعي يصمم خطة وجبات لكلّ فرد في عائلتك، حتى الخادمة — كلٌّ
+            بلغته، في أقل من ٣٠ ثانية. مدعوم بخبيرة تغذية سعودية مرخّصة.
           </Reveal>
 
           <Reveal
-            as="p"
-            delayMs={150}
-            className="max-w-[32ch] text-lg leading-[1.7] text-ink-muted lg:text-2xl"
-          >
-            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك، بلغته، في أقل من 30 ثانية.
-            مدعوم بخبيرة تغذية سعودية.
-          </Reveal>
-
-          <Reveal
-            delayMs={250}
-            className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center"
+            delayMs={280}
+            className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-7"
           >
             <Button
               size="lg"
-              className="h-14 rounded-xl px-8 text-base font-bold shadow-sm transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              className="h-14 rounded-none px-9 text-base font-bold shadow-none transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_var(--brand-yellow)] active:translate-y-0 active:shadow-[3px_3px_0_0_var(--brand-yellow)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
-              ابدئي خطتك المجانية
+              ابدئي خطتكِ المجانية
             </Button>
-            <a
-              href="#problem"
-              className="group/secondary inline-flex min-h-11 items-center gap-2 py-2 text-base font-semibold text-brand-purple-700 transition-colors duration-200 hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            <p
+              dir="ltr"
+              className="text-sm font-medium tracking-wide text-ink-muted tabular-nums text-start"
             >
-              شوفي كيف تشتغل
-              <ChevronLeft
-                className="size-4 transition-transform duration-200 group-hover/secondary:-translate-x-1 rtl:group-hover/secondary:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover/secondary:translate-x-0"
-                aria-hidden="true"
-              />
-            </a>
+              +500 عائلة سعودية
+              <span aria-hidden="true"> · </span>
+              <span dir="rtl">٧ لغات</span>
+              <span aria-hidden="true"> · </span>
+              <span dir="rtl">٧ أيام مجانًا</span>
+            </p>
           </Reveal>
 
-          <Reveal as="p" delayMs={350} className="mt-4 text-sm text-ink-muted">
+          <Reveal as="p" delayMs={380} className="-mt-2 text-xs text-ink-muted/80">
             بدون بطاقة ائتمان
-            <span aria-hidden="true"> • </span>
-            تجربة مجانية 7 أيام
-            <span aria-hidden="true"> • </span>
+            <span aria-hidden="true"> · </span>
             إلغاء بضغطة
-          </Reveal>
-
-          <Reveal
-            as="ul"
-            delayMs={450}
-            className="group/trust mt-8 flex flex-col gap-3 md:flex-row md:gap-6 lg:mt-12"
-          >
-            {trust.map(({ Icon, text }) => (
-              <li key={text} className="flex items-center gap-2">
-                <Icon
-                  className="size-4 text-ink-muted transition-colors duration-200 group-hover/trust:text-primary motion-reduce:transition-none"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
-                <span className="text-sm text-ink-muted">{text}</span>
-              </li>
-            ))}
           </Reveal>
         </div>
 
-        <RevealScale className="lg:col-span-2">
-          <div className="relative mx-auto aspect-[3/4] w-full max-w-sm rounded-2xl bg-surface-elevated ring-1 ring-ink/5 lg:max-w-none">
-            <div className="absolute inset-0 overflow-hidden rounded-2xl">
-              <Image
-                src="/hero-dashboard.png"
-                alt="لوحة فيت لايف تعرض خططًا غذائية مخصصة لكل فرد في العائلة"
-                width={640}
-                height={800}
-                priority
-                sizes="(max-width: 1024px) 24rem, 40vw"
-                className="relative h-full w-full object-cover"
-              />
-            </div>
-
-            <HeroCallout placement="top-end" delayMs={850}>
-              خطة الأم
-            </HeroCallout>
-            <HeroCallout placement="middle-start" delayMs={1050}>
-              خطة الأطفال
-            </HeroCallout>
-            <HeroCallout placement="bottom-end" delayMs={1250}>
-              خطة الخادمة
-            </HeroCallout>
+        {/* CARD FIELD — END side (left in RTL) */}
+        <div className="relative lg:col-span-7 lg:col-start-6">
+          {/* Magazine masthead row above the cards (desktop only) */}
+          <div
+            className="mb-6 hidden items-baseline justify-between border-b border-ink/15 pb-2 font-display text-xs uppercase tracking-[0.22em] text-ink-muted lg:flex"
+            aria-hidden="true"
+          >
+            <span>القائمة · MENU</span>
+            <span className="tabular-nums">العدد ٠١ — صباح الجمعة</span>
+            <span>٢٠٢٦</span>
           </div>
-        </RevealScale>
+
+          <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2 lg:gap-x-6 lg:gap-y-7">
+            {plans.map((plan, idx) => (
+              <li key={plan.num}>
+                <PlanCard plan={plan} idx={idx} />
+              </li>
+            ))}
+          </ul>
+
+          <Reveal
+            delayMs={1000}
+            className="mt-6 hidden items-center gap-3 text-xs tracking-[0.12em] text-ink-muted lg:flex"
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block h-px w-12 bg-ink/30"
+            />
+            <span>تتغيّر القائمة كل يوم · {plans.length} خطط نشطة</span>
+          </Reveal>
+        </div>
       </div>
     </section>
   );
