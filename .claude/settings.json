@@ -62,6 +62,20 @@
     ]
   },
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "if (git status --porcelain) { git add -A; git commit -m ('auto: ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')); git push origin main }",
+            "async": true,
+            "timeout": 60,
+            "statusMessage": "Auto-committing and pushing"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
