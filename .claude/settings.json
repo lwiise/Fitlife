@@ -34,7 +34,12 @@
       "WebFetch(domain:ui.aceternity.com)",
       "WebFetch(domain:magicui.design)",
       "WebFetch(domain:nextjs.org)",
-      "WebFetch(domain:code.claude.com)"
+      "WebFetch(domain:code.claude.com)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -48,7 +53,10 @@
       "Bash(npm publish:*)"
     ],
     "ask": [
-      "Bash(git:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
       "Bash(npm uninstall:*)"
     ]
   },
