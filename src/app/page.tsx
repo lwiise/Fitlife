@@ -2,6 +2,7 @@ import Hero from "@/components/sections/Hero";
 import SocialProofStrip from "@/components/sections/SocialProofStrip";
 import Problem from "@/components/sections/Problem";
 import HowItWorks from "@/components/sections/HowItWorks";
+import FamilyMode from "@/components/sections/FamilyMode";
 import ProductDemo from "@/components/sections/ProductDemo";
 import Features from "@/components/sections/Features";
 
@@ -19,6 +20,7 @@ export default function Home() {
         <SocialProofStrip />
         <Problem />
         <HowItWorks />
+        <FamilyMode />
         <ProductDemo />
         <Features />
       </main>

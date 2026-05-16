@@ -263,6 +263,31 @@
   padding-inline: clamp(1.25rem, 0.5rem + 3vw, 2.5rem);
 }
 
+/* Spotlight reveal — used by Aceternity Spotlight component.
+   Single soft fade-in + drift; honour prefers-reduced-motion. */
+@keyframes spotlight {
+  0% {
+    opacity: 0;
+    transform: translate(-72%, -62%) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+}
+
+@utility animate-spotlight {
+  animation: spotlight 2s ease 0.2s 1 forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spotlight {
+    animation: none;
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+}
+
 /* Subtle grayscale grain — layers over the element's background-color
    to add warmth and kill the flat "AI website" look. */
 @utility bg-noise {
