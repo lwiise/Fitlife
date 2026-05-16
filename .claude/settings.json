@@ -1,28 +1,56 @@
 {
+  "model": "opus",
+  "effort": "xhigh",
   "permissions": {
     "allow": [
-      "Read",
-      "Edit",
-      "Write",
-      "Glob",
-      "Grep",
-      "NotebookEdit",
-      "Bash",
-      "PowerShell",
-      "WebFetch",
-      "WebSearch",
-      "Skill"
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Edit(src/**)",
+      "Edit(public/**)",
+      "Edit(.claude/**)",
+      "Edit(CLAUDE.md)",
+      "Edit(AGENTS.md)",
+      "Edit(package.json)",
+      "Write(src/**)",
+      "Write(public/**)",
+      "Write(.claude/**)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx shadcn:*)",
+      "Bash(npx aceternity-ui:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "WebFetch(domain:motion.dev)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebFetch(domain:ui.aceternity.com)",
+      "WebFetch(domain:magicui.design)",
+      "WebFetch(domain:nextjs.org)",
+      "WebFetch(domain:code.claude.com)"
     ],
     "deny": [
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~)",
-      "Bash(rm -rf $HOME*)",
-      "Bash(git push --force* origin main*)",
-      "Bash(git push -f* origin main*)",
-      "Bash(git reset --hard origin/*)",
-      "PowerShell(Remove-Item -Recurse -Force /*)"
+      "Bash(rm -rf:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Edit(.env*)",
+      "Edit(node_modules/**)",
+      "Write(.env*)",
+      "Bash(npm publish:*)"
     ],
-    "defaultMode": "acceptEdits"
+    "ask": [
+      "Bash(git:*)",
+      "Bash(npm uninstall:*)"
+    ]
   },
   "hooks": {
     "Stop": [
