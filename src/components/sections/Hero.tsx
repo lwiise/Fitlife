@@ -21,55 +21,51 @@ type FamilyMember = {
   sublabel?: string;
   imageSrc: string;
   imageAlt: string;
-  bgColor: string;
+  accentColor: string; // hex — used for gradient overlay + card bg fallback
   textColor: string;
   hasPlayButton?: boolean;
 };
-
-// TODO: 5 brand-matched SVG character illustrations as placeholders. Replace with
-// real brand photography (transparent-background PNG cutouts of actual family
-// members or commissioned models) before launch.
 
 const familyMembers: FamilyMember[] = [
   {
     label: "خطة للأب",
     sublabel: "اللي على حمية",
-    imageSrc: "/family-dad.svg",
-    imageAlt: "رسم تعبيري للأب — رجل خليجي يبتسم",
-    bgColor: "bg-[#D9B0FC]",
+    imageSrc: "/family-dad.png",
+    imageAlt: "صورة الأب — رجل خليجي يبتسم",
+    accentColor: "#D9B0FC",
     textColor: "text-[#4E2490]",
   },
   {
     label: "وجبات الأم",
     sublabel: "بسعرات محسوبة",
-    imageSrc: "/family-mom.svg",
-    imageAlt: "رسم تعبيري للأم — امرأة خليجية بحجاب تبتسم",
-    bgColor: "bg-[#C5458F]",
+    imageSrc: "/family-mom.png",
+    imageAlt: "صورة الأم — امرأة خليجية بحجاب تبتسم",
+    accentColor: "#C5458F",
     textColor: "text-white",
   },
   {
     label: "حساب للخادمة",
     sublabel: "بلغتها",
-    imageSrc: "/family-housekeeper.svg",
-    imageAlt: "رسم تعبيري للخادمة — امرأة فلبينية تبتسم",
-    bgColor: "bg-[#F2BB16]",
+    imageSrc: "/family-housekeeper.png",
+    imageAlt: "صورة الخادمة — امرأة فلبينية تبتسم",
+    accentColor: "#F2BB16",
     textColor: "text-[#4E2490]",
     hasPlayButton: true,
   },
   {
     label: "للأولاد",
     sublabel: "حسب أعمارهم",
-    imageSrc: "/family-daughter.svg",
-    imageAlt: "رسم تعبيري للبنت — طفلة سعيدة",
-    bgColor: "bg-[#4E2490]",
+    imageSrc: "/family-daughter.png",
+    imageAlt: "صورة البنت — طفلة سعيدة",
+    accentColor: "#4E2490",
     textColor: "text-white",
   },
   {
     label: "كل البيت",
     sublabel: "في خطة واحدة",
-    imageSrc: "/family-son.svg",
-    imageAlt: "رسم تعبيري للولد — طفل سعيد",
-    bgColor: "bg-[#E89B5A]",
+    imageSrc: "/family-son.png",
+    imageAlt: "صورة الولد — طفل سعيد",
+    accentColor: "#E89B5A",
     textColor: "text-[#1A1023]",
   },
 ];
@@ -166,18 +162,38 @@ function FamilyCard({
               transition: { duration: 0.3, ease: easeOut },
             }
       }
-      className={cn(
-        "group relative aspect-[3/4] cursor-default overflow-hidden rounded-3xl shadow-xl",
-        member.bgColor,
-      )}
+      style={{ backgroundColor: member.accentColor }}
+      className="group relative aspect-[3/4] cursor-default overflow-hidden rounded-3xl shadow-xl"
     >
+      {/* Photo fills entire card */}
+      <div className="absolute inset-0 z-0">
+        <Image
+          src={member.imageSrc}
+          alt={member.imageAlt}
+          fill
+          sizes="(max-width: 768px) 60vw, 20vw"
+          className="object-cover object-top"
+        />
+      </div>
+
+      {/* Brand-color gradient overlay at top — gives label backdrop + ties photo to card brand */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 overflow-hidden"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[55%]"
+        style={{
+          background: `linear-gradient(to bottom, ${member.accentColor} 0%, ${member.accentColor}E6 20%, ${member.accentColor}80 40%, ${member.accentColor}33 65%, transparent 100%)`,
+        }}
+      />
+
+      {/* Decorative leaves sit on the gradient */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-1/2 overflow-hidden"
       >
         <DecorativeLeaves textColorClass={member.textColor} />
       </div>
 
+      {/* Label on top of everything */}
       <div className="absolute top-5 start-5 z-20 max-w-[80%]">
         <h3
           className={cn(
@@ -197,17 +213,6 @@ function FamilyCard({
             {member.sublabel}
           </p>
         )}
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 z-10 h-[75%]">
-        <Image
-          src={member.imageSrc}
-          alt={member.imageAlt}
-          fill
-          unoptimized
-          sizes="(max-width: 768px) 60vw, 20vw"
-          className="object-cover object-top"
-        />
       </div>
 
       {member.hasPlayButton && (
