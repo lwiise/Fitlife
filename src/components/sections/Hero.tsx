@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 
@@ -14,68 +14,69 @@ import { cn } from "@/lib/utils";
 
 // TODO: Replace family portrait placeholder SVGs with real photography before launch.
 
-type FamilyMember = {
-  label: string;
-  detail: string;
-  goal: string;
+type CardVariant = "lavender" | "dark" | "yellow";
+
+type FamilyCard = {
+  title: string;
   imageSrc: string;
   alt: string;
+  variant: CardVariant;
+  hasLeaves: boolean;
+  hasVideo?: boolean;
 };
 
-const familyMembers: FamilyMember[] = [
+const cards: FamilyCard[] = [
   {
-    label: "الأب",
-    detail: "أحمد، 38",
-    goal: "خسارة وزن",
+    title: "خطة للأب اللي على حمية",
     imageSrc: "/family-dad.svg",
     alt: "صورة الأب — أحمد",
+    variant: "lavender",
+    hasLeaves: true,
   },
   {
-    label: "الأم",
-    detail: "هند، 35",
-    goal: "صحة عامة",
+    title: "وجبات الأم بسعرات محسوبة",
     imageSrc: "/family-mom.svg",
     alt: "صورة الأم — هند",
+    variant: "dark",
+    hasLeaves: false,
   },
   {
-    label: "الخادمة",
-    detail: "روزا، الفلبين",
-    goal: "بالتاغالوغ",
+    title: "حساب للخادمة بلغتها",
     imageSrc: "/family-housekeeper.svg",
     alt: "صورة الخادمة — روزا",
+    variant: "yellow",
+    hasLeaves: true,
+    hasVideo: true,
   },
   {
-    label: "البنت",
-    detail: "ليلى، 6 سنوات",
-    goal: "نمو",
+    title: "للأولاد حسب أعمارهم",
     imageSrc: "/family-daughter.svg",
     alt: "صورة البنت — ليلى",
+    variant: "dark",
+    hasLeaves: false,
   },
   {
-    label: "الولد",
-    detail: "أحمد الابن، 10",
-    goal: "نمو",
+    title: "كل البيت في خطة واحدة",
     imageSrc: "/family-son.svg",
     alt: "صورة الولد — أحمد الابن",
+    variant: "lavender",
+    hasLeaves: true,
   },
 ];
 
 const line1Words = "خطة غذائية لكل البيت.".split(" ");
 const line2Words = "حتى للخادمة.".split(" ");
-
 const easeOut = "easeOut" as const;
 const overshootEase = [0.34, 1.56, 0.64, 1] as const;
 
-const wordContainer = {
-  hidden: {},
-  visible: (delayChildren: number) => ({
-    transition: { staggerChildren: 0.08, delayChildren },
-  }),
-};
-
+const wordContainer = { hidden: {}, visible: {} };
 const wordItem = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: easeOut } },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: easeOut },
+  },
 };
 
 function PlayIcon({ className }: { className?: string }) {
@@ -88,6 +89,50 @@ function PlayIcon({ className }: { className?: string }) {
       aria-hidden="true"
     >
       <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function LeafPattern({ tone }: { tone: "yellow" | "primary" }) {
+  return (
+    <svg
+      viewBox="0 0 300 180"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute inset-x-0 top-0 h-1/2 w-full",
+        tone === "yellow" ? "text-brand-yellow" : "text-primary",
+      )}
+    >
+      <path
+        d="M -10 60 Q 30 10 90 50 Q 120 80 80 110 Q 30 100 -10 60 Z"
+        fill="currentColor"
+        opacity="0.55"
+      />
+      <path
+        d="M 60 90 Q 110 20 170 70 Q 200 110 150 130 Q 90 130 60 90 Z"
+        fill="currentColor"
+        opacity="0.45"
+      />
+      <path
+        d="M 140 100 Q 200 30 260 80 Q 290 120 230 140 Q 170 140 140 100 Z"
+        fill="currentColor"
+        opacity="0.5"
+      />
+      <path
+        d="M 220 60 Q 270 10 320 60"
+        stroke="currentColor"
+        strokeWidth="3"
+        fill="none"
+        opacity="0.4"
+      />
+      <path
+        d="M 40 130 Q 90 70 160 110"
+        stroke="currentColor"
+        strokeWidth="3"
+        fill="none"
+        opacity="0.4"
+      />
     </svg>
   );
 }
@@ -124,7 +169,7 @@ function DecorativeCurves({ reduced }: { reduced: boolean }) {
             ? undefined
             : { duration: 80, ease: "linear" as const, repeat: Infinity }
         }
-        className="pointer-events-none absolute bottom-[40px] start-[-140px] w-[260px] text-brand-yellow opacity-[0.08] md:w-[380px]"
+        className="pointer-events-none absolute bottom-[60px] start-[-140px] w-[260px] text-brand-yellow opacity-[0.08] md:w-[380px]"
       >
         <path
           d="M200 40 C 320 80, 360 200, 320 320 C 280 380, 140 380, 80 300 C 30 240, 40 120, 100 80 C 140 50, 170 40, 200 40 Z"
@@ -154,17 +199,27 @@ function WaveSVG() {
   );
 }
 
-function FamilyCard({
-  member,
+function PortraitCard({
+  card,
   index,
-  isHighlighted,
   reduced,
 }: {
-  member: FamilyMember;
+  card: FamilyCard;
   index: number;
-  isHighlighted: boolean;
   reduced: boolean;
 }) {
+  const variantClasses: Record<CardVariant, string> = {
+    lavender: "bg-brand-lavender",
+    dark: "bg-[#5B2BA8]",
+    yellow: "bg-brand-yellow",
+  };
+  const titleColorClass: Record<CardVariant, string> = {
+    lavender: "text-primary",
+    dark: "text-white",
+    yellow: "text-primary",
+  };
+  const leafTone = card.variant === "yellow" ? "primary" : "yellow";
+
   return (
     <motion.article
       initial={reduced ? false : { opacity: 0, y: 40 }}
@@ -172,73 +227,39 @@ function FamilyCard({
       transition={
         reduced
           ? { duration: 0 }
-          : { duration: 0.5, ease: easeOut, delay: 1.8 + index * 0.08 }
+          : { duration: 0.5, ease: easeOut, delay: 1.4 + index * 0.08 }
       }
       whileHover={
         reduced
           ? undefined
           : {
               scale: 1.02,
-              y: isHighlighted ? -8 : -4,
+              y: card.variant === "yellow" ? -8 : -4,
               transition: { duration: 0.3, ease: easeOut },
             }
       }
       className={cn(
-        "group/card relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl",
-        isHighlighted ? "bg-brand-yellow" : "bg-[#5B2BA8]",
+        "relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl",
+        variantClasses[card.variant],
       )}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-1/2"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 300 200"
-          fill="none"
-          preserveAspectRatio="none"
-          className={cn(
-            "h-full w-full",
-            isHighlighted ? "text-white opacity-25" : "text-brand-yellow opacity-25",
-          )}
-        >
-          <path
-            d="M0 0 C 80 60, 150 80, 220 40 C 260 20, 290 0, 300 0 L 300 0 L 0 0 Z"
-            fill="currentColor"
-          />
-          <path
-            d="M0 30 C 60 80, 140 100, 220 70"
-            stroke="currentColor"
-            strokeWidth="2"
-            fill="none"
-            opacity="0.6"
-          />
-        </svg>
-      </div>
+      {card.hasLeaves && <LeafPattern tone={leafTone} />}
 
-      <div className="absolute inset-x-4 top-4 z-10">
+      <div className="absolute inset-x-5 top-5 z-10">
         <h3
           className={cn(
-            "text-base font-bold leading-tight",
-            isHighlighted ? "text-primary" : "text-white",
+            "text-base font-bold leading-tight md:text-lg",
+            titleColorClass[card.variant],
           )}
         >
-          {member.label}
+          {card.title}
         </h3>
-        <p
-          className={cn(
-            "mt-1 text-xs font-medium",
-            isHighlighted ? "text-primary/70" : "text-white/60",
-          )}
-        >
-          {member.detail} · {member.goal}
-        </p>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 h-3/4">
+      <div className="absolute inset-x-0 bottom-0 z-0 h-3/5">
         <Image
-          src={member.imageSrc}
-          alt={member.alt}
+          src={card.imageSrc}
+          alt={card.alt}
           fill
           unoptimized
           sizes="(max-width: 768px) 55vw, 230px"
@@ -246,7 +267,7 @@ function FamilyCard({
         />
       </div>
 
-      {isHighlighted && (
+      {card.hasVideo && (
         <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center">
           <button
             type="button"
@@ -254,7 +275,7 @@ function FamilyCard({
             className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <PlayIcon className="size-3" />
-            <span>شوفي كيف يشتغل</span>
+            <span>شوفي الفيديو</span>
           </button>
         </div>
       )}
@@ -265,14 +286,6 @@ function FamilyCard({
 export default function Hero() {
   const reduced = useReducedMotion() ?? false;
 
-  // Line 1: 4 words × 80ms stagger + 400ms duration = 720ms. Line 2 starts after, ~0.92s.
-  const line1Container = reduced
-    ? undefined
-    : { ...wordContainer.visible(0.2) };
-  const line2Container = reduced
-    ? undefined
-    : { ...wordContainer.visible(0.92) };
-
   return (
     <section
       aria-label="القسم الرئيسي"
@@ -282,32 +295,18 @@ export default function Hero() {
 
       <div className="container-page relative z-10">
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { duration: 0.4, ease: easeOut, delay: 0 }
-            }
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-bold text-brand-yellow"
-          >
-            <Sparkles className="size-4" aria-hidden="true" />
-            <span>للعائلة الخليجية</span>
-          </motion.div>
-
           {reduced ? (
-            <h1 className="mt-6 max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
+            <h1 className="max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
               <span className="block">خطة غذائية لكل البيت.</span>
-              <span className="block text-brand-yellow">حتى للخادمة.</span>
+              <span className="block">حتى للخادمة.</span>
             </h1>
           ) : (
-            <h1 className="mt-6 max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
+            <h1 className="max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
               <motion.span
                 variants={wordContainer}
                 initial="hidden"
                 animate="visible"
-                transition={line1Container?.transition}
+                transition={{ staggerChildren: 0.08, delayChildren: 0.2 }}
                 className="block"
               >
                 {line1Words.map((word, i) => (
@@ -324,8 +323,8 @@ export default function Hero() {
                 variants={wordContainer}
                 initial="hidden"
                 animate="visible"
-                transition={line2Container?.transition}
-                className="mt-2 block text-brand-yellow"
+                transition={{ staggerChildren: 0.08, delayChildren: 0.85 }}
+                className="block"
               >
                 {line2Words.map((word, i) => (
                   <motion.span
@@ -346,9 +345,9 @@ export default function Hero() {
             transition={
               reduced
                 ? { duration: 0 }
-                : { duration: 0.4, ease: easeOut, delay: 1.2 }
+                : { duration: 0.4, ease: easeOut, delay: 1.1 }
             }
-            className="mx-auto mt-6 max-w-xl text-base leading-[1.7] text-brand-lavender md:text-lg"
+            className="mx-auto mt-6 max-w-xl text-base leading-[1.7] text-white/80 md:text-lg"
           >
             ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك، بلغته.
           </motion.p>
@@ -361,7 +360,7 @@ export default function Hero() {
             transition={
               reduced
                 ? { duration: 0 }
-                : { duration: 0.5, ease: overshootEase, delay: 1.5 }
+                : { duration: 0.5, ease: overshootEase, delay: 1.3 }
             }
             whileHover={
               reduced
@@ -381,30 +380,16 @@ export default function Hero() {
             <span>ابدئي خطتك المجانية</span>
             <ChevronLeft className="size-5" aria-hidden="true" />
           </motion.a>
-
-          <motion.p
-            initial={reduced ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { duration: 0.4, ease: easeOut, delay: 1.8 }
-            }
-            className="mt-4 text-sm text-white/70"
-          >
-            7 أيام مجانية · بدون بطاقة ائتمان
-          </motion.p>
         </div>
 
-        <div className="relative z-20 mt-16 -mb-16 md:mt-20 md:-mb-20">
+        <div className="relative z-20 mt-12 -mb-16 md:mt-16 md:-mb-20">
           <div className="hidden md:block">
             <div className="mx-auto grid max-w-6xl grid-cols-5 gap-3 px-4 lg:gap-4">
-              {familyMembers.map((member, idx) => (
-                <FamilyCard
+              {cards.map((card, idx) => (
+                <PortraitCard
                   key={idx}
-                  member={member}
+                  card={card}
                   index={idx}
-                  isHighlighted={idx === 2}
                   reduced={reduced}
                 />
               ))}
@@ -416,12 +401,11 @@ export default function Hero() {
               opts={{ align: "start", direction: "rtl", loop: false }}
             >
               <CarouselContent>
-                {familyMembers.map((member, idx) => (
+                {cards.map((card, idx) => (
                   <CarouselItem key={idx} className="basis-[55%]">
-                    <FamilyCard
-                      member={member}
+                    <PortraitCard
+                      card={card}
                       index={idx}
-                      isHighlighted={idx === 2}
                       reduced={reduced}
                     />
                   </CarouselItem>
