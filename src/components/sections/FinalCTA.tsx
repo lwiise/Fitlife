@@ -4,6 +4,8 @@ import { Check, ChevronLeft } from "lucide-react";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 
+import { track } from "@/lib/analytics";
+
 const headlineWords = "ابدئي رحلة عائلتك الغذائية اليوم.".split(" ");
 
 const reassuranceItems = [
@@ -149,6 +151,7 @@ export default function FinalCTA() {
 
           <motion.a
             href="#pricing"
+            onClick={() => track("final_cta_clicked")}
             initial={reduced ? false : { opacity: 0, scale: 0.95 }}
             animate={
               reduced || inView

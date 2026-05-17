@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { ChevronLeftIcon } from "lucide-react";
 
+import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
@@ -425,7 +426,10 @@ export default function FamilyMode() {
                 "focus-visible:ring-4 focus-visible:ring-brand-yellow/40",
               )}
             >
-              <a href="#pricing">
+              <a
+                href="#pricing"
+                onClick={() => track("family_cta_clicked")}
+              >
                 اشتركي بباقة العائلة
                 <ChevronLeftIcon className="rtl:rotate-180" aria-hidden="true" />
               </a>

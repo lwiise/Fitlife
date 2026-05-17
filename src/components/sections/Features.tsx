@@ -292,7 +292,7 @@ export default function Features() {
       id="features"
       ref={sectionRef}
       aria-labelledby="features-title"
-      className="relative bg-surface py-16 lg:py-24"
+      className="relative scroll-mt-24 bg-surface py-16 lg:py-24"
     >
       <div className="container-page flex flex-col items-center">
         <header

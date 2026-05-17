@@ -3,6 +3,8 @@
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 
+import { track } from "@/lib/analytics";
+
 interface WhatsAppCTAProps {
   phoneNumber?: string;
   responseTime?: string;
@@ -120,6 +122,9 @@ export default function WhatsAppCTA({
             href={`https://wa.me/${phoneNumber}`}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              track("whatsapp_clicked", { source: "whatsapp_section" })
+            }
             initial={reduced ? false : { opacity: 0, y: 10 }}
             animate={
               reduced || sectionInView

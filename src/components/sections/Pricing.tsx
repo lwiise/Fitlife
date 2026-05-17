@@ -12,6 +12,7 @@ import { useRef, useState } from "react";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { track } from "@/lib/analytics";
 
 type Tier = {
   name: string;
@@ -270,6 +271,9 @@ function PricingCard({
         {highlighted ? (
           <Button
             size="lg"
+            onClick={() =>
+              track("pricing_tier_selected", { tier: name, billing })
+            }
             className="w-full min-h-11 bg-brand-yellow font-bold text-primary shadow-none transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-yellow hover:shadow-lg hover:brightness-110"
           >
             {cta}
@@ -278,6 +282,9 @@ function PricingCard({
           <Button
             size="lg"
             variant="outline"
+            onClick={() =>
+              track("pricing_tier_selected", { tier: name, billing })
+            }
             className="w-full min-h-11 border-primary bg-transparent font-semibold text-primary transition-transform duration-200 ease-out hover:-translate-y-px hover:bg-primary/5"
           >
             {cta}

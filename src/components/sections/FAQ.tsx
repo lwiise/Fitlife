@@ -10,6 +10,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { track } from "@/lib/analytics";
 
 type FAQItem = {
   question: string;
@@ -104,7 +105,17 @@ export default function FAQ() {
           </header>
 
           <div ref={listRef}>
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion
+              type="single"
+              collapsible
+              onValueChange={(value) => {
+                if (value) {
+                  const index = parseInt(value.replace("faq-", ""), 10);
+                  if (!Number.isNaN(index)) track("faq_opened", { index });
+                }
+              }}
+              className="w-full"
+            >
               {faqs.map((faq, i) => (
                 <MotionAccordionItem
                   key={i}
@@ -171,6 +182,7 @@ export default function FAQ() {
               href="https://wa.me/966XXXXXXXXX"
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => track("whatsapp_clicked", { source: "faq_helper" })}
               className="text-base font-semibold text-[#25D366] transition-all hover:underline"
             >
               كلمينا على واتساب

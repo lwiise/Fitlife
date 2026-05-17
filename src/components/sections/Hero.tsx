@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import { ChevronLeft, Languages, Shield, Users, type LucideIcon } from "lucide-react";
 
@@ -5,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/motion/Reveal";
 import { RevealScale } from "@/components/motion/RevealScale";
 import { HeroCallout } from "@/components/sections/HeroCallout";
+import { track } from "@/lib/analytics";
 
 type Trust = { Icon: LucideIcon; text: string };
 
@@ -66,12 +69,14 @@ export default function Hero() {
           >
             <Button
               size="lg"
+              onClick={() => track("hero_cta_clicked")}
               className="h-14 rounded-xl px-8 text-base font-bold shadow-sm transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
               ابدئي خطتك المجانية
             </Button>
             <a
               href="#problem"
+              onClick={() => track("secondary_cta_clicked", { section: "hero" })}
               className="group/secondary inline-flex min-h-11 items-center gap-2 py-2 text-base font-semibold text-brand-purple-700 transition-colors duration-200 hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
             >
               شوفي كيف تشتغل

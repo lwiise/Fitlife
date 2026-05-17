@@ -1,3 +1,4 @@
+import Header from "@/components/sections/Header";
 import Hero from "@/components/sections/Hero";
 import SocialProofStrip from "@/components/sections/SocialProofStrip";
 import Problem from "@/components/sections/Problem";
@@ -22,6 +23,7 @@ export default function Home() {
       >
         تخطّ إلى المحتوى
       </a>
+      <Header />
       <main id="main" className="flex flex-1 flex-col">
         <Hero />
         <SocialProofStrip />

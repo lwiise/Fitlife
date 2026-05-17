@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(Get-ChildItem C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\public *)"
+      "Bash(Get-ChildItem C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\public *)",
+      "Bash(dir C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\src\\\\lib *)"
     ]
   }
 }
