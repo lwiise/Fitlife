@@ -11,6 +11,7 @@ import Testimonials from "@/components/sections/Testimonials";
 import FAQ from "@/components/sections/FAQ";
 import WhatsAppCTA from "@/components/sections/WhatsAppCTA";
 import FinalCTA from "@/components/sections/FinalCTA";
+import Footer from "@/components/sections/Footer";
 
 export default function Home() {
   return (
@@ -36,6 +37,7 @@ export default function Home() {
         <WhatsAppCTA />
         <FinalCTA />
       </main>
+      <Footer />
     </>
   );
 }
