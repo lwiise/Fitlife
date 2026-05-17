@@ -10,6 +10,7 @@ import Trust from "@/components/sections/Trust";
 import Testimonials from "@/components/sections/Testimonials";
 import FAQ from "@/components/sections/FAQ";
 import WhatsAppCTA from "@/components/sections/WhatsAppCTA";
+import FinalCTA from "@/components/sections/FinalCTA";
 
 export default function Home() {
   return (
@@ -33,6 +34,7 @@ export default function Home() {
         <Testimonials />
         <FAQ />
         <WhatsAppCTA />
+        <FinalCTA />
       </main>
     </>
   );
