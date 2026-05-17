@@ -9,6 +9,7 @@ import Pricing from "@/components/sections/Pricing";
 import Trust from "@/components/sections/Trust";
 import Testimonials from "@/components/sections/Testimonials";
 import FAQ from "@/components/sections/FAQ";
+import WhatsAppCTA from "@/components/sections/WhatsAppCTA";
 
 export default function Home() {
   return (
@@ -31,6 +32,7 @@ export default function Home() {
         <Trust />
         <Testimonials />
         <FAQ />
+        <WhatsAppCTA />
       </main>
     </>
   );
