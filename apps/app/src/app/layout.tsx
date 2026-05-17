@@ -1,0 +1,37 @@
+import type { Metadata } from "next";
+import { Tajawal } from "next/font/google";
+import "@/styles/globals.css";
+
+const tajawal = Tajawal({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700", "800"],
+  variable: "--font-tajawal",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://app.fitlife.app",
+  ),
+  title: {
+    default: "فت لايف — تطبيقك",
+    template: "%s | فت لايف",
+  },
+  description: "خطتك الغذائية الذكية. تطبيق فت لايف.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="ar" dir="rtl" className={tajawal.variable}>
+      <body className="antialiased">{children}</body>
+    </html>
+  );
+}
