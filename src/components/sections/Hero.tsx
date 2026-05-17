@@ -26,28 +26,33 @@ type FamilyMember = {
   hasPlayButton?: boolean;
 };
 
+// TODO: Pravatar URLs are temporary real-photo placeholders (CC0 portrait service).
+// Replace with real brand photography (transparent-background PNG cutouts of
+// actual family members or commissioned models) before launch. Drop new files
+// at /public/family-{dad,mom,housekeeper,daughter,son}.png and switch imageSrc back.
+
 const familyMembers: FamilyMember[] = [
   {
     label: "خطة للأب",
     sublabel: "اللي على حمية",
-    imageSrc: "/family-dad.svg",
-    imageAlt: "صورة الأب — رجل خليجي يبتسم",
+    imageSrc: "https://i.pravatar.cc/600?img=12",
+    imageAlt: "صورة الأب",
     bgColor: "bg-[#D9B0FC]",
     textColor: "text-[#4E2490]",
   },
   {
     label: "وجبات الأم",
     sublabel: "بسعرات محسوبة",
-    imageSrc: "/family-mom.svg",
-    imageAlt: "صورة الأم — امرأة خليجية متفائلة",
+    imageSrc: "https://i.pravatar.cc/600?img=5",
+    imageAlt: "صورة الأم",
     bgColor: "bg-[#C5458F]",
     textColor: "text-white",
   },
   {
     label: "حساب للخادمة",
     sublabel: "بلغتها",
-    imageSrc: "/family-housekeeper.svg",
-    imageAlt: "صورة الخادمة — امرأة فلبينية تبتسم",
+    imageSrc: "https://i.pravatar.cc/600?img=49",
+    imageAlt: "صورة الخادمة",
     bgColor: "bg-[#F2BB16]",
     textColor: "text-[#4E2490]",
     hasPlayButton: true,
@@ -55,16 +60,16 @@ const familyMembers: FamilyMember[] = [
   {
     label: "للأولاد",
     sublabel: "حسب أعمارهم",
-    imageSrc: "/family-daughter.svg",
-    imageAlt: "صورة البنت — طفلة سعيدة",
+    imageSrc: "https://i.pravatar.cc/600?img=20",
+    imageAlt: "صورة البنت",
     bgColor: "bg-[#4E2490]",
     textColor: "text-white",
   },
   {
     label: "كل البيت",
     sublabel: "في خطة واحدة",
-    imageSrc: "/family-son.svg",
-    imageAlt: "صورة الولد — طفل سعيد",
+    imageSrc: "https://i.pravatar.cc/600?img=33",
+    imageAlt: "صورة الولد",
     bgColor: "bg-[#E89B5A]",
     textColor: "text-[#1A1023]",
   },
