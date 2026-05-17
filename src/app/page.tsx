@@ -6,6 +6,7 @@ import FamilyMode from "@/components/sections/FamilyMode";
 import ProductDemo from "@/components/sections/ProductDemo";
 import Features from "@/components/sections/Features";
 import Pricing from "@/components/sections/Pricing";
+import Trust from "@/components/sections/Trust";
 
 export default function Home() {
   return (
@@ -25,6 +26,7 @@ export default function Home() {
         <ProductDemo />
         <Features />
         <Pricing />
+        <Trust />
       </main>
     </>
   );
