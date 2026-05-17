@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800" role="img" aria-label="Housekeeper portrait placeholder">
+  <rect width="600" height="800" fill="#4E2490"/>
+  <circle cx="300" cy="320" r="120" fill="#FFFFFF" fill-opacity="0.25"/>
+  <text x="300" y="600" text-anchor="middle" dominant-baseline="central" fill="white" font-family="Tajawal, system-ui, sans-serif" font-size="160" font-weight="700">&#1585;</text>
+</svg>

@@ -1,150 +1,438 @@
 "use client";
 
+import { ChevronLeft, Sparkles } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
-import { ChevronLeft, Languages, Shield, Users, type LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Reveal } from "@/components/motion/Reveal";
-import { RevealScale } from "@/components/motion/RevealScale";
-import { HeroCallout } from "@/components/sections/HeroCallout";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from "@/components/ui/carousel";
 import { track } from "@/lib/analytics";
+import { cn } from "@/lib/utils";
 
-type Trust = { Icon: LucideIcon; text: string };
+// TODO: Replace family portrait placeholder SVGs with real photography before launch.
 
-const trust: Trust[] = [
-  { Icon: Shield, text: "متوافق مع نظام حماية البيانات السعودي" },
-  { Icon: Languages, text: "يدعم 7 لغات" },
-  { Icon: Users, text: "+500 عائلة سعودية" },
+type FamilyMember = {
+  label: string;
+  detail: string;
+  goal: string;
+  imageSrc: string;
+  alt: string;
+};
+
+const familyMembers: FamilyMember[] = [
+  {
+    label: "الأب",
+    detail: "أحمد، 38",
+    goal: "خسارة وزن",
+    imageSrc: "/family-dad.svg",
+    alt: "صورة الأب — أحمد",
+  },
+  {
+    label: "الأم",
+    detail: "هند، 35",
+    goal: "صحة عامة",
+    imageSrc: "/family-mom.svg",
+    alt: "صورة الأم — هند",
+  },
+  {
+    label: "الخادمة",
+    detail: "روزا، الفلبين",
+    goal: "بالتاغالوغ",
+    imageSrc: "/family-housekeeper.svg",
+    alt: "صورة الخادمة — روزا",
+  },
+  {
+    label: "البنت",
+    detail: "ليلى، 6 سنوات",
+    goal: "نمو",
+    imageSrc: "/family-daughter.svg",
+    alt: "صورة البنت — ليلى",
+  },
+  {
+    label: "الولد",
+    detail: "أحمد الابن، 10",
+    goal: "نمو",
+    imageSrc: "/family-son.svg",
+    alt: "صورة الولد — أحمد الابن",
+  },
 ];
 
+const line1Words = "خطة غذائية لكل البيت.".split(" ");
+const line2Words = "حتى للخادمة.".split(" ");
+
+const easeOut = "easeOut" as const;
+const overshootEase = [0.34, 1.56, 0.64, 1] as const;
+
+const wordContainer = {
+  hidden: {},
+  visible: (delayChildren: number) => ({
+    transition: { staggerChildren: 0.08, delayChildren },
+  }),
+};
+
+const wordItem = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: easeOut } },
+};
+
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function DecorativeCurves({ reduced }: { reduced: boolean }) {
+  return (
+    <>
+      <motion.svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 400 400"
+        fill="none"
+        aria-hidden="true"
+        animate={reduced ? undefined : { rotate: 360 }}
+        transition={
+          reduced
+            ? undefined
+            : { duration: 60, ease: "linear" as const, repeat: Infinity }
+        }
+        className="pointer-events-none absolute top-[-100px] end-[-120px] w-[300px] text-brand-yellow opacity-10 md:w-[440px]"
+      >
+        <path
+          d="M200 20 C 320 60, 380 180, 340 300 C 300 380, 160 400, 80 320 C 20 260, 20 140, 80 80 C 120 40, 160 30, 200 20 Z"
+          fill="currentColor"
+        />
+      </motion.svg>
+      <motion.svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 400 400"
+        fill="none"
+        aria-hidden="true"
+        animate={reduced ? undefined : { rotate: -360 }}
+        transition={
+          reduced
+            ? undefined
+            : { duration: 80, ease: "linear" as const, repeat: Infinity }
+        }
+        className="pointer-events-none absolute bottom-[40px] start-[-140px] w-[260px] text-brand-yellow opacity-[0.08] md:w-[380px]"
+      >
+        <path
+          d="M200 40 C 320 80, 360 200, 320 320 C 280 380, 140 380, 80 300 C 30 240, 40 120, 100 80 C 140 50, 170 40, 200 40 Z"
+          fill="currentColor"
+        />
+      </motion.svg>
+    </>
+  );
+}
+
+function WaveSVG() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 w-full">
+      <svg
+        viewBox="0 0 1440 120"
+        fill="none"
+        preserveAspectRatio="none"
+        className="h-[60px] w-full md:h-[120px]"
+        aria-hidden="true"
+      >
+        <path
+          d="M0,40 C240,100 480,120 720,80 C960,40 1200,0 1440,40 L1440,120 L0,120 Z"
+          fill="var(--color-surface-elevated)"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function FamilyCard({
+  member,
+  index,
+  isHighlighted,
+  reduced,
+}: {
+  member: FamilyMember;
+  index: number;
+  isHighlighted: boolean;
+  reduced: boolean;
+}) {
+  return (
+    <motion.article
+      initial={reduced ? false : { opacity: 0, y: 40 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : { duration: 0.5, ease: easeOut, delay: 1.8 + index * 0.08 }
+      }
+      whileHover={
+        reduced
+          ? undefined
+          : {
+              scale: 1.02,
+              y: isHighlighted ? -8 : -4,
+              transition: { duration: 0.3, ease: easeOut },
+            }
+      }
+      className={cn(
+        "group/card relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl",
+        isHighlighted ? "bg-brand-yellow" : "bg-[#5B2BA8]",
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-1/2"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 300 200"
+          fill="none"
+          preserveAspectRatio="none"
+          className={cn(
+            "h-full w-full",
+            isHighlighted ? "text-white opacity-25" : "text-brand-yellow opacity-25",
+          )}
+        >
+          <path
+            d="M0 0 C 80 60, 150 80, 220 40 C 260 20, 290 0, 300 0 L 300 0 L 0 0 Z"
+            fill="currentColor"
+          />
+          <path
+            d="M0 30 C 60 80, 140 100, 220 70"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="none"
+            opacity="0.6"
+          />
+        </svg>
+      </div>
+
+      <div className="absolute inset-x-4 top-4 z-10">
+        <h3
+          className={cn(
+            "text-base font-bold leading-tight",
+            isHighlighted ? "text-primary" : "text-white",
+          )}
+        >
+          {member.label}
+        </h3>
+        <p
+          className={cn(
+            "mt-1 text-xs font-medium",
+            isHighlighted ? "text-primary/70" : "text-white/60",
+          )}
+        >
+          {member.detail} · {member.goal}
+        </p>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 h-3/4">
+        <Image
+          src={member.imageSrc}
+          alt={member.alt}
+          fill
+          unoptimized
+          sizes="(max-width: 768px) 55vw, 230px"
+          className="object-cover object-bottom"
+        />
+      </div>
+
+      {isHighlighted && (
+        <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center">
+          <button
+            type="button"
+            onClick={() => track("hero_video_clicked")}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <PlayIcon className="size-3" />
+            <span>شوفي كيف يشتغل</span>
+          </button>
+        </div>
+      )}
+    </motion.article>
+  );
+}
+
 export default function Hero() {
+  const reduced = useReducedMotion() ?? false;
+
+  // Line 1: 4 words × 80ms stagger + 400ms duration = 720ms. Line 2 starts after, ~0.92s.
+  const line1Container = reduced
+    ? undefined
+    : { ...wordContainer.visible(0.2) };
+  const line2Container = reduced
+    ? undefined
+    : { ...wordContainer.visible(0.92) };
+
   return (
     <section
-      id="hero"
       aria-label="القسم الرئيسي"
-      className="relative isolate overflow-hidden bg-surface bg-noise py-14 sm:py-20 lg:flex lg:min-h-svh lg:items-center lg:py-12"
+      className="relative overflow-hidden bg-primary pt-20 pb-32 md:pt-24 md:pb-40"
     >
-      {/* Magazine-style yellow slab — offset behind the headline, intentionally not centered */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute top-[18%] start-[8%] -z-10 hidden h-[120px] w-[42%] -rotate-[1.5deg] bg-brand-yellow/85 lg:block"
-      />
-      {/* Smaller mobile-only slab so the editorial signature still reads on phone */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute top-[14%] start-[12%] -z-10 h-[64px] w-[58%] -rotate-[2deg] bg-brand-yellow/80 lg:hidden"
-      />
+      <DecorativeCurves reduced={reduced} />
 
-      <div className="container-page relative grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-10">
-        {/* TEXT COLUMN — start side (right in RTL), 8/12 */}
-        <div className="flex flex-col gap-6 lg:col-span-8 lg:col-start-1">
-          <Reveal
-            as="span"
-            delayMs={0}
-            className="text-sm font-semibold tracking-wide text-brand-pink"
+      <div className="container-page relative z-10">
+        <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={
+              reduced
+                ? { duration: 0 }
+                : { duration: 0.4, ease: easeOut, delay: 0 }
+            }
+            className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-bold text-brand-yellow"
           >
-            للعائلة الخليجية
-          </Reveal>
+            <Sparkles className="size-4" aria-hidden="true" />
+            <span>للعائلة الخليجية</span>
+          </motion.div>
 
-          <Reveal
-            as="h1"
-            delayMs={80}
-            className="text-display max-w-[18ch] text-balance text-foreground"
+          {reduced ? (
+            <h1 className="mt-6 max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
+              <span className="block">خطة غذائية لكل البيت.</span>
+              <span className="block text-brand-yellow">حتى للخادمة.</span>
+            </h1>
+          ) : (
+            <h1 className="mt-6 max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
+              <motion.span
+                variants={wordContainer}
+                initial="hidden"
+                animate="visible"
+                transition={line1Container?.transition}
+                className="block"
+              >
+                {line1Words.map((word, i) => (
+                  <motion.span
+                    key={i}
+                    variants={wordItem}
+                    className="me-3 inline-block last:me-0"
+                  >
+                    {word}
+                  </motion.span>
+                ))}
+              </motion.span>
+              <motion.span
+                variants={wordContainer}
+                initial="hidden"
+                animate="visible"
+                transition={line2Container?.transition}
+                className="mt-2 block text-brand-yellow"
+              >
+                {line2Words.map((word, i) => (
+                  <motion.span
+                    key={i}
+                    variants={wordItem}
+                    className="me-3 inline-block last:me-0"
+                  >
+                    {word}
+                  </motion.span>
+                ))}
+              </motion.span>
+            </h1>
+          )}
+
+          <motion.p
+            initial={reduced ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={
+              reduced
+                ? { duration: 0 }
+                : { duration: 0.4, ease: easeOut, delay: 1.2 }
+            }
+            className="mx-auto mt-6 max-w-xl text-base leading-[1.7] text-brand-lavender md:text-lg"
           >
-            خطة غذائية لكل البيت — حتى الخادمة.
-          </Reveal>
+            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك، بلغته.
+          </motion.p>
 
-          <Reveal
-            as="p"
-            delayMs={180}
-            className="max-w-[32ch] text-lg leading-[1.7] text-ink-muted lg:text-2xl"
+          <motion.a
+            href="#pricing"
+            onClick={() => track("hero_cta_clicked")}
+            initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={
+              reduced
+                ? { duration: 0 }
+                : { duration: 0.5, ease: overshootEase, delay: 1.5 }
+            }
+            whileHover={
+              reduced
+                ? undefined
+                : {
+                    y: -2,
+                    transition: { duration: 0.2, ease: easeOut },
+                  }
+            }
+            whileTap={
+              reduced
+                ? undefined
+                : { scale: 0.98, transition: { duration: 0.1 } }
+            }
+            className="mt-8 inline-flex min-h-12 items-center gap-3 rounded-full bg-white px-8 py-4 text-base font-bold text-primary shadow-2xl transition-colors duration-300 hover:bg-brand-yellow focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
           >
-            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك، بلغته، في أقل من 30 ثانية.
-            مدعوم بخبيرة تغذية سعودية.
-          </Reveal>
+            <span>ابدئي خطتك المجانية</span>
+            <ChevronLeft className="size-5" aria-hidden="true" />
+          </motion.a>
 
-          <Reveal
-            delayMs={280}
-            className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-7"
+          <motion.p
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={
+              reduced
+                ? { duration: 0 }
+                : { duration: 0.4, ease: easeOut, delay: 1.8 }
+            }
+            className="mt-4 text-sm text-white/70"
           >
-            <Button
-              size="lg"
-              onClick={() => track("hero_cta_clicked")}
-              className="h-14 rounded-xl px-8 text-base font-bold shadow-sm transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-            >
-              ابدئي خطتك المجانية
-            </Button>
-            <a
-              href="#problem"
-              onClick={() => track("secondary_cta_clicked", { section: "hero" })}
-              className="group/secondary inline-flex min-h-11 items-center gap-2 py-2 text-base font-semibold text-brand-purple-700 transition-colors duration-200 hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-            >
-              شوفي كيف تشتغل
-              <ChevronLeft
-                className="size-4 transition-transform duration-200 group-hover/secondary:-translate-x-1 rtl:group-hover/secondary:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover/secondary:translate-x-0"
-                aria-hidden="true"
-              />
-            </a>
-          </Reveal>
-
-          <Reveal as="p" delayMs={380} className="mt-4 text-sm text-ink-muted">
-            بدون بطاقة ائتمان
-            <span aria-hidden="true"> • </span>
-            تجربة مجانية 7 أيام
-            <span aria-hidden="true"> • </span>
-            إلغاء بضغطة
-          </Reveal>
-
-          <Reveal
-            as="ul"
-            delayMs={480}
-            className="group/trust mt-6 flex flex-col gap-3 md:flex-row md:gap-6 lg:mt-8"
-          >
-            {trust.map(({ Icon, text }) => (
-              <li key={text} className="flex items-center gap-2">
-                <Icon
-                  className="size-4 text-ink-muted transition-colors duration-200 group-hover/trust:text-primary motion-reduce:transition-none"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
-                <span className="text-sm text-ink-muted">{text}</span>
-              </li>
-            ))}
-          </Reveal>
+            7 أيام مجانية · بدون بطاقة ائتمان
+          </motion.p>
         </div>
 
-        {/* VISUAL COLUMN — end side (left in RTL), 4/12, bleeds off edge */}
-        <RevealScale
-          delayMs={200}
-          durationMs={600}
-          fromScale={0.97}
-          className="lg:col-span-4 lg:col-start-9 lg:-me-6 xl:-me-12"
-        >
-          <div className="relative mx-auto aspect-[3/4] w-full max-w-sm overflow-visible rounded-2xl bg-surface-elevated ring-1 ring-ink/5 lg:max-w-none">
-            <div className="absolute inset-0 overflow-hidden rounded-2xl">
-              <Image
-                src="/hero-dashboard.png"
-                alt="لوحة فيت لايف تعرض خططًا غذائية مخصصة لكل فرد في العائلة"
-                width={640}
-                height={800}
-                priority
-                sizes="(max-width: 1024px) 24rem, 30vw"
-                className="h-full w-full object-cover"
-              />
+        <div className="relative z-20 mt-16 -mb-16 md:mt-20 md:-mb-20">
+          <div className="hidden md:block">
+            <div className="mx-auto grid max-w-6xl grid-cols-5 gap-3 px-4 lg:gap-4">
+              {familyMembers.map((member, idx) => (
+                <FamilyCard
+                  key={idx}
+                  member={member}
+                  index={idx}
+                  isHighlighted={idx === 2}
+                  reduced={reduced}
+                />
+              ))}
             </div>
-
-            <HeroCallout placement="top-end" delayMs={800}>
-              خطة الأم
-            </HeroCallout>
-            <HeroCallout placement="middle-start" delayMs={1050}>
-              خطة الأطفال
-            </HeroCallout>
-            <HeroCallout placement="bottom-end" delayMs={1300}>
-              خطة الخادمة
-            </HeroCallout>
           </div>
-        </RevealScale>
+
+          <div className="md:hidden">
+            <Carousel
+              opts={{ align: "start", direction: "rtl", loop: false }}
+            >
+              <CarouselContent>
+                {familyMembers.map((member, idx) => (
+                  <CarouselItem key={idx} className="basis-[55%]">
+                    <FamilyCard
+                      member={member}
+                      index={idx}
+                      isHighlighted={idx === 2}
+                      reduced={reduced}
+                    />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+            </Carousel>
+          </div>
+        </div>
       </div>
+
+      <WaveSVG />
     </section>
   );
 }
