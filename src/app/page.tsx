@@ -8,6 +8,7 @@ import Features from "@/components/sections/Features";
 import Pricing from "@/components/sections/Pricing";
 import Trust from "@/components/sections/Trust";
 import Testimonials from "@/components/sections/Testimonials";
+import FAQ from "@/components/sections/FAQ";
 
 export default function Home() {
   return (
@@ -29,6 +30,7 @@ export default function Home() {
         <Pricing />
         <Trust />
         <Testimonials />
+        <FAQ />
       </main>
     </>
   );
