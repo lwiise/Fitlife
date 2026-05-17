@@ -241,7 +241,7 @@ export default function FamilyMode() {
                 {family.map((m, i) => (
                   <CarouselItem
                     key={m.src}
-                    className="basis-[78%] sm:basis-[45%] md:basis-[33%]"
+                    className="basis-[88%] sm:basis-[55%] md:basis-[40%] lg:basis-[33%]"
                   >
                     <motion.div
                       variants={avatarRise}
