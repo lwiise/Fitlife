@@ -81,39 +81,39 @@ const avatarRise = {
 
 function ProfileCard({ member }: { member: FamilyMember }) {
   return (
-    <CardContainer containerClassName="py-0 w-full">
-      <CardBody className="group/card relative h-auto w-[160px] md:w-[180px] rounded-2xl border border-white/15 bg-white/[0.08] p-5 backdrop-blur-sm transition-[background-color,border-color] duration-200 hover:border-white/30 hover:bg-white/[0.12]">
+    <CardContainer containerClassName="py-0 w-full" className="w-full md:w-auto">
+      <CardBody className="group/card relative h-auto w-full md:w-[180px] rounded-2xl border border-white/15 bg-white/[0.08] p-6 md:p-5 backdrop-blur-sm transition-[background-color,border-color] duration-200 hover:border-white/30 hover:bg-white/[0.12]">
         <CardItem
           translateZ={40}
-          className="mx-auto block size-20 overflow-hidden rounded-full ring-1 ring-white/10"
+          className="mx-auto block size-28 md:size-20 overflow-hidden rounded-full ring-1 ring-white/10"
         >
           <Image
             src={member.src}
             alt={member.alt}
-            width={80}
-            height={80}
-            className="size-20 rounded-full object-cover"
+            width={112}
+            height={112}
+            className="size-28 md:size-20 rounded-full object-cover"
             loading="lazy"
           />
         </CardItem>
         <CardItem
           translateZ={20}
           as="p"
-          className="mt-3 block text-center text-base font-bold text-white"
+          className="mt-4 md:mt-3 block text-center text-lg md:text-base font-bold text-white"
         >
           {member.name}
         </CardItem>
         <CardItem
           translateZ={15}
           as="p"
-          className="mt-1 block text-center text-[13px] font-medium text-brand-lavender"
+          className="mt-1 block text-center text-sm md:text-[13px] font-medium text-brand-lavender"
         >
           {member.language}
         </CardItem>
         <CardItem
           translateZ={25}
           as="span"
-          className="mt-3 mx-auto inline-flex items-center justify-center rounded-full border border-brand-yellow/40 bg-[#3A1A6E] px-2.5 py-1 text-xs font-semibold text-brand-yellow"
+          className="mt-4 md:mt-3 mx-auto inline-flex items-center justify-center rounded-full border border-brand-yellow/40 bg-[#3A1A6E] px-3 py-1.5 md:px-2.5 md:py-1 text-sm md:text-xs font-semibold text-brand-yellow"
         >
           {member.goal}
         </CardItem>
@@ -241,7 +241,7 @@ export default function FamilyMode() {
                 {family.map((m, i) => (
                   <CarouselItem
                     key={m.src}
-                    className="basis-[88%] sm:basis-[55%] md:basis-[40%] lg:basis-[33%]"
+                    className="basis-[85%] sm:basis-[55%] md:basis-[40%] lg:basis-[33%]"
                   >
                     <motion.div
                       variants={avatarRise}
@@ -252,7 +252,7 @@ export default function FamilyMode() {
                         ease: "easeOut" as const,
                         delay: 0.5 + i * 0.08,
                       }}
-                      className="flex justify-center"
+                      className="flex w-full justify-center"
                     >
                       <ProfileCard member={m} />
                     </motion.div>
