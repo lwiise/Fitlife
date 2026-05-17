@@ -1,6 +1,14 @@
+# Root Netlify config for the monorepo.
+# Builds the landing page (apps/web). The SaaS app (apps/app) will get its own
+# Netlify site in Prompt 1.3.
+
 [build]
-  command = "npm run build"
-  publish = ".next"
+  base = "."
+  command = "corepack enable && pnpm install --no-frozen-lockfile && pnpm build:web"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

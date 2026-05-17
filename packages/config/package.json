@@ -1,0 +1,21 @@
+{
+  "name": "@fitlife/config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./brand": "./src/brand.ts",
+    "./constants": "./src/constants.ts"
+  },
+  "scripts": {
+    "lint": "echo 'no lint yet'",
+    "type-check": "tsc --noEmit",
+    "clean": "echo 'nothing to clean'"
+  },
+  "devDependencies": {
+    "@fitlife/tsconfig": "workspace:*",
+    "typescript": "^5.6.0"
+  }
+}
