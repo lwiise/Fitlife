@@ -178,7 +178,9 @@ export default function FinalCTA() {
                     transition: { duration: 0.2, ease: "easeOut" as const },
                   }
             }
-            whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}
+            whileTap={
+              reduced ? undefined : { scale: 0.98, transition: { duration: 0.1 } }
+            }
             className="mt-2 inline-flex min-h-[60px] items-center gap-3 rounded-xl bg-brand-yellow px-7 py-4 text-lg font-extrabold text-primary shadow-2xl shadow-brand-yellow/30 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-yellow/40 md:px-10 md:py-5 md:text-xl animate-pulse-ring hover:animate-none motion-reduce:animate-none"
           >
             <span>ابدئي خطتك المجانية</span>

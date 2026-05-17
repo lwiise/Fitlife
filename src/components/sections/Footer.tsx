@@ -161,7 +161,7 @@ function BrandColumn() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={label}
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[#D9B0FC] transition-all duration-200 hover:bg-brand-yellow/15 hover:text-brand-yellow"
+              className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-[#D9B0FC] transition-all duration-200 hover:bg-brand-yellow/15 hover:text-brand-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
             >
               <Icon />
             </a>
@@ -184,7 +184,7 @@ function LanguageSwitcher() {
     <button
       type="button"
       aria-label="تغيير اللغة"
-      className="flex items-center gap-2 text-sm text-[#D9B0FC]/60 transition-colors hover:text-white"
+      className="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm text-[#D9B0FC]/60 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
     >
       <Globe className="size-4" aria-hidden="true" />
       <span>العربية</span>
@@ -275,7 +275,7 @@ export default function Footer() {
         <div className="mt-16 border-t border-white/10 pt-8">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <p className="text-sm text-[#D9B0FC]/60">
-              © 2026 فت لايف. جميع الحقوق محفوظة. صُنع في المملكة العربية السعودية ❤️
+              © 2026 فت لايف. جميع الحقوق محفوظة. من المملكة العربية السعودية.
             </p>
             <LanguageSwitcher />
           </div>

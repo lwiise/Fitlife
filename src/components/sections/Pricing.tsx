@@ -374,7 +374,7 @@ export default function Pricing() {
                 onCheckedChange={(checked) =>
                   setBilling(checked ? "annual" : "monthly")
                 }
-                aria-label="billing period"
+                aria-label="فترة الفوترة"
               />
             </span>
             <div className="flex flex-row items-center gap-2">

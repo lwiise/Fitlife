@@ -148,7 +148,9 @@ export default function WhatsAppCTA({
                     transition: { duration: 0.2, ease: "easeOut" as const },
                   }
             }
-            whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}
+            whileTap={
+              reduced ? undefined : { scale: 0.98, transition: { duration: 0.1 } }
+            }
             className="mt-2 inline-flex min-h-12 items-center gap-3 rounded-xl bg-[#25D366] px-8 py-4 text-lg font-bold text-white shadow-md transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[#2EE672] hover:shadow-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#25D366]/40"
           >
             <WhatsAppIcon className="size-5" />

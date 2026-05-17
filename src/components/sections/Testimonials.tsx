@@ -121,7 +121,11 @@ function TestimonialCard({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-row gap-1">
+      <div
+        className="mt-4 flex flex-row gap-1"
+        role="img"
+        aria-label="تقييم 5 من 5"
+      >
         {Array.from({ length: 5 }).map((_, i) => (
           <motion.span
             key={i}

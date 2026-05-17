@@ -90,7 +90,7 @@ export default function Header() {
                   key={link.id}
                   href={link.href}
                   className={cn(
-                    "relative py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4",
+                    "relative rounded-sm px-1 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                     isActive ? "text-primary" : "text-ink-muted hover:text-ink",
                   )}
                 >
@@ -117,7 +117,7 @@ export default function Header() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="p-2 text-ink hover:text-primary lg:hidden"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-ink hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:hidden"
               aria-label="فتح القائمة"
             >
               <Menu className="size-6" strokeWidth={2} aria-hidden="true" />

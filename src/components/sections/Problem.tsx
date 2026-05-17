@@ -20,7 +20,7 @@ const pains: Pain[] = [
   {
     Icon: ChefHat,
     iconClass: "text-primary",
-    text: "تطبخين 4 وجبات مختلفة كل ليلة. واحدة لك، وحدة لزوجك الحمية، ثالثة للأولاد، ورابعة للخادمة.",
+    text: "تطبخين 4 وجبات مختلفة كل ليلة. واحدة لك، وحدة لزوجك على حمية، ثالثة للأولاد، ورابعة للخادمة.",
   },
   {
     Icon: Globe,
@@ -81,7 +81,7 @@ export default function Problem() {
             className="text-[2rem] font-bold leading-[1.1] tracking-tight text-balance text-foreground lg:text-[2.5rem]"
             {...headerItem(100)}
           >
-            أعراف يومك يا أم البيت.
+            نعرف يومك يا أم البيت.
           </motion.h2>
 
           <motion.p

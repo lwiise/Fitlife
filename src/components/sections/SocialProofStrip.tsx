@@ -93,7 +93,7 @@ export default function SocialProofStrip({
               <motion.a
                 key={logo.name}
                 href="#"
-                className="text-base font-bold text-ink-muted/60 tracking-[0.05em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="inline-flex min-h-11 items-center rounded-md px-2 py-2 text-base font-bold text-ink-muted/60 tracking-[0.05em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 dir="ltr"
                 initial={reduce ? false : { opacity: 0, y: 10 }}
                 animate={inView ? { opacity: 0.3, y: 0 } : undefined}

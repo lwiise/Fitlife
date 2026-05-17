@@ -139,7 +139,7 @@ export default function FAQ() {
                 >
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute start-0 top-0 bottom-0 w-[3px] origin-top scale-x-0 bg-brand-yellow opacity-0 transition-all duration-200 ease-out motion-reduce:duration-100 group-data-[state=open]/item:scale-x-100 group-data-[state=open]/item:opacity-100"
+                    className="pointer-events-none absolute start-0 top-0 bottom-0 w-[3px] origin-top scale-x-0 bg-brand-yellow opacity-0 transition-all duration-200 ease-out motion-reduce:transition-none group-data-[state=open]/item:scale-x-100 group-data-[state=open]/item:opacity-100"
                   />
                   <AccordionTrigger
                     className="min-h-11 px-4 py-6 text-base font-bold leading-snug text-ink no-underline transition-colors duration-150 ease-out hover:bg-ink/[0.03] hover:no-underline aria-expanded:text-brand-purple-700 md:text-lg [&_[data-slot=accordion-trigger-icon]]:text-ink-muted aria-expanded:[&_[data-slot=accordion-trigger-icon]]:text-brand-purple-700"
@@ -183,7 +183,7 @@ export default function FAQ() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => track("whatsapp_clicked", { source: "faq_helper" })}
-              className="text-base font-semibold text-[#25D366] transition-all hover:underline"
+              className="inline-flex min-h-11 items-center rounded-md px-1 text-base font-semibold text-[#25D366] transition-all hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] focus-visible:ring-offset-2"
             >
               كلمينا على واتساب
             </a>

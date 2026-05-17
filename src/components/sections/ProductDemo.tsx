@@ -287,7 +287,7 @@ export default function ProductDemo({
                 >
                   <Image
                     src={screen.imageSrc}
-                    alt={screen.tabLabel}
+                    alt={`لقطة شاشة من شاشة ${screen.tabLabel} في تطبيق فت لايف`}
                     fill
                     sizes="(max-width: 1024px) 100vw, 80vw"
                     className="object-cover"
