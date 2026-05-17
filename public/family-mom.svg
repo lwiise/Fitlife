@@ -1,5 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800" role="img" aria-label="Mother portrait placeholder">
-  <rect width="600" height="800" fill="#C5458F"/>
-  <circle cx="300" cy="320" r="120" fill="#FFFFFF" fill-opacity="0.25"/>
-  <text x="300" y="600" text-anchor="middle" dominant-baseline="central" fill="white" font-family="Tajawal, system-ui, sans-serif" font-size="160" font-weight="700">&#1607;</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Mother silhouette placeholder">
+  <ellipse cx="300" cy="330" rx="195" ry="215" fill="#3D1A29"/>
+  <path d="M 80 800 Q 80 540 200 470 L 400 470 Q 520 540 520 800 Z" fill="#C84A4A"/>
+  <rect x="265" y="395" width="70" height="80" fill="#E8C5A0"/>
+  <circle cx="300" cy="280" r="135" fill="#E8C5A0"/>
+  <path d="M 165 230 Q 200 130, 300 130 Q 400 130, 435 230 Q 415 200, 380 200 L 220 200 Q 185 200, 165 230 Z" fill="#3D1A29"/>
+  <ellipse cx="255" cy="280" rx="5" ry="7" fill="#2A1810"/>
+  <ellipse cx="345" cy="280" rx="5" ry="7" fill="#2A1810"/>
+  <path d="M 255 340 Q 300 366 345 340" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 240 245 Q 255 238 270 245" stroke="#3D1A29" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 330 245 Q 345 238 360 245" stroke="#3D1A29" stroke-width="3" fill="none" stroke-linecap="round"/>
 </svg>

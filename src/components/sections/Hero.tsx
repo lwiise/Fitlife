@@ -12,76 +12,61 @@ import {
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
-// TODO: Replace family portrait placeholder SVGs with real photography before launch.
+// TODO: Replace 5 placeholder SVG silhouettes with real cutout photography
+// (transparent-background PNGs) before launch. Real photos: women/men in Gulf/Filipino
+// attire, friendly expressions, similar editorial style to the Clevora reference.
 
-type CardBg =
-  | "bg-brand-lavender"
-  | "bg-primary"
-  | "bg-brand-yellow"
-  | "bg-brand-pink"
-  | "bg-[#E89B5A]";
-
-type FamilyCardData = {
+type FamilyMember = {
   label: string;
-  sublabel: string;
-  goal: string;
+  sublabel?: string;
   imageSrc: string;
-  alt: string;
-  bgClass: CardBg;
-  textColorClass: string;
-  leafColor: string;
+  imageAlt: string;
+  bgColor: string;
+  textColor: string;
+  hasPlayButton?: boolean;
 };
 
-const familyMembers: FamilyCardData[] = [
+const familyMembers: FamilyMember[] = [
   {
-    label: "الأب",
-    sublabel: "أحمد، 38 سنة",
-    goal: "خسارة وزن",
+    label: "خطة للأب",
+    sublabel: "اللي على حمية",
     imageSrc: "/family-dad.svg",
-    alt: "صورة الأب — أحمد",
-    bgClass: "bg-brand-lavender",
-    textColorClass: "text-primary",
-    leafColor: "#4E2490",
+    imageAlt: "صورة الأب — رجل خليجي يبتسم",
+    bgColor: "bg-[#D9B0FC]",
+    textColor: "text-[#4E2490]",
   },
   {
-    label: "الأم",
-    sublabel: "هند، 35 سنة",
-    goal: "صحة عامة",
+    label: "وجبات الأم",
+    sublabel: "بسعرات محسوبة",
     imageSrc: "/family-mom.svg",
-    alt: "صورة الأم — هند",
-    bgClass: "bg-primary",
-    textColorClass: "text-white",
-    leafColor: "#FFFFFF",
+    imageAlt: "صورة الأم — امرأة خليجية متفائلة",
+    bgColor: "bg-[#C5458F]",
+    textColor: "text-white",
   },
   {
-    label: "الخادمة",
-    sublabel: "روزا، الفلبين",
-    goal: "بالتاغالوغ",
+    label: "حساب للخادمة",
+    sublabel: "بلغتها",
     imageSrc: "/family-housekeeper.svg",
-    alt: "صورة الخادمة — روزا",
-    bgClass: "bg-brand-yellow",
-    textColorClass: "text-primary",
-    leafColor: "#4E2490",
+    imageAlt: "صورة الخادمة — امرأة فلبينية تبتسم",
+    bgColor: "bg-[#F2BB16]",
+    textColor: "text-[#4E2490]",
+    hasPlayButton: true,
   },
   {
-    label: "البنت",
-    sublabel: "ليلى، 6 سنوات",
-    goal: "نمو",
+    label: "للأولاد",
+    sublabel: "حسب أعمارهم",
     imageSrc: "/family-daughter.svg",
-    alt: "صورة البنت — ليلى",
-    bgClass: "bg-brand-pink",
-    textColorClass: "text-white",
-    leafColor: "#FFFFFF",
+    imageAlt: "صورة البنت — طفلة سعيدة",
+    bgColor: "bg-[#4E2490]",
+    textColor: "text-white",
   },
   {
-    label: "الولد",
-    sublabel: "أحمد الابن، 10",
-    goal: "نمو",
+    label: "كل البيت",
+    sublabel: "في خطة واحدة",
     imageSrc: "/family-son.svg",
-    alt: "صورة الولد — أحمد الابن",
-    bgClass: "bg-[#E89B5A]",
-    textColorClass: "text-white",
-    leafColor: "#FFFFFF",
+    imageAlt: "صورة الولد — طفل سعيد",
+    bgColor: "bg-[#E89B5A]",
+    textColor: "text-[#1A1023]",
   },
 ];
 
@@ -115,32 +100,38 @@ function PlayIcon({ className }: { className?: string }) {
   );
 }
 
-function DecorativeLeaves({ color }: { color: string }) {
+function DecorativeLeaves({ textColorClass }: { textColorClass: string }) {
+  const strokeColor = textColorClass.includes("white") ? "white" : "#4E2490";
   return (
     <svg
-      viewBox="0 0 200 100"
+      viewBox="0 0 300 200"
       fill="none"
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMid slice"
       aria-hidden="true"
-      className="h-full w-full"
+      className="h-full w-full opacity-30"
     >
       <path
-        d="M20,50 Q40,20 60,40 T100,30 T140,40 T180,30"
-        stroke={color}
-        strokeWidth="2"
-        opacity="0.5"
+        d="M-20 100 Q 50 30, 150 70 T 320 60"
+        stroke={strokeColor}
+        strokeWidth="2.5"
         fill="none"
+        strokeLinecap="round"
       />
-      <circle cx="30" cy="40" r="8" fill={color} opacity="0.4" />
-      <circle cx="80" cy="55" r="6" fill={color} opacity="0.4" />
-      <circle cx="140" cy="35" r="7" fill={color} opacity="0.4" />
       <path
-        d="M10,75 Q30,55 50,65 T90,60 T130,68 T170,60"
-        stroke={color}
+        d="M-10 150 Q 70 90, 160 120 T 310 110"
+        stroke={strokeColor}
         strokeWidth="2"
-        opacity="0.35"
         fill="none"
+        strokeLinecap="round"
+        opacity="0.7"
       />
+      <ellipse cx="60" cy="60" rx="14" ry="6" fill={strokeColor} opacity="0.4" transform="rotate(-25 60 60)" />
+      <ellipse cx="180" cy="90" rx="18" ry="8" fill={strokeColor} opacity="0.5" transform="rotate(15 180 90)" />
+      <ellipse cx="240" cy="50" rx="12" ry="5" fill={strokeColor} opacity="0.4" transform="rotate(-15 240 50)" />
+      <ellipse cx="120" cy="130" rx="16" ry="7" fill={strokeColor} opacity="0.4" transform="rotate(25 120 130)" />
+      <circle cx="40" cy="120" r="3" fill={strokeColor} opacity="0.5" />
+      <circle cx="210" cy="140" r="4" fill={strokeColor} opacity="0.5" />
+      <circle cx="280" cy="100" r="3" fill={strokeColor} opacity="0.5" />
     </svg>
   );
 }
@@ -148,12 +139,10 @@ function DecorativeLeaves({ color }: { color: string }) {
 function FamilyCard({
   member,
   index,
-  isHighlighted,
   reduced,
 }: {
-  member: FamilyCardData;
+  member: FamilyMember;
   index: number;
-  isHighlighted: boolean;
   reduced: boolean;
 }) {
   return (
@@ -169,71 +158,63 @@ function FamilyCard({
         reduced
           ? undefined
           : {
-              y: -8,
+              y: -10,
               transition: { duration: 0.3, ease: easeOut },
             }
       }
       className={cn(
-        "relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl",
-        member.bgClass,
+        "group relative aspect-[3/4] cursor-default overflow-hidden rounded-3xl shadow-xl",
+        member.bgColor,
       )}
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 opacity-30"
+        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 overflow-hidden"
       >
-        <DecorativeLeaves color={member.leafColor} />
+        <DecorativeLeaves textColorClass={member.textColor} />
       </div>
 
-      <div className="absolute inset-x-4 top-4 z-10">
+      <div className="absolute top-5 start-5 z-20 max-w-[80%]">
         <h3
           className={cn(
-            "text-lg font-bold leading-tight",
-            member.textColorClass,
+            "text-xl font-bold leading-tight md:text-2xl",
+            member.textColor,
           )}
         >
           {member.label}
         </h3>
-        <p
-          className={cn(
-            "mt-1 text-xs font-medium opacity-80",
-            member.textColorClass,
-          )}
-        >
-          {member.sublabel}
-        </p>
-        <span
-          className={cn(
-            "mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-bold",
-            isHighlighted
-              ? "bg-primary/20 text-primary"
-              : "bg-white/20 text-white",
-          )}
-        >
-          {member.goal}
-        </span>
+        {member.sublabel && (
+          <p
+            className={cn(
+              "mt-1 text-sm font-medium leading-tight opacity-90 md:text-base",
+              member.textColor,
+            )}
+          >
+            {member.sublabel}
+          </p>
+        )}
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-0 h-3/4">
+      <div className="absolute inset-x-0 bottom-0 z-10 h-[75%]">
         <Image
           src={member.imageSrc}
-          alt={member.alt}
+          alt={member.imageAlt}
           fill
           unoptimized
-          sizes="(max-width: 768px) 55vw, 230px"
-          className="object-cover object-bottom"
+          sizes="(max-width: 768px) 60vw, 20vw"
+          className="object-cover object-top"
         />
       </div>
 
-      {isHighlighted && (
-        <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center">
+      {member.hasPlayButton && (
+        <div className="absolute inset-x-0 bottom-6 z-30 flex justify-center">
           <button
             type="button"
             onClick={() => track("hero_video_clicked")}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-[#1A1023] hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-[#1A1023] hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
-            <PlayIcon className="size-3" />
-            <span>شوفي كيف يشتغل</span>
+            <PlayIcon className="size-4" />
+            <span>شغّلي الفيديو</span>
           </button>
         </div>
       )}
@@ -512,17 +493,20 @@ export default function Hero() {
       </div>
 
       <div className="relative">
-        <div className="container-page pb-0">
+        <div className="container-page relative z-10 pb-0">
           <div className="hidden md:block">
-            <div className="mx-auto grid max-w-6xl grid-cols-5 gap-3 lg:gap-4">
+            <div className="mx-auto grid max-w-6xl grid-cols-5 items-end gap-3 lg:gap-4">
               {familyMembers.map((member, idx) => (
-                <FamilyCard
+                <div
                   key={idx}
-                  member={member}
-                  index={idx}
-                  isHighlighted={idx === 2}
-                  reduced={reduced}
-                />
+                  className={cn(idx % 2 === 1 ? "md:-translate-y-5" : "")}
+                >
+                  <FamilyCard
+                    member={member}
+                    index={idx}
+                    reduced={reduced}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -533,11 +517,10 @@ export default function Hero() {
             >
               <CarouselContent>
                 {familyMembers.map((member, idx) => (
-                  <CarouselItem key={idx} className="basis-[55%]">
+                  <CarouselItem key={idx} className="basis-[60%]">
                     <FamilyCard
                       member={member}
                       index={idx}
-                      isHighlighted={idx === 2}
                       reduced={reduced}
                     />
                   </CarouselItem>

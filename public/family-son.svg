@@ -1,5 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800" role="img" aria-label="Son portrait placeholder">
-  <rect width="600" height="800" fill="#10B981"/>
-  <circle cx="300" cy="320" r="120" fill="#FFFFFF" fill-opacity="0.25"/>
-  <text x="300" y="600" text-anchor="middle" dominant-baseline="central" fill="white" font-family="Tajawal, system-ui, sans-serif" font-size="160" font-weight="700">&#1571;</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Son silhouette placeholder">
+  <path d="M 100 800 Q 100 560 220 490 L 380 490 Q 500 560 500 800 Z" fill="#F2BB16"/>
+  <path d="M 270 490 L 300 510 L 330 490" stroke="#D9A50E" stroke-width="3" fill="none"/>
+  <rect x="270" y="410" width="60" height="80" fill="#E5B98E"/>
+  <circle cx="300" cy="300" r="125" fill="#E5B98E"/>
+  <path d="M 185 250 Q 195 175, 300 170 Q 405 175, 415 250 Q 400 215, 370 215 L 230 215 Q 200 215, 185 250 Z" fill="#2A1810"/>
+  <ellipse cx="195" cy="280" rx="20" ry="35" fill="#2A1810"/>
+  <ellipse cx="405" cy="280" rx="20" ry="35" fill="#2A1810"/>
+  <ellipse cx="260" cy="310" rx="6" ry="9" fill="#2A1810"/>
+  <ellipse cx="340" cy="310" rx="6" ry="9" fill="#2A1810"/>
+  <path d="M 265 360 Q 300 382 335 360" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <circle cx="235" cy="340" r="14" fill="#F4A8B5" opacity="0.4"/>
+  <circle cx="365" cy="340" r="14" fill="#F4A8B5" opacity="0.4"/>
 </svg>

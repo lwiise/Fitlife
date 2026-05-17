@@ -1,5 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800" role="img" aria-label="Housekeeper portrait placeholder">
-  <rect width="600" height="800" fill="#4E2490"/>
-  <circle cx="300" cy="320" r="120" fill="#FFFFFF" fill-opacity="0.25"/>
-  <text x="300" y="600" text-anchor="middle" dominant-baseline="central" fill="white" font-family="Tajawal, system-ui, sans-serif" font-size="160" font-weight="700">&#1585;</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Housekeeper silhouette placeholder">
+  <path d="M 80 800 Q 80 540 200 470 L 400 470 Q 520 540 520 800 Z" fill="#F5F5F5"/>
+  <path d="M 280 470 L 320 470 L 320 510 L 300 530 L 280 510 Z" fill="#E0E0E0"/>
+  <rect x="265" y="395" width="70" height="80" fill="#C8956D"/>
+  <ellipse cx="300" cy="290" rx="155" ry="160" fill="#2A1810"/>
+  <circle cx="300" cy="280" r="135" fill="#C8956D"/>
+  <path d="M 175 230 Q 210 145, 300 145 Q 390 145, 425 230 Q 405 200, 375 195 L 225 195 Q 195 200, 175 230 Z" fill="#2A1810"/>
+  <ellipse cx="255" cy="280" rx="5" ry="7" fill="#1A0F08"/>
+  <ellipse cx="345" cy="280" rx="5" ry="7" fill="#1A0F08"/>
+  <path d="M 255 340 Q 300 366 345 340" stroke="#1A0F08" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 240 245 Q 255 238 270 245" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 330 245 Q 345 238 360 245" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
 </svg>
