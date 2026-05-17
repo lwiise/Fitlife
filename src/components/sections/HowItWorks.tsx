@@ -1,240 +1,358 @@
 "use client";
 
-import { useRef } from "react";
+import { ChevronLeft } from "lucide-react";
 import {
   motion,
   useInView,
   useReducedMotion,
-  type Variants,
+  useScroll,
+  useTransform,
 } from "motion/react";
-import {
-  ChevronLeft,
-  ClipboardList,
-  LineChart,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import Image from "next/image";
+import { useEffect, useRef } from "react";
+
+// TODO: Replace 3 placeholder SVG posters with real product screen recordings
+// (MP4 + WebM + poster PNG) before launch. Each video should be 8-15 seconds,
+// silent, looping, showing the actual app feature.
+//
+// Required files in /public/:
+//   /public/how-it-works-1.mp4 — 20-question onboarding flow
+//   /public/how-it-works-1.webm — same content as WebM (smaller, modern browsers)
+//   /public/how-it-works-2.mp4 — multi-member plan generation
+//   /public/how-it-works-2.webm
+//   /public/how-it-works-3.mp4 — chat + progress tracking
+//   /public/how-it-works-3.webm
 
 type Step = {
-  num: string;
-  Icon: LucideIcon;
-  iconClass: string;
+  number: string;
   title: string;
   description: string;
+  videoSrc: string;
+  videoSrcWebm?: string;
+  posterSrc: string;
+  videoAriaLabel: string;
+  accentColor: string;
+  numberTextColor: string;
 };
 
 const steps: Step[] = [
   {
-    num: "٠١",
-    Icon: ClipboardList,
-    iconClass: "text-brand-purple-600",
+    number: "01",
     title: "جاوبي على 20 سؤال",
     description:
       "عن صحة عائلتك، أهدافك، وأكلكم المفضل. الأسئلة بالعربي، وسهلة.",
+    videoSrc: "/how-it-works-1.mp4",
+    videoSrcWebm: "/how-it-works-1.webm",
+    posterSrc: "/how-it-works-1-poster.svg",
+    videoAriaLabel: "عرض مراحل الإعداد: الأسئلة الأولى",
+    accentColor: "#4E2490",
+    numberTextColor: "#FFFFFF",
   },
   {
-    num: "٠٢",
-    Icon: Users,
-    iconClass: "text-brand-pink",
+    number: "02",
     title: "استلمي خطة لكل فرد",
     description:
       "خطة للأم، الأب، الأولاد، والخادمة — كل واحد بلغته، وحسب احتياجه الصحي.",
+    videoSrc: "/how-it-works-2.mp4",
+    videoSrcWebm: "/how-it-works-2.webm",
+    posterSrc: "/how-it-works-2-poster.svg",
+    videoAriaLabel: "عرض إنشاء خطة لكل فرد في العائلة",
+    accentColor: "#C5458F",
+    numberTextColor: "#FFFFFF",
   },
   {
-    num: "٠٣",
-    Icon: LineChart,
-    iconClass: "text-brand-yellow-dark",
+    number: "03",
     title: "تابعي تقدمك يومياً",
     description:
       "تشات بالعربي يجاوب على أسئلتك، صور قبل/بعد، وقياسات في مكان واحد.",
+    videoSrc: "/how-it-works-3.mp4",
+    videoSrcWebm: "/how-it-works-3.webm",
+    posterSrc: "/how-it-works-3-poster.svg",
+    videoAriaLabel: "عرض متابعة التقدم اليومي",
+    accentColor: "#F2BB16",
+    numberTextColor: "#1A1023",
   },
 ];
 
-const listVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.15 } },
-};
+function StepVideo({ step }: { step: Step }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(containerRef, { amount: 0.4 });
+  const reducedMotion = useReducedMotion() ?? false;
 
-const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.5,
-      ease: "easeOut" as const,
-      staggerChildren: 0.08,
-      delayChildren: 0.1,
-    },
-  },
-};
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || reducedMotion) return;
 
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.35, ease: "easeOut" as const },
-  },
-};
+    if (isInView) {
+      video.play().catch(() => {
+        // Autoplay blocked or video missing — poster stays visible
+      });
+    } else {
+      video.pause();
+    }
+  }, [isInView, reducedMotion]);
+
+  if (reducedMotion) {
+    return (
+      <div
+        ref={containerRef}
+        className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-surface-elevated shadow-md"
+      >
+        <Image
+          src={step.posterSrc}
+          alt={`عرض ${step.title}`}
+          fill
+          unoptimized
+          sizes="(max-width: 768px) 90vw, 33vw"
+          className="object-cover"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-surface-elevated shadow-md"
+    >
+      <video
+        ref={videoRef}
+        className="h-full w-full object-cover"
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        poster={step.posterSrc}
+        aria-label={step.videoAriaLabel}
+      >
+        {step.videoSrcWebm && (
+          <source src={step.videoSrcWebm} type="video/webm" />
+        )}
+        <source src={step.videoSrc} type="video/mp4" />
+      </video>
+    </div>
+  );
+}
+
+function AnimatedTimelineLine({
+  lineProgress,
+  reducedMotion,
+}: {
+  lineProgress: ReturnType<typeof useTransform<number, number>>;
+  reducedMotion: boolean;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 top-[44px] z-0 hidden h-1 lg:block"
+    >
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 1200 4"
+        preserveAspectRatio="none"
+      >
+        <line
+          x1="0"
+          y1="2"
+          x2="1200"
+          y2="2"
+          stroke="#1A1023"
+          strokeOpacity="0.1"
+          strokeWidth="2"
+          strokeDasharray="6 8"
+        />
+      </svg>
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 1200 4"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id="timeline-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#4E2490" />
+            <stop offset="50%" stopColor="#C5458F" />
+            <stop offset="100%" stopColor="#F2BB16" />
+          </linearGradient>
+        </defs>
+        <motion.line
+          x1="0"
+          y1="2"
+          x2="1200"
+          y2="2"
+          stroke="url(#timeline-gradient)"
+          strokeWidth="2.5"
+          strokeDasharray="6 8"
+          style={{
+            pathLength: reducedMotion ? 1 : lineProgress,
+          }}
+        />
+      </svg>
+    </div>
+  );
+}
+
+function StepCard({
+  step,
+  index,
+  reducedMotion,
+}: {
+  step: Step;
+  index: number;
+  reducedMotion: boolean;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const cardInView = useInView(cardRef, { amount: 0.3, once: true });
+
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={reducedMotion ? false : { opacity: 0, y: 40 }}
+      animate={cardInView ? { opacity: 1, y: 0 } : undefined}
+      transition={
+        reducedMotion
+          ? { duration: 0 }
+          : { duration: 0.5, delay: index * 0.15, ease: "easeOut" as const }
+      }
+      className="relative"
+    >
+      <div className="mb-8 flex flex-col items-center">
+        <motion.div
+          initial={reducedMotion ? false : { scale: 0, opacity: 0 }}
+          animate={cardInView ? { scale: 1, opacity: 1 } : undefined}
+          transition={
+            reducedMotion
+              ? { duration: 0 }
+              : {
+                  duration: 0.5,
+                  delay: index * 0.15 + 0.2,
+                  ease: [0.34, 1.56, 0.64, 1] as const,
+                }
+          }
+          className="relative"
+        >
+          {!reducedMotion && cardInView && (
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-0 rounded-full"
+              style={{ backgroundColor: step.accentColor, opacity: 0.3 }}
+              animate={{
+                scale: [1, 1.4, 1],
+                opacity: [0.3, 0, 0.3],
+              }}
+              transition={{
+                duration: 2.5,
+                repeat: Infinity,
+                ease: "easeOut" as const,
+              }}
+            />
+          )}
+          <span
+            className="relative inline-flex h-16 w-16 items-center justify-center rounded-full text-2xl font-extrabold shadow-lg"
+            style={{
+              backgroundColor: step.accentColor,
+              color: step.numberTextColor,
+            }}
+            aria-hidden="true"
+          >
+            {step.number}
+          </span>
+        </motion.div>
+      </div>
+
+      <StepVideo step={step} />
+
+      <h3 className="mt-6 text-xl font-bold leading-tight text-foreground md:text-2xl">
+        {step.title}
+      </h3>
+      <p className="mt-3 text-base leading-relaxed text-ink-muted">
+        {step.description}
+      </p>
+    </motion.div>
+  );
+}
 
 export default function HowItWorks() {
-  const reduce = useReducedMotion();
-  const topRef = useRef<HTMLDivElement>(null);
-  const cardsRef = useRef<HTMLDivElement>(null);
-  const topInView = useInView(topRef, { amount: 0.3, once: true });
-  const cardsInView = useInView(cardsRef, { amount: 0.3, once: true });
+  const sectionRef = useRef<HTMLElement>(null);
+  const reducedMotion = useReducedMotion() ?? false;
+  const sectionInView = useInView(sectionRef, { amount: 0.2, once: true });
 
-  const topItem = (delayMs: number) => ({
-    initial: reduce ? false : { opacity: 0, y: 20 },
-    animate: topInView ? { opacity: 1, y: 0 } : undefined,
-    transition: {
-      duration: 0.4,
-      ease: "easeOut" as const,
-      delay: delayMs / 1000,
-    },
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start 70%", "end 30%"],
   });
+  const lineProgress = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
   return (
     <section
       id="how-it-works"
-      aria-labelledby="how-title"
-      className="relative scroll-mt-24 bg-surface bg-noise py-20 lg:py-28"
+      ref={sectionRef}
+      aria-label="كيف يشتغل التطبيق"
+      className="relative scroll-mt-24 bg-surface py-24 md:py-32"
     >
-      <div className="container-page flex flex-col gap-14 lg:gap-20">
-        {/* TOP BLOCK */}
-        <div ref={topRef} className="flex flex-col gap-4">
+      <div className="container-page">
+        <div className="mx-auto max-w-3xl text-center">
           <motion.span
-            className="text-sm font-semibold tracking-wide text-primary"
-            {...topItem(0)}
+            initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+            animate={sectionInView ? { opacity: 1, y: 0 } : undefined}
+            transition={
+              reducedMotion
+                ? { duration: 0 }
+                : { duration: 0.4, ease: "easeOut" as const }
+            }
+            className="text-sm font-bold text-primary"
           >
             3 خطوات. مدة الإعداد: دقيقتين.
           </motion.span>
           <motion.h2
-            id="how-title"
-            className="max-w-[20ch] text-[2rem] font-bold leading-[1.1] tracking-tight text-balance text-foreground lg:text-[2.5rem]"
-            {...topItem(100)}
+            initial={reducedMotion ? false : { opacity: 0, y: 15 }}
+            animate={sectionInView ? { opacity: 1, y: 0 } : undefined}
+            transition={
+              reducedMotion
+                ? { duration: 0 }
+                : { duration: 0.4, ease: "easeOut" as const, delay: 0.1 }
+            }
+            className="mt-3 text-balance text-[clamp(2rem,4vw,3rem)] font-bold leading-tight text-foreground"
           >
             بسيطة بقدر ما تحتاجين.
           </motion.h2>
         </div>
 
-        {/* CARDS WITH DOTTED LINE */}
-        <div ref={cardsRef} className="relative">
-          {/* Dotted line — desktop only, behind cards, draws RTL (right→left) */}
-          <motion.div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-[8%] top-[24px] -z-10 hidden h-[2px] md:block"
-            initial={reduce ? false : { clipPath: "inset(0 0 0 100%)" }}
-            animate={
-              reduce
-                ? undefined
-                : cardsInView
-                  ? { clipPath: "inset(0 0 0 0)" }
-                  : { clipPath: "inset(0 0 0 100%)" }
-            }
-            transition={{ duration: 1.5, delay: 0.6, ease: "easeInOut" as const }}
-          >
-            <svg
-              viewBox="0 0 1000 4"
-              preserveAspectRatio="none"
-              className="h-full w-full"
-            >
-              <path
-                d="M 4 2 L 996 2"
-                stroke="var(--brand-purple-300)"
-                strokeWidth="2"
-                strokeDasharray="3 6"
-                strokeLinecap="round"
-                fill="none"
+        <div className="relative mt-16 md:mt-24">
+          <AnimatedTimelineLine
+            lineProgress={lineProgress}
+            reducedMotion={reducedMotion}
+          />
+
+          <div className="relative z-10 grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-8 lg:grid-cols-3 lg:gap-6">
+            {steps.map((step, idx) => (
+              <StepCard
+                key={step.number}
+                step={step}
+                index={idx}
+                reducedMotion={reducedMotion}
               />
-            </svg>
-          </motion.div>
-
-          <motion.ul
-            variants={listVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.3 }}
-            className="grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8 lg:gap-12"
-          >
-            {steps.map(({ num, Icon, iconClass, title, description }) => (
-              <motion.li
-                key={num}
-                variants={cardVariants}
-                className="group/step list-none"
-              >
-                <article className="flex flex-col items-start gap-5">
-                  <motion.div
-                    variants={itemVariants}
-                    className="text-[44px] font-bold leading-none tracking-tight tabular-nums text-brand-pink transition-colors duration-300 group-hover/step:text-brand-pink-dark"
-                    aria-hidden="true"
-                  >
-                    {num}
-                  </motion.div>
-
-                  <motion.div
-                    variants={itemVariants}
-                    className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-ink/15 bg-surface-elevated"
-                  >
-                    {/* Corner perforation marks — recipe-card metaphor */}
-                    <span
-                      aria-hidden="true"
-                      className="absolute top-1 start-1 h-1 w-1 rounded-full bg-ink/25"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="absolute top-1 end-1 h-1 w-1 rounded-full bg-ink/25"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="absolute bottom-1 start-1 h-1 w-1 rounded-full bg-ink/25"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="absolute bottom-1 end-1 h-1 w-1 rounded-full bg-ink/25"
-                    />
-
-                    <div className="flex h-full w-full items-center justify-center transition-transform duration-300 group-hover/step:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover/step:scale-100">
-                      <Icon
-                        className={`size-12 ${iconClass}`}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </motion.div>
-
-                  <motion.div
-                    variants={itemVariants}
-                    className="flex flex-col gap-2"
-                  >
-                    <h3 className="text-xl font-bold leading-tight text-foreground">
-                      {title}
-                    </h3>
-                    <p className="text-base leading-[1.7] text-ink-muted">
-                      {description}
-                    </p>
-                  </motion.div>
-                </article>
-              </motion.li>
             ))}
-          </motion.ul>
+          </div>
         </div>
 
-        {/* BOTTOM CTA */}
         <motion.div
-          initial={reduce ? false : { opacity: 0, y: 16 }}
-          animate={cardsInView ? { opacity: 1, y: 0 } : undefined}
-          transition={{ duration: 0.4, ease: "easeOut" as const, delay: 1.2 }}
-          className="flex"
+          initial={reducedMotion ? false : { opacity: 0, y: 20 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : undefined}
+          transition={
+            reducedMotion
+              ? { duration: 0 }
+              : { duration: 0.5, ease: "easeOut" as const, delay: 0.8 }
+          }
+          className="mt-16 flex justify-center md:mt-20"
         >
           <a
             href="#pricing"
-            className="group/cta inline-flex min-h-11 items-center gap-2 py-2 text-base font-bold text-brand-purple-700 transition-colors duration-200 hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            className="group inline-flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-base font-bold text-primary transition-all duration-300 hover:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
-            جربيها مجاناً
+            <span>جربيها مجاناً</span>
             <ChevronLeft
-              className="size-4 transition-transform duration-200 group-hover/cta:-translate-x-1 motion-reduce:transition-none motion-reduce:group-hover/cta:translate-x-0"
+              className="size-4 transition-transform group-hover:-translate-x-1 motion-reduce:group-hover:translate-x-0"
               aria-hidden="true"
             />
           </a>
