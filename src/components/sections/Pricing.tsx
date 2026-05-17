@@ -165,14 +165,14 @@ function PricingCard({
   const transition = reduced
     ? undefined
     : {
-        opacity: { duration: 0.5, ease: "easeOut", delay: index * 0.1 },
-        y: { duration: 0.5, ease: "easeOut", delay: index * 0.1 },
+        opacity: { duration: 0.5, ease: "easeOut" as const, delay: index * 0.1 },
+        y: { duration: 0.5, ease: "easeOut" as const, delay: index * 0.1 },
         ...(isFamilyGlow && inView
           ? {
               boxShadow: {
                 duration: 4,
                 repeat: Infinity,
-                ease: "easeOut",
+                ease: "easeOut" as const,
                 delay: index * 0.1 + 0.6,
               },
             }
@@ -184,11 +184,11 @@ function PricingCard({
     : highlighted
       ? {
           boxShadow: familyStaticShadow,
-          transition: { duration: 0.2, ease: "easeOut" },
+          transition: { duration: 0.2, ease: "easeOut" as const },
         }
       : {
           scale: 1.005,
-          transition: { duration: 0.2, ease: "easeOut" },
+          transition: { duration: 0.2, ease: "easeOut" as const },
         };
 
   return (
@@ -237,7 +237,7 @@ function PricingCard({
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            transition={{ duration: 0.2, ease: "easeOut" as const }}
             className={`mt-2 text-xs ${annualLineClass}`}
           >
             تُدفع سنوياً ({annualPrice * 12} ر.س/سنة)
@@ -302,7 +302,7 @@ export default function Pricing() {
         ? { opacity: 1, y: 0 }
         : { opacity: 0, y: 15 };
   const topTransition = (delay: number) =>
-    reduced ? undefined : { duration: 0.4, ease: "easeOut", delay };
+    reduced ? undefined : { duration: 0.4, ease: "easeOut" as const, delay };
 
   return (
     <section
@@ -387,7 +387,7 @@ export default function Pricing() {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    transition={{ duration: 0.2, ease: "easeOut" as const }}
                     className="rounded-full bg-brand-yellow/15 px-2 py-0.5 text-xs font-semibold text-brand-yellow-dark"
                   >
                     وفّري 20%

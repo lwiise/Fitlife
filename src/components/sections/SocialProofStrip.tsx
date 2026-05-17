@@ -69,7 +69,7 @@ export default function SocialProofStrip({
                 className="inline-flex"
                 initial={reduce ? false : { opacity: 0, scale: 0.5 }}
                 animate={inView ? { opacity: 1, scale: 1 } : undefined}
-                transition={{ duration: 0.3, ease: "easeOut", delay: i * 0.08 }}
+                transition={{ duration: 0.3, ease: "easeOut" as const, delay: i * 0.08 }}
               >
                 <Star
                   className="size-6 fill-brand-yellow text-brand-yellow"
@@ -99,7 +99,7 @@ export default function SocialProofStrip({
                 animate={inView ? { opacity: 0.3, y: 0 } : undefined}
                 whileHover={!reduce ? { opacity: 1, transition: { duration: 0.2 } } : undefined}
                 whileFocus={!reduce ? { opacity: 1, transition: { duration: 0.2 } } : undefined}
-                transition={{ duration: 0.4, ease: "easeOut", delay: 0.4 }}
+                transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0.4 }}
               >
                 {logo.name}
               </motion.a>

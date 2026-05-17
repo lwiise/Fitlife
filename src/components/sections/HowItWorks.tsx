@@ -62,7 +62,7 @@ const cardVariants: Variants = {
     y: 0,
     transition: {
       duration: 0.5,
-      ease: "easeOut",
+      ease: "easeOut" as const,
       staggerChildren: 0.08,
       delayChildren: 0.1,
     },
@@ -74,7 +74,7 @@ const itemVariants: Variants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.35, ease: "easeOut" },
+    transition: { duration: 0.35, ease: "easeOut" as const },
   },
 };
 
@@ -133,7 +133,7 @@ export default function HowItWorks() {
                   ? { clipPath: "inset(0 0 0 0)" }
                   : { clipPath: "inset(0 0 0 100%)" }
             }
-            transition={{ duration: 1.5, delay: 0.6, ease: "easeInOut" }}
+            transition={{ duration: 1.5, delay: 0.6, ease: "easeInOut" as const }}
           >
             <svg
               viewBox="0 0 1000 4"
@@ -225,7 +225,7 @@ export default function HowItWorks() {
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 16 }}
           animate={cardsInView ? { opacity: 1, y: 0 } : undefined}
-          transition={{ duration: 0.4, ease: "easeOut", delay: 1.2 }}
+          transition={{ duration: 0.4, ease: "easeOut" as const, delay: 1.2 }}
           className="flex"
         >
           <a

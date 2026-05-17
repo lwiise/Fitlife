@@ -112,14 +112,14 @@ function TrustMiniCard({
       transition={
         reduced
           ? { duration: 0 }
-          : { duration: 0.5, ease: "easeOut", delay: index * 0.1 }
+          : { duration: 0.5, ease: "easeOut" as const, delay: index * 0.1 }
       }
       whileHover={
         reduced
           ? undefined
           : {
               scale: 1.005,
-              transition: { duration: 0.2, ease: "easeOut" },
+              transition: { duration: 0.2, ease: "easeOut" as const },
             }
       }
       className={`group/card flex flex-row items-start gap-4 rounded-xl border border-ink/[0.08] bg-surface p-5 transition-colors duration-200 ${hoverBorderClass}`}
@@ -166,7 +166,7 @@ export default function Trust() {
         : { opacity: 0, y },
     transition: reduced
       ? { duration: 0 }
-      : { duration, ease: "easeOut", delay },
+      : { duration, ease: "easeOut" as const, delay },
   });
 
   const topFadeUp = (delay: number) => ({
@@ -175,7 +175,7 @@ export default function Trust() {
       reduced || topInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 },
     transition: reduced
       ? { duration: 0 }
-      : { duration: 0.4, ease: "easeOut", delay },
+      : { duration: 0.4, ease: "easeOut" as const, delay },
   });
 
   return (
@@ -313,7 +313,7 @@ export default function Trust() {
             reduced || complianceInView ? { opacity: 1 } : { opacity: 0 }
           }
           transition={
-            reduced ? { duration: 0 } : { duration: 0.4, ease: "easeOut" }
+            reduced ? { duration: 0 } : { duration: 0.4, ease: "easeOut" as const }
           }
           className="mt-20 flex flex-row flex-wrap items-center justify-center gap-3 text-[13px] font-medium text-ink-muted"
         >

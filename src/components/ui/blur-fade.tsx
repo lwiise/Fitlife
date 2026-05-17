@@ -81,7 +81,7 @@ export function BlurFade({
         transition={{
           delay: 0.04 + delay,
           duration,
-          ease: "easeOut",
+          ease: "easeOut" as const,
           ...(shouldTransitionFilter ? { filter: { duration } } : {}),
         }}
         className={className}

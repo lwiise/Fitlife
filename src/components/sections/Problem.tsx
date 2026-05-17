@@ -106,7 +106,7 @@ export default function Problem() {
               animate={cardsInView ? { opacity: 1, x: 0 } : undefined}
               transition={{
                 duration: 0.5,
-                ease: "easeOut",
+                ease: "easeOut" as const,
                 delay: i * 0.1,
               }}
               whileHover={

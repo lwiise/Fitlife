@@ -130,7 +130,7 @@ function CalloutMark({
         className="relative flex h-3 w-3 flex-shrink-0"
         initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.2, ease: "easeOut", delay: dotDelayS }}
+        transition={{ duration: 0.2, ease: "easeOut" as const, delay: dotDelayS }}
       >
         {/* Continuous pulse ring */}
         {!reduce && (
@@ -142,7 +142,7 @@ function CalloutMark({
             transition={{
               duration: 2,
               repeat: Infinity,
-              ease: "easeOut",
+              ease: "easeOut" as const,
               delay: dotDelayS + 0.2,
             }}
           />
@@ -161,7 +161,7 @@ function CalloutMark({
         animate={{ opacity: 1 }}
         transition={{
           duration: 0.3,
-          ease: "easeOut",
+          ease: "easeOut" as const,
           delay: reduce ? 0 : labelDelayS,
         }}
       >

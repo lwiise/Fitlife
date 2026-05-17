@@ -121,7 +121,7 @@ function WeightTrendDecoration({
         animate={{
           strokeDashoffset: reduced || inView ? 0 : pathLength,
         }}
-        transition={{ duration: 1.5, ease: "easeInOut" }}
+        transition={{ duration: 1.5, ease: "easeInOut" as const }}
       />
       <circle cx="4" cy="12" r="3" fill="#F2BB16" />
       <circle cx="70" cy="38" r="3" fill="#F2BB16" />
@@ -184,7 +184,7 @@ function WatchDecoration({
         style={{ transformOrigin: "40px 56px" }}
         animate={spinning ? { rotate: 360 } : undefined}
         transition={
-          spinning ? { duration: 8, repeat: Infinity, ease: "linear" } : undefined
+          spinning ? { duration: 8, repeat: Infinity, ease: "linear" as const } : undefined
         }
       >
         <path
@@ -240,7 +240,7 @@ function FeatureCard({
       }
       transition={{
         duration: 0.4,
-        ease: "easeOut",
+        ease: "easeOut" as const,
         delay: reduced ? 0 : index * 0.06,
       }}
       whileHover={
@@ -248,7 +248,7 @@ function FeatureCard({
           ? undefined
           : {
               scale: 1.005,
-              transition: { duration: 0.2, ease: "easeOut" },
+              transition: { duration: 0.2, ease: "easeOut" as const },
             }
       }
       className={`group/card relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-ink/[0.08] bg-surface-elevated shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-brand-purple-300 hover:shadow-lg ${large ? "p-8" : "p-6"} ${areaClass}`}
@@ -306,7 +306,7 @@ export default function Features() {
                 ? { opacity: 1, y: 0 }
                 : { opacity: 0, y: 15 }
             }
-            transition={{ duration: 0.4, ease: "easeOut", delay: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0 }}
             className="text-sm font-semibold text-primary"
           >
             ميزات تخدمك أنتِ
@@ -319,7 +319,7 @@ export default function Features() {
                 ? { opacity: 1, y: 0 }
                 : { opacity: 0, y: 15 }
             }
-            transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
+            transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0.1 }}
             className="text-balance text-[clamp(2rem,5vw,2.5rem)] font-bold leading-[1.2] text-foreground"
           >
             صُمم للعائلة الخليجية — بكل تفاصيلها.

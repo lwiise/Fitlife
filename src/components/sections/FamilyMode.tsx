@@ -170,7 +170,7 @@ export default function FamilyMode() {
             variants={fadeOnly}
             initial={shouldReduceMotion ? false : "hidden"}
             animate={target}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+            transition={{ duration: 0.4, ease: "easeOut" as const }}
             className="text-sm font-bold text-brand-yellow"
           >
             ما أحد يقدمها غيرنا
@@ -179,7 +179,7 @@ export default function FamilyMode() {
             variants={fadeUp}
             initial={shouldReduceMotion ? false : "hidden"}
             animate={target}
-            transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
+            transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0.1 }}
             className="mx-auto mt-4 max-w-[18ch] text-[clamp(2rem,1.5rem+2.5vw,3rem)] font-extrabold leading-[1.1] text-white"
           >
             حساب واحد. خطط لكل البيت.
@@ -188,7 +188,7 @@ export default function FamilyMode() {
             variants={fadeOnly}
             initial={shouldReduceMotion ? false : "hidden"}
             animate={target}
-            transition={{ duration: 0.4, ease: "easeOut", delay: 0.25 }}
+            transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0.25 }}
             className="mx-auto mt-5 max-w-[600px] text-lg leading-[1.7] text-brand-lavender"
           >
             أنتِ تشتركين مرة، وكل فرد من عائلتك يحصل على خطته الخاصة — بلغته،
@@ -201,7 +201,7 @@ export default function FamilyMode() {
             variants={fadeScale}
             initial={shouldReduceMotion ? false : "hidden"}
             animate={target}
-            transition={{ duration: 0.5, ease: "easeOut", delay: 0.4 }}
+            transition={{ duration: 0.5, ease: "easeOut" as const, delay: 0.4 }}
             className="relative mx-auto mb-12 flex w-fit items-center justify-center md:mb-16"
           >
             <span
@@ -226,7 +226,7 @@ export default function FamilyMode() {
                 animate={target}
                 transition={{
                   duration: 0.5,
-                  ease: "easeOut",
+                  ease: "easeOut" as const,
                   delay: 0.5 + i * 0.08,
                 }}
               >
@@ -249,7 +249,7 @@ export default function FamilyMode() {
                       animate={target}
                       transition={{
                         duration: 0.5,
-                        ease: "easeOut",
+                        ease: "easeOut" as const,
                         delay: 0.5 + i * 0.08,
                       }}
                       className="flex justify-center"
@@ -337,7 +337,7 @@ export default function FamilyMode() {
           variants={fadeOnly}
           initial={shouldReduceMotion ? false : "hidden"}
           animate={target}
-          transition={{ duration: 0.6, ease: "easeOut", delay: 1.4 }}
+          transition={{ duration: 0.6, ease: "easeOut" as const, delay: 1.4 }}
           className="mx-auto mt-16 max-w-[700px] text-center"
         >
           <motion.svg
@@ -353,7 +353,7 @@ export default function FamilyMode() {
                 ? { opacity: 1, scale: 1 }
                 : { opacity: 0, scale: 0.7 }
             }
-            transition={{ duration: 0.6, ease: "easeOut", delay: 1.4 }}
+            transition={{ duration: 0.6, ease: "easeOut" as const, delay: 1.4 }}
           >
             <path
               d="M10 18 Q 4 12 8 6 Q 14 2 22 6 Q 26 12 22 20 L 18 34 L 10 34 Z"
@@ -368,7 +368,7 @@ export default function FamilyMode() {
             variants={fadeOnly}
             initial={shouldReduceMotion ? false : "hidden"}
             animate={target}
-            transition={{ duration: 0.6, ease: "easeOut", delay: 2 }}
+            transition={{ duration: 0.6, ease: "easeOut" as const, delay: 2 }}
             className="mt-4 text-[clamp(1.125rem,0.95rem+0.8vw,1.375rem)] italic leading-[1.6] text-white"
           >
             أول مرة ألقى تطبيق يفكر في الخادمة. صارت روزا تأكل معانا نفس النظام
@@ -378,7 +378,7 @@ export default function FamilyMode() {
             variants={fadeOnly}
             initial={shouldReduceMotion ? false : "hidden"}
             animate={target}
-            transition={{ duration: 0.6, ease: "easeOut", delay: 2.1 }}
+            transition={{ duration: 0.6, ease: "easeOut" as const, delay: 2.1 }}
             className="mt-4 text-sm font-medium text-brand-lavender"
           >
             — هند، الرياض
@@ -406,7 +406,7 @@ export default function FamilyMode() {
                 : {
                     duration: 3,
                     repeat: Infinity,
-                    ease: "easeOut",
+                    ease: "easeOut" as const,
                   }
             }
             whileHover={
