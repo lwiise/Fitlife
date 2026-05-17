@@ -7,7 +7,6 @@ import { ChevronLeftIcon } from "lucide-react";
 
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
 import { CardBody, CardContainer, CardItem } from "@/components/ui/3d-card";
 import { AnimatedBeam } from "@/components/ui/animated-beam";
@@ -416,24 +415,19 @@ export default function FamilyMode() {
                 : { boxShadow: "0 14px 44px rgba(242,187,22,0.45)" }
             }
           >
-            <Button
-              asChild
-              size="lg"
+            <a
+              href="#pricing"
+              onClick={() => track("family_cta_clicked")}
               className={cn(
-                "h-auto rounded-xl bg-brand-yellow px-9 py-4 text-base font-extrabold text-brand-purple-600 shadow-2xl",
-                "hover:-translate-y-0.5 hover:bg-[oklch(0.86_0.17_86)]",
+                "inline-flex min-h-12 items-center gap-2 rounded-xl bg-brand-yellow px-9 py-4 text-base font-extrabold text-brand-purple-600 shadow-2xl",
+                "hover:-translate-y-0.5 hover:bg-[oklch(0.86_0.17_86)] hover:text-brand-purple-900",
                 "transition-[background-color,transform,box-shadow] duration-200",
-                "focus-visible:ring-4 focus-visible:ring-brand-yellow/40",
+                "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-yellow/50 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-700",
               )}
             >
-              <a
-                href="#pricing"
-                onClick={() => track("family_cta_clicked")}
-              >
-                اشتركي بباقة العائلة
-                <ChevronLeftIcon className="rtl:rotate-180" aria-hidden="true" />
-              </a>
-            </Button>
+              اشتركي بباقة العائلة
+              <ChevronLeftIcon className="rtl:rotate-180" aria-hidden="true" />
+            </a>
           </motion.div>
         </div>
       </div>
