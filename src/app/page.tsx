@@ -7,6 +7,7 @@ import ProductDemo from "@/components/sections/ProductDemo";
 import Features from "@/components/sections/Features";
 import Pricing from "@/components/sections/Pricing";
 import Trust from "@/components/sections/Trust";
+import Testimonials from "@/components/sections/Testimonials";
 
 export default function Home() {
   return (
@@ -27,6 +28,7 @@ export default function Home() {
         <Features />
         <Pricing />
         <Trust />
+        <Testimonials />
       </main>
     </>
   );
