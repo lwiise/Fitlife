@@ -1,13 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Housekeeper silhouette placeholder">
-  <path d="M 80 800 Q 80 540 200 470 L 400 470 Q 520 540 520 800 Z" fill="#F5F5F5"/>
-  <path d="M 280 470 L 320 470 L 320 510 L 300 530 L 280 510 Z" fill="#E0E0E0"/>
-  <rect x="265" y="395" width="70" height="80" fill="#C8956D"/>
-  <ellipse cx="300" cy="290" rx="155" ry="160" fill="#2A1810"/>
-  <circle cx="300" cy="280" r="135" fill="#C8956D"/>
-  <path d="M 175 230 Q 210 145, 300 145 Q 390 145, 425 230 Q 405 200, 375 195 L 225 195 Q 195 200, 175 230 Z" fill="#2A1810"/>
-  <ellipse cx="255" cy="280" rx="5" ry="7" fill="#1A0F08"/>
-  <ellipse cx="345" cy="280" rx="5" ry="7" fill="#1A0F08"/>
-  <path d="M 255 340 Q 300 366 345 340" stroke="#1A0F08" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 240 245 Q 255 238 270 245" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 330 245 Q 345 238 360 245" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Housekeeper illustration">
+  <!-- Body / simple uniform shirt (light cream) -->
+  <path d="M 80 800 Q 80 545 200 475 L 400 475 Q 520 545 520 800 Z" fill="#F4EDE3"/>
+  <!-- Shirt highlight -->
+  <path d="M 90 800 Q 90 555 200 490 L 220 490 Q 130 555 130 800 Z" fill="#FFFFFF" opacity="0.55"/>
+  <!-- Shirt collar V -->
+  <path d="M 270 475 L 300 525 L 330 475 Z" fill="#DDD0BC"/>
+
+  <!-- Ears -->
+  <ellipse cx="172" cy="290" rx="13" ry="21" fill="#B58060"/>
+
+  <!-- Neck -->
+  <rect x="268" y="395" width="64" height="85" fill="#C8956D"/>
+  <ellipse cx="300" cy="475" rx="32" ry="7" fill="#A06A48" opacity="0.45"/>
+
+  <!-- Hair pulled back into low bun behind head -->
+  <ellipse cx="445" cy="345" rx="35" ry="42" fill="#1A0F08"/>
+  <!-- Subtle back hair behind head outline -->
+  <ellipse cx="300" cy="295" rx="148" ry="148" fill="#1A0F08"/>
+
+  <!-- Head (slightly different proportions for Filipino features — slightly narrower face) -->
+  <ellipse cx="300" cy="280" rx="130" ry="138" fill="#C8956D"/>
+
+  <!-- Hair top + side fringe -->
+  <path d="M 175 235 Q 215 145, 300 140 Q 385 145, 425 235 Q 405 200, 375 195 L 225 195 Q 195 200, 175 235 Z" fill="#1A0F08"/>
+  <!-- Hair part line -->
+  <path d="M 300 145 Q 297 175, 300 200" stroke="#0F0805" stroke-width="2" fill="none" opacity="0.6"/>
+  <!-- Side strands tucked behind ear -->
+  <path d="M 178 245 Q 175 280, 178 305" stroke="#0F0805" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Eyebrows: straighter shape -->
+  <path d="M 235 252 Q 260 247, 280 252" stroke="#1A0F08" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M 320 252 Q 340 247, 365 252" stroke="#1A0F08" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+  <!-- Eyes: slightly almond, narrower -->
+  <ellipse cx="256" cy="285" rx="11" ry="6" fill="white"/>
+  <ellipse cx="344" cy="285" rx="11" ry="6" fill="white"/>
+  <circle cx="256" cy="285" r="5.5" fill="#1A0F08"/>
+  <circle cx="344" cy="285" r="5.5" fill="#1A0F08"/>
+  <!-- Eye highlights -->
+  <circle cx="259" cy="283" r="2" fill="white"/>
+  <circle cx="347" cy="283" r="2" fill="white"/>
+
+  <!-- Subtle cheek blush -->
+  <ellipse cx="235" cy="335" rx="20" ry="11" fill="#E89B7A" opacity="0.35"/>
+  <ellipse cx="365" cy="335" rx="20" ry="11" fill="#E89B7A" opacity="0.35"/>
+
+  <!-- Nose hint (slightly broader) -->
+  <path d="M 290 300 Q 287 332, 297 345 Q 305 348, 310 345 Q 314 332, 308 300" stroke="#A06A48" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+
+  <!-- Bright friendly smile -->
+  <path d="M 258 358 Q 300 385, 342 358" stroke="#1A0F08" stroke-width="3.5" fill="none" stroke-linecap="round"/>
 </svg>

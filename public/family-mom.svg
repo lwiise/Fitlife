@@ -1,12 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Mother silhouette placeholder">
-  <ellipse cx="300" cy="330" rx="195" ry="215" fill="#3D1A29"/>
-  <path d="M 80 800 Q 80 540 200 470 L 400 470 Q 520 540 520 800 Z" fill="#C84A4A"/>
-  <rect x="265" y="395" width="70" height="80" fill="#E8C5A0"/>
-  <circle cx="300" cy="280" r="135" fill="#E8C5A0"/>
-  <path d="M 165 230 Q 200 130, 300 130 Q 400 130, 435 230 Q 415 200, 380 200 L 220 200 Q 185 200, 165 230 Z" fill="#3D1A29"/>
-  <ellipse cx="255" cy="280" rx="5" ry="7" fill="#2A1810"/>
-  <ellipse cx="345" cy="280" rx="5" ry="7" fill="#2A1810"/>
-  <path d="M 255 340 Q 300 366 345 340" stroke="#2A1810" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 240 245 Q 255 238 270 245" stroke="#3D1A29" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 330 245 Q 345 238 360 245" stroke="#3D1A29" stroke-width="3" fill="none" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Mother illustration with hijab">
+  <!-- Body / abaya-style top -->
+  <path d="M 80 800 Q 80 545 200 475 L 400 475 Q 520 545 520 800 Z" fill="#A03862"/>
+  <!-- Subtle body highlight -->
+  <path d="M 90 800 Q 90 555 200 490 L 220 490 Q 130 555 130 800 Z" fill="#B54877" opacity="0.5"/>
+
+  <!-- Hijab outer drape (frames face + flows down to shoulders) -->
+  <path d="M 145 800 Q 125 510 175 350 Q 200 215 300 200 Q 400 215 425 350 Q 475 510 455 800 Z" fill="#7A2848"/>
+
+  <!-- Hijab gentle inner highlight -->
+  <path d="M 175 380 Q 195 280, 240 235 Q 270 215 285 215" stroke="#9C3A66" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Face oval (visible through hijab opening) -->
+  <ellipse cx="300" cy="310" rx="122" ry="142" fill="#E8C5A0"/>
+
+  <!-- Hijab fold across forehead -->
+  <path d="M 178 255 Q 205 200 300 198 Q 395 200 422 255 Q 380 238 300 238 Q 220 238 178 255 Z" fill="#5C1E36"/>
+
+  <!-- Eyebrows -->
+  <path d="M 232 275 Q 256 268, 280 275" stroke="#3D1A29" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M 320 275 Q 344 268, 368 275" stroke="#3D1A29" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+  <!-- Eyes (almond, expressive) -->
+  <ellipse cx="256" cy="310" rx="12" ry="8" fill="white"/>
+  <ellipse cx="344" cy="310" rx="12" ry="8" fill="white"/>
+  <circle cx="256" cy="310" r="7" fill="#1A0F08"/>
+  <circle cx="344" cy="310" r="7" fill="#1A0F08"/>
+  <!-- Eye highlights -->
+  <circle cx="259" cy="308" r="2.5" fill="white"/>
+  <circle cx="347" cy="308" r="2.5" fill="white"/>
+  <!-- Eyelash hint upper -->
+  <path d="M 244 300 Q 256 295, 268 300" stroke="#1A0F08" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 332 300 Q 344 295, 356 300" stroke="#1A0F08" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Subtle blush on cheeks -->
+  <ellipse cx="235" cy="365" rx="22" ry="14" fill="#F4A8B5" opacity="0.45"/>
+  <ellipse cx="365" cy="365" rx="22" ry="14" fill="#F4A8B5" opacity="0.45"/>
+
+  <!-- Nose hint -->
+  <path d="M 295 325 Q 293 358, 300 370 Q 307 370, 309 365 Q 308 340 305 325" stroke="#C29478" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+
+  <!-- Smile -->
+  <path d="M 258 388 Q 300 412, 342 388" stroke="#1A0F08" stroke-width="3.5" fill="none" stroke-linecap="round"/>
 </svg>

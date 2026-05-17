@@ -26,33 +26,32 @@ type FamilyMember = {
   hasPlayButton?: boolean;
 };
 
-// TODO: Pravatar URLs are temporary real-photo placeholders (CC0 portrait service).
-// Replace with real brand photography (transparent-background PNG cutouts of
-// actual family members or commissioned models) before launch. Drop new files
-// at /public/family-{dad,mom,housekeeper,daughter,son}.png and switch imageSrc back.
+// TODO: 5 brand-matched SVG character illustrations as placeholders. Replace with
+// real brand photography (transparent-background PNG cutouts of actual family
+// members or commissioned models) before launch.
 
 const familyMembers: FamilyMember[] = [
   {
     label: "خطة للأب",
     sublabel: "اللي على حمية",
-    imageSrc: "https://i.pravatar.cc/600?img=12",
-    imageAlt: "صورة الأب",
+    imageSrc: "/family-dad.svg",
+    imageAlt: "رسم تعبيري للأب — رجل خليجي يبتسم",
     bgColor: "bg-[#D9B0FC]",
     textColor: "text-[#4E2490]",
   },
   {
     label: "وجبات الأم",
     sublabel: "بسعرات محسوبة",
-    imageSrc: "https://i.pravatar.cc/600?img=5",
-    imageAlt: "صورة الأم",
+    imageSrc: "/family-mom.svg",
+    imageAlt: "رسم تعبيري للأم — امرأة خليجية بحجاب تبتسم",
     bgColor: "bg-[#C5458F]",
     textColor: "text-white",
   },
   {
     label: "حساب للخادمة",
     sublabel: "بلغتها",
-    imageSrc: "https://i.pravatar.cc/600?img=49",
-    imageAlt: "صورة الخادمة",
+    imageSrc: "/family-housekeeper.svg",
+    imageAlt: "رسم تعبيري للخادمة — امرأة فلبينية تبتسم",
     bgColor: "bg-[#F2BB16]",
     textColor: "text-[#4E2490]",
     hasPlayButton: true,
@@ -60,16 +59,16 @@ const familyMembers: FamilyMember[] = [
   {
     label: "للأولاد",
     sublabel: "حسب أعمارهم",
-    imageSrc: "https://i.pravatar.cc/600?img=20",
-    imageAlt: "صورة البنت",
+    imageSrc: "/family-daughter.svg",
+    imageAlt: "رسم تعبيري للبنت — طفلة سعيدة",
     bgColor: "bg-[#4E2490]",
     textColor: "text-white",
   },
   {
     label: "كل البيت",
     sublabel: "في خطة واحدة",
-    imageSrc: "https://i.pravatar.cc/600?img=33",
-    imageAlt: "صورة الولد",
+    imageSrc: "/family-son.svg",
+    imageAlt: "رسم تعبيري للولد — طفل سعيد",
     bgColor: "bg-[#E89B5A]",
     textColor: "text-[#1A1023]",
   },
