@@ -3,7 +3,10 @@
     "allow": [
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(Get-ChildItem C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\public *)",
-      "Bash(dir C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\src\\\\lib *)"
+      "Bash(dir C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\src\\\\lib *)",
+      "Bash(cd /d \"C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\")",
+      "Bash(Get-ChildItem -Path public -Filter \"family-*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

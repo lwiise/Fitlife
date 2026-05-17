@@ -14,64 +14,86 @@ import { cn } from "@/lib/utils";
 
 // TODO: Replace family portrait placeholder SVGs with real photography before launch.
 
-type CardVariant = "lavender" | "dark" | "yellow";
+type CardBg =
+  | "bg-brand-lavender"
+  | "bg-primary"
+  | "bg-brand-yellow"
+  | "bg-brand-pink"
+  | "bg-[#E89B5A]";
 
-type FamilyCard = {
-  title: string;
+type FamilyCardData = {
+  label: string;
+  sublabel: string;
+  goal: string;
   imageSrc: string;
   alt: string;
-  variant: CardVariant;
-  hasLeaves: boolean;
-  hasVideo?: boolean;
+  bgClass: CardBg;
+  textColorClass: string;
+  leafColor: string;
 };
 
-const cards: FamilyCard[] = [
+const familyMembers: FamilyCardData[] = [
   {
-    title: "خطة للأب اللي على حمية",
+    label: "الأب",
+    sublabel: "أحمد، 38 سنة",
+    goal: "خسارة وزن",
     imageSrc: "/family-dad.svg",
     alt: "صورة الأب — أحمد",
-    variant: "lavender",
-    hasLeaves: true,
+    bgClass: "bg-brand-lavender",
+    textColorClass: "text-primary",
+    leafColor: "#4E2490",
   },
   {
-    title: "وجبات الأم بسعرات محسوبة",
+    label: "الأم",
+    sublabel: "هند، 35 سنة",
+    goal: "صحة عامة",
     imageSrc: "/family-mom.svg",
     alt: "صورة الأم — هند",
-    variant: "dark",
-    hasLeaves: false,
+    bgClass: "bg-primary",
+    textColorClass: "text-white",
+    leafColor: "#FFFFFF",
   },
   {
-    title: "حساب للخادمة بلغتها",
+    label: "الخادمة",
+    sublabel: "روزا، الفلبين",
+    goal: "بالتاغالوغ",
     imageSrc: "/family-housekeeper.svg",
     alt: "صورة الخادمة — روزا",
-    variant: "yellow",
-    hasLeaves: true,
-    hasVideo: true,
+    bgClass: "bg-brand-yellow",
+    textColorClass: "text-primary",
+    leafColor: "#4E2490",
   },
   {
-    title: "للأولاد حسب أعمارهم",
+    label: "البنت",
+    sublabel: "ليلى، 6 سنوات",
+    goal: "نمو",
     imageSrc: "/family-daughter.svg",
     alt: "صورة البنت — ليلى",
-    variant: "dark",
-    hasLeaves: false,
+    bgClass: "bg-brand-pink",
+    textColorClass: "text-white",
+    leafColor: "#FFFFFF",
   },
   {
-    title: "كل البيت في خطة واحدة",
+    label: "الولد",
+    sublabel: "أحمد الابن، 10",
+    goal: "نمو",
     imageSrc: "/family-son.svg",
     alt: "صورة الولد — أحمد الابن",
-    variant: "lavender",
-    hasLeaves: true,
+    bgClass: "bg-[#E89B5A]",
+    textColorClass: "text-white",
+    leafColor: "#FFFFFF",
   },
 ];
 
-const line1Words = "خطة غذائية لكل البيت.".split(" ");
-const line2Words = "حتى للخادمة.".split(" ");
+const line1Words = "خطة غذائية".split(" ");
+const line2Words = "لكل البيت.".split(" ");
+const line3Words = "حتى للخادمة.".split(" ");
+
 const easeOut = "easeOut" as const;
-const overshootEase = [0.34, 1.56, 0.64, 1] as const;
 
 const wordContainer = { hidden: {}, visible: {} };
 const wordItem = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 15 },
   visible: {
     opacity: 1,
     y: 0,
@@ -93,173 +115,109 @@ function PlayIcon({ className }: { className?: string }) {
   );
 }
 
-function LeafPattern({ tone }: { tone: "yellow" | "primary" }) {
+function DecorativeLeaves({ color }: { color: string }) {
   return (
     <svg
-      viewBox="0 0 300 180"
+      viewBox="0 0 200 100"
+      fill="none"
       preserveAspectRatio="none"
       aria-hidden="true"
-      className={cn(
-        "pointer-events-none absolute inset-x-0 top-0 h-1/2 w-full",
-        tone === "yellow" ? "text-brand-yellow" : "text-primary",
-      )}
+      className="h-full w-full"
     >
       <path
-        d="M -10 60 Q 30 10 90 50 Q 120 80 80 110 Q 30 100 -10 60 Z"
-        fill="currentColor"
-        opacity="0.55"
-      />
-      <path
-        d="M 60 90 Q 110 20 170 70 Q 200 110 150 130 Q 90 130 60 90 Z"
-        fill="currentColor"
-        opacity="0.45"
-      />
-      <path
-        d="M 140 100 Q 200 30 260 80 Q 290 120 230 140 Q 170 140 140 100 Z"
-        fill="currentColor"
+        d="M20,50 Q40,20 60,40 T100,30 T140,40 T180,30"
+        stroke={color}
+        strokeWidth="2"
         opacity="0.5"
-      />
-      <path
-        d="M 220 60 Q 270 10 320 60"
-        stroke="currentColor"
-        strokeWidth="3"
         fill="none"
-        opacity="0.4"
       />
+      <circle cx="30" cy="40" r="8" fill={color} opacity="0.4" />
+      <circle cx="80" cy="55" r="6" fill={color} opacity="0.4" />
+      <circle cx="140" cy="35" r="7" fill={color} opacity="0.4" />
       <path
-        d="M 40 130 Q 90 70 160 110"
-        stroke="currentColor"
-        strokeWidth="3"
+        d="M10,75 Q30,55 50,65 T90,60 T130,68 T170,60"
+        stroke={color}
+        strokeWidth="2"
+        opacity="0.35"
         fill="none"
-        opacity="0.4"
       />
     </svg>
   );
 }
 
-function DecorativeCurves({ reduced }: { reduced: boolean }) {
-  return (
-    <>
-      <motion.svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 400 400"
-        fill="none"
-        aria-hidden="true"
-        animate={reduced ? undefined : { rotate: 360 }}
-        transition={
-          reduced
-            ? undefined
-            : { duration: 60, ease: "linear" as const, repeat: Infinity }
-        }
-        className="pointer-events-none absolute top-[-100px] end-[-120px] w-[300px] text-brand-yellow opacity-10 md:w-[440px]"
-      >
-        <path
-          d="M200 20 C 320 60, 380 180, 340 300 C 300 380, 160 400, 80 320 C 20 260, 20 140, 80 80 C 120 40, 160 30, 200 20 Z"
-          fill="currentColor"
-        />
-      </motion.svg>
-      <motion.svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 400 400"
-        fill="none"
-        aria-hidden="true"
-        animate={reduced ? undefined : { rotate: -360 }}
-        transition={
-          reduced
-            ? undefined
-            : { duration: 80, ease: "linear" as const, repeat: Infinity }
-        }
-        className="pointer-events-none absolute bottom-[60px] start-[-140px] w-[260px] text-brand-yellow opacity-[0.08] md:w-[380px]"
-      >
-        <path
-          d="M200 40 C 320 80, 360 200, 320 320 C 280 380, 140 380, 80 300 C 30 240, 40 120, 100 80 C 140 50, 170 40, 200 40 Z"
-          fill="currentColor"
-        />
-      </motion.svg>
-    </>
-  );
-}
-
-function WaveSVG() {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 w-full">
-      <svg
-        viewBox="0 0 1440 120"
-        fill="none"
-        preserveAspectRatio="none"
-        className="h-[60px] w-full md:h-[120px]"
-        aria-hidden="true"
-      >
-        <path
-          d="M0,40 C240,100 480,120 720,80 C960,40 1200,0 1440,40 L1440,120 L0,120 Z"
-          fill="var(--color-surface-elevated)"
-        />
-      </svg>
-    </div>
-  );
-}
-
-function PortraitCard({
-  card,
+function FamilyCard({
+  member,
   index,
+  isHighlighted,
   reduced,
 }: {
-  card: FamilyCard;
+  member: FamilyCardData;
   index: number;
+  isHighlighted: boolean;
   reduced: boolean;
 }) {
-  const variantClasses: Record<CardVariant, string> = {
-    lavender: "bg-brand-lavender",
-    dark: "bg-[#5B2BA8]",
-    yellow: "bg-brand-yellow",
-  };
-  const titleColorClass: Record<CardVariant, string> = {
-    lavender: "text-primary",
-    dark: "text-white",
-    yellow: "text-primary",
-  };
-  const leafTone = card.variant === "yellow" ? "primary" : "yellow";
-
   return (
-    <motion.article
+    <motion.div
       initial={reduced ? false : { opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       transition={
         reduced
           ? { duration: 0 }
-          : { duration: 0.5, ease: easeOut, delay: 1.4 + index * 0.08 }
+          : { duration: 0.5, ease: easeOut, delay: 1.8 + index * 0.08 }
       }
       whileHover={
         reduced
           ? undefined
           : {
-              scale: 1.02,
-              y: card.variant === "yellow" ? -8 : -4,
+              y: -8,
               transition: { duration: 0.3, ease: easeOut },
             }
       }
       className={cn(
         "relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl",
-        variantClasses[card.variant],
+        member.bgClass,
       )}
     >
-      {card.hasLeaves && <LeafPattern tone={leafTone} />}
-
-      <div className="absolute inset-x-5 top-5 z-10">
-        <h3
-          className={cn(
-            "text-base font-bold leading-tight md:text-lg",
-            titleColorClass[card.variant],
-          )}
-        >
-          {card.title}
-        </h3>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 opacity-30"
+      >
+        <DecorativeLeaves color={member.leafColor} />
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-0 h-3/5">
+      <div className="absolute inset-x-4 top-4 z-10">
+        <h3
+          className={cn(
+            "text-lg font-bold leading-tight",
+            member.textColorClass,
+          )}
+        >
+          {member.label}
+        </h3>
+        <p
+          className={cn(
+            "mt-1 text-xs font-medium opacity-80",
+            member.textColorClass,
+          )}
+        >
+          {member.sublabel}
+        </p>
+        <span
+          className={cn(
+            "mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-bold",
+            isHighlighted
+              ? "bg-primary/20 text-primary"
+              : "bg-white/20 text-white",
+          )}
+        >
+          {member.goal}
+        </span>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 z-0 h-3/4">
         <Image
-          src={card.imageSrc}
-          alt={card.alt}
+          src={member.imageSrc}
+          alt={member.alt}
           fill
           unoptimized
           sizes="(max-width: 768px) 55vw, 230px"
@@ -267,19 +225,137 @@ function PortraitCard({
         />
       </div>
 
-      {card.hasVideo && (
+      {isHighlighted && (
         <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center">
           <button
             type="button"
             onClick={() => track("hero_video_clicked")}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-[#1A1023] hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <PlayIcon className="size-3" />
-            <span>شوفي الفيديو</span>
+            <span>شوفي كيف يشتغل</span>
           </button>
         </div>
       )}
-    </motion.article>
+    </motion.div>
+  );
+}
+
+function MomFloatingCard({ reduced }: { reduced: boolean }) {
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, x: -30, y: -20 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : { duration: 0.6, ease: easeOut, delay: 1.4 }
+      }
+      className="absolute top-[8%] start-[4%] z-20 hidden w-[260px] -rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 lg:block"
+    >
+      <div className="rounded-2xl border border-[#1A1023]/5 bg-white p-4 shadow-xl">
+        <div className="flex flex-row items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-pink to-brand-lavender text-sm font-bold text-white">
+            ه
+          </div>
+          <div className="min-w-0 flex-1 text-start">
+            <p className="truncate text-sm font-bold text-[#1A1023]">
+              هند الدوسري
+            </p>
+            <p className="text-xs text-[#1A1023]/60">بدأت 27 أكتوبر</p>
+          </div>
+        </div>
+        <div className="mt-3 text-start">
+          <p className="mb-1.5 text-xs text-[#1A1023]/60">
+            الأسبوع 6، اليوم 5
+          </p>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1A1023]/10">
+            <div className="h-full w-[70%] rounded-full bg-gradient-to-l from-brand-yellow to-brand-pink" />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, x: 30, y: -20 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : { duration: 0.6, ease: easeOut, delay: 1.6 }
+      }
+      className="absolute top-[12%] end-[4%] z-20 hidden w-[260px] rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 lg:block"
+    >
+      <div className="rounded-2xl border border-[#1A1023]/5 bg-white p-4 shadow-xl">
+        <div className="flex flex-row items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-yellow to-[#E89B5A] text-sm font-bold text-white">
+            R
+          </div>
+          <div className="min-w-0 flex-1 text-start" dir="ltr">
+            <p className="text-sm font-bold text-[#1A1023]">Rosa M.</p>
+            <p className="text-xs text-[#1A1023]/60">
+              Tagalog · Started Oct 27
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 text-start" dir="ltr">
+          <p className="mb-1.5 text-xs text-[#1A1023]/60">Week 6, Day 5</p>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1A1023]/10">
+            <div className="h-full w-[55%] rounded-full bg-gradient-to-r from-brand-yellow to-primary" />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function SaraPill({ reduced }: { reduced: boolean }) {
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : { duration: 0.5, ease: easeOut, delay: 1.8 }
+      }
+      className="absolute bottom-[5%] start-[5%] z-10 hidden lg:block"
+    >
+      <div className="inline-flex items-center gap-2.5 rounded-full bg-[#1A1023] px-4 py-2 text-white shadow-lg">
+        <div className="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-pink to-brand-lavender text-xs font-bold">
+          س
+        </div>
+        <div className="text-start">
+          <p className="text-xs font-bold leading-tight">ساره العتيبي</p>
+          <p className="text-[10px] leading-tight text-white/60">
+            خبيرة تغذية
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function WaveSVG() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 w-full">
+      <svg
+        viewBox="0 0 1440 100"
+        fill="none"
+        preserveAspectRatio="none"
+        className="h-[60px] w-full md:h-[100px]"
+        aria-hidden="true"
+      >
+        <path
+          d="M0,60 C240,100 480,100 720,60 C960,30 1200,30 1440,60 L1440,100 L0,100 Z"
+          fill="var(--color-surface-elevated)"
+        />
+      </svg>
+    </div>
   );
 }
 
@@ -289,31 +365,68 @@ export default function Hero() {
   return (
     <section
       aria-label="القسم الرئيسي"
-      className="relative overflow-hidden bg-primary pt-20 pb-32 md:pt-24 md:pb-40"
+      className="relative overflow-hidden pt-32 pb-0"
     >
-      <DecorativeCurves reduced={reduced} />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-20"
+        style={{
+          background: `
+            radial-gradient(ellipse 1000px 700px at 15% 25%, rgba(217, 176, 252, 0.55) 0%, transparent 55%),
+            radial-gradient(ellipse 800px 900px at 85% 60%, rgba(242, 187, 22, 0.18) 0%, transparent 55%),
+            radial-gradient(ellipse 600px 600px at 50% 85%, rgba(197, 69, 143, 0.12) 0%, transparent 60%),
+            linear-gradient(180deg, #FAFAFA 0%, #EBEFF2 100%)
+          `,
+        }}
+      />
 
-      <div className="container-page relative z-10">
-        <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 opacity-[0.04]"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, #1A1023 1px, transparent 1px),
+            linear-gradient(to bottom, #1A1023 1px, transparent 1px)
+          `,
+          backgroundSize: "60px 60px",
+        }}
+      />
+
+      <div className="container-page relative pb-32">
+        <MomFloatingCard reduced={reduced} />
+        <HousekeeperFloatingCard reduced={reduced} />
+
+        <div className="relative mx-auto max-w-5xl pt-12 text-center md:pt-20">
           {reduced ? (
-            <h1 className="max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
-              <span className="block">خطة غذائية لكل البيت.</span>
-              <span className="block">حتى للخادمة.</span>
+            <h1 className="font-extrabold leading-[0.95] tracking-tight">
+              <span className="block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
+                خطة غذائية
+              </span>
+              <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
+                لكل البيت.
+              </span>
+              <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-primary">
+                حتى للخادمة.
+              </span>
             </h1>
           ) : (
-            <h1 className="max-w-3xl text-balance text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] text-white">
+            <motion.h1
+              variants={wordContainer}
+              initial="hidden"
+              animate="visible"
+              transition={{ staggerChildren: 0.06 }}
+              className="font-extrabold leading-[0.95] tracking-tight"
+            >
               <motion.span
                 variants={wordContainer}
-                initial="hidden"
-                animate="visible"
-                transition={{ staggerChildren: 0.08, delayChildren: 0.2 }}
-                className="block"
+                transition={{ staggerChildren: 0.06, delayChildren: 0.1 }}
+                className="block text-[clamp(48px,7vw,96px)] text-[#1A1023]"
               >
                 {line1Words.map((word, i) => (
                   <motion.span
                     key={i}
                     variants={wordItem}
-                    className="me-3 inline-block last:me-0"
+                    className="me-4 inline-block last:me-0"
                   >
                     {word}
                   </motion.span>
@@ -321,22 +434,35 @@ export default function Hero() {
               </motion.span>
               <motion.span
                 variants={wordContainer}
-                initial="hidden"
-                animate="visible"
-                transition={{ staggerChildren: 0.08, delayChildren: 0.85 }}
-                className="block"
+                transition={{ staggerChildren: 0.06, delayChildren: 0.4 }}
+                className="mt-2 block text-[clamp(48px,7vw,96px)] text-[#1A1023]"
               >
                 {line2Words.map((word, i) => (
                   <motion.span
                     key={i}
                     variants={wordItem}
-                    className="me-3 inline-block last:me-0"
+                    className="me-4 inline-block last:me-0"
                   >
                     {word}
                   </motion.span>
                 ))}
               </motion.span>
-            </h1>
+              <motion.span
+                variants={wordContainer}
+                transition={{ staggerChildren: 0.06, delayChildren: 0.7 }}
+                className="mt-2 block text-[clamp(48px,7vw,96px)] text-primary"
+              >
+                {line3Words.map((word, i) => (
+                  <motion.span
+                    key={i}
+                    variants={wordItem}
+                    className="me-4 inline-block last:me-0"
+                  >
+                    {word}
+                  </motion.span>
+                ))}
+              </motion.span>
+            </motion.h1>
           )}
 
           <motion.p
@@ -345,51 +471,56 @@ export default function Hero() {
             transition={
               reduced
                 ? { duration: 0 }
-                : { duration: 0.4, ease: easeOut, delay: 1.1 }
+                : { duration: 0.5, ease: easeOut, delay: 1.0 }
             }
-            className="mx-auto mt-6 max-w-xl text-base leading-[1.7] text-white/80 md:text-lg"
+            className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#1A1023]/70 md:text-xl"
           >
-            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك، بلغته.
+            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك بلغته، بإشراف خبيرة تغذية سعودية.
           </motion.p>
 
-          <motion.a
-            href="#pricing"
-            onClick={() => track("hero_cta_clicked")}
-            initial={reduced ? false : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={
               reduced
                 ? { duration: 0 }
-                : { duration: 0.5, ease: overshootEase, delay: 1.3 }
+                : { duration: 0.5, ease: easeOut, delay: 1.2 }
             }
-            whileHover={
-              reduced
-                ? undefined
-                : {
-                    y: -2,
-                    transition: { duration: 0.2, ease: easeOut },
-                  }
-            }
-            whileTap={
-              reduced
-                ? undefined
-                : { scale: 0.98, transition: { duration: 0.1 } }
-            }
-            className="mt-8 inline-flex min-h-12 items-center gap-3 rounded-full bg-white px-8 py-4 text-base font-bold text-primary shadow-2xl transition-colors duration-300 hover:bg-brand-yellow focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+            className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
           >
-            <span>ابدئي خطتك المجانية</span>
-            <ChevronLeft className="size-5" aria-hidden="true" />
-          </motion.a>
+            <a
+              href="#pricing"
+              onClick={() => track("hero_cta_clicked")}
+              className="inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-full bg-[#1A1023] px-7 py-3.5 text-base font-bold text-white shadow-lg transition-colors duration-200 hover:bg-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
+            >
+              <span>ابدئي خطتك المجانية</span>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </a>
+            <a
+              href="#how-it-works"
+              onClick={() =>
+                track("secondary_cta_clicked", { section: "hero" })
+              }
+              className="inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-full border border-[#1A1023]/10 bg-white px-7 py-3.5 text-base font-bold text-[#1A1023] shadow-md transition-colors duration-200 hover:bg-surface focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
+            >
+              <span>شوفي كيف يشتغل</span>
+            </a>
+          </motion.div>
         </div>
 
-        <div className="relative z-20 mt-12 -mb-16 md:mt-16 md:-mb-20">
+        <SaraPill reduced={reduced} />
+      </div>
+
+      <div className="relative">
+        <div className="container-page pb-0">
           <div className="hidden md:block">
-            <div className="mx-auto grid max-w-6xl grid-cols-5 gap-3 px-4 lg:gap-4">
-              {cards.map((card, idx) => (
-                <PortraitCard
+            <div className="mx-auto grid max-w-6xl grid-cols-5 gap-3 lg:gap-4">
+              {familyMembers.map((member, idx) => (
+                <FamilyCard
                   key={idx}
-                  card={card}
+                  member={member}
                   index={idx}
+                  isHighlighted={idx === 2}
                   reduced={reduced}
                 />
               ))}
@@ -401,11 +532,12 @@ export default function Hero() {
               opts={{ align: "start", direction: "rtl", loop: false }}
             >
               <CarouselContent>
-                {cards.map((card, idx) => (
+                {familyMembers.map((member, idx) => (
                   <CarouselItem key={idx} className="basis-[55%]">
-                    <PortraitCard
-                      card={card}
+                    <FamilyCard
+                      member={member}
                       index={idx}
+                      isHighlighted={idx === 2}
                       reduced={reduced}
                     />
                   </CarouselItem>
@@ -414,9 +546,9 @@ export default function Hero() {
             </Carousel>
           </div>
         </div>
-      </div>
 
-      <WaveSVG />
+        <WaveSVG />
+      </div>
     </section>
   );
 }
