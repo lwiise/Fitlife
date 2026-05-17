@@ -5,6 +5,7 @@ import HowItWorks from "@/components/sections/HowItWorks";
 import FamilyMode from "@/components/sections/FamilyMode";
 import ProductDemo from "@/components/sections/ProductDemo";
 import Features from "@/components/sections/Features";
+import Pricing from "@/components/sections/Pricing";
 
 export default function Home() {
   return (
@@ -23,6 +24,7 @@ export default function Home() {
         <FamilyMode />
         <ProductDemo />
         <Features />
+        <Pricing />
       </main>
     </>
   );
