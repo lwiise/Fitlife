@@ -1,10 +1,16 @@
 import { createClient } from "./server";
+import type { Database } from "./database.types";
+
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
+type MealPlan = Database["public"]["Tables"]["meal_plans"]["Row"];
+type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"];
 
 /**
  * Get the current authenticated user's profile.
  * Returns null if not authenticated or profile not found.
  */
-export async function getCurrentUserProfile() {
+export async function getCurrentUserProfile(): Promise<Profile | null> {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -16,14 +22,14 @@ export async function getCurrentUserProfile() {
     .eq("id", user.id)
     .single();
 
-  if (error) return null;
+  if (error || !profile) return null;
   return profile;
 }
 
 /**
  * Get the current user's family members, ordered by display_order.
  */
-export async function getCurrentUserFamilyMembers() {
+export async function getCurrentUserFamilyMembers(): Promise<FamilyMember[]> {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -42,7 +48,7 @@ export async function getCurrentUserFamilyMembers() {
 /**
  * Get the current user's active meal plan (most recent ready plan).
  */
-export async function getCurrentUserMealPlan() {
+export async function getCurrentUserMealPlan(): Promise<MealPlan | null> {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -57,7 +63,7 @@ export async function getCurrentUserMealPlan() {
     .limit(1)
     .single();
 
-  if (error) return null;
+  if (error || !data) return null;
   return data;
 }
 
@@ -65,7 +71,7 @@ export async function getCurrentUserMealPlan() {
  * Get the current user's active subscription.
  * Returns null if no active subscription (free trial counts as active).
  */
-export async function getCurrentUserSubscription() {
+export async function getCurrentUserSubscription(): Promise<Subscription | null> {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -80,7 +86,7 @@ export async function getCurrentUserSubscription() {
     .limit(1)
     .single();
 
-  if (error) return null;
+  if (error || !data) return null;
   return data;
 }
 
