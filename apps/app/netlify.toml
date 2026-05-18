@@ -2,30 +2,28 @@
 # Live at: https://fitlife-app-mvp.netlify.app/
 # Custom domain (e.g., app.fitlife.com) to be added later.
 #
-# IMPORTANT: This site is configured with:
-#   Base directory: apps/app (set in Netlify UI)
-#   Package directory: (auto-filled to "apps/app/" — cannot be cleared in UI)
-#   Publish directory: .next (relative to base)
+# Build approach:
+#   - base = "apps/app" so Netlify scopes the deploy to this app
+#   - pnpm -w install installs at the workspace root regardless of cwd
+#     (pnpm -w looks UP for pnpm-workspace.yaml)
+#   - pnpm --filter @fitlife/app build builds only this app's package
 #
-# Because Netlify's Package directory UI field is locked and adds a redundant
-# apps/app/ prefix, we use explicit paths and pnpm filter in the build command
-# below to ensure consistent behavior regardless of where Netlify thinks it is.
+# This avoids relying on $NETLIFY_REPO_BASE_DIR (which doesn't exist
+# in Netlify's build environment).
 
 [build]
   base = "apps/app"
-  command = "cd $NETLIFY_REPO_BASE_DIR && corepack enable && pnpm install --no-frozen-lockfile && pnpm --filter @fitlife/app build"
-  publish = ".next"
+  command = "corepack enable && pnpm -w install --no-frozen-lockfile && pnpm --filter @fitlife/app build"
+  publish = "apps/app/.next"
 
 [build.environment]
   NODE_VERSION = "20"
   NEXT_PRIVATE_TARGET = "server"
-  # Critical: NETLIFY_REPO_BASE_DIR is the monorepo root regardless of base setting
-  # This lets us reliably "cd" back to where pnpm-workspace.yaml lives.
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Security headers (matches next.config.ts but Netlify applies these at edge)
+# Security headers
 [[headers]]
   for = "/*"
   [headers.values]
