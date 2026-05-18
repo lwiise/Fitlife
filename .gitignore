@@ -48,3 +48,7 @@ next-env.d.ts
 **/dist/
 **/.env.local
 **/coverage/
+
+# Supabase CLI workspace (auto-created at repo root by `npx supabase ...`)
+# Our migrations live in apps/app/supabase/ which stays tracked.
+/supabase/
