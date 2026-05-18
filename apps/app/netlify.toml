@@ -1,0 +1,47 @@
+# Netlify config for the Fit Life SaaS app
+# Live at: https://fitlife-app-mvp.netlify.app/
+# Custom domain (e.g., app.fitlife.com) to be added later.
+#
+# This file is only read when the Netlify site has Base directory = apps/app
+# (Site settings → Build & deploy → Build settings).
+
+[build]
+  base = "."
+  command = "cd ../.. && corepack enable && pnpm install --no-frozen-lockfile && pnpm build:app"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_PRIVATE_TARGET = "server"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Security headers (mirrors next.config.ts but applied at the Netlify edge,
+# so they fire even for statically prerendered pages)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    X-Robots-Tag = "noindex, nofollow"
+
+# Cache static assets aggressively
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/_next/image*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# API routes must not be cached
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"

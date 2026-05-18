@@ -1,6 +1,17 @@
-# Root Netlify config for the monorepo.
-# Builds the landing page (apps/web). The SaaS app (apps/app) will get its own
-# Netlify site in Prompt 1.3.
+# ROOT Netlify config — for the LANDING PAGE site
+# Live at: https://fitlife-landing.netlify.app/
+#
+# The SaaS app site reads from apps/app/netlify.toml instead.
+#
+# Two-site architecture:
+# - Site 1 (this config): landing page → builds apps/web
+#   URL: https://fitlife-landing.netlify.app/
+# - Site 2 (apps/app/netlify.toml): SaaS app → builds apps/app
+#   URL: https://fitlife-app-mvp.netlify.app/
+#
+# Both currently use Netlify native subdomains.
+# Custom domains can be added later in each site's Domain settings
+# without any code changes.
 
 [build]
   base = "."
