@@ -14,7 +14,10 @@
 [build]
   base = "apps/app"
   command = "corepack enable && pnpm -w install --no-frozen-lockfile && pnpm --filter @fitlife/app build"
-  publish = "apps/app/.next"
+  # publish is relative to base — Netlify joins them, so ".next" resolves
+  # to /opt/build/repo/apps/app/.next. Using "apps/app/.next" here would
+  # double the prefix (see deploy 2496820 — failed at apps/app/apps/app/.next).
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
