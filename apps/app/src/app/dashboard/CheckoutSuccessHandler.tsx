@@ -27,9 +27,10 @@ export function CheckoutSuccessHandler() {
       if (Date.now() - startedAt > TIMEOUT_MS) {
         clearInterval(interval);
         setStage("timeout");
-        // Strip the URL param even on timeout — refresh once more in case.
-        history.replaceState(null, "", "/dashboard");
-        router.refresh();
+        // Strip the URL param + refetch via router.replace (avoids the
+        // SecurityError that history.replaceState can throw under some
+        // hydration paths).
+        router.replace("/dashboard");
         return;
       }
 
@@ -42,8 +43,7 @@ export function CheckoutSuccessHandler() {
         if (body.status === "active") {
           clearInterval(interval);
           setStage("active");
-          history.replaceState(null, "", "/dashboard");
-          router.refresh();
+          router.replace("/dashboard");
         }
       } catch {
         // network blip — keep polling
