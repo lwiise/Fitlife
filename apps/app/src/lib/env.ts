@@ -2,10 +2,15 @@
  * Type-safe environment variable access.
  * Validates required vars at startup so we fail fast instead of getting
  * cryptic "undefined" errors at runtime.
+ *
+ * IMPORTANT: NEXT_PUBLIC_* vars must be accessed via direct property reads
+ * (process.env.NEXT_PUBLIC_FOO), NOT via dynamic keys (process.env[key]),
+ * so Next.js can inline them into the client bundle at build time.
+ * Dynamic keys stay as runtime lookups and resolve to `undefined` in the
+ * browser, which would crash module evaluation on the client.
  */
 
-function requireEnv(key: string): string {
-  const value = process.env[key];
+function requireValue(key: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
       `Missing required environment variable: ${key}\n` +
@@ -15,18 +20,26 @@ function requireEnv(key: string): string {
   return value;
 }
 
-function optionalEnv(key: string): string | undefined {
-  return process.env[key] || undefined;
-}
-
 export const env = {
-  // Public (safe to expose to browser)
-  NEXT_PUBLIC_SUPABASE_URL: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-  NEXT_PUBLIC_APP_URL: requireEnv("NEXT_PUBLIC_APP_URL"),
-  NEXT_PUBLIC_WEB_URL: requireEnv("NEXT_PUBLIC_WEB_URL"),
+  // Public (safe to expose to browser) — direct refs so Next.js inlines them
+  NEXT_PUBLIC_SUPABASE_URL: requireValue(
+    "NEXT_PUBLIC_SUPABASE_URL",
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+  ),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: requireValue(
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  ),
+  NEXT_PUBLIC_APP_URL: requireValue(
+    "NEXT_PUBLIC_APP_URL",
+    process.env.NEXT_PUBLIC_APP_URL,
+  ),
+  NEXT_PUBLIC_WEB_URL: requireValue(
+    "NEXT_PUBLIC_WEB_URL",
+    process.env.NEXT_PUBLIC_WEB_URL,
+  ),
 
-  // Server-only (must never be sent to browser)
-  SUPABASE_SERVICE_ROLE_KEY: optionalEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  ANTHROPIC_API_KEY: optionalEnv("ANTHROPIC_API_KEY"),
+  // Server-only (never sent to browser; resolve to undefined in client bundle)
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || undefined,
 } as const;
