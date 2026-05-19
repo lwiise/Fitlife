@@ -13,6 +13,10 @@ import { NumberTicker } from "@/components/ui/number-ticker";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { track } from "@/lib/analytics";
+import {
+  PRICING_TIERS,
+  getAnnualMonthlyEquivalent,
+} from "@fitlife/config";
 
 type Tier = {
   name: string;
@@ -25,67 +29,47 @@ type Tier = {
   badge?: string;
 };
 
+// Pricing is centralized in @fitlife/config. The `annualPrice` shown here is
+// the per-month equivalent when billing annually (derived from the annual
+// total / 12), to match the existing landing-page UX of comparing per-month
+// rates between monthly and annual cadences.
 const tiers: Tier[] = [
   {
-    name: "البداية",
-    monthlyPrice: 29,
-    annualPrice: 23,
+    name: PRICING_TIERS.starter.name_ar,
+    monthlyPrice: PRICING_TIERS.starter.price_monthly_sar,
+    annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.starter),
     description: "للشخص الواحد، تبدئين رحلتك",
-    features: [
-      "خطة غذائية شخصية",
-      "5 أسئلة يومياً للمساعد الذكي",
-      "تتبع الوزن والقياسات",
-      "وصفات خليجية أساسية",
-      "بالعربي",
-    ],
+    features: PRICING_TIERS.starter.features_ar,
     cta: "ابدئي البداية",
-    highlighted: false,
+    highlighted: PRICING_TIERS.starter.highlighted,
   },
   {
-    name: "المتقدمة",
-    monthlyPrice: 59,
-    annualPrice: 47,
+    name: PRICING_TIERS.pro.name_ar,
+    monthlyPrice: PRICING_TIERS.pro.price_monthly_sar,
+    annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.pro),
     description: "للأم، مع تتبع متقدم",
-    features: [
-      "كل ميزات البداية",
-      "محادثات غير محدودة مع الذكاء الاصطناعي",
-      "تكامل مع Apple Watch و Fitbit",
-      "صور قبل/بعد",
-      "تقارير أسبوعية",
-    ],
+    features: PRICING_TIERS.pro.features_ar,
     cta: "اختاري المتقدمة",
-    highlighted: false,
+    highlighted: PRICING_TIERS.pro.highlighted,
   },
   {
-    name: "العائلة",
-    monthlyPrice: 129,
-    annualPrice: 103,
-    description: "للبيت كامل — حتى 5 أفراد بما فيهم الخادمة",
-    features: [
-      "كل ميزات المتقدمة لكل فرد",
-      "حتى 5 حسابات في الباقة",
-      "حساب منفصل للخادمة بلغتها",
-      "خطط للأولاد حسب أعمارهم",
-      "تقارير عائلية شهرية",
-      "أولوية في الدعم",
-    ],
+    name: PRICING_TIERS.family.name_ar,
+    monthlyPrice: PRICING_TIERS.family.price_monthly_sar,
+    annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.family),
+    description: "للبيت كامل — حتى 6 أفراد",
+    features: PRICING_TIERS.family.features_ar,
     cta: "اشتركي بباقة العائلة",
-    highlighted: true,
+    highlighted: PRICING_TIERS.family.highlighted,
     badge: "الأكثر شعبية",
   },
   {
-    name: "البريميوم",
-    monthlyPrice: 249,
-    annualPrice: 199,
+    name: PRICING_TIERS.premium.name_ar,
+    monthlyPrice: PRICING_TIERS.premium.price_monthly_sar,
+    annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.premium),
     description: "العائلة + جلسات مع خبيرة تغذية",
-    features: [
-      "كل ميزات العائلة",
-      "جلستان شهرياً مع خبيرة تغذية معتمدة",
-      "خطط مخصصة لحالات خاصة (حمل، سكري، ضغط)",
-      "تقارير صحية يومية",
-    ],
+    features: PRICING_TIERS.premium.features_ar,
     cta: "اختاري البريميوم",
-    highlighted: false,
+    highlighted: PRICING_TIERS.premium.highlighted,
   },
 ];
 

@@ -1,0 +1,105 @@
+import "server-only";
+
+import { createClient } from "@/lib/supabase/server";
+import { canGeneratePlan } from "@/lib/supabase/queries";
+import {
+  getCurrentSubscription,
+  getTierLimit,
+  isSubscriptionActive,
+} from "./state";
+
+export type AccessReason =
+  | "trial_expired"
+  | "subscription_inactive"
+  | "rate_limit"
+  | "person_count_exceeded";
+
+export interface AccessDetails {
+  current_people?: number;
+  max_people?: number | null;
+  days_until_reset?: number;
+}
+
+export type AccessResult =
+  | { allowed: true }
+  | { allowed: false; reason: AccessReason; details?: AccessDetails };
+
+/**
+ * Counts beneficiaries: Mom (always 1) + non-housekeeper family members.
+ */
+async function countBeneficiaries(userId: string): Promise<number> {
+  const supabase = await createClient();
+
+  const { count, error } = await supabase
+    .from("family_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .neq("role", "housekeeper");
+
+  if (error) {
+    console.error("[countBeneficiaries] error:", error);
+    // Defensive: assume worst case (no family members beyond Mom)
+    return 1;
+  }
+  return (count ?? 0) + 1;
+}
+
+/**
+ * Decides whether the authenticated user is allowed to trigger a new plan
+ * generation. Checks happen in this order:
+ *   1. Subscription exists + is active (trialing-with-valid-end-date or active)
+ *   2. Person count is within tier limit
+ *   3. Weekly 3-plan rate limit hasn't been exceeded
+ */
+export async function canGenerateNewPlan(userId: string): Promise<AccessResult> {
+  const sub = await getCurrentSubscription(userId);
+  if (!sub) {
+    return { allowed: false, reason: "subscription_inactive" };
+  }
+
+  if (!isSubscriptionActive(sub)) {
+    // Distinguish expired trials from genuinely inactive (cancelled, expired)
+    if (sub.status === "trialing") {
+      return { allowed: false, reason: "trial_expired" };
+    }
+    return { allowed: false, reason: "subscription_inactive" };
+  }
+
+  const maxPeople = getTierLimit(sub.tier);
+  if (maxPeople !== null) {
+    const currentPeople = await countBeneficiaries(userId);
+    if (currentPeople > maxPeople) {
+      return {
+        allowed: false,
+        reason: "person_count_exceeded",
+        details: { current_people: currentPeople, max_people: maxPeople },
+      };
+    }
+  }
+
+  const canRateLimit = await canGeneratePlan(userId);
+  if (!canRateLimit) {
+    return {
+      allowed: false,
+      reason: "rate_limit",
+      // Conservative fallback — the rate-limit window is 7 days but the
+      // actual days-until-reset depends on the oldest completed generation.
+      details: { days_until_reset: 7 },
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * True when the user is allowed to VIEW their existing plans (vs. generate
+ * new ones). Permissive on expired/cancelled subs so users can still see
+ * the last plan they paid for — locks them out of generation, not history.
+ */
+export async function canViewExistingPlans(userId: string): Promise<boolean> {
+  const sub = await getCurrentSubscription(userId);
+  if (!sub) return false;
+  // Trialing (even if expired), active, past_due, cancelled all see history.
+  // Only fully purged accounts (no subscription row) cannot view.
+  return true;
+}

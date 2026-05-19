@@ -1,8 +1,8 @@
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, AlertTriangle } from "lucide-react";
 import type { z } from "zod";
 import { step4Schema } from "../schema";
 
@@ -51,10 +51,12 @@ export function Step4FamilyComposition({
   defaultValues,
   onSubmit,
   isPending,
+  tierLimit,
 }: {
   defaultValues?: FormData;
   onSubmit: (data: FormData) => void;
   isPending: boolean;
+  tierLimit: number | null;
 }) {
   const {
     handleSubmit,
@@ -68,6 +70,16 @@ export function Step4FamilyComposition({
     },
   });
 
+  const hasPartner = useWatch({ control, name: "has_partner" });
+  const numChildren = useWatch({ control, name: "num_children" });
+
+  // Beneficiary count = Mom + partner (if any) + children. Housekeeper excluded.
+  const beneficiaryCount =
+    1 + (hasPartner ? 1 : 0) + (typeof numChildren === "number" ? numChildren : 0);
+
+  const overTier =
+    tierLimit !== null && beneficiaryCount > tierLimit;
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <header>
@@ -78,6 +90,30 @@ export function Step4FamilyComposition({
           اختاري الأعضاء — نسجلهم في الخطوة الجاية.
         </p>
       </header>
+
+      {overTier && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-3 rounded-2xl border-2 border-brand-yellow/40 bg-brand-yellow/15 px-4 py-3"
+        >
+          <AlertTriangle
+            className="size-5 flex-shrink-0 mt-0.5 text-brand-ink"
+            aria-hidden="true"
+          />
+          <div className="flex-1">
+            <p className="text-brand-ink text-sm font-medium leading-relaxed">
+              خطتك الحالية تسمح بـ {tierLimit} {tierLimit === 1 ? "شخص" : "أشخاص"} فقط، عائلتك {beneficiaryCount} أفراد.
+            </p>
+            <a
+              href="/pricing"
+              className="inline-block mt-1 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-yellow/15 rounded-md"
+            >
+              ترقي للفاميلي
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div className="bg-white rounded-2xl border border-brand-ink/10 p-5 flex items-center justify-between gap-4">

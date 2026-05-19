@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { canGeneratePlan } from "@/lib/supabase/queries";
 import {
   generateMealPlan,
   OnboardingIncompleteError,
@@ -9,17 +8,21 @@ import {
   AnthropicCallError,
   PlanValidationError,
 } from "@/lib/plans";
+import { canGenerateNewPlan } from "@/lib/subscription/access";
+import {
+  buildPersonLimitMessage,
+  TIER_DISPLAY_NAMES_AR,
+} from "@/lib/subscription/strings";
+import { getCurrentSubscription } from "@/lib/subscription/state";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 /**
  * POST /api/plans/generate
  *
- * Auth-required. Rate-limited to 3 successful generations per user per 7-day
- * rolling window. Generates a full-week meal plan for the user's whole family.
+ * Auth-required. Subscription-gated (trial-aware, tier-limited, rate-limited).
+ * Generates a full-week meal plan for the user's whole family.
  */
 export async function POST() {
   const supabase = await createClient();
@@ -32,19 +35,42 @@ export async function POST() {
     return NextResponse.json({ error: "يجب تسجيل الدخول" }, { status: 401 });
   }
 
-  // Rate limit
-  const canGenerate = await canGeneratePlan(user.id);
-  if (!canGenerate) {
-    // Approximate days until reset: the oldest of the user's 3 most-recent
-    // completed generations rolls off 7 days after it was created. Without
-    // querying again we'll fall back to a conservative 7-day message.
-    const daysUntilReset = 7;
-    return NextResponse.json(
-      {
-        error: `وصلتي للحد الأقصى من الخطط هذا الأسبوع. حاولي مرة ثانية بعد ${daysUntilReset} أيام`,
-      },
-      { status: 429 },
-    );
+  // Subscription + person-count + rate-limit gating
+  const access = await canGenerateNewPlan(user.id);
+  if (!access.allowed) {
+    switch (access.reason) {
+      case "trial_expired":
+        return NextResponse.json(
+          { error: "انتهت فترتك التجريبية. اشتركي للاستمرار" },
+          { status: 402 },
+        );
+      case "subscription_inactive":
+        return NextResponse.json(
+          { error: "اشتراكك غير نشط. حدّثي طريقة الدفع" },
+          { status: 402 },
+        );
+      case "person_count_exceeded": {
+        const sub = await getCurrentSubscription(user.id);
+        const tierName = sub
+          ? TIER_DISPLAY_NAMES_AR[sub.tier]
+          : TIER_DISPLAY_NAMES_AR.starter;
+        const current = access.details?.current_people ?? 0;
+        const max = access.details?.max_people ?? 0;
+        return NextResponse.json(
+          { error: buildPersonLimitMessage(current, max, tierName) },
+          { status: 403 },
+        );
+      }
+      case "rate_limit": {
+        const days = access.details?.days_until_reset ?? 7;
+        return NextResponse.json(
+          {
+            error: `وصلتي للحد الأقصى من الخطط هذا الأسبوع. حاولي مرة ثانية بعد ${days} أيام`,
+          },
+          { status: 429 },
+        );
+      }
+    }
   }
 
   try {
@@ -106,6 +132,3 @@ export async function POST() {
   }
 }
 
-// Suppress unused-var TS in some build configs — MS_PER_DAY may be unused
-// today but kept for the per-user days-until-reset refinement later.
-void MS_PER_DAY;

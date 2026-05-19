@@ -1,9 +1,13 @@
-import { Sparkles, Users, Calendar } from "lucide-react";
+import { Sparkles, Users, Calendar, Lock } from "lucide-react";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
   getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentSubscription } from "@/lib/subscription/state";
+import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
+import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { LogoutButton } from "./LogoutButton";
 import { CreateFirstPlanButton } from "./CreateFirstPlanButton";
 
@@ -15,6 +19,14 @@ export default async function DashboardPage() {
   const profile = await getCurrentUserProfile();
   const familyMembers = await getCurrentUserFamilyMembers();
   const latestPlan = await getCurrentUserLatestPlan();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const subscription = user ? await getCurrentSubscription(user.id) : null;
+  const subStatus = subscription?.status ?? null;
+  const isPaywalled = subStatus === "cancelled" || subStatus === "expired";
 
   if (!profile) {
     return (
@@ -39,6 +51,8 @@ export default async function DashboardPage() {
       </header>
 
       <div className="container-app py-8 md:py-12">
+        {subscription && <TrialBanner subscription={subscription} />}
+
         <div className="mb-8">
           <p className="text-brand-ink-muted text-sm">أهلاً،</p>
           <h2 className="font-extrabold text-2xl md:text-3xl text-brand-ink mt-1 leading-tight">
@@ -84,6 +98,28 @@ export default async function DashboardPage() {
             </p>
           </div>
 
+          {isPaywalled ? (
+            <div className="bg-brand-purple-900 text-white rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="size-10 rounded-full bg-white/15 flex items-center justify-center">
+                  <Lock className="size-5 text-brand-yellow" aria-hidden="true" />
+                </div>
+                <p className="text-white/80 text-sm font-medium">الاشتراك</p>
+              </div>
+              <p className="font-extrabold text-2xl mt-1 leading-tight">
+                اشتراكك انتهى
+              </p>
+              <p className="text-white/80 text-xs mt-1">
+                للوصول لخطتك الغذائية
+              </p>
+              <a
+                href="/pricing"
+                className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-4 py-2 rounded-full mt-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900 min-h-[2.75rem]"
+              >
+                اشتركي للاستمرار
+              </a>
+            </div>
+          ) : (
           <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center">
@@ -142,19 +178,20 @@ export default async function DashboardPage() {
               </>
             )}
           </div>
+          )}
 
           <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-yellow/20 flex items-center justify-center">
-                <Sparkles className="size-5 text-brand-yellow" />
+                <Sparkles className="size-5 text-brand-yellow" aria-hidden="true" />
               </div>
               <p className="text-brand-ink-muted text-sm font-medium">الاشتراك</p>
             </div>
-            <p className="font-extrabold text-3xl text-brand-ink mt-1">
-              مجاني
+            <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
+              {subscription ? TIER_DISPLAY_NAMES_AR[subscription.tier] : "—"}
             </p>
             <p className="text-brand-ink-muted text-xs mt-1">
-              فترة تجريبية
+              {subStatus === "trialing" ? "فترة تجريبية" : subStatus === "active" ? "نشط" : subStatus === "past_due" ? "تأخر السداد" : subStatus === "cancelled" ? "مُلغى" : subStatus === "expired" ? "منتهي" : "—"}
             </p>
           </div>
         </div>

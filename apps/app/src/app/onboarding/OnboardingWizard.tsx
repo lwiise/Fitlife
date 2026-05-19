@@ -23,7 +23,13 @@ const TOTAL_STEPS = 8;
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function OnboardingWizard({ initialProfile: _initialProfile }: { initialProfile: Profile }) {
+export function OnboardingWizard({
+  initialProfile: _initialProfile,
+  tierLimit,
+}: {
+  initialProfile: Profile;
+  tierLimit: number | null;
+}) {
   const [currentStep, setCurrentStep] = useState(1);
   const [state, setState] = useState<OnboardingState>({});
   const [isPending, startTransition] = useTransition();
@@ -154,6 +160,7 @@ export function OnboardingWizard({ initialProfile: _initialProfile }: { initialP
             {currentStep === 4 && (
               <Step4FamilyComposition
                 defaultValues={state.step4}
+                tierLimit={tierLimit}
                 onSubmit={(data) => {
                   setState((s) => ({ ...s, step4: data }));
                   goNext();
