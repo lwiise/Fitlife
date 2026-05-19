@@ -1,5 +1,6 @@
 import { createClient } from "./server";
 import type { Database } from "./database.types";
+import { getLatestPlan, type LatestPlanSummary } from "@/lib/plans/getLatestPlan";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
@@ -88,6 +89,19 @@ export async function getCurrentUserSubscription(): Promise<Subscription | null>
 
   if (error || !data) return null;
   return data;
+}
+
+/**
+ * Get the current user's most recent plan regardless of status.
+ * Returns null if no plan exists.
+ */
+export async function getCurrentUserLatestPlan(): Promise<LatestPlanSummary | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  return getLatestPlan(user.id);
 }
 
 /**

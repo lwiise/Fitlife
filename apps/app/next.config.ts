@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
 
   transpilePackages: ["@fitlife/ui", "@fitlife/config"],
 
+  // @react-pdf/renderer is loaded dynamically (ssr:false) by DownloadPDFButton,
+  // but Turbopack still tries to resolve its imports during SSR compilation.
+  // Marking it server-external tells Next.js not to bundle it for the server.
+  serverExternalPackages: ["@react-pdf/renderer"],
+
   images: {
     remotePatterns: [
       {

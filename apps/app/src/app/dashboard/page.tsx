@@ -2,9 +2,10 @@ import { Sparkles, Users, Calendar } from "lucide-react";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
-  getCurrentUserMealPlan,
+  getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
 import { LogoutButton } from "./LogoutButton";
+import { CreateFirstPlanButton } from "./CreateFirstPlanButton";
 
 export const metadata = {
   title: "لوحة التحكم",
@@ -13,7 +14,7 @@ export const metadata = {
 export default async function DashboardPage() {
   const profile = await getCurrentUserProfile();
   const familyMembers = await getCurrentUserFamilyMembers();
-  const currentPlan = await getCurrentUserMealPlan();
+  const latestPlan = await getCurrentUserLatestPlan();
 
   if (!profile) {
     return (
@@ -86,18 +87,60 @@ export default async function DashboardPage() {
           <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center">
-                <Calendar className="size-5 text-brand-pink" />
+                <Calendar className="size-5 text-brand-pink" aria-hidden="true" />
               </div>
               <p className="text-brand-ink-muted text-sm font-medium">الخطة الحالية</p>
             </div>
-            <p className="font-extrabold text-3xl text-brand-ink mt-1">
-              {currentPlan ? "نشطة" : "—"}
-            </p>
-            <p className="text-brand-ink-muted text-xs mt-1">
-              {currentPlan
-                ? `بدأت ${new Date(currentPlan.generated_at!).toLocaleDateString("ar-SA")}`
-                : "ما عندك خطة بعد"}
-            </p>
+            {latestPlan?.status === "ready" && (
+              <>
+                <p className="font-extrabold text-3xl text-brand-ink mt-1">نشطة</p>
+                <p className="text-brand-ink-muted text-xs mt-1">
+                  {latestPlan.week_start_date
+                    ? `تبدأ ${new Date(latestPlan.week_start_date).toLocaleDateString("ar-SA")}`
+                    : "خطة حالية جاهزة"}
+                </p>
+                <a
+                  href="/plan"
+                  className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
+                >
+                  اعرضي الخطة
+                </a>
+              </>
+            )}
+            {latestPlan?.status === "generating" && (
+              <>
+                <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
+                  جاري إنشاء خطتك
+                </p>
+                <p className="text-brand-ink-muted text-xs mt-1">قد تاخذ دقيقة</p>
+                <a
+                  href="/plan"
+                  className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
+                >
+                  متابعة الحالة
+                </a>
+              </>
+            )}
+            {latestPlan?.status === "failed" && (
+              <>
+                <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
+                  آخر محاولة فشلت
+                </p>
+                <a
+                  href="/plan"
+                  className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
+                >
+                  إعادة المحاولة
+                </a>
+              </>
+            )}
+            {!latestPlan && (
+              <>
+                <p className="font-extrabold text-3xl text-brand-ink mt-1">—</p>
+                <p className="text-brand-ink-muted text-xs mt-1">ما عندك خطة بعد</p>
+                {onboardingDone && <CreateFirstPlanButton />}
+              </>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
@@ -121,7 +164,7 @@ export default async function DashboardPage() {
             معلومات تشخيصية (للمطور فقط)
           </summary>
           <pre className="mt-2 p-3 bg-white/50 rounded-lg overflow-auto">
-            {JSON.stringify({ profile, familyMembers, currentPlan }, null, 2)}
+            {JSON.stringify({ profile, familyMembers, latestPlan }, null, 2)}
           </pre>
         </details>
       </div>
