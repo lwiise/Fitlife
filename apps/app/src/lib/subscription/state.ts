@@ -76,13 +76,30 @@ export function isTrialExpired(sub: SubscriptionRow): boolean {
 
 /**
  * True if the subscription should grant access right now:
- *   - status === 'active', OR
+ *   - status === 'active' AND current_period_end > now (handles the
+ *     cancel-at-period-end case where the row stays 'active' until the
+ *     paid-through date and then transitions to 'expired' via the webhook
+ *     or a stale-period check)
  *   - status === 'trialing' AND trial_ends_at is in the future
  */
 export function isSubscriptionActive(sub: SubscriptionRow): boolean {
-  if (sub.status === "active") return true;
+  if (sub.status === "active") {
+    // If we have a current_period_end, require it to be in the future.
+    // Webhooks fill this; only legacy/seed rows may have it null — treat as active.
+    if (!sub.current_period_end) return true;
+    return new Date(sub.current_period_end).getTime() > Date.now();
+  }
   if (sub.status === "trialing") return !isTrialExpired(sub);
   return false;
+}
+
+/**
+ * True when a renewal payment has failed and the user needs to update their
+ * card. Distinct from 'cancelled' / 'expired' — the user can recover by
+ * paying, no need to start a new subscription.
+ */
+export function isPastDue(sub: SubscriptionRow): boolean {
+  return sub.status === "past_due";
 }
 
 /**

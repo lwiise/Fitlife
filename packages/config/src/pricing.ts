@@ -8,6 +8,9 @@
  * - premium: 249 * 12 * 0.80 = 2390.4 → 2390
  *
  * Arabic display names match the landing page (البداية, المتقدمة, العائلة, البريميوم).
+ *
+ * ⚠️ Lemonsqueezy variant IDs below are TEST MODE. Prompt 2.0c (pre-launch)
+ * will introduce live-mode IDs and switch based on environment.
  */
 
 export const TRIAL_DAYS = 7;
@@ -31,6 +34,9 @@ export interface TierDefinition {
   price_annual_sar: number;
   highlighted: boolean;
   features_ar: string[];
+  /** Lemonsqueezy variant IDs (TEST MODE — swap for live before launch). */
+  lemonsqueezy_variant_id_monthly: string;
+  lemonsqueezy_variant_id_annual: string;
 }
 
 export const PRICING_TIERS: Record<Tier, TierDefinition> = {
@@ -48,6 +54,8 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
       "وصفات خليجية أساسية",
       "بالعربي",
     ],
+    lemonsqueezy_variant_id_monthly: "1677645",
+    lemonsqueezy_variant_id_annual: "1677781",
   },
   pro: {
     id: "pro",
@@ -63,6 +71,8 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
       "صور قبل/بعد",
       "تقارير أسبوعية",
     ],
+    lemonsqueezy_variant_id_monthly: "1677648",
+    lemonsqueezy_variant_id_annual: "1677755",
   },
   family: {
     id: "family",
@@ -79,6 +89,8 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
       "تقارير عائلية شهرية",
       "أولوية في الدعم",
     ],
+    lemonsqueezy_variant_id_monthly: "1677653",
+    lemonsqueezy_variant_id_annual: "1677675",
   },
   premium: {
     id: "premium",
@@ -93,8 +105,21 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
       "خطط مخصصة لحالات خاصة (حمل، سكري، ضغط)",
       "تقارير صحية يومية",
     ],
+    lemonsqueezy_variant_id_monthly: "1677655",
+    lemonsqueezy_variant_id_annual: "1677749",
   },
 };
+
+/**
+ * Resolve the Lemonsqueezy variant ID for a (tier, cadence) pair.
+ * Used by the checkout API to look up the variant to charge.
+ */
+export function getVariantId(tier: Tier, cadence: Cadence): string {
+  const t = PRICING_TIERS[tier];
+  return cadence === "annual"
+    ? t.lemonsqueezy_variant_id_annual
+    : t.lemonsqueezy_variant_id_monthly;
+}
 
 /**
  * Returns the per-month equivalent when paying annually (for display on toggles

@@ -49,6 +49,11 @@ export async function POST() {
           { error: "اشتراكك غير نشط. حدّثي طريقة الدفع" },
           { status: 402 },
         );
+      case "past_due":
+        return NextResponse.json(
+          { error: "فيه مشكلة في الدفع. حدّثي بطاقتك للاستمرار" },
+          { status: 402 },
+        );
       case "person_count_exceeded": {
         const sub = await getCurrentSubscription(user.id);
         const tierName = sub

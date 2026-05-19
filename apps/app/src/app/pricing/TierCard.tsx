@@ -4,7 +4,7 @@ import {
   type Cadence,
   getAnnualMonthlyEquivalent,
 } from "@fitlife/config";
-import { ChooseTierButton } from "./ChooseTierButton";
+import { CheckoutButton } from "./CheckoutButton";
 
 export function TierCard({
   tier,
@@ -68,7 +68,7 @@ export function TierCard({
         ))}
       </ul>
 
-      <ChooseTierButton tierName={tier.name_ar} />
+      <CheckoutButton tier={tier.id} cadence={cadence} tierName={tier.name_ar} />
     </article>
   );
 }

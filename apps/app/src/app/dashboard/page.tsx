@@ -1,4 +1,5 @@
-import { Sparkles, Users, Calendar, Lock } from "lucide-react";
+import { Suspense } from "react";
+import { Sparkles, Users, Calendar, Lock, AlertTriangle } from "lucide-react";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -10,6 +11,8 @@ import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { LogoutButton } from "./LogoutButton";
 import { CreateFirstPlanButton } from "./CreateFirstPlanButton";
+import { CheckoutSuccessHandler } from "./CheckoutSuccessHandler";
+import { BillingPortalButton } from "./BillingPortalButton";
 
 export const metadata = {
   title: "لوحة التحكم",
@@ -51,7 +54,32 @@ export default async function DashboardPage() {
       </header>
 
       <div className="container-app py-8 md:py-12">
-        {subscription && <TrialBanner subscription={subscription} />}
+        <Suspense fallback={null}>
+          <CheckoutSuccessHandler />
+        </Suspense>
+
+        {subscription?.status === "past_due" && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-start sm:items-center gap-3 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 mb-6"
+          >
+            <AlertTriangle
+              className="size-5 flex-shrink-0 mt-0.5 sm:mt-0 text-red-600"
+              aria-hidden="true"
+            />
+            <p className="flex-1 text-brand-ink text-sm font-medium leading-relaxed">
+              فيه مشكلة في تجديد اشتراكك. حدّثي بياناتك الآن لتجنب توقف الخدمة
+            </p>
+            <div className="flex-shrink-0">
+              <BillingPortalButton label="تحديث الدفع" variant="ghost" />
+            </div>
+          </div>
+        )}
+
+        {subscription?.status === "trialing" && (
+          <TrialBanner subscription={subscription} />
+        )}
 
         <div className="mb-8">
           <p className="text-brand-ink-muted text-sm">أهلاً،</p>
@@ -193,6 +221,16 @@ export default async function DashboardPage() {
             <p className="text-brand-ink-muted text-xs mt-1">
               {subStatus === "trialing" ? "فترة تجريبية" : subStatus === "active" ? "نشط" : subStatus === "past_due" ? "تأخر السداد" : subStatus === "cancelled" ? "مُلغى" : subStatus === "expired" ? "منتهي" : "—"}
             </p>
+            {subStatus === "active" && subscription?.current_period_end && (
+              <p className="text-brand-ink-muted text-xs mt-1">
+                التجديد القادم: {new Date(subscription.current_period_end).toLocaleDateString("ar-SA")}
+              </p>
+            )}
+            {(subStatus === "active" || subStatus === "past_due") && subscription?.lemonsqueezy_customer_id && (
+              <div className="mt-3">
+                <BillingPortalButton variant="ghost" />
+              </div>
+            )}
           </div>
         </div>
 

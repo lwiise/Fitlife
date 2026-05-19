@@ -11,6 +11,7 @@ import {
 export type AccessReason =
   | "trial_expired"
   | "subscription_inactive"
+  | "past_due"
   | "rate_limit"
   | "person_count_exceeded";
 
@@ -58,7 +59,13 @@ export async function canGenerateNewPlan(userId: string): Promise<AccessResult> 
   }
 
   if (!isSubscriptionActive(sub)) {
-    // Distinguish expired trials from genuinely inactive (cancelled, expired)
+    // Distinguish reasons so the UI can surface the right message:
+    //   - past_due  → "payment failed, update card"
+    //   - trialing  → "trial expired, subscribe"
+    //   - other     → "subscription inactive, subscribe"
+    if (sub.status === "past_due") {
+      return { allowed: false, reason: "past_due" };
+    }
     if (sub.status === "trialing") {
       return { allowed: false, reason: "trial_expired" };
     }

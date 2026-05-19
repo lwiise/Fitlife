@@ -69,3 +69,19 @@ function requireServerEnv(key: string): string {
 export function getAnthropicKey(): string {
   return requireServerEnv("ANTHROPIC_API_KEY");
 }
+
+export function getLemonsqueezyApiKey(): string {
+  return requireServerEnv("LEMONSQUEEZY_API_KEY");
+}
+
+export function getLemonsqueezyStoreId(): string {
+  return requireServerEnv("LEMONSQUEEZY_STORE_ID");
+}
+
+export function getLemonsqueezyWebhookSecret(): string {
+  return requireServerEnv("LEMONSQUEEZY_WEBHOOK_SECRET");
+}
+
+export function getSupabaseServiceRoleKey(): string {
+  return requireServerEnv("SUPABASE_SERVICE_ROLE_KEY");
+}
