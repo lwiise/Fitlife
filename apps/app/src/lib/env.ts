@@ -39,7 +39,33 @@ export const env = {
     process.env.NEXT_PUBLIC_WEB_URL,
   ),
 
-  // Server-only (never sent to browser; resolve to undefined in client bundle)
+  // Server-only optional (never sent to browser; resolve to undefined in client bundle)
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || undefined,
 } as const;
+
+/**
+ * Lazy, throwing access for server-only required secrets.
+ *
+ * Use these from inside request handlers / generation functions — never at
+ * module top-level. Module-load access would crash the build/process when the
+ * env var is unset; lazy access gives a clean runtime error pointing the
+ * developer at the .env.local / Netlify dashboard to populate.
+ *
+ * Dynamic key access via `process.env[key]` is fine for SERVER-ONLY vars
+ * (no Next.js client-bundle inlining concern), but we still pass the resolved
+ * value to a helper to keep the error message consistent.
+ */
+function requireServerEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${key}\n` +
+      `Add it to apps/app/.env.local (local) or Netlify dashboard (production).`
+    );
+  }
+  return value;
+}
+
+export function getAnthropicKey(): string {
+  return requireServerEnv("ANTHROPIC_API_KEY");
+}

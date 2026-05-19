@@ -104,7 +104,7 @@ export async function canGeneratePlan(userId: string): Promise<boolean> {
     .from("plan_generations")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("status", "success")
+    .eq("status", "completed")
     .gte("created_at", oneWeekAgo.toISOString());
 
   if (error) return false;
