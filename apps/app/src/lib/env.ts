@@ -30,14 +30,16 @@ export const env = {
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   ),
+  // Strip trailing slashes so concatenations like `${APP_URL}/dashboard`
+  // never produce a double slash (which breaks URL resolution / replaceState).
   NEXT_PUBLIC_APP_URL: requireValue(
     "NEXT_PUBLIC_APP_URL",
     process.env.NEXT_PUBLIC_APP_URL,
-  ),
+  ).replace(/\/+$/, ""),
   NEXT_PUBLIC_WEB_URL: requireValue(
     "NEXT_PUBLIC_WEB_URL",
     process.env.NEXT_PUBLIC_WEB_URL,
-  ),
+  ).replace(/\/+$/, ""),
 
   // Server-only optional (never sent to browser; resolve to undefined in client bundle)
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
