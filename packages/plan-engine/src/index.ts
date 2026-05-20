@@ -1,14 +1,22 @@
-export { buildPlanContext } from "./buildContext";
+export { buildPlanContext, getBeneficiaries } from "./buildContext";
 export type {
   PlanPromptContext,
   PlanPromptContextMom,
   PlanPromptContextMember,
+  Beneficiary,
 } from "./buildContext";
 
-export { createPlanRows, runMealPlanGeneration } from "./generate";
+export {
+  createPlanRows,
+  runMealPlanGeneration,
+  generateMealPlan,
+} from "./generate";
 export type { GenerateResult } from "./generate";
 
-export { buildSystemPrompt } from "./systemPrompt";
+export { buildMemberSystemPrompt } from "./systemPrompt";
+
+export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
+export type { StreamResult } from "./anthropic";
 
 export {
   MacrosSchema,
@@ -20,6 +28,6 @@ export {
 } from "./schema";
 export type { Macros, Ingredient, Meal, Day, MemberPlan, MealPlan } from "./schema";
 
-export { PLAN_MODEL, PLAN_MAX_TOKENS, PRICING_USD_PER_MTOK } from "./constants";
+export { PLAN_MODEL, PLAN_MEMBER_MAX_TOKENS, PRICING_USD_PER_MTOK } from "./constants";
 
 export * from "./errors";

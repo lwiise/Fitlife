@@ -1,18 +1,23 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PLAN_MODEL, PLAN_MEMBER_MAX_TOKENS } from "./constants";
+import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
+import { buildMemberSystemPrompt } from "./systemPrompt";
 import {
-  PLAN_MODEL,
-  PLAN_MAX_TOKENS,
-  PRICING_USD_PER_MTOK,
-} from "./constants";
+  MemberPlanSchema,
+  MealPlanSchema,
+  type MealPlan,
+  type MemberPlan,
+} from "./schema";
+import { PlanValidationError } from "./errors";
+import {
+  getBeneficiaries,
+  type Beneficiary,
+  type PlanPromptContext,
+} from "./buildContext";
 
 // Accepts any Supabase client shape (cookie-typed or service-role admin).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = SupabaseClient<any, any, any>;
-import { buildSystemPrompt } from "./systemPrompt";
-import { MealPlanSchema, type MealPlan } from "./schema";
-import { AnthropicCallError, PlanValidationError } from "./errors";
-import type { PlanPromptContext } from "./buildContext";
 
 export interface GenerateResult {
   plan: MealPlan;
@@ -25,17 +30,18 @@ export interface GenerateResult {
   };
 }
 
-function stripMarkdownFence(text: string): string {
-  const fence = text.match(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
-  if (fence && fence[1]) return fence[1];
-  return text.trim();
-}
-
-function computeCostUsd(tokensIn: number, tokensOut: number): number {
-  const cost =
-    (tokensIn / 1_000_000) * PRICING_USD_PER_MTOK.input +
-    (tokensOut / 1_000_000) * PRICING_USD_PER_MTOK.output;
-  return Math.round(cost * 1_000_000) / 1_000_000;
+/** ISO date (YYYY-MM-DD) of the upcoming Saturday — the Gulf week start. */
+function nextSaturdayISO(): string {
+  const now = new Date();
+  const daysUntilSat = (6 - now.getUTCDay() + 7) % 7;
+  const sat = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + daysUntilSat,
+    ),
+  );
+  return sat.toISOString().slice(0, 10);
 }
 
 /**
@@ -81,12 +87,128 @@ export async function createPlanRows(
   return mealPlanId;
 }
 
+/** Generate one beneficiary's plan, retrying once on a transient failure. */
+async function generateOneMember(params: {
+  anthropicApiKey: string;
+  context: PlanPromptContext;
+  target: Beneficiary;
+  methodologyOverride?: string;
+}): Promise<{ plan: MemberPlan; tokensIn: number; tokensOut: number }> {
+  const { anthropicApiKey, context, target, methodologyOverride } = params;
+  const systemPrompt = buildMemberSystemPrompt(
+    context,
+    target,
+    methodologyOverride,
+  );
+
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { text, tokensIn, tokensOut, stopReason } = await streamAnthropic({
+        apiKey: anthropicApiKey,
+        model: PLAN_MODEL,
+        maxTokens: PLAN_MEMBER_MAX_TOKENS,
+        systemPrompt,
+      });
+
+      if (!text.trim()) {
+        throw new PlanValidationError(
+          `Member ${target.member_id}: empty response`,
+          text,
+        );
+      }
+      if (stopReason === "max_tokens") {
+        throw new PlanValidationError(
+          `Member ${target.member_id} hit max_tokens (${PLAN_MEMBER_MAX_TOKENS})`,
+          text,
+        );
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stripMarkdownFence(text));
+      } catch (e) {
+        throw new PlanValidationError(
+          `Member ${target.member_id} JSON parse failed: ${e instanceof Error ? e.message : String(e)}`,
+          text,
+        );
+      }
+
+      const result = MemberPlanSchema.safeParse(parsed);
+      if (!result.success) {
+        throw new PlanValidationError(
+          `Member ${target.member_id} failed validation: ${result.error.message.slice(0, 300)}`,
+          text,
+        );
+      }
+
+      // Member id + display name are authoritative from our DB, never the model.
+      const plan: MemberPlan = {
+        ...result.data,
+        member_id: target.member_id,
+        member_name_ar: target.member_name_ar,
+      };
+      return { plan, tokensIn, tokensOut };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(`Member ${params.target.member_id} generation failed`);
+}
+
 /**
- * Run the actual Anthropic generation for an already-created meal_plan row,
- * validate the output, and update both rows (ready/completed or failed).
- *
+ * Generate the full family plan by fanning out one concurrent Anthropic call
+ * per beneficiary (mom + non-housekeeper members), then assembling + validating
+ * the result. No DB access — callers persist the result.
+ */
+export async function generateMealPlan(params: {
+  anthropicApiKey: string;
+  context: PlanPromptContext;
+  methodologyOverride?: string;
+}): Promise<{
+  plan: MealPlan;
+  usage: { input_tokens: number; output_tokens: number; cost_usd: number };
+}> {
+  const { anthropicApiKey, context, methodologyOverride } = params;
+  const beneficiaries = getBeneficiaries(context);
+
+  const results = await Promise.all(
+    beneficiaries.map((target) =>
+      generateOneMember({ anthropicApiKey, context, target, methodologyOverride }),
+    ),
+  );
+
+  const members = results.map((r) => r.plan);
+  const tokensIn = results.reduce((sum, r) => sum + r.tokensIn, 0);
+  const tokensOut = results.reduce((sum, r) => sum + r.tokensOut, 0);
+
+  const validated = MealPlanSchema.safeParse({
+    week_start_date: nextSaturdayISO(),
+    members,
+  });
+  if (!validated.success) {
+    throw new PlanValidationError(
+      `Assembled plan failed validation: ${validated.error.message.slice(0, 300)}`,
+    );
+  }
+
+  return {
+    plan: validated.data,
+    usage: {
+      input_tokens: tokensIn,
+      output_tokens: tokensOut,
+      cost_usd: computeCostUsd(tokensIn, tokensOut),
+    },
+  };
+}
+
+/**
+ * Run generation for an already-created meal_plan row and persist the result.
  * Client + key are injected so this runs unchanged in a request (cookie client)
- * or a Netlify background function (service-role client).
+ * or inline in development.
  */
 export async function runMealPlanGeneration(params: {
   supabase: AnyClient;
@@ -99,81 +221,24 @@ export async function runMealPlanGeneration(params: {
     params;
   const startMs = Date.now();
 
-  let systemPrompt = buildSystemPrompt(context);
-  if (methodologyOverride) {
-    systemPrompt = systemPrompt.replace(
-      "{{METHODOLOGY_PLACEHOLDER}}",
-      methodologyOverride,
-    );
-  }
-
-  let tokensIn = 0;
-  let tokensOut = 0;
-  let validated: MealPlan | null = null;
-  let rawText = "";
-
+  let plan: MealPlan;
+  let usage: { input_tokens: number; output_tokens: number; cost_usd: number };
   try {
-    const anthropic = new Anthropic({ apiKey: anthropicApiKey });
-    let response;
-    try {
-      response = await anthropic.messages.create({
-        model: PLAN_MODEL,
-        max_tokens: PLAN_MAX_TOKENS,
-        system: systemPrompt,
-        messages: [{ role: "user", content: "أنشئي الخطة الآن." }],
-      });
-    } catch (err) {
-      throw new AnthropicCallError(
-        err instanceof Error ? err.message : "Anthropic API call failed",
-        err,
-      );
-    }
-
-    tokensIn = response.usage.input_tokens;
-    tokensOut = response.usage.output_tokens;
-    rawText = response.content
-      .filter(
-        (block): block is Extract<typeof block, { type: "text" }> =>
-          block.type === "text",
-      )
-      .map((block) => block.text)
-      .join("\n");
-
-    if (!rawText.trim()) {
-      throw new PlanValidationError("Empty response from Anthropic", rawText);
-    }
-
-    const cleaned = stripMarkdownFence(rawText);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (err) {
-      throw new PlanValidationError(
-        `Failed to JSON.parse response: ${err instanceof Error ? err.message : String(err)}`,
-        rawText,
-      );
-    }
-
-    const result = MealPlanSchema.safeParse(parsed);
-    if (!result.success) {
-      throw new PlanValidationError(
-        `Zod validation failed: ${result.error.message}`,
-        rawText,
-      );
-    }
-    validated = result.data;
+    const result = await generateMealPlan({
+      anthropicApiKey,
+      context,
+      methodologyOverride,
+    });
+    plan = result.plan;
+    usage = result.usage;
   } catch (err) {
     const durationMs = Date.now() - startMs;
-    const costUsd = computeCostUsd(tokensIn, tokensOut);
     const errorMessage = err instanceof Error ? err.message : String(err);
 
     await supabase
       .from("plan_generations")
       .update({
         status: "failed",
-        tokens_in: tokensIn,
-        tokens_out: tokensOut,
-        cost_usd: costUsd,
         duration_ms: durationMs,
         error_message: errorMessage,
         completed_at: new Date().toISOString(),
@@ -189,17 +254,16 @@ export async function runMealPlanGeneration(params: {
   }
 
   const durationMs = Date.now() - startMs;
-  const costUsd = computeCostUsd(tokensIn, tokensOut);
   const generatedAt = new Date().toISOString();
 
   const { error: updateMealError } = await supabase
     .from("meal_plans")
     .update({
       status: "ready",
-      plan_data: validated,
+      plan_data: plan,
       generated_at: generatedAt,
-      ai_input_tokens: tokensIn,
-      ai_output_tokens: tokensOut,
+      ai_input_tokens: usage.input_tokens,
+      ai_output_tokens: usage.output_tokens,
       ai_generation_seconds: durationMs / 1000,
     })
     .eq("id", mealPlanId);
@@ -212,9 +276,9 @@ export async function runMealPlanGeneration(params: {
     .from("plan_generations")
     .update({
       status: "completed",
-      tokens_in: tokensIn,
-      tokens_out: tokensOut,
-      cost_usd: costUsd,
+      tokens_in: usage.input_tokens,
+      tokens_out: usage.output_tokens,
+      cost_usd: usage.cost_usd,
       duration_ms: durationMs,
       completed_at: generatedAt,
     })
@@ -228,12 +292,12 @@ export async function runMealPlanGeneration(params: {
   }
 
   return {
-    plan: validated,
+    plan,
     mealPlanId,
     usage: {
-      input_tokens: tokensIn,
-      output_tokens: tokensOut,
-      cost_usd: costUsd,
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
+      cost_usd: usage.cost_usd,
       duration_ms: durationMs,
     },
   };

@@ -1,24 +1,18 @@
 // Netlify background function (15-min budget) for AI meal-plan generation.
 //
-// Bundle-safety: zip-it-and-ship-it (esbuild) chokes on the @supabase/supabase-js
-// and @anthropic-ai/sdk packages (optional native/realtime deps), which crashed
-// this function at cold-start import time. So we talk to both services over plain
-// `fetch` (PostgREST for Supabase, the Messages API for Anthropic) and import only
-// the PURE engine pieces (system prompt + Zod schema — zod is the only npm dep,
-// and it always bundles). The system prompt + schema stay the single source of
-// truth in @fitlife/plan-engine; the relative paths let esbuild inline them.
+// Bundle-safety: zip-it-and-ship-it (esbuild) chokes on @supabase/supabase-js
+// (optional native/realtime deps), which crashed this function at cold-start
+// import time. So we talk to Supabase over plain `fetch` (PostgREST) and import
+// only the PURE, fetch-based engine generator (no SDK) — its transitive deps are
+// just zod + pure code, which always bundle. The generation logic (per-member
+// parallel calls, system prompt, schema) stays the single source of truth in
+// @fitlife/plan-engine; the relative path lets esbuild inline it.
 
-import { MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
-import { buildSystemPrompt } from "../../../../packages/plan-engine/src/systemPrompt";
+import { generateMealPlan } from "../../../../packages/plan-engine/src/generate";
 import type {
   PlanPromptContext,
   PlanPromptContextMember,
 } from "../../../../packages/plan-engine/src/buildContext";
-import {
-  PLAN_MODEL,
-  PLAN_MAX_TOKENS,
-  PRICING_USD_PER_MTOK,
-} from "../../../../packages/plan-engine/src/constants";
 
 type Activity =
   | "sedentary"
@@ -188,117 +182,6 @@ async function buildContextViaFetch(
   };
 }
 
-// ─── Anthropic Messages API over fetch (streaming) ─────────────────────────
-interface StreamResult {
-  text: string;
-  tokensIn: number;
-  tokensOut: number;
-  stopReason: string | null;
-}
-
-// Stream the Messages API as SSE. Non-streaming requests that take >~5 min hit
-// undici's header timeout ("fetch failed"); streaming returns headers
-// immediately and Anthropic sends periodic `ping` events that keep the body
-// connection alive, so long generations don't time out.
-async function streamAnthropic(
-  apiKey: string,
-  systemPrompt: string,
-): Promise<StreamResult> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: PLAN_MODEL,
-      max_tokens: PLAN_MAX_TOKENS,
-      system: systemPrompt,
-      messages: [{ role: "user", content: "أنشئي الخطة الآن." }],
-      stream: true,
-    }),
-  });
-
-  if (!res.ok || !res.body) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Anthropic API ${res.status}: ${errText.slice(0, 500)}`);
-  }
-
-  let text = "";
-  let tokensIn = 0;
-  let tokensOut = 0;
-  let stopReason: string | null = null;
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-
-      let evt: Record<string, unknown>;
-      try {
-        evt = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-
-      switch (evt.type) {
-        case "message_start": {
-          const usage = (evt.message as { usage?: { input_tokens?: number } })
-            ?.usage;
-          if (usage?.input_tokens != null) tokensIn = usage.input_tokens;
-          break;
-        }
-        case "content_block_delta": {
-          const delta = evt.delta as { type?: string; text?: string };
-          if (delta?.type === "text_delta") text += delta.text ?? "";
-          break;
-        }
-        case "message_delta": {
-          const usage = evt.usage as { output_tokens?: number } | undefined;
-          if (usage?.output_tokens != null) tokensOut = usage.output_tokens;
-          const delta = evt.delta as { stop_reason?: string };
-          if (delta?.stop_reason) stopReason = delta.stop_reason;
-          break;
-        }
-        case "error": {
-          throw new Error(
-            `Anthropic stream error: ${JSON.stringify(evt.error).slice(0, 500)}`,
-          );
-        }
-      }
-    }
-  }
-
-  return { text, tokensIn, tokensOut, stopReason };
-}
-
-function stripMarkdownFence(text: string): string {
-  const fence = text.match(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
-  if (fence && fence[1]) return fence[1];
-  return text.trim();
-}
-
-function computeCostUsd(tokensIn: number, tokensOut: number): number {
-  const cost =
-    (tokensIn / 1_000_000) * PRICING_USD_PER_MTOK.input +
-    (tokensOut / 1_000_000) * PRICING_USD_PER_MTOK.output;
-  return Math.round(cost * 1_000_000) / 1_000_000;
-}
-
 // ─── Handler ───────────────────────────────────────────────────────────────
 export default async (req: Request): Promise<Response> => {
   const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -328,40 +211,21 @@ export default async (req: Request): Promise<Response> => {
   try {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
 
-    let systemPrompt = buildSystemPrompt(context);
-    if (methodologyOverride) {
-      systemPrompt = systemPrompt.replace(
-        "{{METHODOLOGY_PLACEHOLDER}}",
-        methodologyOverride,
-      );
-    }
-
-    const { text: rawText, tokensIn, tokensOut, stopReason } =
-      await streamAnthropic(anthropicKey, systemPrompt);
-
-    if (!rawText.trim()) throw new Error("Empty response from Anthropic");
-    if (stopReason === "max_tokens") {
-      throw new Error(
-        `Response hit max_tokens (${PLAN_MAX_TOKENS}); plan truncated. Household too large for the cap.`,
-      );
-    }
-
-    const parsed = JSON.parse(stripMarkdownFence(rawText));
-    const result = MealPlanSchema.safeParse(parsed);
-    if (!result.success) {
-      throw new Error(`Zod validation failed: ${result.error.message.slice(0, 500)}`);
-    }
+    const { plan, usage } = await generateMealPlan({
+      anthropicApiKey: anthropicKey,
+      context,
+      methodologyOverride,
+    });
 
     const durationMs = Date.now() - startMs;
-    const costUsd = computeCostUsd(tokensIn, tokensOut);
     const generatedAt = new Date().toISOString();
 
     await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
       status: "ready",
-      plan_data: result.data,
+      plan_data: plan,
       generated_at: generatedAt,
-      ai_input_tokens: tokensIn,
-      ai_output_tokens: tokensOut,
+      ai_input_tokens: usage.input_tokens,
+      ai_output_tokens: usage.output_tokens,
       ai_generation_seconds: durationMs / 1000,
     });
     await sbUpdate(
@@ -371,9 +235,9 @@ export default async (req: Request): Promise<Response> => {
       `meal_plan_id=eq.${mealPlanId}`,
       {
         status: "completed",
-        tokens_in: tokensIn,
-        tokens_out: tokensOut,
-        cost_usd: costUsd,
+        tokens_in: usage.input_tokens,
+        tokens_out: usage.output_tokens,
+        cost_usd: usage.cost_usd,
         duration_ms: durationMs,
         completed_at: generatedAt,
       },
@@ -382,7 +246,7 @@ export default async (req: Request): Promise<Response> => {
     console.log("[generate-plan-background] completed", {
       userId,
       mealPlanId,
-      tokensOut,
+      tokensOut: usage.output_tokens,
       durationMs,
     });
   } catch (err) {

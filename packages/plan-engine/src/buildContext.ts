@@ -168,3 +168,35 @@ export async function buildPlanContext(
     composition_summary: buildCompositionSummary(family_members),
   };
 }
+
+export interface Beneficiary {
+  /** "mom" (the profile owner) or a family_members.id (uuid string). */
+  member_id: string;
+  member_name_ar: string;
+  role: string;
+}
+
+/**
+ * The members who each get their own plan: the mom, plus every family member
+ * except the housekeeper (she executes the recipes but isn't a beneficiary).
+ * Used to fan out one Anthropic call per person and to assemble the result, so
+ * prompt-building and assembly agree on ids/names/order.
+ */
+export function getBeneficiaries(context: PlanPromptContext): Beneficiary[] {
+  const list: Beneficiary[] = [
+    {
+      member_id: "mom",
+      member_name_ar: context.mom.display_name ?? "العميلة",
+      role: "mom",
+    },
+  ];
+  for (const m of context.family_members) {
+    if (m.role === "housekeeper") continue;
+    list.push({
+      member_id: m.id,
+      member_name_ar: m.name,
+      role: m.role,
+    });
+  }
+  return list;
+}

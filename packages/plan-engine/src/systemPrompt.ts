@@ -1,5 +1,9 @@
 
-import type { PlanPromptContext, PlanPromptContextMember } from "./buildContext";
+import type {
+  PlanPromptContext,
+  PlanPromptContextMember,
+  Beneficiary,
+} from "./buildContext";
 
 const ROLE_LABELS_AR: Record<string, string> = {
   dad: "الزوج",
@@ -90,24 +94,35 @@ function describeMember(member: PlanPromptContextMember, idx: number): string {
   return line;
 }
 
+function describeTarget(
+  context: PlanPromptContext,
+  target: Beneficiary,
+): string {
+  if (target.member_id === "mom") return describeMom(context);
+  const member = context.family_members.find((m) => m.id === target.member_id);
+  if (member) return describeMember(member, 0);
+  return `${target.member_name_ar}.`;
+}
+
 /**
- * Build the system prompt for Anthropic.
+ * Build the system prompt for ONE beneficiary's weekly plan (a single
+ * MemberPlan). The full family plan is assembled from N concurrent per-member
+ * calls, so each call is small and fast.
  *
- * Contains two literal tokens that get replaced later:
+ * Literal tokens replaced later:
  *  - {{METHODOLOGY_PLACEHOLDER}}  — Sara's nutrition methodology (Prompt 1.8b)
  *  - {{TONE_PLACEHOLDER}}         — Sara's speaking style guidance (1.8b)
  *
  * The output schema description is human-readable (TS-style) so the model has
  * a concrete reference, with placeholder numeric values to avoid anchoring.
  */
-export function buildSystemPrompt(context: PlanPromptContext): string {
-  const momLine = describeMom(context);
-  const memberLines = context.family_members
-    .map((m, i) => `- ${describeMember(m, i)}`)
-    .join("\n");
-
-  const familyBlock =
-    memberLines.length > 0 ? `\nأفراد العائلة:\n${memberLines}` : "";
+export function buildMemberSystemPrompt(
+  context: PlanPromptContext,
+  target: Beneficiary,
+  methodologyOverride?: string,
+): string {
+  const targetLine = describeTarget(context, target);
+  const methodology = methodologyOverride ?? "{{METHODOLOGY_PLACEHOLDER}}";
 
   return `# دورك
 
@@ -115,17 +130,23 @@ export function buildSystemPrompt(context: PlanPromptContext): string {
 
 # منهجيتك
 
-{{METHODOLOGY_PLACEHOLDER}}
+${methodology}
 
-# معطيات العميلة والعائلة
-
-${momLine}${familyBlock}
+# سياق العائلة
 
 ملخص العائلة: ${context.composition_summary}
 
+في هذه المهمة تنشئين خطة فرد واحد فقط من العائلة. الخادمة (إن وجدت) تنفذ الوصفات للعائلة، لذلك يجب أن تكون خطوات التحضير واضحة وقابلة للتنفيذ من قبلها.
+
+# الفرد المطلوب إنشاء خطته
+
+${targetLine}
+
 # المطلوب
 
-أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) لكل فرد من أفراد العائلة المستفيدين (الأم والأب والأطفال). الخادمة لا تأخذ خطة خاصة بها، لكن الوصفات يجب أن تكون مكتوبة بوضوح وقابلة للتنفيذ من قبلها.
+أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) لهذا الفرد فقط. استخدمي القيم التالية كما هي:
+- member_id = "${target.member_id}"
+- member_name_ar = "${target.member_name_ar}"
 
 # قواعد صارمة
 
@@ -137,34 +158,31 @@ ${momLine}${familyBlock}
 
 # تنسيق الإخراج
 
-أرجعي JSON صالحاً فقط. لا مقدمة، لا تعليقات، لا أكواد محاطة بـ \`\`\`json. الشكل المطلوب (الأرقام في المثال أدناه وهمية للتوضيح فقط):
+أرجعي JSON صالحاً فقط لخطة هذا الفرد. لا مقدمة، لا تعليقات، لا أكواد محاطة بـ \`\`\`json. الشكل المطلوب (الأرقام في المثال أدناه وهمية للتوضيح فقط):
 
 \`\`\`ts
-type MealPlan = {
-  week_start_date: string;       // ISO date, e.g. "2026-05-23"
-  members: Array<{
-    member_id: string;           // "mom" أو معرف فرد العائلة (uuid)
-    member_name_ar: string;
-    daily_calories_target: number;   // مثال: 000
-    macros_target: { protein_g: number; carbs_g: number; fat_g: number };
-    days: Array<{                // طول المصفوفة بالضبط 7
-      day_index: number;         // 0..6
-      day_name_ar: string;       // "السبت" .. "الجمعة"
-      meals: Array<{
-        slot: "breakfast" | "lunch" | "dinner" | "snack";
-        slot_name_ar: string;    // "الفطور" / "الغداء" / "العشاء" / "السناك"
-        recipe_name_ar: string;
-        ingredients: Array<{
-          name_ar: string;
-          amount: number;
-          unit: "g" | "ml" | "cup" | "tbsp" | "piece";
-        }>;
-        prep_steps_ar: string[]; // خطوات مختصرة وعملية للخادمة
-        calories: number;        // مثال: 000
-        macros: { protein_g: number; carbs_g: number; fat_g: number };
+type MemberPlan = {
+  member_id: string;             // "${target.member_id}"
+  member_name_ar: string;        // "${target.member_name_ar}"
+  daily_calories_target: number; // مثال: 000
+  macros_target: { protein_g: number; carbs_g: number; fat_g: number };
+  days: Array<{                  // طول المصفوفة بالضبط 7
+    day_index: number;           // 0..6
+    day_name_ar: string;         // "السبت" .. "الجمعة"
+    meals: Array<{
+      slot: "breakfast" | "lunch" | "dinner" | "snack";
+      slot_name_ar: string;      // "الفطور" / "الغداء" / "العشاء" / "السناك"
+      recipe_name_ar: string;
+      ingredients: Array<{
+        name_ar: string;
+        amount: number;
+        unit: "g" | "ml" | "cup" | "tbsp" | "piece";
       }>;
-      day_total: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+      prep_steps_ar: string[];   // خطوات مختصرة وعملية للخادمة
+      calories: number;          // مثال: 000
+      macros: { protein_g: number; carbs_g: number; fat_g: number };
     }>;
+    day_total: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
   }>;
 };
 \`\`\`
@@ -189,5 +207,5 @@ type MealPlan = {
 }
 \`\`\`
 
-أرجعي JSON كامل وصالح يطابق الشكل أعلاه، بدون أي نص قبل أو بعده.`;
+أرجعي JSON كامل وصالح لخطة هذا الفرد فقط، بدون أي نص قبل أو بعده.`;
 }
