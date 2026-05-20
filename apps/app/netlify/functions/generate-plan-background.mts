@@ -188,10 +188,102 @@ async function buildContextViaFetch(
   };
 }
 
-// ─── Anthropic Messages API over fetch ─────────────────────────────────────
-interface AnthropicResponse {
-  content: Array<{ type: string; text?: string }>;
-  usage: { input_tokens: number; output_tokens: number };
+// ─── Anthropic Messages API over fetch (streaming) ─────────────────────────
+interface StreamResult {
+  text: string;
+  tokensIn: number;
+  tokensOut: number;
+  stopReason: string | null;
+}
+
+// Stream the Messages API as SSE. Non-streaming requests that take >~5 min hit
+// undici's header timeout ("fetch failed"); streaming returns headers
+// immediately and Anthropic sends periodic `ping` events that keep the body
+// connection alive, so long generations don't time out.
+async function streamAnthropic(
+  apiKey: string,
+  systemPrompt: string,
+): Promise<StreamResult> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: PLAN_MODEL,
+      max_tokens: PLAN_MAX_TOKENS,
+      system: systemPrompt,
+      messages: [{ role: "user", content: "أنشئي الخطة الآن." }],
+      stream: true,
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Anthropic API ${res.status}: ${errText.slice(0, 500)}`);
+  }
+
+  let text = "";
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let stopReason: string | null = null;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+
+      let evt: Record<string, unknown>;
+      try {
+        evt = JSON.parse(payload);
+      } catch {
+        continue;
+      }
+
+      switch (evt.type) {
+        case "message_start": {
+          const usage = (evt.message as { usage?: { input_tokens?: number } })
+            ?.usage;
+          if (usage?.input_tokens != null) tokensIn = usage.input_tokens;
+          break;
+        }
+        case "content_block_delta": {
+          const delta = evt.delta as { type?: string; text?: string };
+          if (delta?.type === "text_delta") text += delta.text ?? "";
+          break;
+        }
+        case "message_delta": {
+          const usage = evt.usage as { output_tokens?: number } | undefined;
+          if (usage?.output_tokens != null) tokensOut = usage.output_tokens;
+          const delta = evt.delta as { stop_reason?: string };
+          if (delta?.stop_reason) stopReason = delta.stop_reason;
+          break;
+        }
+        case "error": {
+          throw new Error(
+            `Anthropic stream error: ${JSON.stringify(evt.error).slice(0, 500)}`,
+          );
+        }
+      }
+    }
+  }
+
+  return { text, tokensIn, tokensOut, stopReason };
 }
 
 function stripMarkdownFence(text: string): string {
@@ -244,35 +336,15 @@ export default async (req: Request): Promise<Response> => {
       );
     }
 
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: PLAN_MODEL,
-        max_tokens: PLAN_MAX_TOKENS,
-        system: systemPrompt,
-        messages: [{ role: "user", content: "أنشئي الخطة الآن." }],
-      }),
-    });
-
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text().catch(() => "");
-      throw new Error(`Anthropic API ${anthropicRes.status}: ${errText.slice(0, 500)}`);
-    }
-
-    const data = (await anthropicRes.json()) as AnthropicResponse;
-    const tokensIn = data.usage.input_tokens;
-    const tokensOut = data.usage.output_tokens;
-    const rawText = data.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text ?? "")
-      .join("\n");
+    const { text: rawText, tokensIn, tokensOut, stopReason } =
+      await streamAnthropic(anthropicKey, systemPrompt);
 
     if (!rawText.trim()) throw new Error("Empty response from Anthropic");
+    if (stopReason === "max_tokens") {
+      throw new Error(
+        `Response hit max_tokens (${PLAN_MAX_TOKENS}); plan truncated. Household too large for the cap.`,
+      );
+    }
 
     const parsed = JSON.parse(stripMarkdownFence(rawText));
     const result = MealPlanSchema.safeParse(parsed);
