@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 const POLL_INTERVAL_MS = 3000;
-const TIMEOUT_MS = 90_000;
+// Opus 4.7 generating a full family-week runs ~60-130s; give the background
+// function generous headroom before showing the manual-refresh fallback.
+const TIMEOUT_MS = 180_000;
 
 export function PlanGeneratingState({ planId }: { planId: string }) {
   const router = useRouter();
