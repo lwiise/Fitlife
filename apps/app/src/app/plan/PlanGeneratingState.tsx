@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 const POLL_INTERVAL_MS = 3000;
-// Opus 4.7 generating a full family-week runs ~60-130s; give the background
-// function generous headroom before showing the manual-refresh fallback.
-const TIMEOUT_MS = 180_000;
+// Opus 4.7 generating a full family-week (up to 32k output tokens) can run
+// ~2-4 min; give the background function generous headroom before showing the
+// manual-refresh fallback.
+const TIMEOUT_MS = 240_000;
 
 export function PlanGeneratingState({ planId }: { planId: string }) {
   const router = useRouter();
@@ -77,7 +78,7 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
         نحضّر خطتك...
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-        هذي العملية تاخذ من 30 ثانية إلى دقيقة. لا تقفلين الصفحة.
+        هذي العملية تاخذ من دقيقة إلى ثلاث دقائق. لا تقفلين الصفحة.
       </p>
       <div
         className="mt-6 h-1.5 bg-brand-surface rounded-full overflow-hidden"
