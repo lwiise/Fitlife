@@ -14,8 +14,11 @@ export const PRICING_USD_PER_MTOK = {
 } as const;
 
 /**
- * Generous ceiling for a full-week plan covering up to ~6 family members.
- * Generation runs in a Netlify background function (15-min budget), so output
- * size — not request timeout — is the only constraint here.
+ * Output-token ceiling for a full-week plan covering up to ~6 family members.
+ * A complete plan (members × 7 days × meals, Arabic JSON which is token-dense)
+ * exceeds 8000 tokens and truncates mid-string → invalid JSON. Raised to 32000
+ * (Opus 4.7's standard max output) to fit the largest households. Generation
+ * runs in a Netlify background function (15-min budget), so output size — not
+ * request timeout — is the only constraint here.
  */
-export const PLAN_MAX_TOKENS = 8000;
+export const PLAN_MAX_TOKENS = 32000;
