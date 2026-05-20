@@ -23,6 +23,12 @@
   NODE_VERSION = "20"
   NEXT_PRIVATE_TARGET = "server"
 
+# Custom Netlify functions (e.g. the plan-generation background worker) are
+# bundled with esbuild, which inlines the relatively-imported @fitlife/plan-engine
+# source into the artifact (avoids pnpm workspace-symlink resolution issues).
+[functions]
+  node_bundler = "esbuild"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

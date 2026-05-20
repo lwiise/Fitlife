@@ -1,5 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
-import { buildPlanContext, runMealPlanGeneration } from "@fitlife/plan-engine";
+// Import via relative path (not the @fitlife/plan-engine workspace alias) so
+// esbuild bundles the engine source directly into the function artifact.
+// pnpm's symlinked workspace packages don't reliably bundle by alias in
+// zip-it-and-ship-it, which crashes the function at cold-start import time.
+import {
+  buildPlanContext,
+  runMealPlanGeneration,
+} from "../../../../packages/plan-engine/src/index";
 
 /**
  * Netlify background function (15-min budget). Does the heavy Anthropic
