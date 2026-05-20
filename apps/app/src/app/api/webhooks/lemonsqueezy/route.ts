@@ -13,13 +13,16 @@ interface WebhookCustomData {
 
 interface WebhookData {
   id: string;
+  type: string;
   attributes: {
-    status: string;
-    customer_id: number | string;
-    variant_id: number | string;
-    renews_at: string | null;
-    ends_at: string | null;
-    cancelled: boolean;
+    status?: string;
+    customer_id?: number | string;
+    variant_id?: number | string;
+    renews_at?: string | null;
+    ends_at?: string | null;
+    cancelled?: boolean;
+    // Present on subscription-invoices (payment_success / payment_failed events)
+    subscription_id?: number | string;
   };
 }
 
@@ -110,142 +113,147 @@ export async function POST(request: Request) {
   }
 
   const eventName = payload.meta?.event_name;
-  const subscriptionId = payload.data?.id;
   const attrs = payload.data?.attributes;
 
-  if (!eventName || !subscriptionId || !attrs) {
+  if (!eventName || !payload.data || !attrs) {
     console.error("[lemonsqueezy-webhook] malformed payload", { eventName });
     return new NextResponse(null, { status: 200 });
   }
 
+  // For subscription-invoices events (payment_success / payment_failed), the
+  // real subscription id is at attributes.subscription_id; data.id is the
+  // INVOICE id. For subscription events, data.id IS the subscription id.
+  const isInvoiceEvent = payload.data.type === "subscription-invoices";
+  const lsSubscriptionId = isInvoiceEvent
+    ? attrs.subscription_id != null
+      ? String(attrs.subscription_id)
+      : null
+    : String(payload.data.id);
+
+  const userId = payload.meta.custom_data?.user_id;
+  const customerId =
+    attrs.customer_id != null ? String(attrs.customer_id) : undefined;
+
   const admin = createAdminClient();
+
+  // Apply an update to the user's subscription row. Prefer user_id (carried in
+  // checkout custom_data, present on all subscription events) and fall back to
+  // the LS subscription id. This also lets a payment_success event activate the
+  // subscription even if subscription_created was missed.
+  async function applyUpdate(update: Record<string, unknown>) {
+    const q = admin.from("subscriptions").update(update);
+    return userId
+      ? await q.eq("user_id", userId)
+      : await q.eq("lemonsqueezy_subscription_id", lsSubscriptionId ?? "");
+  }
 
   try {
     switch (eventName) {
-      case "subscription_created": {
-        const userId = payload.meta.custom_data?.user_id;
+      case "subscription_created":
+      case "subscription_payment_success": {
+        // Both fully activate the subscription. created carries variant + renews_at;
+        // payment_success (invoice) does not, so only set fields we actually have.
         const tier = payload.meta.custom_data?.tier;
-        const cadenceFromCustom = payload.meta.custom_data?.cadence;
         const cadence =
-          (cadenceFromCustom as "monthly" | "annual" | undefined) ??
-          deriveCadence(attrs.variant_id) ??
-          undefined;
-
-        if (!userId) {
-          console.error("[lemonsqueezy-webhook] subscription_created missing user_id custom data", { subscriptionId });
-          return new NextResponse(null, { status: 200 });
-        }
+          (payload.meta.custom_data?.cadence as
+            | "monthly"
+            | "annual"
+            | undefined) ??
+          (attrs.variant_id != null
+            ? (deriveCadence(attrs.variant_id) ?? undefined)
+            : undefined);
 
         const update: Record<string, unknown> = {
-          status: mapLemonsqueezyStatus(attrs.status) ?? "active",
-          lemonsqueezy_subscription_id: String(subscriptionId),
-          lemonsqueezy_customer_id: String(attrs.customer_id),
-          lemonsqueezy_variant_id: String(attrs.variant_id),
-          current_period_end: attrs.renews_at,
+          status: "active",
           cancel_at_period_end: false,
         };
+        if (lsSubscriptionId) update.lemonsqueezy_subscription_id = lsSubscriptionId;
+        if (customerId) update.lemonsqueezy_customer_id = customerId;
+        if (attrs.variant_id != null)
+          update.lemonsqueezy_variant_id = String(attrs.variant_id);
+        if (attrs.renews_at) update.current_period_end = attrs.renews_at;
         if (tier) update.tier = tier;
         if (cadence) update.cadence = cadence;
 
-        const { error } = await admin
-          .from("subscriptions")
-          .update(update)
-          .eq("user_id", userId);
-
+        const { error } = await applyUpdate(
+          update,
+        );
         if (error) {
-          console.error("[lemonsqueezy-webhook] subscription_created update failed", error);
+          console.error("[lemonsqueezy-webhook] activate failed", { eventName, error });
           return new NextResponse(null, { status: 500 });
         }
-        console.log("[lemonsqueezy-webhook]", { eventName, subscriptionId, userId, status: update.status });
+        console.log("[lemonsqueezy-webhook]", {
+          eventName,
+          lsSubscriptionId,
+          userId,
+          status: "active",
+        });
         break;
       }
 
       case "subscription_updated": {
-        const mapped = mapLemonsqueezyStatus(attrs.status);
+        const mapped = mapLemonsqueezyStatus(attrs.status ?? "");
         const update: Record<string, unknown> = {
-          current_period_end: attrs.renews_at,
           cancel_at_period_end: !!attrs.cancelled,
         };
+        if (attrs.renews_at) update.current_period_end = attrs.renews_at;
         if (mapped) update.status = mapped;
-        const derivedCadence = deriveCadence(attrs.variant_id);
-        if (derivedCadence) update.cadence = derivedCadence;
+        if (attrs.variant_id != null) {
+          const dc = deriveCadence(attrs.variant_id);
+          if (dc) update.cadence = dc;
+        }
 
-        const { error } = await admin
-          .from("subscriptions")
-          .update(update)
-          .eq("lemonsqueezy_subscription_id", String(subscriptionId));
-
+        const { error } = await applyUpdate(
+          update,
+        );
         if (error) {
           console.error("[lemonsqueezy-webhook] subscription_updated failed", error);
           return new NextResponse(null, { status: 500 });
         }
-        console.log("[lemonsqueezy-webhook]", { eventName, subscriptionId, status: mapped });
+        console.log("[lemonsqueezy-webhook]", { eventName, lsSubscriptionId, status: mapped });
         break;
       }
 
       case "subscription_cancelled": {
         // Sub remains 'active' until current_period_end; just flag the intent.
-        const { error } = await admin
-          .from("subscriptions")
-          .update({ cancel_at_period_end: true })
-          .eq("lemonsqueezy_subscription_id", String(subscriptionId));
-
+        const { error } = await applyUpdate({
+          cancel_at_period_end: true,
+        });
         if (error) {
           console.error("[lemonsqueezy-webhook] subscription_cancelled failed", error);
           return new NextResponse(null, { status: 500 });
         }
-        console.log("[lemonsqueezy-webhook]", { eventName, subscriptionId });
+        console.log("[lemonsqueezy-webhook]", { eventName, lsSubscriptionId });
         break;
       }
 
       case "subscription_expired": {
-        const { error } = await admin
-          .from("subscriptions")
-          .update({ status: "expired" })
-          .eq("lemonsqueezy_subscription_id", String(subscriptionId));
-
+        const { error } = await applyUpdate({
+          status: "expired",
+        });
         if (error) {
           console.error("[lemonsqueezy-webhook] subscription_expired failed", error);
           return new NextResponse(null, { status: 500 });
         }
-        console.log("[lemonsqueezy-webhook]", { eventName, subscriptionId });
-        break;
-      }
-
-      case "subscription_payment_success": {
-        const { error } = await admin
-          .from("subscriptions")
-          .update({
-            status: "active",
-            current_period_end: attrs.renews_at,
-          })
-          .eq("lemonsqueezy_subscription_id", String(subscriptionId));
-
-        if (error) {
-          console.error("[lemonsqueezy-webhook] subscription_payment_success failed", error);
-          return new NextResponse(null, { status: 500 });
-        }
-        console.log("[lemonsqueezy-webhook]", { eventName, subscriptionId, renews_at: attrs.renews_at });
+        console.log("[lemonsqueezy-webhook]", { eventName, lsSubscriptionId });
         break;
       }
 
       case "subscription_payment_failed": {
-        const { error } = await admin
-          .from("subscriptions")
-          .update({ status: "past_due" })
-          .eq("lemonsqueezy_subscription_id", String(subscriptionId));
-
+        const { error } = await applyUpdate({
+          status: "past_due",
+        });
         if (error) {
           console.error("[lemonsqueezy-webhook] subscription_payment_failed failed", error);
           return new NextResponse(null, { status: 500 });
         }
-        console.log("[lemonsqueezy-webhook]", { eventName, subscriptionId });
+        console.log("[lemonsqueezy-webhook]", { eventName, lsSubscriptionId });
         break;
       }
 
       default:
         // Unknown event — ack with 200 so LS doesn't retry.
-        console.log("[lemonsqueezy-webhook] unhandled event", { eventName, subscriptionId });
+        console.log("[lemonsqueezy-webhook] unhandled event", { eventName });
         break;
     }
 
