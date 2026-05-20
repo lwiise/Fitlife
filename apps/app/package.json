@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.0",
     "@fitlife/config": "workspace:*",
+    "@fitlife/plan-engine": "workspace:*",
     "@fitlife/ui": "workspace:*",
     "@hookform/resolvers": "^3.10.0",
     "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",

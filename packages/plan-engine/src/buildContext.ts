@@ -1,10 +1,10 @@
-import "server-only";
-
-import {
-  getCurrentUserProfile,
-  getCurrentUserFamilyMembers,
-} from "@/lib/supabase/queries";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
+
+// Accepts any Supabase client shape — the app's <Database>-typed cookie client
+// or the plain service-role admin client. The engine queries untyped.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyClient = SupabaseClient<any, any, any>;
 
 type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active" | null;
 
@@ -58,25 +58,19 @@ function pluralizeAr(count: number, singular: string, dual: string, plural: stri
   return plural;
 }
 
-function buildCompositionSummary(
-  mom: PlanPromptContextMom,
-  members: PlanPromptContextMember[],
-): string {
+function buildCompositionSummary(members: PlanPromptContextMember[]): string {
   const partners = members.filter((m) => m.role === "dad");
   const kids = members.filter((m) => m.role === "son" || m.role === "daughter");
   const housekeepers = members.filter((m) => m.role === "housekeeper");
 
-  const totalCount =
-    1 + partners.length + kids.length; // housekeeper is NOT a beneficiary
+  const totalCount = 1 + partners.length + kids.length;
 
   const parts: string[] = [
     `عائلة من ${arabicNumber(totalCount)} ${pluralizeAr(totalCount, "فرد", "فردين", "أفراد")}: الأم`,
   ];
   if (partners.length > 0) parts.push("الأب");
   if (kids.length > 0) {
-    const ages = kids
-      .map((k) => k.age)
-      .filter((a): a is number => a !== null);
+    const ages = kids.map((k) => k.age).filter((a): a is number => a !== null);
     if (ages.length === kids.length && kids.length > 0) {
       parts.push(
         `و${pluralizeAr(kids.length, "طفل", "طفلان", "أطفال")} (${ages
@@ -84,57 +78,58 @@ function buildCompositionSummary(
           .join("، ")})`,
       );
     } else {
-      parts.push(`و${arabicNumber(kids.length)} ${pluralizeAr(kids.length, "طفل", "طفلان", "أطفال")}`);
+      parts.push(
+        `و${arabicNumber(kids.length)} ${pluralizeAr(kids.length, "طفل", "طفلان", "أطفال")}`,
+      );
     }
   }
 
   let summary = parts.join("، ") + ".";
-
   if (housekeepers.length > 0) {
     summary +=
       " يوجد خادمة تطبخ للعائلة وتنفذ الوصفات (ليست من المستفيدين من الخطة الغذائية).";
   }
-
-  // Silence unused-var lint for `mom` — kept in signature for future use.
-  void mom;
-
   return summary;
 }
 
 /**
- * Assemble the prompt context from the authenticated user's profile + family.
+ * Build the prompt context for a user from their profile + family members,
+ * using an injected Supabase client (cookie-bound in a request, or service-role
+ * in a background function). Queries by explicit userId — no cookie helpers.
  *
  * Throws:
- *  - OnboardingIncompleteError if profiles.onboarding_completed_at is null
- *  - MedicalGateError if user has medical conditions or is pregnant but has
- *    not confirmed they consulted their doctor
- *
- * The `userId` argument is used for an explicit safety assertion: the cookie-
- * bound profile must match the requested user. RLS already enforces this, but
- * the assert catches mistakes earlier.
+ *  - OnboardingIncompleteError if no profile or onboarding_completed_at is null
+ *  - MedicalGateError if medical conditions / pregnancy but doctor not consulted
  */
-export async function buildPromptContext(userId: string): Promise<PlanPromptContext> {
-  const profile = await getCurrentUserProfile();
-  if (!profile) {
+export async function buildPlanContext(
+  supabase: AnyClient,
+  userId: string,
+): Promise<PlanPromptContext> {
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (profileError || !profile) {
     throw new OnboardingIncompleteError();
-  }
-  if (profile.id !== userId) {
-    // Should not happen under RLS, but a defensive check makes mistakes loud.
-    throw new Error("Profile mismatch");
   }
   if (!profile.onboarding_completed_at) {
     throw new OnboardingIncompleteError();
   }
 
-  const medicalConditions = profile.medical_conditions ?? [];
+  const medicalConditions: string[] = profile.medical_conditions ?? [];
   const hasMedical =
     profile.has_medical_conditions || medicalConditions.length > 0;
-  const isPregnant = profile.is_pregnant;
-  if ((hasMedical || isPregnant) && !profile.consulted_doctor) {
+  if ((hasMedical || profile.is_pregnant) && !profile.consulted_doctor) {
     throw new MedicalGateError();
   }
 
-  const family = await getCurrentUserFamilyMembers();
+  const { data: family } = await supabase
+    .from("family_members")
+    .select("*")
+    .eq("user_id", userId)
+    .order("display_order", { ascending: true });
 
   const mom: PlanPromptContextMom = {
     id: profile.id,
@@ -152,22 +147,24 @@ export async function buildPromptContext(userId: string): Promise<PlanPromptCont
     consulted_doctor: profile.consulted_doctor,
   };
 
-  const family_members: PlanPromptContextMember[] = family.map((m) => ({
-    id: m.id,
-    name: m.name,
-    role: m.role,
-    age: ageFromBirthYear(m.birth_year),
-    height_cm: m.height_cm,
-    weight_kg: m.weight_kg,
-    activity_level: (m.activity_level ?? null) as Activity,
-    primary_goal: m.primary_goal,
-    dietary_restrictions: m.dietary_restrictions ?? [],
-    preferred_language: m.preferred_language,
-  }));
+  const family_members: PlanPromptContextMember[] = (family ?? []).map(
+    (m: Record<string, unknown>) => ({
+      id: m.id as string,
+      name: m.name as string,
+      role: m.role as string,
+      age: ageFromBirthYear((m.birth_year as number | null) ?? null),
+      height_cm: (m.height_cm as number | null) ?? null,
+      weight_kg: (m.weight_kg as number | null) ?? null,
+      activity_level: ((m.activity_level as string | null) ?? null) as Activity,
+      primary_goal: (m.primary_goal as string | null) ?? null,
+      dietary_restrictions: (m.dietary_restrictions as string[] | null) ?? [],
+      preferred_language: m.preferred_language as string,
+    }),
+  );
 
   return {
     mom,
     family_members,
-    composition_summary: buildCompositionSummary(mom, family_members),
+    composition_summary: buildCompositionSummary(family_members),
   };
 }

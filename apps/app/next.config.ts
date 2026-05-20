@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
-  transpilePackages: ["@fitlife/ui", "@fitlife/config"],
+  transpilePackages: ["@fitlife/ui", "@fitlife/config", "@fitlife/plan-engine"],
 
   // @react-pdf/renderer is loaded dynamically (ssr:false) by DownloadPDFButton,
   // but Turbopack still tries to resolve its imports during SSR compilation.

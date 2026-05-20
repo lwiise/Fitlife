@@ -1,28 +1,35 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
-  generateMealPlan,
+  buildPlanContext,
+  createPlanRows,
+  runMealPlanGeneration,
   OnboardingIncompleteError,
   MedicalGateError,
-  RateLimitError,
   AnthropicCallError,
   PlanValidationError,
-} from "@/lib/plans";
+} from "@fitlife/plan-engine";
 import { canGenerateNewPlan } from "@/lib/subscription/access";
 import {
   buildPersonLimitMessage,
   TIER_DISPLAY_NAMES_AR,
 } from "@/lib/subscription/strings";
 import { getCurrentSubscription } from "@/lib/subscription/state";
+import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// The route only gates, inserts rows, and fires the background function — fast.
+export const maxDuration = 30;
+
+const GENERIC_502 = "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية";
 
 /**
  * POST /api/plans/generate
  *
- * Auth-required. Subscription-gated (trial-aware, tier-limited, rate-limited).
- * Generates a full-week meal plan for the user's whole family.
+ * Auth + subscription gating + onboarding/medical gates run synchronously so
+ * the user gets immediate feedback. Then the heavy Anthropic generation runs
+ * in a Netlify background function (production) or inline (development, where
+ * there's no 26s serverless cap). The /plan page polls /api/plans/status.
  */
 export async function POST() {
   const supabase = await createClient();
@@ -78,21 +85,11 @@ export async function POST() {
     }
   }
 
+  // Onboarding / medical gates — synchronous, immediate feedback
+  let context;
   try {
-    const { mealPlanId } = await generateMealPlan(user.id);
-    return NextResponse.json(
-      { plan_id: mealPlanId, status: "ready" },
-      { status: 200 },
-    );
+    context = await buildPlanContext(supabase, user.id);
   } catch (err) {
-    const errorName = err instanceof Error ? err.name : "Unknown";
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error("[plan-generate]", {
-      userId: user.id,
-      errorName,
-      error: errorMessage,
-    });
-
     if (err instanceof OnboardingIncompleteError) {
       return NextResponse.json(
         { error: "أكملي بياناتك أولاً قبل إنشاء الخطة" },
@@ -105,35 +102,79 @@ export async function POST() {
         { status: 403 },
       );
     }
-    if (err instanceof RateLimitError) {
-      return NextResponse.json(
-        {
-          error: `وصلتي للحد الأقصى من الخطط هذا الأسبوع. حاولي مرة ثانية بعد ${err.daysUntilReset} أيام`,
-        },
-        { status: 429 },
-      );
-    }
-    if (err instanceof AnthropicCallError) {
-      return NextResponse.json(
-        { error: "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية" },
-        { status: 502 },
-      );
-    }
-    if (err instanceof PlanValidationError) {
-      console.error(
-        "[plan-generate] raw response (truncated):",
-        (err.rawResponse ?? "").slice(0, 2000),
-      );
-      return NextResponse.json(
-        { error: "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية" },
-        { status: 502 },
-      );
-    }
-
-    return NextResponse.json(
-      { error: "حدث خطأ غير متوقع" },
-      { status: 500 },
-    );
+    console.error("[plan-generate] context build failed", err);
+    return NextResponse.json({ error: "حدث خطأ غير متوقع" }, { status: 500 });
   }
-}
 
+  // Create the placeholder rows so the polling UI has something to watch.
+  let mealPlanId: string;
+  try {
+    mealPlanId = await createPlanRows(supabase, user.id);
+  } catch (err) {
+    console.error("[plan-generate] createPlanRows failed", err);
+    return NextResponse.json({ error: GENERIC_502 }, { status: 502 });
+  }
+
+  // Development: no serverless timeout — run generation inline.
+  if (process.env.NODE_ENV === "development") {
+    try {
+      await runMealPlanGeneration({
+        supabase,
+        anthropicApiKey: getAnthropicKey(),
+        mealPlanId,
+        context,
+      });
+      return NextResponse.json(
+        { plan_id: mealPlanId, status: "ready" },
+        { status: 200 },
+      );
+    } catch (err) {
+      const errorName = err instanceof Error ? err.name : "Unknown";
+      console.error("[plan-generate] inline generation failed", {
+        userId: user.id,
+        errorName,
+      });
+      if (err instanceof PlanValidationError) {
+        console.error(
+          "[plan-generate] raw response (truncated):",
+          (err.rawResponse ?? "").slice(0, 2000),
+        );
+      }
+      if (err instanceof AnthropicCallError || err instanceof PlanValidationError) {
+        return NextResponse.json({ error: GENERIC_502 }, { status: 502 });
+      }
+      return NextResponse.json({ error: "حدث خطأ غير متوقع" }, { status: 500 });
+    }
+  }
+
+  // Production: fire the background function (15-min budget) and return.
+  try {
+    const res = await fetch(
+      `${env.NEXT_PUBLIC_APP_URL}/.netlify/functions/generate-plan-background`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-internal-secret": getSupabaseServiceRoleKey(),
+        },
+        body: JSON.stringify({ userId: user.id, mealPlanId }),
+      },
+    );
+    if (!res.ok && res.status !== 202) {
+      throw new Error(`background fn returned ${res.status}`);
+    }
+  } catch (err) {
+    console.error("[plan-generate] failed to start background generation", err);
+    await supabase
+      .from("meal_plans")
+      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+      .update({ status: "failed", error_message: "failed to start generation" })
+      .eq("id", mealPlanId);
+    return NextResponse.json({ error: GENERIC_502 }, { status: 502 });
+  }
+
+  return NextResponse.json(
+    { plan_id: mealPlanId, status: "generating" },
+    { status: 200 },
+  );
+}

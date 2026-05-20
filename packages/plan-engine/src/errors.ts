@@ -1,6 +1,6 @@
 /**
  * Typed errors for the plan-generation pipeline.
- * Each subclass sets `this.name` so the route handler can branch on `err.name`.
+ * Each subclass sets `this.name` so callers can branch on `err.name`.
  */
 
 export class OnboardingIncompleteError extends Error {

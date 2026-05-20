@@ -14,8 +14,8 @@ export const PRICING_USD_PER_MTOK = {
 } as const;
 
 /**
- * 8000 is a starting ceiling for a full-week plan covering up to ~6 family
- * members. Watch `stop_reason: 'max_tokens'` in audit logs and bump if needed
- * once Sara's methodology is in.
+ * Generous ceiling for a full-week plan covering up to ~6 family members.
+ * Generation runs in a Netlify background function (15-min budget), so output
+ * size — not request timeout — is the only constraint here.
  */
 export const PLAN_MAX_TOKENS = 8000;

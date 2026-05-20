@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Download, Loader2 } from "lucide-react";
-import type { MemberPlan } from "@/lib/plans/schema";
+import type { MemberPlan } from "@fitlife/plan-engine";
 
 // Lazy-load react-pdf so the (heavy) library doesn't ship in the initial bundle.
 // The placeholder button preserves the same dimensions while loading.

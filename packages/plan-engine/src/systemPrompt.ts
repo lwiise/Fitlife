@@ -1,6 +1,5 @@
-import "server-only";
 
-import type { PlanPromptContext, PlanPromptContextMember } from "./buildPromptContext";
+import type { PlanPromptContext, PlanPromptContextMember } from "./buildContext";
 
 const ROLE_LABELS_AR: Record<string, string> = {
   dad: "الزوج",

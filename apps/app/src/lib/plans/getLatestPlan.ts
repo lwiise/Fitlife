@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { MealPlanSchema, type MealPlan } from "./schema";
+import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
 
 export interface LatestPlanSummary {
   id: string;

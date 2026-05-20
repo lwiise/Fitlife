@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
-import type { MealPlan, MemberPlan } from "@/lib/plans/schema";
+import type { MealPlan, MemberPlan } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
 

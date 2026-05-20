@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
-import type { Meal } from "@/lib/plans/schema";
+import type { Meal } from "@fitlife/plan-engine";
 
 const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   breakfast: { bg: "bg-brand-yellow/25", text: "text-brand-ink" },

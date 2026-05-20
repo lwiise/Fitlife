@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
-import type { MemberPlan } from "@/lib/plans/schema";
+import type { MemberPlan } from "@fitlife/plan-engine";
 
 // Tajawal Arabic font from Google's font mirror. .ttf is required by @react-pdf.
 Font.register({
