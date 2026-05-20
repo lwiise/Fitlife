@@ -21,15 +21,6 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl border border-brand-ink/5 p-8">
-          <div className="text-center mb-6">
-            <h2 className="font-bold text-2xl text-brand-ink leading-tight">
-              تسجيل الدخول
-            </h2>
-            <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
-              أدخلي إيميلك، نرسل لكِ رابط دخول سحري — بدون كلمة سر.
-            </p>
-          </div>
-
           <Suspense fallback={<div className="h-12" />}>
             <LoginForm />
           </Suspense>
