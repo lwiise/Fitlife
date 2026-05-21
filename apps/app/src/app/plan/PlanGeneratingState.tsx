@@ -5,14 +5,18 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 const POLL_INTERVAL_MS = 3000;
-// Generation runs one concurrent Anthropic call per family member, so wall-clock
-// is ~the slowest single member (~60-120s). 150s gives headroom before the
-// manual-refresh fallback.
-const TIMEOUT_MS = 150_000;
+// Generation runs one concurrent Anthropic call per family member; the slowest
+// member can take ~2-3 min. After this we soften the copy (but keep waiting) so
+// a normal run never looks broken.
+const LONG_RUNNING_MS = 90_000;
+// Genuine-stuck threshold — only past this do we show the refresh/retry
+// fallback. Kept inside the background function's 15-min budget.
+const TIMEOUT_MS = 780_000;
 
 export function PlanGeneratingState({ planId }: { planId: string }) {
   const router = useRouter();
   const [timedOut, setTimedOut] = useState(false);
+  const [isLong, setIsLong] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,10 +24,15 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
 
     const interval = setInterval(async () => {
       if (cancelled) return;
-      if (Date.now() - startedAt > TIMEOUT_MS) {
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > TIMEOUT_MS) {
         clearInterval(interval);
         setTimedOut(true);
         return;
+      }
+      if (elapsed >= LONG_RUNNING_MS) {
+        setIsLong(true);
       }
 
       try {
@@ -78,7 +87,9 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
         نحضّر خطتك...
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-        هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة.
+        {isLong
+          ? "نجهّز خطة مفصلة لكل فرد بالعائلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
+          : "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة."}
       </p>
       <div
         className="mt-6 h-1.5 bg-brand-surface rounded-full overflow-hidden"
@@ -88,6 +99,15 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
       >
         <div className="h-full w-1/3 bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow animate-pulse motion-reduce:animate-none" />
       </div>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => router.refresh()}
+          className="mt-5 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded"
+        >
+          جاهزة؟ حدّثي الصفحة
+        </button>
+      )}
     </div>
   );
 }
