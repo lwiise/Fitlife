@@ -1,33 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2 } from "lucide-react";
 import type { MealPlan, MemberPlan } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
-
-// Lazy-load the PDF button so @react-pdf/renderer never enters the SSR bundle.
-const DownloadPDFButton = dynamic(
-  () => import("./pdf/DownloadPDFButton").then((m) => m.DownloadPDFButton),
-  {
-    ssr: false,
-    loading: () => (
-      <button
-        type="button"
-        disabled
-        className="inline-flex items-center justify-center gap-2 bg-brand-surface text-brand-ink-muted font-bold text-sm px-5 py-2.5 rounded-full min-h-[2.75rem] cursor-not-allowed"
-      >
-        <Loader2
-          className="size-4 animate-spin motion-reduce:animate-none"
-          aria-hidden="true"
-        />
-        تحضير PDF...
-      </button>
-    ),
-  },
-);
+// @react-pdf is dynamically imported inside this button's click handler, so it
+// doesn't enter the page bundle and never renders during the React tree render.
+import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
 
 const FALLBACK_DAY_NAMES = [
   "السبت",
