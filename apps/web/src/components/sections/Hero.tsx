@@ -241,7 +241,7 @@ function MomFloatingCard({ reduced }: { reduced: boolean }) {
           ? { duration: 0 }
           : { duration: 0.6, ease: easeOut, delay: 1.4 }
       }
-      className="absolute top-[8%] start-[4%] z-20 hidden w-[260px] -rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 lg:block"
+      className="absolute top-[150px] start-[3%] z-20 hidden w-[235px] -rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 xl:block"
     >
       <div className="rounded-2xl border border-[#1A1023]/5 bg-white p-4 shadow-xl">
         <div className="flex flex-row items-center gap-3">
@@ -278,7 +278,7 @@ function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
           ? { duration: 0 }
           : { duration: 0.6, ease: easeOut, delay: 1.6 }
       }
-      className="absolute top-[12%] end-[4%] z-20 hidden w-[260px] rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 lg:block"
+      className="absolute top-[180px] end-[3%] z-20 hidden w-[235px] rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 xl:block"
     >
       <div className="rounded-2xl border border-[#1A1023]/5 bg-white p-4 shadow-xl">
         <div className="flex flex-row items-center gap-3">
@@ -296,12 +296,7 @@ function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
           </p>
           <p className="text-sm font-bold text-primary">Chicken Kabsa · for 4</p>
           <p className="mt-1 text-xs leading-snug text-[#1A1023]/60">
-            500g chicken · 2 cups rice · spices
-          </p>
-          <p className="mt-1 text-xs leading-snug text-[#1A1023]/70">
-            1. Sear chicken
-            <br />
-            2. Add rice + water, simmer 25 min
+            500g chicken · 2 cups rice — simmer 25 min
           </p>
           <p className="mt-2 text-[10px] text-[#1A1023]/50">
             In your language · Tagalog
@@ -391,10 +386,13 @@ export default function Hero() {
         }}
       />
 
-      <div className="container-page relative pb-32">
-        <MomFloatingCard reduced={reduced} />
-        <HousekeeperFloatingCard reduced={reduced} />
+      {/* Floating cards are positioned against the full-width section (not the
+          1280px container) so they sit in the viewport gutters, clear of the
+          centred headline. */}
+      <MomFloatingCard reduced={reduced} />
+      <HousekeeperFloatingCard reduced={reduced} />
 
+      <div className="container-page relative pb-32">
         <div className="relative mx-auto max-w-5xl pt-12 text-center md:pt-20">
           {reduced ? (
             <h1 className="font-extrabold leading-[0.95] tracking-tight">
