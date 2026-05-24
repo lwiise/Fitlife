@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 const POLL_INTERVAL_MS = 3000;
@@ -14,7 +13,6 @@ const LONG_RUNNING_MS = 90_000;
 const TIMEOUT_MS = 780_000;
 
 export function PlanGeneratingState({ planId }: { planId: string }) {
-  const router = useRouter();
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
 
@@ -42,7 +40,9 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
         if (body.id !== planId) return;
         if (body.status === "ready" || body.status === "failed") {
           clearInterval(interval);
-          router.refresh();
+          // Hard reload guarantees a fresh server render (router.refresh can
+          // serve a stale RSC) → the plan/failed state shows automatically.
+          window.location.reload();
         }
       } catch {
         // network blip — keep polling
@@ -53,7 +53,7 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [planId, router]);
+  }, [planId]);
 
   if (timedOut) {
     return (
@@ -66,7 +66,7 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
         </p>
         <button
           type="button"
-          onClick={() => router.refresh()}
+          onClick={() => window.location.reload()}
           className="mt-6 inline-flex items-center justify-center w-full bg-brand-ink hover:bg-brand-purple-900 text-white font-bold py-3 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
         >
           تحديث
@@ -99,15 +99,6 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
       >
         <div className="h-full w-1/3 bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow animate-pulse motion-reduce:animate-none" />
       </div>
-      {isLong && (
-        <button
-          type="button"
-          onClick={() => router.refresh()}
-          className="mt-5 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded"
-        >
-          جاهزة؟ حدّثي الصفحة
-        </button>
-      )}
     </div>
   );
 }
