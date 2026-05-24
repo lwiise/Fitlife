@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildPlanContext,
@@ -103,6 +104,9 @@ export async function POST() {
       );
     }
     console.error("[plan-generate] context build failed", err);
+    Sentry.captureException(err, {
+      tags: { area: "plan-generation", step: "build-context", userId: user.id },
+    });
     return NextResponse.json({ error: "حدث خطأ غير متوقع" }, { status: 500 });
   }
 
@@ -112,6 +116,9 @@ export async function POST() {
     mealPlanId = await createPlanRows(supabase, user.id);
   } catch (err) {
     console.error("[plan-generate] createPlanRows failed", err);
+    Sentry.captureException(err, {
+      tags: { area: "plan-generation", step: "create-rows", userId: user.id },
+    });
     return NextResponse.json({ error: GENERIC_502 }, { status: 502 });
   }
 
@@ -133,6 +140,9 @@ export async function POST() {
       console.error("[plan-generate] inline generation failed", {
         userId: user.id,
         errorName,
+      });
+      Sentry.captureException(err, {
+        tags: { area: "plan-generation", step: "inline-generate", userId: user.id },
       });
       if (err instanceof PlanValidationError) {
         console.error(
@@ -165,6 +175,9 @@ export async function POST() {
     }
   } catch (err) {
     console.error("[plan-generate] failed to start background generation", err);
+    Sentry.captureException(err, {
+      tags: { area: "plan-generation", step: "dispatch-bg", userId: user.id },
+    });
     await supabase
       .from("meal_plans")
       // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.

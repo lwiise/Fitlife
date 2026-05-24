@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { createCheckout } from "@lemonsqueezy/lemonsqueezy.js";
 import { createClient } from "@/lib/supabase/server";
@@ -82,6 +83,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ checkout_url: checkoutUrl }, { status: 200 });
   } catch (err) {
     console.error("[checkout] LS error:", err);
+    Sentry.captureException(err, {
+      tags: {
+        area: "checkout-creation",
+        userId: user.id,
+        tier: parsed.tier,
+        cadence: parsed.cadence,
+      },
+    });
     return NextResponse.json(
       { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
       { status: 502 },

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -54,6 +55,9 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
 
   if (error) {
     console.error("[saveProfileStep] error:", error);
+    Sentry.captureException(error, {
+      tags: { area: "onboarding", step: "saveProfileStep", userId: user.id },
+    });
     return { ok: false, error: error.message };
   }
 
@@ -90,6 +94,9 @@ export async function saveFamilyMembers(
     .eq("user_id", user.id);
 
   if (deleteError) {
+    Sentry.captureException(deleteError, {
+      tags: { area: "onboarding", step: "saveFamilyMembers.delete", userId: user.id },
+    });
     return { ok: false, error: deleteError.message };
   }
 
@@ -105,6 +112,9 @@ export async function saveFamilyMembers(
       .insert(rows);
 
     if (insertError) {
+      Sentry.captureException(insertError, {
+        tags: { area: "onboarding", step: "saveFamilyMembers.insert", userId: user.id },
+      });
       return { ok: false, error: insertError.message };
     }
   }
@@ -134,6 +144,9 @@ export async function completeOnboarding(): Promise<void> {
 
   if (error) {
     console.error("[completeOnboarding] error:", error);
+    Sentry.captureException(error, {
+      tags: { area: "onboarding", step: "completeOnboarding", userId: user.id },
+    });
     throw new Error(error.message);
   }
 

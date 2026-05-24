@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLemonsqueezyWebhookSecret } from "@/lib/env";
@@ -260,6 +261,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     console.error("[lemonsqueezy-webhook] unexpected error", err);
+    // Never pass the raw body, signature, or secret to Sentry.
+    Sentry.captureException(err, {
+      tags: { area: "lemonsqueezy-webhook", event_name: eventName },
+      extra: { subscription_id: lsSubscriptionId },
+    });
     return new NextResponse(null, { status: 500 });
   }
 }
