@@ -8,7 +8,12 @@ export const metadata = {
   title: "البدء",
 };
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tier?: string; cadence?: string }>;
+}) {
+  const { tier, cadence } = await searchParams;
   const profile = await getCurrentUserProfile();
 
   if (!profile) {
@@ -28,5 +33,12 @@ export default async function OnboardingPage() {
   const subscription = user ? await getCurrentSubscription(user.id) : null;
   const tierLimit = subscription ? getTierLimit(subscription.tier) : 1;
 
-  return <OnboardingWizard initialProfile={profile} tierLimit={tierLimit} />;
+  return (
+    <OnboardingWizard
+      initialProfile={profile}
+      tierLimit={tierLimit}
+      tier={tier}
+      cadence={cadence}
+    />
+  );
 }

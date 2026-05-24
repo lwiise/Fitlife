@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { Loader2, Mail } from "lucide-react";
 
 type Mode = "signin" | "signup";
@@ -26,7 +27,14 @@ function arabicAuthError(message: string): string {
 
 export function LoginForm() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect_to") || "/dashboard";
+  // Intent carried from the landing page (tier CTA) takes the user into
+  // onboarding with the tier preselected; otherwise honor redirect_to.
+  const tier = searchParams.get("tier");
+  const cadence = searchParams.get("cadence");
+  const nextPath =
+    isValidTier(tier) && isValidCadence(cadence)
+      ? `/onboarding?tier=${tier}&cadence=${cadence}`
+      : searchParams.get("redirect_to") || "/dashboard";
 
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -44,7 +52,7 @@ export function LoginForm() {
     const supabase = createClient();
 
     if (mode === "signup") {
-      const callbackUrl = `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(redirectTo)}`;
+      const callbackUrl = `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(nextPath)}`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -61,7 +69,7 @@ export function LoginForm() {
       // log straight in. If it's ON, there's no session yet → ask the user
       // to confirm via the email link.
       if (data.session) {
-        window.location.assign(redirectTo);
+        window.location.assign(nextPath);
         return;
       }
       setStatus("confirm-sent");
@@ -80,7 +88,7 @@ export function LoginForm() {
     }
 
     // Hard navigation so the proxy picks up the freshly-set session cookie.
-    window.location.assign(redirectTo);
+    window.location.assign(nextPath);
   }
 
   if (status === "confirm-sent") {

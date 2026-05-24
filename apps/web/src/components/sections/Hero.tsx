@@ -10,6 +10,7 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { track } from "@/lib/analytics";
+import { getSignupUrl } from "@/lib/appUrls";
 import { cn } from "@/lib/utils";
 
 // TODO: Replace 5 placeholder SVG silhouettes with real cutout photography
@@ -486,7 +487,7 @@ export default function Hero() {
             className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
           >
             <a
-              href="#pricing"
+              href={getSignupUrl()}
               onClick={() => track("hero_cta_clicked")}
               className="inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-full bg-[#1A1023] px-7 py-3.5 text-base font-bold text-white shadow-lg transition-colors duration-200 hover:bg-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
             >

@@ -3,6 +3,7 @@ import { PRICING_TIERS, type Cadence } from "@fitlife/config";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { PricingToggle } from "./PricingToggle";
 import { TierCard } from "./TierCard";
+import { PreselectionScroll } from "./PreselectionScroll";
 
 export const metadata = {
   title: "الأسعار — فت لايف",
@@ -14,7 +15,7 @@ const TIER_ORDER = ["starter", "pro", "family", "premium"] as const;
 export default async function PricingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cadence?: string }>;
+  searchParams: Promise<{ cadence?: string; tier?: string }>;
 }) {
   const params = await searchParams;
   const cadence: Cadence = params.cadence === "annual" ? "annual" : "monthly";
@@ -63,6 +64,8 @@ export default async function PricingPage({
           الأسعار بالريال السعودي. الفوترة سنوية تُحتسب مرة واحدة.
         </p>
       </div>
+
+      <PreselectionScroll tier={params.tier} />
     </main>
   );
 }

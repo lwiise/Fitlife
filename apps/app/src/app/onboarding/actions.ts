@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
+import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import type { Database } from "@/lib/supabase/database.types";
 
 type ProfileUpdates = Partial<{
@@ -123,9 +124,14 @@ export async function saveFamilyMembers(
 }
 
 /**
- * Complete onboarding: mark profile, then redirect to dashboard.
+ * Complete onboarding: mark profile, then redirect. If the user arrived from a
+ * landing-page tier CTA, send them to /pricing with that tier preselected;
+ * otherwise to the dashboard.
  */
-export async function completeOnboarding(): Promise<void> {
+export async function completeOnboarding(
+  tier?: string,
+  cadence?: string,
+): Promise<void> {
   const supabase = await createClient();
 
   const {
@@ -151,5 +157,9 @@ export async function completeOnboarding(): Promise<void> {
   }
 
   revalidatePath("/dashboard");
+
+  if (isValidTier(tier) && isValidCadence(cadence)) {
+    redirect(`/pricing?tier=${tier}&cadence=${cadence}`);
+  }
   redirect("/dashboard");
 }

@@ -16,9 +16,12 @@ import { track } from "@/lib/analytics";
 import {
   PRICING_TIERS,
   getAnnualMonthlyEquivalent,
+  type Tier as TierId,
 } from "@fitlife/config";
+import { getTierSignupUrl } from "@/lib/appUrls";
 
 type Tier = {
+  id: TierId;
   name: string;
   monthlyPrice: number;
   annualPrice: number;
@@ -35,6 +38,7 @@ type Tier = {
 // rates between monthly and annual cadences.
 const tiers: Tier[] = [
   {
+    id: PRICING_TIERS.starter.id,
     name: PRICING_TIERS.starter.name_ar,
     monthlyPrice: PRICING_TIERS.starter.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.starter),
@@ -44,6 +48,7 @@ const tiers: Tier[] = [
     highlighted: PRICING_TIERS.starter.highlighted,
   },
   {
+    id: PRICING_TIERS.pro.id,
     name: PRICING_TIERS.pro.name_ar,
     monthlyPrice: PRICING_TIERS.pro.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.pro),
@@ -53,6 +58,7 @@ const tiers: Tier[] = [
     highlighted: PRICING_TIERS.pro.highlighted,
   },
   {
+    id: PRICING_TIERS.family.id,
     name: PRICING_TIERS.family.name_ar,
     monthlyPrice: PRICING_TIERS.family.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.family),
@@ -63,6 +69,7 @@ const tiers: Tier[] = [
     badge: "الأكثر شعبية",
   },
   {
+    id: PRICING_TIERS.premium.id,
     name: PRICING_TIERS.premium.name_ar,
     monthlyPrice: PRICING_TIERS.premium.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.premium),
@@ -102,6 +109,7 @@ function PricingCard({
   const ref = useRef<HTMLElement | null>(null);
   const inView = useInView(ref, { amount: 0.2, once: true });
   const {
+    id,
     name,
     monthlyPrice,
     annualPrice,
@@ -254,24 +262,34 @@ function PricingCard({
       <div className="mt-8 pt-2">
         {highlighted ? (
           <Button
+            asChild
             size="lg"
-            onClick={() =>
-              track("pricing_tier_selected", { tier: name, billing })
-            }
             className="w-full min-h-11 bg-brand-yellow font-bold text-primary shadow-none transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-yellow hover:shadow-lg hover:brightness-110"
           >
-            {cta}
+            <a
+              href={getTierSignupUrl(id, billing)}
+              onClick={() =>
+                track("pricing_tier_selected", { tier: name, billing })
+              }
+            >
+              {cta}
+            </a>
           </Button>
         ) : (
           <Button
+            asChild
             size="lg"
             variant="outline"
-            onClick={() =>
-              track("pricing_tier_selected", { tier: name, billing })
-            }
             className="w-full min-h-11 border-primary bg-transparent font-semibold text-primary transition-transform duration-200 ease-out hover:-translate-y-px hover:bg-primary/5"
           >
-            {cta}
+            <a
+              href={getTierSignupUrl(id, billing)}
+              onClick={() =>
+                track("pricing_tier_selected", { tier: name, billing })
+              }
+            >
+              {cta}
+            </a>
           </Button>
         )}
       </div>

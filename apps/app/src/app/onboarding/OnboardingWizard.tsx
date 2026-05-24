@@ -26,9 +26,13 @@ type ActionResult = { ok: true } | { ok: false; error: string };
 export function OnboardingWizard({
   initialProfile: _initialProfile,
   tierLimit,
+  tier,
+  cadence,
 }: {
   initialProfile: Profile;
   tierLimit: number | null;
+  tier?: string;
+  cadence?: string;
 }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [state, setState] = useState<OnboardingState>({});
@@ -90,7 +94,7 @@ export function OnboardingWizard({
       }
 
       if (stepNumber === TOTAL_STEPS) {
-        await completeOnboarding();
+        await completeOnboarding(tier, cadence);
       } else {
         goNext();
       }

@@ -25,7 +25,8 @@ export function TierCard({
 
   return (
     <article
-      className={`relative flex flex-col rounded-3xl border-2 p-6 md:p-8 transition-transform ${highlightClasses}`}
+      id={`tier-card-${tier.id}`}
+      className={`relative flex flex-col rounded-3xl border-2 p-6 md:p-8 transition-transform scroll-mt-24 ${highlightClasses}`}
     >
       {tier.highlighted && (
         <span
