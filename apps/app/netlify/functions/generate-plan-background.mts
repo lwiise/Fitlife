@@ -137,7 +137,34 @@ async function buildContextViaFetch(
   const medicalConditions = (profile.medical_conditions as string[] | null) ?? [];
   const hasMedical =
     !!profile.has_medical_conditions || medicalConditions.length > 0;
-  if ((hasMedical || profile.is_pregnant) && !profile.consulted_doctor) {
+  // Mirrors HIGH_RISK_MEDICAL_FLAGS in the engine's buildContext (kept inline so
+  // this bundle stays SDK-free). Most aren't captured by onboarding yet; OR'd
+  // with the broad gate so today's behavior is unchanged.
+  const HIGH_RISK_FLAGS = [
+    "unstable_diabetes",
+    "uncontrolled_hypertension",
+    "heart_disease",
+    "kidney_disease",
+    "liver_disease",
+    "unstable_thyroid",
+    "severe_food_allergy",
+    "acute_digestive",
+    "eating_disorder",
+    "post_surgical",
+    "unexplained_symptoms",
+  ];
+  const hasHighRiskFlag = medicalConditions.some((c) =>
+    HIGH_RISK_FLAGS.includes(c),
+  );
+  const isHighRiskPregnancy =
+    !!profile.is_pregnant && !!profile.high_risk_pregnancy;
+  if (
+    (hasMedical ||
+      profile.is_pregnant ||
+      hasHighRiskFlag ||
+      isHighRiskPregnancy) &&
+    !profile.consulted_doctor
+  ) {
     throw new GateError("Medical consultation required");
   }
 
@@ -196,13 +223,13 @@ export default async (req: Request): Promise<Response> => {
     return new Response("Server misconfigured", { status: 500 });
   }
 
-  let body: { userId?: string; mealPlanId?: string; methodologyOverride?: string };
+  let body: { userId?: string; mealPlanId?: string };
   try {
     body = await req.json();
   } catch {
     return new Response("Bad request", { status: 400 });
   }
-  const { userId, mealPlanId, methodologyOverride } = body;
+  const { userId, mealPlanId } = body;
   if (!userId || !mealPlanId) {
     return new Response("Missing userId or mealPlanId", { status: 400 });
   }
@@ -214,7 +241,6 @@ export default async (req: Request): Promise<Response> => {
     const { plan, usage } = await generateMealPlan({
       anthropicApiKey: anthropicKey,
       context,
-      methodologyOverride,
     });
 
     const durationMs = Date.now() - startMs;

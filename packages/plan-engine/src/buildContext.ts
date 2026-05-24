@@ -8,6 +8,24 @@ type AnyClient = SupabaseClient<any, any, any>;
 
 type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active" | null;
 
+// Sara's "no plan without doctor sign-off" conditions. Most aren't captured by
+// the current onboarding yet (Prompt 1.8c expands it) — the check is ?.-safe and
+// OR'd with the existing broad gate, so today's behavior is unchanged and it's
+// ready to enforce these as soon as onboarding surfaces them.
+export const HIGH_RISK_MEDICAL_FLAGS = [
+  "unstable_diabetes",
+  "uncontrolled_hypertension",
+  "heart_disease",
+  "kidney_disease",
+  "liver_disease",
+  "unstable_thyroid",
+  "severe_food_allergy",
+  "acute_digestive",
+  "eating_disorder",
+  "post_surgical",
+  "unexplained_symptoms",
+];
+
 export interface PlanPromptContextMom {
   id: string;
   display_name: string | null;
@@ -121,7 +139,18 @@ export async function buildPlanContext(
   const medicalConditions: string[] = profile.medical_conditions ?? [];
   const hasMedical =
     profile.has_medical_conditions || medicalConditions.length > 0;
-  if ((hasMedical || profile.is_pregnant) && !profile.consulted_doctor) {
+  const hasHighRiskFlag = medicalConditions.some((c: string) =>
+    HIGH_RISK_MEDICAL_FLAGS.includes(c),
+  );
+  const isHighRiskPregnancy =
+    !!profile.is_pregnant && !!profile.high_risk_pregnancy;
+  if (
+    (hasMedical ||
+      profile.is_pregnant ||
+      hasHighRiskFlag ||
+      isHighRiskPregnancy) &&
+    !profile.consulted_doctor
+  ) {
     throw new MedicalGateError();
   }
 

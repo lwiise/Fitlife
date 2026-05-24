@@ -1,19 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLAN_MODEL, PLAN_MEMBER_MAX_TOKENS } from "./constants";
+import { PLAN_MODEL, PLAN_MAX_TOKENS } from "./constants";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
-import { buildMemberSystemPrompt } from "./systemPrompt";
-import {
-  MemberPlanSchema,
-  MealPlanSchema,
-  type MealPlan,
-  type MemberPlan,
-} from "./schema";
+import { buildSystemPrompt } from "./systemPrompt";
+import { MealPlanSchema, type MealPlan } from "./schema";
 import { PlanValidationError } from "./errors";
-import {
-  getBeneficiaries,
-  type Beneficiary,
-  type PlanPromptContext,
-} from "./buildContext";
+import { getBeneficiaries, type PlanPromptContext } from "./buildContext";
 
 // Accepts any Supabase client shape (cookie-typed or service-role admin).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,116 +78,115 @@ export async function createPlanRows(
   return mealPlanId;
 }
 
-/** Generate one beneficiary's plan, retrying once on a transient failure. */
-async function generateOneMember(params: {
-  anthropicApiKey: string;
-  context: PlanPromptContext;
-  target: Beneficiary;
-  methodologyOverride?: string;
-}): Promise<{ plan: MemberPlan; tokensIn: number; tokensOut: number }> {
-  const { anthropicApiKey, context, target, methodologyOverride } = params;
-  const systemPrompt = buildMemberSystemPrompt(
-    context,
-    target,
-    methodologyOverride,
-  );
-
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const { text, tokensIn, tokensOut, stopReason } = await streamAnthropic({
-        apiKey: anthropicApiKey,
-        model: PLAN_MODEL,
-        maxTokens: PLAN_MEMBER_MAX_TOKENS,
-        systemPrompt,
-      });
-
-      if (!text.trim()) {
-        throw new PlanValidationError(
-          `Member ${target.member_id}: empty response`,
-          text,
-        );
-      }
-      if (stopReason === "max_tokens") {
-        throw new PlanValidationError(
-          `Member ${target.member_id} hit max_tokens (${PLAN_MEMBER_MAX_TOKENS})`,
-          text,
-        );
-      }
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(stripMarkdownFence(text));
-      } catch (e) {
-        throw new PlanValidationError(
-          `Member ${target.member_id} JSON parse failed: ${e instanceof Error ? e.message : String(e)}`,
-          text,
-        );
-      }
-
-      const result = MemberPlanSchema.safeParse(parsed);
-      if (!result.success) {
-        throw new PlanValidationError(
-          `Member ${target.member_id} failed validation: ${result.error.message.slice(0, 300)}`,
-          text,
-        );
-      }
-
-      // Member id + display name are authoritative from our DB, never the model.
-      const plan: MemberPlan = {
-        ...result.data,
-        member_id: target.member_id,
-        member_name_ar: target.member_name_ar,
-      };
-      return { plan, tokensIn, tokensOut };
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-
-  throw lastErr instanceof Error
-    ? lastErr
-    : new Error(`Member ${params.target.member_id} generation failed`);
-}
-
 /**
- * Generate the full family plan by fanning out one concurrent Anthropic call
- * per beneficiary (mom + non-housekeeper members), then assembling + validating
- * the result. No DB access — callers persist the result.
+ * Generate the WHOLE family plan in a single coordinated Anthropic call
+ * (Sara's family-as-unit methodology — shared base recipes + per-member
+ * portions). Parses, validates against the schema + Sara's safety/macro
+ * guards, and returns. No DB access — callers persist the result.
  */
 export async function generateMealPlan(params: {
   anthropicApiKey: string;
   context: PlanPromptContext;
-  methodologyOverride?: string;
 }): Promise<{
   plan: MealPlan;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
 }> {
-  const { anthropicApiKey, context, methodologyOverride } = params;
-  const beneficiaries = getBeneficiaries(context);
+  const { anthropicApiKey, context } = params;
 
-  const results = await Promise.all(
-    beneficiaries.map((target) =>
-      generateOneMember({ anthropicApiKey, context, target, methodologyOverride }),
-    ),
-  );
-
-  const members = results.map((r) => r.plan);
-  const tokensIn = results.reduce((sum, r) => sum + r.tokensIn, 0);
-  const tokensOut = results.reduce((sum, r) => sum + r.tokensOut, 0);
-
-  const validated = MealPlanSchema.safeParse({
-    week_start_date: nextSaturdayISO(),
-    members,
+  const { text, tokensIn, tokensOut, stopReason } = await streamAnthropic({
+    apiKey: anthropicApiKey,
+    model: PLAN_MODEL,
+    maxTokens: PLAN_MAX_TOKENS,
+    systemPrompt: buildSystemPrompt(context),
   });
-  if (!validated.success) {
+
+  if (!text.trim()) {
+    throw new PlanValidationError("Empty response from Anthropic", text);
+  }
+  if (stopReason === "max_tokens") {
     throw new PlanValidationError(
-      `Assembled plan failed validation: ${validated.error.message.slice(0, 300)}`,
+      `Plan hit max_tokens (${PLAN_MAX_TOKENS}); household too large for the cap`,
+      text,
     );
   }
 
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripMarkdownFence(text));
+  } catch (e) {
+    throw new PlanValidationError(
+      `JSON parse failed: ${e instanceof Error ? e.message : String(e)}`,
+      text,
+    );
+  }
+
+  const result = MealPlanSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new PlanValidationError(
+      `Plan failed validation: ${result.error.message.slice(0, 400)}`,
+      text,
+    );
+  }
+
+  // Member id + display name are authoritative from our DB, never the model.
+  const beneficiaries = getBeneficiaries(context);
+  const nameById = new Map(
+    beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
+  );
+  const ageById = new Map<string, number | null>([
+    ["mom", context.mom.age],
+    ...context.family_members.map(
+      (m) => [m.id, m.age] as [string, number | null],
+    ),
+  ]);
+
+  const plan: MealPlan = {
+    ...result.data,
+    week_start_date: nextSaturdayISO(),
+    members: result.data.members.map((m) => ({
+      ...m,
+      member_name_ar: nameById.get(m.member_id) ?? m.member_name_ar,
+    })),
+  };
+
+  // ── Sara's safety guards (post-validation) ──
+  for (const memberPlan of plan.members) {
+    const age = ageById.get(memberPlan.member_id);
+    const isChild = age != null && age < 18; // children: portion-based, no kcal floor
+    if (!isChild && memberPlan.daily_calories_target < 1400) {
+      throw new PlanValidationError(
+        `Calories ${memberPlan.daily_calories_target} below the 1400 safety floor for ${memberPlan.member_id}`,
+        text,
+      );
+    }
+    if (
+      !isChild &&
+      memberPlan.daily_calories_target >= 1400 &&
+      memberPlan.daily_calories_target < 1600
+    ) {
+      console.warn(
+        "[plan-generate] calories below 1600 for",
+        memberPlan.member_id,
+        ":",
+        memberPlan.daily_calories_target,
+      );
+    }
+
+    const { protein_g, carbs_g, fat_g } = memberPlan.macros_target;
+    const calcKcal = protein_g * 4 + carbs_g * 4 + fat_g * 9;
+    const drift =
+      Math.abs(calcKcal - memberPlan.daily_calories_target) /
+      memberPlan.daily_calories_target;
+    if (drift > 0.1) {
+      throw new PlanValidationError(
+        `Macro totals (${Math.round(calcKcal)} kcal) drift >10% from target (${memberPlan.daily_calories_target}) for ${memberPlan.member_id}`,
+        text,
+      );
+    }
+  }
+
   return {
-    plan: validated.data,
+    plan,
     usage: {
       input_tokens: tokensIn,
       output_tokens: tokensOut,
@@ -215,10 +205,8 @@ export async function runMealPlanGeneration(params: {
   anthropicApiKey: string;
   mealPlanId: string;
   context: PlanPromptContext;
-  methodologyOverride?: string;
 }): Promise<GenerateResult> {
-  const { supabase, anthropicApiKey, mealPlanId, context, methodologyOverride } =
-    params;
+  const { supabase, anthropicApiKey, mealPlanId, context } = params;
   const startMs = Date.now();
 
   let plan: MealPlan;
@@ -227,7 +215,6 @@ export async function runMealPlanGeneration(params: {
     const result = await generateMealPlan({
       anthropicApiKey,
       context,
-      methodologyOverride,
     });
     plan = result.plan;
     usage = result.usage;

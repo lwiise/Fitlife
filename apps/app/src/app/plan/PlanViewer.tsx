@@ -50,6 +50,14 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
     return activeMember.days.find((d) => d.day_index === activeDayIndex);
   }, [activeMember, activeDayIndex]);
 
+  const memberNames = useMemo(
+    () =>
+      Object.fromEntries(
+        plan.members.map((m) => [m.member_id, m.member_name_ar]),
+      ),
+    [plan.members],
+  );
+
   if (!activeMember) {
     return (
       <div className="text-center py-12">
@@ -201,7 +209,9 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
           className="space-y-3"
         >
           {activeDay && activeDay.meals.length > 0 ? (
-            activeDay.meals.map((meal, i) => <MealCard key={i} meal={meal} />)
+            activeDay.meals.map((meal, i) => (
+              <MealCard key={i} meal={meal} memberNames={memberNames} />
+            ))
           ) : (
             <div className="text-center py-8 text-brand-ink-muted text-sm">
               ما عندك وجبات لهذا اليوم

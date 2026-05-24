@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
-import type { Meal } from "@fitlife/plan-engine";
+import type { Meal, Ingredient } from "@fitlife/plan-engine";
 
 const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   breakfast: { bg: "bg-brand-yellow/25", text: "text-brand-ink" },
@@ -14,15 +14,68 @@ const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
 
 const UNIT_AR: Record<string, string> = {
   g: "جم",
+  kg: "كجم",
   ml: "مل",
+  l: "لتر",
   cup: "كوب",
   tbsp: "ملعقة كبيرة",
+  tsp: "ملعقة صغيرة",
   piece: "حبة",
+  serving: "حصة",
+  unlimited: "حسب الرغبة",
 };
 
-export function MealCard({ meal }: { meal: Meal }) {
+function formatAmount(ing: Ingredient): string {
+  if (ing.unit === "unlimited") return "حسب الرغبة";
+  const unit = UNIT_AR[ing.unit] ?? ing.unit;
+  const hasRange =
+    ing.amount_min != null &&
+    ing.amount_max != null &&
+    ing.amount_min !== ing.amount_max;
+  if (hasRange) return `${ing.amount_min}-${ing.amount_max} ${unit}`;
+  return `${ing.amount} ${unit}`;
+}
+
+function IngredientList({ items }: { items: Ingredient[] }) {
+  return (
+    <ul className="space-y-1.5">
+      {items.map((ing, i) => (
+        <li
+          key={i}
+          className="flex items-center justify-between gap-2 text-sm"
+        >
+          <span className="text-brand-ink">{ing.name_ar}</span>
+          <span className="text-brand-ink-muted tabular-nums text-xs">
+            {formatAmount(ing)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function MealCard({
+  meal,
+  memberNames,
+}: {
+  meal: Meal;
+  memberNames?: Record<string, string>;
+}) {
   const [expanded, setExpanded] = useState(false);
   const slotStyle = SLOT_STYLE[meal.slot];
+
+  const metaBits: string[] = [];
+  if (meal.prep_time_minutes != null)
+    metaBits.push(`تحضير ${meal.prep_time_minutes} د`);
+  if (meal.cook_time_minutes != null)
+    metaBits.push(`طبخ ${meal.cook_time_minutes} د`);
+  if (meal.servings_count != null)
+    metaBits.push(`${meal.servings_count} حصص`);
+
+  const sharedPortions =
+    meal.shared_recipe && meal.per_member_portions?.length
+      ? meal.per_member_portions
+      : null;
 
   return (
     <article className="bg-white rounded-2xl border border-brand-ink/5 overflow-hidden">
@@ -41,6 +94,11 @@ export function MealCard({ meal }: { meal: Meal }) {
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-brand-ink text-base leading-snug">
               {meal.recipe_name_ar}
+              {meal.shared_recipe && (
+                <span className="ms-2 inline-block align-middle text-[10px] font-bold text-brand-purple-900 bg-brand-lavender/40 rounded-full px-2 py-0.5">
+                  وصفة العائلة
+                </span>
+              )}
             </h3>
             <p className="mt-1 text-brand-ink-muted text-xs leading-relaxed tabular-nums">
               {meal.macros.protein_g} بروتين · {meal.macros.carbs_g} كارب ·{" "}
@@ -74,24 +132,45 @@ export function MealCard({ meal }: { meal: Meal }) {
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 pt-1 border-t border-brand-ink/5 space-y-4">
+              {metaBits.length > 0 && (
+                <p className="text-brand-ink-muted text-xs tabular-nums">
+                  {metaBits.join(" · ")}
+                </p>
+              )}
+
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2">
-                  المكونات
+                  المكونات{sharedPortions ? " (الوصفة الأساس)" : ""}
                 </h4>
-                <ul className="space-y-1.5">
-                  {meal.ingredients.map((ing, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center justify-between gap-2 text-sm"
-                    >
-                      <span className="text-brand-ink">{ing.name_ar}</span>
-                      <span className="text-brand-ink-muted tabular-nums text-xs">
-                        {ing.amount} {UNIT_AR[ing.unit] ?? ing.unit}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <IngredientList items={meal.ingredients} />
               </section>
+
+              {sharedPortions && (
+                <section>
+                  <h4 className="font-bold text-brand-ink text-sm mb-2">
+                    مقادير كل فرد
+                  </h4>
+                  <div className="space-y-3">
+                    {sharedPortions.map((portion, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl bg-brand-surface/60 p-3"
+                      >
+                        <p className="font-bold text-brand-ink text-xs mb-1.5">
+                          {memberNames?.[portion.member_id] ??
+                            portion.member_id}
+                        </p>
+                        <IngredientList items={portion.ingredients} />
+                        {portion.notes_ar && (
+                          <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                            {portion.notes_ar}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2">
@@ -108,6 +187,30 @@ export function MealCard({ meal }: { meal: Meal }) {
                   ))}
                 </ol>
               </section>
+
+              {meal.substitutions_ar && meal.substitutions_ar.length > 0 && (
+                <section>
+                  <h4 className="font-bold text-brand-ink text-sm mb-2">
+                    بدائل وتعديلات
+                  </h4>
+                  <ul className="space-y-1.5 list-disc list-inside marker:text-brand-purple-900">
+                    {meal.substitutions_ar.map((sub, i) => (
+                      <li
+                        key={i}
+                        className="text-brand-ink text-sm leading-relaxed"
+                      >
+                        {sub}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {meal.notes_ar && (
+                <p className="text-brand-ink-muted text-xs leading-relaxed bg-brand-surface/60 rounded-xl p-3">
+                  {meal.notes_ar}
+                </p>
+              )}
             </div>
           </motion.div>
         )}

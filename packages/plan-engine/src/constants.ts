@@ -14,10 +14,10 @@ export const PRICING_USD_PER_MTOK = {
 } as const;
 
 /**
- * Output-token ceiling for ONE beneficiary's weekly plan (7 days of meals in
- * token-dense Arabic JSON). A full member week (4 meals × 7 days with recipes,
- * ingredients, prep steps, macros) genuinely runs ~7–9k tokens, so 6000 cut it
- * off mid-plan. This is a ceiling, not a target — the model stops naturally at
- * the plan's real length; 16000 just gives complete plans room to finish.
+ * Output-token ceiling for the WHOLE family's weekly plan (single call).
+ * Sara's family-as-unit writes each shared recipe once with compact per-member
+ * portions, so the full plan fits comfortably; 16000 gives rich plans room to
+ * finish. If a large household (5-6) truncates (stop_reason=max_tokens), bump
+ * to 32000.
  */
-export const PLAN_MEMBER_MAX_TOKENS = 16000;
+export const PLAN_MAX_TOKENS = 16000;
