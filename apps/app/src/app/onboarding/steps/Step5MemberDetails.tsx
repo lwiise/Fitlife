@@ -40,10 +40,10 @@ function defaultMembers(composition: Composition): Member[] {
     });
   }
   if (composition.has_housekeeper) {
+    // No birth_year — she's the cook, not a plan member.
     out.push({
       name: "",
       role: "housekeeper",
-      birth_year: 0,
       preferred_language: "tl",
     });
   }
@@ -52,7 +52,7 @@ function defaultMembers(composition: Composition): Member[] {
 
 function memberHeadline(role: Member["role"], idx: number, childIdx: number) {
   if (role === "dad") return "زوجك";
-  if (role === "housekeeper") return "الخادمة";
+  if (role === "housekeeper") return "معلومات الخدامة لتجهيز تعليمات الطبخ";
   if (role === "son" || role === "daughter") return `الطفل ${childIdx + 1}`;
   return `فرد ${idx + 1}`;
 }
@@ -184,7 +184,7 @@ export function Step5MemberDetails({
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className={role === "housekeeper" ? "col-span-2" : undefined}>
                   <label
                     htmlFor={`name-${idx}`}
                     className="block text-xs font-bold text-brand-ink mb-1"
@@ -206,29 +206,31 @@ export function Step5MemberDetails({
                     </p>
                   )}
                 </div>
-                <div>
-                  <label
-                    htmlFor={`birth-${idx}`}
-                    className="block text-xs font-bold text-brand-ink mb-1"
-                  >
-                    سنة الميلاد
-                  </label>
-                  <input
-                    id={`birth-${idx}`}
-                    type="number"
-                    inputMode="numeric"
-                    dir="ltr"
-                    disabled={isPending}
-                    className="w-full px-3 py-2 rounded-lg border border-brand-ink/10 bg-brand-surface text-brand-ink text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 transition-colors"
-                    {...register(`members.${idx}.birth_year`, { valueAsNumber: true })}
-                    aria-invalid={!!errors.members?.[idx]?.birth_year}
-                  />
-                  {errors.members?.[idx]?.birth_year && (
-                    <p role="alert" className="mt-1 text-red-600 text-xs">
-                      اكتبي سنة صحيحة
-                    </p>
-                  )}
-                </div>
+                {role !== "housekeeper" && (
+                  <div>
+                    <label
+                      htmlFor={`birth-${idx}`}
+                      className="block text-xs font-bold text-brand-ink mb-1"
+                    >
+                      سنة الميلاد
+                    </label>
+                    <input
+                      id={`birth-${idx}`}
+                      type="number"
+                      inputMode="numeric"
+                      dir="ltr"
+                      disabled={isPending}
+                      className="w-full px-3 py-2 rounded-lg border border-brand-ink/10 bg-brand-surface text-brand-ink text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 transition-colors"
+                      {...register(`members.${idx}.birth_year`, { valueAsNumber: true })}
+                      aria-invalid={!!errors.members?.[idx]?.birth_year}
+                    />
+                    {errors.members?.[idx]?.birth_year && (
+                      <p role="alert" className="mt-1 text-red-600 text-xs">
+                        اكتبي سنة صحيحة
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {role === "housekeeper" && (
@@ -237,7 +239,7 @@ export function Step5MemberDetails({
                     htmlFor={`lang-${idx}`}
                     className="block text-xs font-bold text-brand-ink mb-1"
                   >
-                    لغة الخدامة (توصلها الوصفات بلغتها)
+                    بأي لغة تقرأ الخدامة الوصفات؟
                   </label>
                   <select
                     id={`lang-${idx}`}

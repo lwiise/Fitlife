@@ -55,9 +55,9 @@ const family: FamilyMember[] = [
   },
   {
     src: "/avatar-housekeeper.svg",
-    name: "روزا · الخدامة",
+    name: "روزا",
     language: "بالتاغالوغ",
-    goal: "وصفاتها بلغتها",
+    goal: "تطبخ للعائلة",
     alt: "صورة شخصية لروزا",
   },
 ];
@@ -191,8 +191,8 @@ export default function FamilyMode() {
             transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0.25 }}
             className="mx-auto mt-5 max-w-[600px] text-lg leading-[1.7] text-brand-lavender"
           >
-            أنتِ تشتركين مرة، وكل فرد من عائلتك يحصل على خطته الخاصة — بلغته،
-            وحسب احتياجه.
+            أنتِ تشتركين مرة، وكل فرد من عائلتك يحصل على خطته الخاصة. وتعليمات
+            الطبخ توصل لمطبخك باللغة اللي تطبخ فيها الخدامة.
           </motion.p>
         </header>
 

@@ -45,12 +45,32 @@ export const step4Schema = z.object({
 });
 
 // ─── Step 5: Each family member ───────────────────
-const memberSchema = z.object({
-  name: z.string().min(2, "الاسم لازم يكون حرفين أو أكثر"),
-  role: z.enum(["dad", "son", "daughter", "housekeeper"]),
-  birth_year: z.number().int().min(1940).max(currentYear),
-  preferred_language: z.enum(["ar", "en", "tl", "id", "bn", "am", "ur"]),
-});
+// The housekeeper is a cook, not a plan beneficiary — she needs only a language
+// (and optionally a name). Name + birth_year are required for everyone else.
+const memberSchema = z
+  .object({
+    name: z.string(),
+    role: z.enum(["dad", "son", "daughter", "housekeeper"]),
+    birth_year: z.number().int().min(1940).max(currentYear).optional(),
+    preferred_language: z.enum(["ar", "en", "tl", "id", "bn", "am", "ur"]),
+  })
+  .superRefine((m, ctx) => {
+    if (m.role === "housekeeper") return;
+    if (m.name.trim().length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "الاسم لازم يكون حرفين أو أكثر",
+      });
+    }
+    if (m.birth_year == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["birth_year"],
+        message: "اكتبي سنة الميلاد",
+      });
+    }
+  });
 
 export const step5Schema = z.object({
   members: z.array(memberSchema).min(0).max(8),

@@ -87,9 +87,6 @@ function describeMember(member: PlanPromptContextMember, idx: number): string {
   if (member.dietary_restrictions.length > 0) {
     line += ` قيود: ${member.dietary_restrictions.join("، ")}.`;
   }
-  if (member.role === "housekeeper") {
-    line += ` (لغتها: ${member.preferred_language}). الخادمة تنفذ الوصفات للعائلة وليست من المستفيدين.`;
-  }
   void idx;
   return line;
 }
@@ -136,7 +133,7 @@ ${methodology}
 
 ملخص العائلة: ${context.composition_summary}
 
-في هذه المهمة تنشئين خطة فرد واحد فقط من العائلة. الخادمة (إن وجدت) تنفذ الوصفات للعائلة، لذلك يجب أن تكون خطوات التحضير واضحة وقابلة للتنفيذ من قبلها.
+في هذه المهمة تنشئين خطة فرد واحد فقط من العائلة. الخدامة لا تظهر في خطة الأكل كفرد من العائلة. دورها فقط هو طبخ وجبات العائلة. عند كتابة خطوات التحضير (prep_steps_ar) لكل وصفة، اجعليها مختصرة وواضحة وقابلة للتنفيذ من قِبَل شخص يقرأ بلغة بسيطة. لا تنشئي قسمًا خاصًا بها، ولا تذكري احتياجاتها الغذائية.
 
 # الفرد المطلوب إنشاء خطته
 

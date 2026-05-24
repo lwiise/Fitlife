@@ -43,7 +43,7 @@ const DEFAULT_SCREENSHOTS: Screenshot[] = [
         y: 25,
       },
       {
-        title: "وصفات الخدامة",
+        title: "تعليمات الطبخ",
         description: "بلغتها، مع صور للخطوات",
         x: 30,
         y: 50,

@@ -46,8 +46,8 @@ const cards: Card[] = [
     iconBgClass: "bg-primary/10",
     iconHoverBgClass: "group-hover/card:bg-primary/15",
     iconColorClass: "text-primary",
-    title: "وصفات الخدامة بلغتها",
-    description: "٧ لغات: تجالوج، بنغالي، هندي، إندونيسي، أمهري، أردو، وعربي مبسط. الوصفات توصلها بلغتها — بدون ترجمة، بدون تخمين.",
+    title: "تعليمات طبخ بسبع لغات",
+    description: "تجالوج، بنغالي، هندي، إندونيسي، أمهري، أردو، وعربي مبسط — عشان مطبخك يشتغل بسلاسة، بدون ترجمة كل يوم.",
   },
   {
     area: "card3",

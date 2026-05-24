@@ -44,7 +44,7 @@ const familyMembers: FamilyMember[] = [
     textColor: "text-white",
   },
   {
-    label: "وصفات للخدامة",
+    label: "تطبخ للعائلة",
     sublabel: "بلغتها",
     imageSrc: "/family-housekeeper.png",
     imageAlt: "صورة الخدامة — امرأة فلبينية تبتسم",
@@ -71,8 +71,8 @@ const familyMembers: FamilyMember[] = [
 ];
 
 const line1Words = "خطة غذائية للعائلة.".split(" ");
-const line2Words = "ووصفات للخدامة".split(" ");
-const line3Words = "تطبخها بلغتها.".split(" ");
+const line2Words = "وتعليمات الطبخ".split(" ");
+const line3Words = "توصل للخدامة بلغتها.".split(" ");
 
 const easeOut = "easeOut" as const;
 
@@ -291,12 +291,20 @@ function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
           </div>
         </div>
         <div className="mt-3 text-start" dir="ltr">
-          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-[#1A1023]/50">
-            Family lunch · Wed
+          <p className="mb-1 text-xs font-bold text-[#1A1023]">
+            Cooking today for the family
           </p>
-          <p className="text-sm font-bold text-[#1A1023]">Chicken Kabsa</p>
+          <p className="text-sm font-bold text-primary">Chicken Kabsa · for 4</p>
           <p className="mt-1 text-xs leading-snug text-[#1A1023]/60">
-            2 cups basmati · 500g chicken · simmer 25 min
+            500g chicken · 2 cups rice · spices
+          </p>
+          <p className="mt-1 text-xs leading-snug text-[#1A1023]/70">
+            1. Sear chicken
+            <br />
+            2. Add rice + water, simmer 25 min
+          </p>
+          <p className="mt-2 text-[10px] text-[#1A1023]/50">
+            In your language · Tagalog
           </p>
         </div>
       </div>
@@ -394,10 +402,10 @@ export default function Hero() {
                 خطة غذائية للعائلة.
               </span>
               <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
-                ووصفات للخدامة
+                وتعليمات الطبخ
               </span>
               <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-primary">
-                تطبخها بلغتها.
+                توصل للخدامة بلغتها.
               </span>
             </h1>
           ) : (

@@ -170,9 +170,9 @@ export function Step4FamilyComposition({
 
         <div className="bg-white rounded-2xl border border-brand-ink/10 p-5 flex items-center justify-between gap-4">
           <div>
-            <p className="font-bold text-brand-ink text-base">هل فيه خدامة تطبخ في البيت؟</p>
+            <p className="font-bold text-brand-ink text-base">هل فيه خدامة تطبخ للعائلة؟</p>
             <p className="text-brand-ink-muted text-xs mt-0.5">
-              توصلها وصفات العائلة بلغتها
+              تعليمات الطبخ توصل لها بلغتها
             </p>
           </div>
           <Controller

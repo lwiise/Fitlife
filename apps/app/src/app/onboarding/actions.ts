@@ -74,7 +74,7 @@ export async function saveFamilyMembers(
   members: Array<{
     name: string;
     role: string;
-    birth_year: number;
+    birth_year?: number;
     preferred_language: string;
   }>,
 ): Promise<ActionResult> {
