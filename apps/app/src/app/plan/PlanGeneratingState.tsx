@@ -15,17 +15,31 @@ const TIMEOUT_MS = 780_000;
 export function PlanGeneratingState({ planId }: { planId: string }) {
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
+  const [progress, setProgress] = useState(6);
 
   useEffect(() => {
     let cancelled = false;
     const startedAt = Date.now();
 
-    const interval = setInterval(async () => {
+    // Time-based progress estimate (no real signal from the bg function): ease
+    // toward ~95% over the expected window, then snap to 100% on completion.
+    const progressTimer = setInterval(() => {
+      if (cancelled) return;
+      const elapsed = Date.now() - startedAt;
+      const pct = Math.max(
+        6,
+        Math.min(95, Math.round(100 * (1 - Math.exp(-elapsed / 45000)))),
+      );
+      setProgress(pct);
+    }, 1000);
+
+    const poll = setInterval(async () => {
       if (cancelled) return;
 
       const elapsed = Date.now() - startedAt;
       if (elapsed > TIMEOUT_MS) {
-        clearInterval(interval);
+        clearInterval(poll);
+        clearInterval(progressTimer);
         setTimedOut(true);
         return;
       }
@@ -39,10 +53,12 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
         const body = (await res.json()) as { id: string; status: string };
         if (body.id !== planId) return;
         if (body.status === "ready" || body.status === "failed") {
-          clearInterval(interval);
-          // Hard reload guarantees a fresh server render (router.refresh can
-          // serve a stale RSC) → the plan/failed state shows automatically.
-          window.location.reload();
+          clearInterval(poll);
+          clearInterval(progressTimer);
+          setProgress(100);
+          // Let the bar visibly complete, then hard-reload (a fresh server
+          // render guarantees the plan/failed state shows automatically).
+          setTimeout(() => window.location.reload(), 500);
         }
       } catch {
         // network blip — keep polling
@@ -51,7 +67,8 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(poll);
+      clearInterval(progressTimer);
     };
   }, [planId]);
 
@@ -96,8 +113,14 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
         role="progressbar"
         aria-busy="true"
         aria-label="جاري إنشاء الخطة"
+        aria-valuenow={progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
       >
-        <div className="h-full w-1/3 bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow animate-pulse motion-reduce:animate-none" />
+        <div
+          className="h-full rounded-full bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow transition-[width] duration-700 ease-out"
+          style={{ width: `${progress}%` }}
+        />
       </div>
     </div>
   );
