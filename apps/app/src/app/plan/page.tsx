@@ -3,6 +3,7 @@ import {
   getCurrentUserProfile,
 } from "@/lib/supabase/queries";
 import { LogoutButton } from "../dashboard/LogoutButton";
+import { Logo } from "@/components/Logo";
 import { EmptyState } from "./EmptyState";
 import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
@@ -27,9 +28,10 @@ export default async function PlanPage() {
         <div className="container-app py-4 flex items-center justify-between">
           <a
             href="/dashboard"
-            className="font-extrabold text-xl text-brand-ink hover:text-brand-purple-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md px-1"
+            aria-label="فت لايف — الرئيسية"
+            className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
-            فت لايف
+            <Logo className="h-9 w-auto" />
           </a>
           <LogoutButton />
         </div>

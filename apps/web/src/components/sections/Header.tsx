@@ -14,6 +14,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
 type NavLink = { href: string; id: string; label: string };
@@ -76,10 +77,10 @@ export default function Header() {
         <div className="container-page flex flex-row items-center justify-between gap-4">
           <a
             href="#"
-            className="text-xl font-extrabold text-primary"
+            className="inline-flex items-center"
             aria-label="فت لايف — العودة إلى الأعلى"
           >
-            فت لايف
+            <Logo priority className="h-11 w-auto" />
           </a>
 
           <nav className="hidden flex-row items-center gap-8 lg:flex">
@@ -129,8 +130,8 @@ export default function Header() {
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="bg-surface p-6">
           <SheetHeader className="p-0">
-            <SheetTitle className="text-start text-xl font-extrabold text-primary">
-              فت لايف
+            <SheetTitle className="text-start">
+              <Logo className="h-9 w-auto" />
             </SheetTitle>
           </SheetHeader>
 

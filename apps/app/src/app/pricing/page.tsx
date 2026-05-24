@@ -4,6 +4,7 @@ import { LogoutButton } from "../dashboard/LogoutButton";
 import { PricingToggle } from "./PricingToggle";
 import { TierCard } from "./TierCard";
 import { PreselectionScroll } from "./PreselectionScroll";
+import { Logo } from "@/components/Logo";
 
 export const metadata = {
   title: "الأسعار — فت لايف",
@@ -26,9 +27,10 @@ export default async function PricingPage({
         <div className="container-app py-4 flex items-center justify-between">
           <a
             href="/dashboard"
-            className="font-extrabold text-xl text-brand-ink hover:text-brand-purple-900 transition-colors rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            aria-label="فت لايف — الرئيسية"
+            className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
-            فت لايف
+            <Logo className="h-9 w-auto" />
           </a>
           <LogoutButton />
         </div>

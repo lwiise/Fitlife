@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { BRAND_NAME } from "@fitlife/config";
 import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
+import { Logo } from "@/components/Logo";
 import { LoginForm } from "./LoginForm";
 
 export const metadata = {
@@ -37,10 +37,8 @@ export default async function LoginPage({
     <main className="min-h-screen flex items-center justify-center bg-brand-surface px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-extrabold text-3xl text-brand-ink tracking-tight">
-            {BRAND_NAME.ar}
-          </h1>
-          <p className="mt-2 text-brand-ink-muted text-sm">
+          <Logo priority className="h-20 w-auto mx-auto" />
+          <p className="mt-3 text-brand-ink-muted text-sm">
             خطة غذائية لكل البيت
           </p>
         </div>

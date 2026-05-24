@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
+import { Logo } from "@/components/Logo";
 import { LogoutButton } from "./LogoutButton";
 import { CreateFirstPlanButton } from "./CreateFirstPlanButton";
 import { CheckoutSuccessHandler } from "./CheckoutSuccessHandler";
@@ -48,7 +49,7 @@ export default async function DashboardPage() {
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
         <div className="container-app py-4 flex items-center justify-between">
-          <h1 className="font-extrabold text-xl text-brand-ink">فت لايف</h1>
+          <Logo className="h-9 w-auto" />
           <LogoutButton />
         </div>
       </header>
