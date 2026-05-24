@@ -43,8 +43,8 @@ const DEFAULT_SCREENSHOTS: Screenshot[] = [
         y: 25,
       },
       {
-        title: "حساب الخادمة",
-        description: "بلغتها، مع صور للوصفات",
+        title: "وصفات الخدامة",
+        description: "بلغتها، مع صور للخطوات",
         x: 30,
         y: 50,
       },

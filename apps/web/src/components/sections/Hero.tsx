@@ -44,10 +44,10 @@ const familyMembers: FamilyMember[] = [
     textColor: "text-white",
   },
   {
-    label: "حساب للخادمة",
+    label: "وصفات للخدامة",
     sublabel: "بلغتها",
     imageSrc: "/family-housekeeper.png",
-    imageAlt: "صورة الخادمة — امرأة فلبينية تبتسم",
+    imageAlt: "صورة الخدامة — امرأة فلبينية تبتسم",
     accentColor: "#F2BB16",
     textColor: "text-[#4E2490]",
     hasPlayButton: true,
@@ -70,9 +70,9 @@ const familyMembers: FamilyMember[] = [
   },
 ];
 
-const line1Words = "خطة غذائية".split(" ");
-const line2Words = "لكل البيت.".split(" ");
-const line3Words = "حتى للخادمة.".split(" ");
+const line1Words = "خطة غذائية للعائلة.".split(" ");
+const line2Words = "ووصفات للخدامة".split(" ");
+const line3Words = "تطبخها بلغتها.".split(" ");
 
 const easeOut = "easeOut" as const;
 
@@ -287,16 +287,17 @@ function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
           </div>
           <div className="min-w-0 flex-1 text-start" dir="ltr">
             <p className="text-sm font-bold text-[#1A1023]">Rosa M.</p>
-            <p className="text-xs text-[#1A1023]/60">
-              Tagalog · Started Oct 27
-            </p>
+            <p className="text-xs text-[#1A1023]/60">Tagalog · Family cook</p>
           </div>
         </div>
         <div className="mt-3 text-start" dir="ltr">
-          <p className="mb-1.5 text-xs text-[#1A1023]/60">Week 6, Day 5</p>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1A1023]/10">
-            <div className="h-full w-[55%] rounded-full bg-gradient-to-r from-brand-yellow to-primary" />
-          </div>
+          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-[#1A1023]/50">
+            Family lunch · Wed
+          </p>
+          <p className="text-sm font-bold text-[#1A1023]">Chicken Kabsa</p>
+          <p className="mt-1 text-xs leading-snug text-[#1A1023]/60">
+            2 cups basmati · 500g chicken · simmer 25 min
+          </p>
         </div>
       </div>
     </motion.div>
@@ -390,13 +391,13 @@ export default function Hero() {
           {reduced ? (
             <h1 className="font-extrabold leading-[0.95] tracking-tight">
               <span className="block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
-                خطة غذائية
+                خطة غذائية للعائلة.
               </span>
               <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
-                لكل البيت.
+                ووصفات للخدامة
               </span>
               <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-primary">
-                حتى للخادمة.
+                تطبخها بلغتها.
               </span>
             </h1>
           ) : (

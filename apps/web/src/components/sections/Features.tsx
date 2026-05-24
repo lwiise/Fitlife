@@ -46,8 +46,8 @@ const cards: Card[] = [
     iconBgClass: "bg-primary/10",
     iconHoverBgClass: "group-hover/card:bg-primary/15",
     iconColorClass: "text-primary",
-    title: "بلغة الخادمة، بلغة أولادك",
-    description: "7 لغات. كل واحد بلغته. ما يحتاج ترجمة، ما يحتاج تخمين.",
+    title: "وصفات الخدامة بلغتها",
+    description: "٧ لغات: تجالوج، بنغالي، هندي، إندونيسي، أمهري، أردو، وعربي مبسط. الوصفات توصلها بلغتها — بدون ترجمة، بدون تخمين.",
   },
   {
     area: "card3",

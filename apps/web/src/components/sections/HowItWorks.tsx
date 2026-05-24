@@ -52,7 +52,7 @@ const steps: Step[] = [
     number: "02",
     title: "استلمي خطة لكل فرد",
     description:
-      "خطة للأم، الأب، الأولاد، والخادمة — كل واحد بلغته، وحسب احتياجه الصحي.",
+      "خطة غذائية لكل فرد من عائلتك حسب احتياجه. والخدامة توصلها وصفات هالخطط بلغتها — جاهزة تطبخها.",
     videoSrc: "/how-it-works-2.mp4",
     videoSrcWebm: "/how-it-works-2.webm",
     posterSrc: "/how-it-works-2-poster.svg",

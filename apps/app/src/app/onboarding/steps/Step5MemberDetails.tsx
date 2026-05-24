@@ -237,7 +237,7 @@ export function Step5MemberDetails({
                     htmlFor={`lang-${idx}`}
                     className="block text-xs font-bold text-brand-ink mb-1"
                   >
-                    لغة الخادمة (تظهر لها الخطة بلغتها)
+                    لغة الخدامة (توصلها الوصفات بلغتها)
                   </label>
                   <select
                     id={`lang-${idx}`}

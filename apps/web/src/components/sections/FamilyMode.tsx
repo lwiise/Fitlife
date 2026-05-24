@@ -55,9 +55,9 @@ const family: FamilyMember[] = [
   },
   {
     src: "/avatar-housekeeper.svg",
-    name: "روزا (خادمة)",
+    name: "روزا · الخدامة",
     language: "بالتاغالوغ",
-    goal: "صحة عامة",
+    goal: "وصفاتها بلغتها",
     alt: "صورة شخصية لروزا",
   },
 ];
@@ -371,8 +371,8 @@ export default function FamilyMode() {
             transition={{ duration: 0.6, ease: "easeOut" as const, delay: 2 }}
             className="mt-4 text-[clamp(1.125rem,0.95rem+0.8vw,1.375rem)] italic leading-[1.6] text-white"
           >
-            أول مرة ألقى تطبيق يفكر في الخادمة. صارت روزا تأكل معانا نفس النظام
-            بدل ما تطبخ لنفسها لحالها.
+            أول مرة روزا تفهم الوصفات بلغتها. الحين كل وجبة تطلع زي ما خططت لها،
+            بدون ما أشرح لها كل يوم.
           </motion.blockquote>
           <motion.figcaption
             variants={fadeOnly}
