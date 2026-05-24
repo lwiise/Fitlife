@@ -30,9 +30,6 @@ export default async function LoginPage({
     redirect("/dashboard");
   }
 
-  const webUrl =
-    process.env.NEXT_PUBLIC_WEB_URL ?? "https://fitlife-landing.netlify.app";
-
   return (
     <main className="min-h-screen flex items-center justify-center bg-brand-surface px-4 py-12">
       <div className="w-full max-w-md">
@@ -55,7 +52,7 @@ export default async function LoginPage({
 
         <p className="text-center mt-4">
           <a
-            href={webUrl}
+            href="/"
             className="inline-block text-brand-ink-muted text-sm hover:text-brand-purple-900 transition-colors"
           >
             ← الرجوع للصفحة الرئيسية

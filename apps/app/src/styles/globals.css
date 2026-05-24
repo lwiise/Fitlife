@@ -1,5 +1,10 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ─── App brand tokens (canonical — primary purple is brand-purple-900) ─── */
 @theme {
   --color-brand-purple-900: #4e2490;
   --color-brand-purple-700: #3d1c73;
@@ -21,19 +26,134 @@
   --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ─── Landing (marketing) tokens, merged from apps/web ─────────────────────
+   Only NON-colliding tokens are added; the app's brand-purple-900/700,
+   brand-yellow, brand-pink, brand-lavender above stay canonical. The dark-mode
+   block is omitted (no .dark class is ever applied). */
+:root {
+  /* Purple OKLCH ramp the app lacks (600 = #4E2490, the brand primary). */
+  --brand-purple-50: oklch(0.971 0.014 295);
+  --brand-purple-100: oklch(0.94 0.03 295);
+  --brand-purple-200: oklch(0.885 0.06 295);
+  --brand-purple-300: oklch(0.8 0.1 295);
+  --brand-purple-400: oklch(0.66 0.15 295);
+  --brand-purple-500: oklch(0.52 0.175 295);
+  --brand-purple-600: oklch(0.385 0.165 295);
+  --brand-purple-800: oklch(0.28 0.115 295);
+  --brand-purple-950: oklch(0.175 0.06 295);
+
+  --brand-yellow-dark: oklch(0.745 0.155 84);
+  --brand-pink-dark: oklch(0.52 0.172 348);
+  --brand-lavender-soft: oklch(0.9 0.06 309);
+
+  --surface: #ebeff2;
+  --surface-elevated: #ffffff;
+  --ink: #1a1023;
+  --ink-muted: oklch(0.196 0.04 308 / 0.72);
+
+  --radius: 0.625rem;
+
+  /* shadcn semantic tokens — used by the landing's ui components */
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-elevated);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--ink);
+  --primary: #4e2490;
+  --primary-foreground: oklch(0.985 0.004 295);
+  --secondary: var(--brand-purple-100);
+  --secondary-foreground: var(--color-brand-purple-700);
+  --muted: var(--brand-purple-50);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--brand-lavender-soft);
+  --accent-foreground: var(--color-brand-purple-700);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.012 295);
+  --input: oklch(0.9 0.012 295);
+  --ring: var(--brand-purple-500);
+}
+
+@theme inline {
+  --font-sans: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --font-heading: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --font-display: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+
+  --color-brand-purple-50: var(--brand-purple-50);
+  --color-brand-purple-100: var(--brand-purple-100);
+  --color-brand-purple-200: var(--brand-purple-200);
+  --color-brand-purple-300: var(--brand-purple-300);
+  --color-brand-purple-400: var(--brand-purple-400);
+  --color-brand-purple-500: var(--brand-purple-500);
+  --color-brand-purple-600: var(--brand-purple-600);
+  --color-brand-purple-800: var(--brand-purple-800);
+  --color-brand-purple-950: var(--brand-purple-950);
+  --color-brand-yellow-dark: var(--brand-yellow-dark);
+  --color-brand-pink-dark: var(--brand-pink-dark);
+  --color-brand-lavender-soft: var(--brand-lavender-soft);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
 @layer base {
   html {
     direction: rtl;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
 
   body {
     font-family: var(--font-tajawal);
     color: var(--color-brand-ink);
     background-color: var(--color-brand-surface);
+    line-height: 1.7;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Arabic reads poorly with tracking — neutralise by default. */
+  * {
+    letter-spacing: normal;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.2;
+    text-wrap: balance;
   }
 
   .tabular-nums {
@@ -47,6 +167,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
     *,
     *::before,
     *::after {
@@ -58,6 +181,7 @@
   }
 }
 
+/* ─── Utilities ─────────────────────────────────────────────────────────── */
 @utility container-app {
   width: 100%;
   margin-inline: auto;
@@ -70,5 +194,85 @@
 
   @media (min-width: 1024px) {
     padding-inline: 2rem;
+  }
+}
+
+/* Landing page container: max 1280px, responsive inline padding. */
+@utility container-page {
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 0.5rem + 3vw, 2.5rem);
+}
+
+@utility text-display {
+  font-size: clamp(2.5rem, 1.8rem + 3vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: normal;
+}
+
+@utility text-h1 {
+  font-size: clamp(2rem, 1.65rem + 1.5vw, 3rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: normal;
+}
+
+@utility text-h2 {
+  font-size: clamp(1.5rem, 1.24rem + 1.13vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+}
+
+@utility text-h3 {
+  font-size: clamp(1.25rem, 1.16rem + 0.38vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+
+@keyframes spotlight {
+  0% {
+    opacity: 0;
+    transform: translate(-72%, -62%) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+}
+
+@utility animate-spotlight {
+  animation: spotlight 2s ease 0.2s 1 forwards;
+}
+
+@utility bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(242, 187, 22, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 20px rgba(242, 187, 22, 0);
+  }
+}
+
+@utility animate-pulse-ring {
+  animation: pulse-ring 3s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spotlight {
+    animation: none;
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+  .animate-pulse-ring {
+    animation: none;
   }
 }

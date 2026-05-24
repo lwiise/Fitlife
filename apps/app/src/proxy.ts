@@ -18,12 +18,14 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = pathname.startsWith("/auth");
   const isApiRoute = pathname.startsWith("/api");
   const isPublicAsset = pathname.startsWith("/_next") || pathname.includes(".");
+  // The marketing landing page lives at "/" and is public to everyone.
+  const isPublicRoute = pathname === "/";
 
   if (isApiRoute || isPublicAsset) {
     return response;
   }
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect_to", pathname);

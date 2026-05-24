@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Father illustration">
+  <!-- Body / shirt -->
+  <path d="M 80 800 Q 80 545 200 475 L 400 475 Q 520 545 520 800 Z" fill="#5B7E9A"/>
+  <!-- Shirt collar V -->
+  <path d="M 270 475 L 300 535 L 330 475 Z" fill="#476680"/>
+  <!-- Subtle shirt highlight -->
+  <path d="M 90 800 Q 90 555 200 490 L 220 490 Q 130 555 130 800 Z" fill="#6B8DA8" opacity="0.55"/>
+
+  <!-- Ears (subtle, partially behind hair) -->
+  <ellipse cx="170" cy="285" rx="14" ry="22" fill="#C8956D"/>
+  <ellipse cx="430" cy="285" rx="14" ry="22" fill="#C8956D"/>
+
+  <!-- Neck -->
+  <rect x="265" y="395" width="70" height="85" fill="#D9A87C"/>
+  <ellipse cx="300" cy="475" rx="35" ry="8" fill="#B98556" opacity="0.4"/>
+
+  <!-- Head -->
+  <circle cx="300" cy="280" r="135" fill="#D9A87C"/>
+
+  <!-- Hair: short, dark, slightly textured -->
+  <path d="M 170 250 Q 175 145, 300 130 Q 425 145, 430 250 Q 415 215, 380 205 L 220 205 Q 185 215, 170 250 Z" fill="#2A1810"/>
+  <!-- Hair highlight wisp -->
+  <path d="M 235 165 Q 270 145, 305 150" stroke="#4A2C1F" stroke-width="3" fill="none" opacity="0.7" stroke-linecap="round"/>
+
+  <!-- Beard suggestion (well-groomed shadow) -->
+  <path d="M 215 335 Q 245 365, 300 380 Q 355 365, 385 335 Q 380 355, 350 370 Q 300 385, 250 370 Q 220 355, 215 335 Z" fill="#3D2418" opacity="0.45"/>
+
+  <!-- Eyebrows: bolder, expressive -->
+  <path d="M 233 252 Q 257 244, 280 252" stroke="#1A0F08" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M 320 252 Q 343 244, 367 252" stroke="#1A0F08" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+  <!-- Eyes (almond shape with iris) -->
+  <ellipse cx="256" cy="287" rx="11" ry="7" fill="white"/>
+  <ellipse cx="344" cy="287" rx="11" ry="7" fill="white"/>
+  <circle cx="256" cy="287" r="6" fill="#1A0F08"/>
+  <circle cx="344" cy="287" r="6" fill="#1A0F08"/>
+  <!-- Eye highlights -->
+  <circle cx="258" cy="285" r="2" fill="white"/>
+  <circle cx="346" cy="285" r="2" fill="white"/>
+
+  <!-- Nose hint -->
+  <path d="M 293 297 Q 290 325, 298 340 Q 305 343, 307 340 Q 313 325, 309 297" stroke="#B98556" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+
+  <!-- Smile -->
+  <path d="M 258 358 Q 300 380, 342 358" stroke="#1A0F08" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+</svg>
