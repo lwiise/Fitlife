@@ -25,7 +25,9 @@ export async function createClient() {
         ) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+              // Lax so the session cookie survives the cross-site return from
+              // the Lemonsqueezy payment redirect (Strict would be dropped).
+              cookieStore.set(name, value, { ...options, sameSite: "lax" });
             });
           } catch {
             // Called from Server Component — ignore (middleware refreshes sessions)

@@ -26,7 +26,12 @@ export async function updateSession(request: NextRequest) {
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            // Lax so the session cookie survives the cross-site return from the
+            // Lemonsqueezy payment redirect (Strict would be dropped).
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              sameSite: "lax",
+            })
           );
         },
       },

@@ -51,6 +51,14 @@ export async function POST(request: Request) {
   const storeId = getLemonsqueezyStoreId();
   const variantId = getVariantId(parsed.tier, parsed.cadence);
 
+  // Return to the EXACT origin the user is browsing (the same-origin POST sends
+  // an Origin header), so the post-payment redirect carries the session cookie.
+  // Falling back on the request URL, then the configured app URL.
+  const origin =
+    request.headers.get("origin") ??
+    new URL(request.url).origin ??
+    env.NEXT_PUBLIC_APP_URL;
+
   try {
     const response = await createCheckout(storeId, variantId, {
       checkoutOptions: {
@@ -67,7 +75,7 @@ export async function POST(request: Request) {
         },
       },
       productOptions: {
-        redirectUrl: `${env.NEXT_PUBLIC_APP_URL}/dashboard?checkout=success`,
+        redirectUrl: `${origin}/dashboard?checkout=success`,
       },
     });
 
