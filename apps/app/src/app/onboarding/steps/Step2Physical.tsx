@@ -58,7 +58,7 @@ export function Step2Physical({
           >
             الطول
           </label>
-          <div className="relative">
+          <div className="relative" dir="ltr">
             <input
               id="height_cm"
               type="number"
@@ -91,7 +91,7 @@ export function Step2Physical({
           >
             الوزن
           </label>
-          <div className="relative">
+          <div className="relative" dir="ltr">
             <input
               id="weight_kg"
               type="number"
