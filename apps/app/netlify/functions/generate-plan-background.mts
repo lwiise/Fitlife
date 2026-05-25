@@ -282,17 +282,15 @@ export default async (req: Request): Promise<Response> => {
     const { plan, usage } = await generateMealPlan({
       anthropicApiKey: anthropicKey,
       context,
-      // Persist each day as it completes; flip to "ready" after the first day
-      // so the user leaves the loading screen and watches the rest fill in.
-      onProgress: async (snapshot, { readyDays }) => {
+      // Persist progressively + flip "ready" on the first emit (the shell), so
+      // the plan opens showing all days as loading and they fill in 1→7.
+      onProgress: async (snapshot) => {
         await sbUpdate(
           supabaseUrl,
           expected,
           "meal_plans",
           `id=eq.${mealPlanId}`,
-          readyDays >= 1
-            ? { status: "ready", plan_data: snapshot }
-            : { plan_data: snapshot },
+          { status: "ready", plan_data: snapshot },
         );
       },
     });

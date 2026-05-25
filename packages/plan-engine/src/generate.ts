@@ -229,56 +229,48 @@ export async function generateMealPlan(params: {
   const dayNameByIndex = new Map(
     (skeleton.members[0]?.days ?? []).map((d) => [d.day_index, d.day_name_ar]),
   );
-  // member_id -> (day_index -> Day), filled as each day resolves.
+  // Pre-seed every day as an empty "loading" slot so the plan opens showing all
+  // days at once; each slot's meals fill in as that day is generated (in order).
   const daysByMember = new Map<string, Map<number, Day>>(
     skeleton.members.map((sm) => [sm.member_id, new Map<number, Day>()]),
   );
-  // Days compute in parallel but are REVEALED in order: a day is shown only once
-  // every earlier day has settled (succeeded or permanently failed).
-  const done = new Set<number>(); // expanded successfully (has meals)
-  const settled = new Set<number>(); // done OR permanently failed
-  let revealed = -1; // highest index into dayIndices revealed so far
-
-  const snapshot = (generating: boolean): MealPlan => {
-    const prefix = dayIndices.slice(0, revealed + 1);
-    return {
-      week_start_date: nextSaturdayISO(),
-      members: skeleton.members.map((sm) => {
-        const dmap = daysByMember.get(sm.member_id)!;
-        const days = prefix
-          .map((di) => dmap.get(di))
-          .filter((d): d is Day => !!d)
-          .sort((a, b) => a.day_index - b.day_index);
-        return {
-          member_id: sm.member_id,
-          member_name_ar: nameById.get(sm.member_id) ?? sm.member_name_ar ?? "",
-          primary_goal: sm.primary_goal,
-          daily_calories_target: sm.daily_calories_target,
-          macros_target: sm.macros_target,
-          days,
-        };
-      }),
-      methodology_notes_ar: skeleton.methodology_notes_ar,
-      safety_disclaimer_ar: skeleton.safety_disclaimer_ar,
-      days_total: totalDays,
-      generating,
-    };
-  };
-
-  // Serialize onProgress so concurrent day-workers don't clobber the DB write.
-  let progressTail: Promise<void> = Promise.resolve();
-  const tryReveal = () => {
-    let advanced = false;
-    while (revealed + 1 < totalDays && settled.has(dayIndices[revealed + 1]!)) {
-      revealed++;
-      advanced = true;
+  for (const sm of skeleton.members) {
+    const dmap = daysByMember.get(sm.member_id)!;
+    for (const di of dayIndices) {
+      dmap.set(di, {
+        day_index: di,
+        day_name_ar: dayNameByIndex.get(di) ?? `اليوم ${di + 1}`,
+        meals: [],
+        day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      });
     }
-    if (!advanced || !onProgress) return;
-    const generating = settled.size < totalDays;
-    const readyDays = dayIndices
-      .slice(0, revealed + 1)
-      .filter((di) => done.has(di)).length;
-    const snap = snapshot(generating);
+  }
+  const done = new Set<number>(); // days expanded successfully (have meals)
+
+  const snapshot = (generating: boolean): MealPlan => ({
+    week_start_date: nextSaturdayISO(),
+    members: skeleton.members.map((sm) => ({
+      member_id: sm.member_id,
+      member_name_ar: nameById.get(sm.member_id) ?? sm.member_name_ar ?? "",
+      primary_goal: sm.primary_goal,
+      daily_calories_target: sm.daily_calories_target,
+      macros_target: sm.macros_target,
+      days: [...daysByMember.get(sm.member_id)!.values()].sort(
+        (a, b) => a.day_index - b.day_index,
+      ),
+    })),
+    methodology_notes_ar: skeleton.methodology_notes_ar,
+    safety_disclaimer_ar: skeleton.safety_disclaimer_ar,
+    days_total: totalDays,
+    generating,
+  });
+
+  // Serialize onProgress writes.
+  let progressTail: Promise<void> = Promise.resolve();
+  const emit = () => {
+    if (!onProgress) return;
+    const snap = snapshot(done.size < totalDays);
+    const readyDays = done.size;
     progressTail = progressTail.then(() =>
       Promise.resolve(onProgress(snap, { readyDays, totalDays })).catch((e) =>
         console.error("[plan-generate] onProgress failed", e),
@@ -286,7 +278,10 @@ export async function generateMealPlan(params: {
     );
   };
 
-  // ── Phase 2: expand each day in parallel; reveal the prefix in order ──
+  // Open the plan immediately with all days shown as "loading" (the shell).
+  emit();
+
+  // ── Phase 2: expand each day sequentially, in order; fill its slot + emit ──
   await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
     const prompt = buildDayPrompt(context, skeleton, dayIndex);
     let attempt = 0;
@@ -330,8 +325,7 @@ export async function generateMealPlan(params: {
           });
         }
         done.add(dayIndex);
-        settled.add(dayIndex);
-        tryReveal();
+        emit();
         return;
       } catch (err) {
         if (isRetryable(err) && attempt < 2) {
@@ -339,16 +333,14 @@ export async function generateMealPlan(params: {
           await sleep(800 * attempt);
           continue;
         }
-        // Tolerate a single failed day — settle it so it doesn't stall the
-        // reveal of later days (its tab shows "no meals"). Only a total failure
-        // is fatal.
+        // Tolerate a single failed day — leave its empty slot ("no meals" when
+        // done). Only a total failure (all days) is fatal.
         console.error(
           "[plan-generate] day failed (omitting)",
           dayIndex,
           err instanceof Error ? err.message : String(err),
         );
-        settled.add(dayIndex);
-        tryReveal();
+        emit();
         return;
       }
     }
@@ -361,8 +353,7 @@ export async function generateMealPlan(params: {
     throw new PlanValidationError(`All ${totalDays} day generations failed`);
   }
 
-  // ── Final assembled MealPlan ── (reveal everything that succeeded)
-  revealed = totalDays - 1;
+  // ── Final assembled MealPlan ── (all days that succeeded; failed = empty)
   const result = MealPlanSchema.safeParse(snapshot(false));
   if (!result.success)
     throw new PlanValidationError(
@@ -429,15 +420,12 @@ export async function runMealPlanGeneration(params: {
     const result = await generateMealPlan({
       anthropicApiKey,
       context,
-      // Persist progressively so the plan is viewable after the first day.
-      onProgress: async (snapshot, { readyDays }) => {
+      // Persist progressively; flip "ready" on the first emit (the shell) so the
+      // plan opens showing all days loading and they fill in 1→7.
+      onProgress: async (snapshot) => {
         await supabase
           .from("meal_plans")
-          .update(
-            readyDays >= 1
-              ? { status: "ready", plan_data: snapshot }
-              : { plan_data: snapshot },
-          )
+          .update({ status: "ready", plan_data: snapshot })
           .eq("id", mealPlanId);
       },
     });

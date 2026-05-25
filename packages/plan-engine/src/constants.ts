@@ -31,4 +31,6 @@ export const PLAN_MAX_TOKENS = 32000;
 // stay under Anthropic rate limits (with retry/backoff on 429).
 export const SKELETON_MAX_TOKENS = 6000;
 export const DAY_MAX_TOKENS = 12000;
-export const DAY_CONCURRENCY = 5;
+// Sequential (one day at a time, in order): the plan opens showing all 7 days
+// as "loading" and they fill in 1→7. Higher values parallelize (faster total).
+export const DAY_CONCURRENCY = 1;
