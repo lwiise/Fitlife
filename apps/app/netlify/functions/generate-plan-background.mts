@@ -175,23 +175,54 @@ async function buildContextViaFetch(
     `user_id=eq.${userId}&select=*&order=display_order.asc`,
   );
 
-  const family_members: PlanPromptContextMember[] = family.map((m) => ({
-    id: m.id as string,
-    name: m.name as string,
-    role: m.role as string,
-    age: ageFromBirthYear((m.birth_year as number | null) ?? null),
-    height_cm: (m.height_cm as number | null) ?? null,
-    weight_kg: (m.weight_kg as number | null) ?? null,
-    activity_level: ((m.activity_level as string | null) ?? null) as Activity,
-    primary_goal: (m.primary_goal as string | null) ?? null,
-    dietary_restrictions: (m.dietary_restrictions as string[] | null) ?? [],
-    preferred_language: m.preferred_language as string,
-  }));
+  const asStrings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+  // Per-member medical gate (mirrors the engine's buildContext).
+  for (const m of family) {
+    const conds = asStrings(m.medical_conditions);
+    const memberHighRisk =
+      conds.some((c) => HIGH_RISK_FLAGS.includes(c)) || !!m.high_risk_pregnancy;
+    if (memberHighRisk && m.consulted_doctor !== true) {
+      throw new GateError("Medical consultation required");
+    }
+  }
+
+  const family_members: PlanPromptContextMember[] = family.map((m) => {
+    const age = ageFromBirthYear((m.birth_year as number | null) ?? null);
+    const memberType = (m.member_type as string | null) ?? "adult";
+    return {
+      id: m.id as string,
+      name: m.name as string,
+      role: m.role as string,
+      member_type: memberType,
+      sex: (m.sex as string | null) ?? null,
+      age,
+      height_cm: (m.height_cm as number | null) ?? null,
+      weight_kg: (m.weight_kg as number | null) ?? null,
+      activity_level: ((m.activity_level as string | null) ?? null) as Activity,
+      primary_goal: (m.primary_goal as string | null) ?? null,
+      dietary_restrictions: asStrings(m.dietary_restrictions),
+      medical_conditions: asStrings(m.medical_conditions),
+      allergies: asStrings(m.allergies),
+      dislikes: asStrings(m.dislikes),
+      trimester: (m.trimester as number | null) ?? null,
+      months_postpartum: (m.months_postpartum as number | null) ?? null,
+      high_risk_pregnancy: !!m.high_risk_pregnancy,
+      school_meal_handling: (m.school_meal_handling as string | null) ?? null,
+      picky_eater: !!m.picky_eater,
+      consulted_doctor: m.consulted_doctor === true,
+      is_child: memberType === "child" || (age != null && age < 18),
+      preferred_language: m.preferred_language as string,
+    };
+  });
 
   return {
     mom: {
       id: profile.id as string,
       display_name: (profile.display_name as string | null) ?? null,
+      sex: (profile.sex as string | null) ?? null,
+      member_type: (profile.member_type as string | null) ?? "adult",
       age: ageFromBirthYear((profile.birth_year as number | null) ?? null),
       height_cm: (profile.height_cm as number | null) ?? null,
       weight_kg: (profile.weight_kg as number | null) ?? null,
@@ -200,11 +231,21 @@ async function buildContextViaFetch(
       dietary_restrictions: (profile.dietary_restrictions as string[] | null) ?? [],
       cuisine_preference: profile.cuisine_preference as string,
       medical_conditions: medicalConditions,
+      allergies: asStrings(profile.allergies),
+      dislikes: asStrings(profile.dislikes),
       is_pregnant: !!profile.is_pregnant,
       pregnancy_trimester: (profile.pregnancy_trimester as number | null) ?? null,
+      months_postpartum: (profile.months_postpartum as number | null) ?? null,
+      high_risk_pregnancy: !!profile.high_risk_pregnancy,
       consulted_doctor: !!profile.consulted_doctor,
     },
     family_members,
+    family_wide: {
+      dietary_restrictions: asStrings(profile.family_dietary_restrictions),
+      dislikes: asStrings(profile.family_dislikes),
+      cooking_methods: asStrings(profile.cooking_methods),
+      meal_out_frequency: (profile.meal_out_frequency as string | null) ?? null,
+    },
     composition_summary: buildCompositionSummary(family_members),
   };
 }

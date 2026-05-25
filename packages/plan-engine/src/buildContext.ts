@@ -29,6 +29,8 @@ export const HIGH_RISK_MEDICAL_FLAGS = [
 export interface PlanPromptContextMom {
   id: string;
   display_name: string | null;
+  sex: string | null;
+  member_type: string;
   age: number | null;
   height_cm: number | null;
   weight_kg: number | null;
@@ -37,8 +39,12 @@ export interface PlanPromptContextMom {
   dietary_restrictions: string[];
   cuisine_preference: string;
   medical_conditions: string[];
+  allergies: string[];
+  dislikes: string[];
   is_pregnant: boolean;
   pregnancy_trimester: number | null;
+  months_postpartum: number | null;
+  high_risk_pregnancy: boolean;
   consulted_doctor: boolean;
 }
 
@@ -46,24 +52,50 @@ export interface PlanPromptContextMember {
   id: string;
   name: string;
   role: string;
+  member_type: string;
+  sex: string | null;
   age: number | null;
   height_cm: number | null;
   weight_kg: number | null;
   activity_level: Activity;
   primary_goal: string | null;
   dietary_restrictions: string[];
+  medical_conditions: string[];
+  allergies: string[];
+  dislikes: string[];
+  trimester: number | null;
+  months_postpartum: number | null;
+  high_risk_pregnancy: boolean;
+  school_meal_handling: string | null;
+  picky_eater: boolean;
+  consulted_doctor: boolean;
+  is_child: boolean;
   preferred_language: string;
+}
+
+export interface PlanPromptContextFamilyWide {
+  dietary_restrictions: string[];
+  dislikes: string[];
+  cooking_methods: string[];
+  meal_out_frequency: string | null;
 }
 
 export interface PlanPromptContext {
   mom: PlanPromptContextMom;
   family_members: PlanPromptContextMember[];
+  family_wide: PlanPromptContextFamilyWide;
   composition_summary: string;
 }
 
 function ageFromBirthYear(birthYear: number | null): number | null {
   if (!birthYear) return null;
   return new Date().getFullYear() - birthYear;
+}
+
+/** jsonb columns come back as unknown JSON — coerce to a string[] defensively. */
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string");
 }
 
 function arabicNumber(n: number): string {
@@ -160,9 +192,23 @@ export async function buildPlanContext(
     .eq("user_id", userId)
     .order("display_order", { ascending: true });
 
+  // Per-member medical gate: a family member with a high-risk condition or a
+  // high-risk pregnancy may not get a plan until their own doctor sign-off.
+  for (const m of (family ?? []) as Record<string, unknown>[]) {
+    const conds = toStringArray(m.medical_conditions);
+    const memberHighRisk =
+      conds.some((c) => HIGH_RISK_MEDICAL_FLAGS.includes(c)) ||
+      !!m.high_risk_pregnancy;
+    if (memberHighRisk && m.consulted_doctor !== true) {
+      throw new MedicalGateError();
+    }
+  }
+
   const mom: PlanPromptContextMom = {
     id: profile.id,
     display_name: profile.display_name,
+    sex: profile.sex ?? null,
+    member_type: profile.member_type ?? "adult",
     age: ageFromBirthYear(profile.birth_year),
     height_cm: profile.height_cm,
     weight_kg: profile.weight_kg,
@@ -171,29 +217,57 @@ export async function buildPlanContext(
     dietary_restrictions: profile.dietary_restrictions ?? [],
     cuisine_preference: profile.cuisine_preference,
     medical_conditions: medicalConditions,
+    allergies: toStringArray(profile.allergies),
+    dislikes: toStringArray(profile.dislikes),
     is_pregnant: profile.is_pregnant,
     pregnancy_trimester: profile.pregnancy_trimester,
+    months_postpartum: profile.months_postpartum ?? null,
+    high_risk_pregnancy: !!profile.high_risk_pregnancy,
     consulted_doctor: profile.consulted_doctor,
   };
 
   const family_members: PlanPromptContextMember[] = (family ?? []).map(
-    (m: Record<string, unknown>) => ({
-      id: m.id as string,
-      name: m.name as string,
-      role: m.role as string,
-      age: ageFromBirthYear((m.birth_year as number | null) ?? null),
-      height_cm: (m.height_cm as number | null) ?? null,
-      weight_kg: (m.weight_kg as number | null) ?? null,
-      activity_level: ((m.activity_level as string | null) ?? null) as Activity,
-      primary_goal: (m.primary_goal as string | null) ?? null,
-      dietary_restrictions: (m.dietary_restrictions as string[] | null) ?? [],
-      preferred_language: m.preferred_language as string,
-    }),
+    (m: Record<string, unknown>) => {
+      const age = ageFromBirthYear((m.birth_year as number | null) ?? null);
+      const memberType = (m.member_type as string | null) ?? "adult";
+      return {
+        id: m.id as string,
+        name: m.name as string,
+        role: m.role as string,
+        member_type: memberType,
+        sex: (m.sex as string | null) ?? null,
+        age,
+        height_cm: (m.height_cm as number | null) ?? null,
+        weight_kg: (m.weight_kg as number | null) ?? null,
+        activity_level: ((m.activity_level as string | null) ?? null) as Activity,
+        primary_goal: (m.primary_goal as string | null) ?? null,
+        dietary_restrictions: toStringArray(m.dietary_restrictions),
+        medical_conditions: toStringArray(m.medical_conditions),
+        allergies: toStringArray(m.allergies),
+        dislikes: toStringArray(m.dislikes),
+        trimester: (m.trimester as number | null) ?? null,
+        months_postpartum: (m.months_postpartum as number | null) ?? null,
+        high_risk_pregnancy: !!m.high_risk_pregnancy,
+        school_meal_handling: (m.school_meal_handling as string | null) ?? null,
+        picky_eater: !!m.picky_eater,
+        consulted_doctor: m.consulted_doctor === true,
+        is_child: memberType === "child" || (age != null && age < 18),
+        preferred_language: m.preferred_language as string,
+      };
+    },
   );
+
+  const family_wide: PlanPromptContextFamilyWide = {
+    dietary_restrictions: toStringArray(profile.family_dietary_restrictions),
+    dislikes: toStringArray(profile.family_dislikes),
+    cooking_methods: toStringArray(profile.cooking_methods),
+    meal_out_frequency: profile.meal_out_frequency ?? null,
+  };
 
   return {
     mom,
     family_members,
+    family_wide,
     composition_summary: buildCompositionSummary(family_members),
   };
 }

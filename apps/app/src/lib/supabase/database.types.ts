@@ -17,51 +17,81 @@ export type Database = {
       family_members: {
         Row: {
           activity_level: string | null
+          allergies: Json | null
           birth_year: number | null
+          consulted_doctor: boolean | null
           created_at: string
           dietary_restrictions: string[] | null
+          dislikes: Json | null
           display_order: number
           height_cm: number | null
+          high_risk_pregnancy: boolean | null
           id: string
           medical_conditions: string[] | null
+          member_type: string
+          months_postpartum: number | null
           name: string
+          picky_eater: boolean | null
           preferred_language: string
           primary_goal: string | null
           role: string
+          school_meal_handling: string | null
+          sex: string | null
+          trimester: number | null
           updated_at: string
           user_id: string
           weight_kg: number | null
         }
         Insert: {
           activity_level?: string | null
+          allergies?: Json | null
           birth_year?: number | null
+          consulted_doctor?: boolean | null
           created_at?: string
           dietary_restrictions?: string[] | null
+          dislikes?: Json | null
           display_order?: number
           height_cm?: number | null
+          high_risk_pregnancy?: boolean | null
           id?: string
           medical_conditions?: string[] | null
+          member_type?: string
+          months_postpartum?: number | null
           name: string
+          picky_eater?: boolean | null
           preferred_language?: string
           primary_goal?: string | null
           role: string
+          school_meal_handling?: string | null
+          sex?: string | null
+          trimester?: number | null
           updated_at?: string
           user_id: string
           weight_kg?: number | null
         }
         Update: {
           activity_level?: string | null
+          allergies?: Json | null
           birth_year?: number | null
+          consulted_doctor?: boolean | null
           created_at?: string
           dietary_restrictions?: string[] | null
+          dislikes?: Json | null
           display_order?: number
           height_cm?: number | null
+          high_risk_pregnancy?: boolean | null
           id?: string
           medical_conditions?: string[] | null
+          member_type?: string
+          months_postpartum?: number | null
           name?: string
+          picky_eater?: boolean | null
           preferred_language?: string
           primary_goal?: string | null
           role?: string
+          school_meal_handling?: string | null
+          sex?: string | null
+          trimester?: number | null
           updated_at?: string
           user_id?: string
           weight_kg?: number | null
@@ -133,34 +163,58 @@ export type Database = {
         Row: {
           ai_input_tokens: number
           ai_output_tokens: number
+          completed_at: string | null
+          cost_usd: number | null
           created_at: string
+          duration_ms: number | null
+          error_message: string | null
           estimated_cost_usd: number
           failure_reason: string | null
           id: string
           meal_plan_id: string | null
+          model: string | null
+          started_at: string
           status: string
+          tokens_in: number | null
+          tokens_out: number | null
           user_id: string
         }
         Insert: {
           ai_input_tokens?: number
           ai_output_tokens?: number
+          completed_at?: string | null
+          cost_usd?: number | null
           created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
           estimated_cost_usd?: number
           failure_reason?: string | null
           id?: string
           meal_plan_id?: string | null
-          status: string
+          model?: string | null
+          started_at?: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
           user_id: string
         }
         Update: {
           ai_input_tokens?: number
           ai_output_tokens?: number
+          completed_at?: string | null
+          cost_usd?: number | null
           created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
           estimated_cost_usd?: number
           failure_reason?: string | null
           id?: string
           meal_plan_id?: string | null
+          model?: string | null
+          started_at?: string
           status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
           user_id?: string
         }
         Relationships: [
@@ -183,61 +237,100 @@ export type Database = {
       profiles: {
         Row: {
           activity_level: string | null
+          allergies: Json | null
           birth_year: number | null
           consulted_doctor: boolean
+          cooking_methods: Json | null
           created_at: string
           cuisine_preference: string
           dietary_restrictions: string[] | null
+          dislikes: Json | null
           display_name: string | null
+          family_dietary_restrictions: Json | null
+          family_dislikes: Json | null
+          family_wide_completed_at: string | null
           has_medical_conditions: boolean
           height_cm: number | null
+          high_risk_pregnancy: boolean | null
           id: string
           is_pregnant: boolean
+          meal_out_frequency: string | null
           medical_conditions: string[] | null
+          member_addition_order: Json | null
+          member_type: string
+          mom_profile_completed_at: string | null
+          months_postpartum: number | null
           onboarding_completed_at: string | null
           preferred_language: string
           pregnancy_trimester: number | null
           primary_goal: string | null
+          sex: string | null
           updated_at: string
           weight_kg: number | null
         }
         Insert: {
           activity_level?: string | null
+          allergies?: Json | null
           birth_year?: number | null
           consulted_doctor?: boolean
+          cooking_methods?: Json | null
           created_at?: string
           cuisine_preference?: string
           dietary_restrictions?: string[] | null
+          dislikes?: Json | null
           display_name?: string | null
+          family_dietary_restrictions?: Json | null
+          family_dislikes?: Json | null
+          family_wide_completed_at?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
+          high_risk_pregnancy?: boolean | null
           id: string
           is_pregnant?: boolean
+          meal_out_frequency?: string | null
           medical_conditions?: string[] | null
+          member_addition_order?: Json | null
+          member_type?: string
+          mom_profile_completed_at?: string | null
+          months_postpartum?: number | null
           onboarding_completed_at?: string | null
           preferred_language?: string
           pregnancy_trimester?: number | null
           primary_goal?: string | null
+          sex?: string | null
           updated_at?: string
           weight_kg?: number | null
         }
         Update: {
           activity_level?: string | null
+          allergies?: Json | null
           birth_year?: number | null
           consulted_doctor?: boolean
+          cooking_methods?: Json | null
           created_at?: string
           cuisine_preference?: string
           dietary_restrictions?: string[] | null
+          dislikes?: Json | null
           display_name?: string | null
+          family_dietary_restrictions?: Json | null
+          family_dislikes?: Json | null
+          family_wide_completed_at?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
+          high_risk_pregnancy?: boolean | null
           id?: string
           is_pregnant?: boolean
+          meal_out_frequency?: string | null
           medical_conditions?: string[] | null
+          member_addition_order?: Json | null
+          member_type?: string
+          mom_profile_completed_at?: string | null
+          months_postpartum?: number | null
           onboarding_completed_at?: string | null
           preferred_language?: string
           pregnancy_trimester?: number | null
           primary_goal?: string | null
+          sex?: string | null
           updated_at?: string
           weight_kg?: number | null
         }
@@ -246,12 +339,17 @@ export type Database = {
       subscriptions: {
         Row: {
           billing_interval: string
+          cadence: string | null
+          cancel_at_period_end: boolean
           cancelled_at: string | null
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
           ends_at: string | null
           id: string
+          lemonsqueezy_customer_id: string | null
+          lemonsqueezy_subscription_id: string | null
+          lemonsqueezy_variant_id: string | null
           ls_customer_id: string
           ls_order_id: string | null
           ls_subscription_id: string
@@ -259,17 +357,23 @@ export type Database = {
           status: string
           tier: string
           trial_ends_at: string | null
+          trial_started_at: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           billing_interval: string
+          cadence?: string | null
+          cancel_at_period_end?: boolean
           cancelled_at?: string | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
           ends_at?: string | null
           id?: string
+          lemonsqueezy_customer_id?: string | null
+          lemonsqueezy_subscription_id?: string | null
+          lemonsqueezy_variant_id?: string | null
           ls_customer_id: string
           ls_order_id?: string | null
           ls_subscription_id: string
@@ -277,17 +381,23 @@ export type Database = {
           status: string
           tier: string
           trial_ends_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           billing_interval?: string
+          cadence?: string | null
+          cancel_at_period_end?: boolean
           cancelled_at?: string | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
           ends_at?: string | null
           id?: string
+          lemonsqueezy_customer_id?: string | null
+          lemonsqueezy_subscription_id?: string | null
+          lemonsqueezy_variant_id?: string | null
           ls_customer_id?: string
           ls_order_id?: string | null
           ls_subscription_id?: string
@@ -295,6 +405,7 @@ export type Database = {
           status?: string
           tier?: string
           trial_ends_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string
           user_id?: string
         }

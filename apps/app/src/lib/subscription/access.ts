@@ -52,7 +52,13 @@ async function countBeneficiaries(userId: string): Promise<number> {
  *   2. Person count is within tier limit
  *   3. Weekly 3-plan rate limit hasn't been exceeded
  */
-export async function canGenerateNewPlan(userId: string): Promise<AccessResult> {
+/**
+ * Subscription-active + person-count checks shared by both entry points.
+ * Does NOT include the weekly rate limit.
+ */
+async function checkSubscriptionAndPersonCount(
+  userId: string,
+): Promise<AccessResult> {
   const sub = await getCurrentSubscription(userId);
   if (!sub) {
     return { allowed: false, reason: "subscription_inactive" };
@@ -84,6 +90,13 @@ export async function canGenerateNewPlan(userId: string): Promise<AccessResult> 
     }
   }
 
+  return { allowed: true };
+}
+
+export async function canGenerateNewPlan(userId: string): Promise<AccessResult> {
+  const base = await checkSubscriptionAndPersonCount(userId);
+  if (!base.allowed) return base;
+
   const canRateLimit = await canGeneratePlan(userId);
   if (!canRateLimit) {
     return {
@@ -96,6 +109,18 @@ export async function canGenerateNewPlan(userId: string): Promise<AccessResult> 
   }
 
   return { allowed: true };
+}
+
+/**
+ * Access check for onboarding-time generation and family add/remove changes:
+ * enforces subscription-active + person-count + (downstream) the medical gate,
+ * but BYPASSES the weekly 3/week rate limit. Only ever called by trusted server
+ * actions — the bypass must never be reachable from client/URL/body input.
+ */
+export async function canGenerateForFamilyChange(
+  userId: string,
+): Promise<AccessResult> {
+  return checkSubscriptionAndPersonCount(userId);
 }
 
 /**

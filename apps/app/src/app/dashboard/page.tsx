@@ -1,5 +1,7 @@
 import { Suspense } from "react";
-import { Sparkles, Users, Calendar, Lock, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft } from "lucide-react";
+import { AddFamilyBanner } from "./AddFamilyBanner";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -44,6 +46,12 @@ export default async function DashboardPage() {
 
   const displayName = profile.display_name || "أهلاً";
   const onboardingDone = profile.onboarding_completed_at !== null;
+  const beneficiaryCount = familyMembers.filter(
+    (m) => m.role !== "housekeeper",
+  ).length;
+  // Mom's plan exists but no other family members yet → nudge to add family.
+  const showAddFamily =
+    profile.mom_profile_completed_at !== null && beneficiaryCount === 0;
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -82,6 +90,8 @@ export default async function DashboardPage() {
           <TrialBanner subscription={subscription} />
         )}
 
+        {showAddFamily && <AddFamilyBanner />}
+
         <div className="mb-8">
           <p className="text-brand-ink-muted text-sm">أهلاً،</p>
           <h2 className="font-extrabold text-2xl md:text-3xl text-brand-ink mt-1 leading-tight">
@@ -98,7 +108,7 @@ export default async function DashboardPage() {
                   خطتك على بعد دقيقتين
                 </h3>
                 <p className="text-white/80 text-sm mt-2 leading-relaxed">
-                  جاوبي على 8 أسئلة سريعة عشان نصمم لكِ ولعائلتك خطة غذائية شخصية.
+                  جاوبي على أسئلة سريعة عنك وعن عائلتك عشان نصمم لكِ خطة غذائية شخصية.
                 </p>
               </div>
             </div>
@@ -112,7 +122,10 @@ export default async function DashboardPage() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
+          <Link
+            href="/family"
+            className="block bg-white rounded-2xl p-6 border border-brand-ink/5 hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+          >
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center">
                 <Users className="size-5 text-brand-purple-900" />
@@ -122,10 +135,11 @@ export default async function DashboardPage() {
             <p className="font-extrabold text-3xl text-brand-ink mt-1 tabular-nums">
               {familyMembers.length}
             </p>
-            <p className="text-brand-ink-muted text-xs mt-1">
-              {familyMembers.length === 0 ? "ما أضفتي أحد بعد" : "مسجلين معاكِ"}
+            <p className="inline-flex items-center gap-1 text-brand-purple-900 text-xs font-bold mt-1">
+              إدارة العائلة
+              <ChevronLeft className="size-3.5" aria-hidden="true" />
             </p>
-          </div>
+          </Link>
 
           {isPaywalled ? (
             <div className="bg-brand-purple-900 text-white rounded-2xl p-6">

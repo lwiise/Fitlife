@@ -22,6 +22,16 @@ const ACTIVITY_LABELS_AR: Record<string, string> = {
 };
 
 const GOAL_LABELS_AR: Record<string, string> = {
+  // Sara's 8
+  fat_loss: "نزول الوزن",
+  muscle_gain: "زيادة العضل",
+  body_recomposition: "إعادة تركيب الجسم",
+  athletic_performance: "الأداء الرياضي",
+  metabolic_health: "الصحة الأيضية",
+  digestive_health: "صحة الجهاز الهضمي",
+  pregnancy_lactation: "الحمل والرضاعة",
+  posture_recovery: "القوام والتعافي",
+  // legacy
   lose_weight: "نزول الوزن",
   maintain: "ثبات الوزن",
   gain_weight: "زيادة الوزن",
@@ -31,10 +41,18 @@ const GOAL_LABELS_AR: Record<string, string> = {
   child_growth: "النمو الصحي",
 };
 
+const MEAL_OUT_LABELS_AR: Record<string, string> = {
+  never: "أبداً",
+  rarely: "نادراً (1-2 في الأسبوع)",
+  sometimes: "أحياناً (3-4 في الأسبوع)",
+  often: "غالباً (5+ في الأسبوع)",
+};
+
 const CUISINE_LABELS_AR: Record<string, string> = {
   khaleeji: "خليجي تقليدي",
   mixed: "خليط من الخليجي والعالمي",
   mediterranean: "متوسطي",
+  international: "عالمي",
 };
 
 function labeled(map: Record<string, string>, key: string | null | undefined): string {
@@ -60,10 +78,19 @@ function describeMom(c: PlanPromptContext): string {
     line += " لا تعاني من حالات صحية.";
   }
   if (m.is_pregnant) {
-    line += ` حامل (الثلث ${m.pregnancy_trimester ?? "غير محدد"}) — طبّقي قواعد الحمل.`;
+    line += ` حامل (الثلث ${m.pregnancy_trimester ?? "غير محدد"})${m.high_risk_pregnancy ? " — حمل عالي الخطورة" : ""} — طبّقي قواعد الحمل.`;
+  }
+  if (m.months_postpartum != null) {
+    line += ` مرضعة (مرّ ${m.months_postpartum} شهر على الولادة) — طبّقي قواعد الرضاعة.`;
   }
   if (m.dietary_restrictions.length > 0) {
     line += ` قيود غذائية: ${m.dietary_restrictions.join("، ")}.`;
+  }
+  if (m.allergies.length > 0) {
+    line += ` حساسية: ${m.allergies.join("، ")} — تجنّبيها تماماً.`;
+  }
+  if (m.dislikes.length > 0) {
+    line += ` لا تحب: ${m.dislikes.join("، ")}.`;
   }
   line += ` تفضل مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
 
@@ -86,13 +113,38 @@ function describeMember(member: PlanPromptContextMember): string {
   if (member.dietary_restrictions.length > 0) {
     line += ` قيود: ${member.dietary_restrictions.join("، ")}.`;
   }
+  if (member.allergies.length > 0) {
+    line += ` حساسية: ${member.allergies.join("، ")} — تجنّبيها تماماً.`;
+  }
+  if (member.dislikes.length > 0) {
+    line += ` لا يحب: ${member.dislikes.join("، ")}.`;
+  }
+  if (member.medical_conditions.length > 0) {
+    line += ` حالات صحية: ${member.medical_conditions.join("، ")}.`;
+  }
+  if (member.member_type === "pregnant") {
+    line += ` حامل (الثلث ${member.trimester ?? "غير محدد"})${member.high_risk_pregnancy ? " — عالي الخطورة" : ""} — طبّقي قواعد الحمل.`;
+  }
+  if (member.member_type === "lactating") {
+    line += ` مرضعة (مرّ ${member.months_postpartum ?? "غير محدد"} شهر على الولادة) — طبّقي قواعد الرضاعة.`;
+  }
   // Children: portion-based planning only — never BMR/TDEE.
-  if (member.age != null && member.age < 18) {
+  if (member.is_child) {
+    if (member.school_meal_handling) {
+      line += ` وجبات المدرسة: ${SCHOOL_MEAL_LABELS_AR[member.school_meal_handling] ?? member.school_meal_handling}.`;
+    }
+    if (member.picky_eater) line += " صعب في الأكل — اختاري أطباق مألوفة ومحبّبة.";
     line +=
       " (طفل — استخدمي حصص الهرم الغذائي الصحي للأطفال، بدون معادلات BMR/TDEE ولا حد سعرات.)";
   }
   return line;
 }
+
+const SCHOOL_MEAL_LABELS_AR: Record<string, string> = {
+  home_packed: "وجبة من البيت",
+  school_provided: "من المدرسة",
+  mixed: "مزيج",
+};
 
 // Sara's methodology — encoded verbatim (numbers are her professional standard).
 // TONE is intentionally left as a placeholder; Email 2 fills {{TONE_PLACEHOLDER}}.
@@ -187,18 +239,52 @@ export function buildSystemPrompt(context: PlanPromptContext): string {
                 id: b.member_id,
                 name: b.member_name_ar,
                 role: b.role,
+                member_type: "adult",
+                sex: null,
                 age: null,
                 height_cm: null,
                 weight_kg: null,
                 activity_level: null,
                 primary_goal: null,
                 dietary_restrictions: [],
+                medical_conditions: [],
+                allergies: [],
+                dislikes: [],
+                trimester: null,
+                months_postpartum: null,
+                high_risk_pregnancy: false,
+                school_meal_handling: null,
+                picky_eater: false,
+                consulted_doctor: false,
+                is_child: false,
                 preferred_language: "ar",
               },
             );
       return `- member_id="${b.member_id}" — ${desc}`;
     })
     .join("\n");
+
+  const isSolo = beneficiaries.length === 1;
+  const familyDirective = isSolo
+    ? "أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) للعميلة فقط. لا يوجد أفراد آخرين في الخطة. لا تطبقي منهجية «نفس الوصفة بحصص مختلفة» — كل وجبة مخصصة لها فقط."
+    : "أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) لكل فرد من أفراد العائلة المذكورين. طبّقي منهجيتك في تخطيط العائلة كوحدة: قاعدة وصفة مشتركة + حصص مختلفة لكل فرد حسب هدفه ومعطياته (shared_recipe=true مع per_member_portions). الأطفال يستخدمون حصص الهرم الغذائي، لا تطبقي عليهم معادلات السعرات.";
+
+  const fw = context.family_wide;
+  const fwBits: string[] = [];
+  if (fw.dietary_restrictions.length > 0)
+    fwBits.push(`قيود غذائية للعائلة: ${fw.dietary_restrictions.join("، ")}`);
+  if (fw.dislikes.length > 0)
+    fwBits.push(`أطعمة لا تأكلها العائلة أبداً: ${fw.dislikes.join("، ")}`);
+  if (fw.cooking_methods.length > 0)
+    fwBits.push(`طرق الطبخ المفضلة: ${fw.cooking_methods.join("، ")}`);
+  if (fw.meal_out_frequency)
+    fwBits.push(
+      `الأكل خارج البيت: ${MEAL_OUT_LABELS_AR[fw.meal_out_frequency] ?? fw.meal_out_frequency}`,
+    );
+  const familyWideText =
+    fwBits.length > 0
+      ? `\n\nتفضيلات العائلة المشتركة (طبّقيها على جميع الأفراد): ${fwBits.join("؛ ")}.`
+      : "";
 
   return `# دورك
 
@@ -210,7 +296,7 @@ ${SARA_METHODOLOGY}
 
 # سياق العائلة
 
-ملخص العائلة: ${context.composition_summary}
+ملخص العائلة: ${context.composition_summary}${familyWideText}
 
 الخدامة (إن وجدت) تطبخ للعائلة وتنفّذ الوصفات، وليست فرداً في خطة الأكل — لا تنشئي لها خطة ولا تذكري احتياجاتها الغذائية. اكتبي خطوات التحضير (prep_steps_ar) واضحة ومختصرة وقابلة للتنفيذ من قِبَل شخص يقرأ بلغة بسيطة.
 
@@ -220,7 +306,9 @@ ${roster}
 
 # المطلوب
 
-أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) لكل فرد، مطبّقةً منهجيتك أعلاه. اتبعي منهجية تخطيط العائلة: استخدمي وصفة أساس واحدة مشتركة للوجبة قدر الإمكان، وعند مشاركتها ضعي shared_recipe=true واملئي per_member_portions بمقدار كل فرد (مثل الأم 150 جم / الأب 220-250 جم عبر amount_min/amount_max). أعطي وصفة منفصلة فقط لحالات الاستثناء الطبي. للأطفال: مقادير بالحصص بدون معادلات سعرات.
+${familyDirective}
+
+طبّقي منهجيتك أعلاه. عند مشاركة وصفة الأساس ضعي shared_recipe=true واملئي per_member_portions بمقدار كل فرد (مثل الأم 150 جم / الأب 220-250 جم عبر amount_min/amount_max). أعطي وصفة منفصلة فقط لحالات الاستثناء الطبي. للأطفال: مقادير بالحصص بدون معادلات سعرات.
 
 # قواعد صارمة
 - استخدمي صيغة المؤنث (أنتِ) عند مخاطبة الأم.
