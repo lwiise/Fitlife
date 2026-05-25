@@ -184,7 +184,9 @@ export function MemberWizard({
 
   const [name, setName] = useState(initial?.name ?? "");
   const [birthYear, setBirthYear] = useState(initial?.birth_year?.toString() ?? "");
-  const [sex, setSex] = useState<string>(initial?.sex ?? (type === "adult" ? "" : "female"));
+  const [sex, setSex] = useState<string>(
+    initial?.sex ?? (role === "dad" ? "male" : type === "adult" ? "" : "female"),
+  );
   const [heightCm, setHeightCm] = useState(initial?.height_cm?.toString() ?? "");
   const [weightKg, setWeightKg] = useState(initial?.weight_kg?.toString() ?? "");
   const [activity, setActivity] = useState(initial?.activity_level ?? "");
@@ -209,7 +211,10 @@ export function MemberWizard({
   const baseSteps: string[] = useMemo(() => {
     switch (type) {
       case "adult":
-        return ["identity", "sex", "physical", "activity", "goal", "allergies", "medical"];
+        // Husband is male by default — no gender question.
+        return role === "dad"
+          ? ["identity", "physical", "activity", "goal", "allergies", "medical"]
+          : ["identity", "sex", "physical", "activity", "goal", "allergies", "medical"];
       case "child":
         return ["identity", "sex", "physical", "childActivity", "school", "picky", "allergies", "chronic"];
       case "pregnant":
@@ -217,7 +222,7 @@ export function MemberWizard({
       case "lactating":
         return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "supplements"];
     }
-  }, [type]);
+  }, [type, role]);
 
   const doctorNeeded = useMemo(() => {
     if (type === "pregnant" || type === "lactating") return true;
