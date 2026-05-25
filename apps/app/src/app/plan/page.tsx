@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import {
   getCurrentUserLatestPlan,
   getCurrentUserProfile,
-  getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
@@ -17,17 +16,21 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function PlanPage() {
-  const [profile, latest, familyMembers] = await Promise.all([
+export default async function PlanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ member?: string }>;
+}) {
+  const [{ member }, profile, latest] = await Promise.all([
+    searchParams,
     getCurrentUserProfile(),
     getCurrentUserLatestPlan(),
-    getCurrentUserFamilyMembers(),
   ]);
 
   const isOnboarded = !!profile?.onboarding_completed_at;
-  // Solo = only Mom (no non-housekeeper family members) → tailor the generating copy.
-  const isSolo =
-    familyMembers.filter((m) => m.role !== "housekeeper").length === 0;
+  // Who we're generating for: the just-added member (from the redirect param),
+  // otherwise the account owner. Never framed as "the family".
+  const generatingFor = member || profile?.display_name || null;
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -52,7 +55,7 @@ export default async function PlanPage() {
         {!latest && <EmptyState isOnboarded={isOnboarded} />}
 
         {latest?.status === "generating" && (
-          <PlanGeneratingState planId={latest.id} solo={isSolo} />
+          <PlanGeneratingState planId={latest.id} name={generatingFor} />
         )}
 
         {latest?.status === "failed" && (

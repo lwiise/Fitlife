@@ -14,10 +14,10 @@ const TIMEOUT_MS = 780_000;
 
 export function PlanGeneratingState({
   planId,
-  solo = false,
+  name,
 }: {
   planId: string;
-  solo?: boolean;
+  name?: string | null;
 }) {
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
@@ -107,13 +107,11 @@ export function PlanGeneratingState({
         />
       </div>
       <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
-        نحضّر خطتك...
+        {name ? `نحضّر خطة ${name}...` : "نحضّر خطتك..."}
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {isLong
-          ? solo
-            ? "نجهّز خطتك المفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
-            : "نجهّز خطة مفصلة لكل فرد بالعائلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
+          ? "نجهّز خطة مفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
           : "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة."}
       </p>
       <div

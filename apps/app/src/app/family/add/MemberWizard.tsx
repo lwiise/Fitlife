@@ -368,7 +368,7 @@ export function MemberWizard({
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center gap-4 px-4">
         <Loader2 className="size-8 animate-spin motion-reduce:animate-none text-brand-purple-900" aria-hidden="true" />
         <p className="text-brand-ink font-bold text-lg">
-          جاري تحديث خطط العائلة بعد إضافة {name}…
+          نحضّر خطة {name}…
         </p>
         <p className="text-brand-ink-muted text-sm">قد تاخذ دقيقة</p>
       </div>
