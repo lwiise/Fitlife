@@ -12,7 +12,13 @@ const LONG_RUNNING_MS = 90_000;
 // fallback. Kept inside the background function's 15-min budget.
 const TIMEOUT_MS = 780_000;
 
-export function PlanGeneratingState({ planId }: { planId: string }) {
+export function PlanGeneratingState({
+  planId,
+  solo = false,
+}: {
+  planId: string;
+  solo?: boolean;
+}) {
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
@@ -105,7 +111,9 @@ export function PlanGeneratingState({ planId }: { planId: string }) {
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {isLong
-          ? "نجهّز خطة مفصلة لكل فرد بالعائلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
+          ? solo
+            ? "نجهّز خطتك المفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
+            : "نجهّز خطة مفصلة لكل فرد بالعائلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
           : "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة."}
       </p>
       <div
