@@ -379,6 +379,9 @@ export function MemberWizard({
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
                     الاسم وسنة الميلاد
                   </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نحسب العمر منها عشان نخصّص الخطة.
+                  </p>
                 </header>
                 <TextField id="m-name" label="الاسم" value={name} onChange={setName} placeholder="مثلاً: خالد" />
                 <NumberField id="m-by" label="سنة الميلاد" value={birthYear} onChange={setBirthYear} placeholder="1988" />
@@ -390,6 +393,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الجنس</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نختار الأنسب لحساب احتياجه الغذائي.
+                  </p>
                 </header>
                 <div className="grid grid-cols-2 gap-2">
                   <OptionButton active={sex === "male"} onClick={() => setSex("male")}>ذكر</OptionButton>
@@ -405,11 +411,11 @@ export function MemberWizard({
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
                     {type === "pregnant" ? "الطول والوزن قبل الحمل" : "الطول والوزن"}
                   </h2>
-                  {type === "child" && (
-                    <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
-                      نستخدمها للسياق العام فقط، خطة الطفل بالحصص لا بالسعرات.
-                    </p>
-                  )}
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    {type === "child"
+                      ? "نستخدمها للسياق العام فقط، خطة الطفل بالحصص لا بالسعرات."
+                      : "نستخدمها لحساب احتياجه الغذائي بدقة."}
+                  </p>
                 </header>
                 <NumberField id="m-h" label="الطول (سم)" value={heightCm} onChange={setHeightCm} placeholder="120" />
                 <NumberField id="m-w" label="الوزن (كجم)" value={weightKg} onChange={setWeightKg} placeholder="40" />
@@ -421,6 +427,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">مستوى النشاط</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    كل ما زاد نشاطه، زادت سعراته.
+                  </p>
                 </header>
                 <div className="space-y-2">
                   {ADULT_ACTIVITY.map((a) => (
@@ -435,6 +444,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">مستوى نشاط الطفل</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    حركة الطفل خلال يومه.
+                  </p>
                 </header>
                 <div className="grid grid-cols-3 gap-2">
                   {CHILD_ACTIVITY.map((a) => (
@@ -449,6 +461,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الهدف الرئيسي</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نبني خطته حول هدفه.
+                  </p>
                 </header>
                 <div className="space-y-2">
                   {GOALS.map((g) => (
@@ -463,6 +478,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">كيف يأكل الطفل في المدرسة؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نراعي وجباته خارج البيت.
+                  </p>
                 </header>
                 <div className="space-y-2">
                   {SCHOOL.map((s) => (
@@ -477,6 +495,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">هل الطفل صعب في الأكل؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نختار أطباق مألوفة ومحبّبة لو كان صعب.
+                  </p>
                 </header>
                 <div className="grid grid-cols-2 gap-2">
                   <OptionButton active={pickyEater === false} onClick={() => setPickyEater(false)}>لا</OptionButton>
@@ -490,6 +511,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الثلث الحالي من الحمل</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    احتياجها يختلف حسب مرحلة الحمل.
+                  </p>
                 </header>
                 <div className="grid grid-cols-3 gap-2">
                   {[1, 2, 3].map((t) => (
@@ -506,6 +530,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">هل الحمل عالي الخطورة؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    لو عالي الخطورة، نطلب استشارة الطبيب.
+                  </p>
                 </header>
                 <div className="grid grid-cols-2 gap-2">
                   <OptionButton active={highRisk === false} onClick={() => setHighRisk(false)}>لا</OptionButton>
@@ -519,6 +546,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">كم شهر مرّ على الولادة؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    احتياج الرضاعة يختلف حسب المرحلة.
+                  </p>
                 </header>
                 <NumberField id="m-pp" label="عدد الأشهر" value={monthsPP} onChange={setMonthsPP} placeholder="3" />
                 <PrimaryButton onClick={() => (monthsPP ? goNext() : setError("اكتبي عدد الأشهر"))}>التالي</PrimaryButton>
@@ -529,6 +559,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">طريقة الرضاعة</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نراعي احتياج الحليب حسب نوع الرضاعة.
+                  </p>
                 </header>
                 <div className="space-y-2">
                   {FEEDING.map((f) => (
@@ -543,6 +576,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">أي حالة صحية؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    اختاري اللي ينطبق، أو تجاوزي.
+                  </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
                   {(key === "pregConditions" ? PREGNANT_CONDITIONS : LACTATING_CONDITIONS).map((c) => (
@@ -580,6 +616,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الحالات الصحية</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    اختاري اللي ينطبق، أو تجاوزي.
+                  </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
                   {[...GATE_CONDITIONS, ...STABLE_CONDITIONS].map((c) => (
@@ -618,6 +657,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">أكلات تسبب لك غثيان حالياً؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نتجنب اللي يسبب لك غثيان، أو تجاوزي.
+                  </p>
                 </header>
                 <ChipInput value={allergies} onChange={setAllergies} disabled={isPending} placeholder="اكتبيها، أو تجاوزي" />
                 <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
@@ -628,6 +670,9 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">تأخذين فيتامينات أو مكملات؟</h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    معلومة تساعدنا نكمل خطتها، أو تجاوزي.
+                  </p>
                 </header>
                 <TextField id="m-supp" label="المكملات (اختياري)" value={otherCondition} onChange={setOtherCondition} placeholder="مثلاً: حديد، فيتامين د" />
                 <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
