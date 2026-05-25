@@ -6,7 +6,10 @@
  * as of 2026-05.
  */
 
-export const PLAN_MODEL = "claude-opus-4-7";
+// Defaults to Opus 4.7. Override with the PLAN_MODEL env var (e.g.
+// claude-sonnet-4-6 or claude-haiku-4-5-20251001) to test with a faster/cheaper
+// model — no code change needed; remove the env var to go back to Opus.
+export const PLAN_MODEL = process.env.PLAN_MODEL?.trim() || "claude-opus-4-7";
 
 export const PRICING_USD_PER_MTOK = {
   input: 15,
