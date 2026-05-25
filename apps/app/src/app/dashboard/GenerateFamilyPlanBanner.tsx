@@ -11,10 +11,16 @@ import { generateFamilyPlan } from "@/app/onboarding/actions";
  * upgraded). One click generates the coordinated family plan; if the tier still
  * can't cover them, routes to pricing.
  */
-export function GenerateFamilyPlanBanner() {
+export function GenerateFamilyPlanBanner({ names }: { names: string[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const one = names.length === 1 ? names[0] : null;
+  const headline = one
+    ? `أضفتِ ${one} — أنشئي خطته الغذائية ضمن خطط العائلة المنسقة.`
+    : `أضفتِ ${names.length} أفراد جدد — أنشئي خططهم الغذائية ضمن خطط العائلة المنسقة.`;
+  const buttonLabel = one ? `أنشئي خطة ${one}` : "أنشئي الخطط";
 
   const onGenerate = () => {
     setError(null);
@@ -38,7 +44,7 @@ export function GenerateFamilyPlanBanner() {
         <Users className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900" aria-hidden="true" />
         <div className="flex-1">
           <p className="text-brand-ink text-sm font-medium leading-relaxed">
-            خطة عائلتك جاهزة للإنشاء. أضفنا أفراد جدد — أنشئي الخطة المنسقة لكل العائلة.
+            {headline}
           </p>
           <button
             type="button"
@@ -49,7 +55,7 @@ export function GenerateFamilyPlanBanner() {
             {isPending && (
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
             )}
-            أنشئي خطة عائلتك الآن
+            {buttonLabel}
           </button>
           {error && (
             <p role="alert" className="mt-2 text-red-700 text-sm leading-relaxed">

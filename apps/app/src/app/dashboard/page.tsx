@@ -54,11 +54,15 @@ export default async function DashboardPage() {
   const showAddFamily =
     profile.mom_profile_completed_at !== null && beneficiaryCount === 0;
 
-  // Household grew beyond what the current plan covers (e.g. a member was added
-  // but generation was gated on a tier upgrade) → offer one-click regeneration.
-  const householdSize = beneficiaryCount + 1; // + Mom
+  // Members who exist but aren't in the current plan yet (e.g. added while a
+  // tier upgrade was pending) → offer one-click generation, named for them.
+  const planMemberIds = latestPlan?.member_ids ?? [];
+  const pendingMembers = familyMembers.filter(
+    (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
+  );
   const needsFamilyPlan =
-    latestPlan?.status === "ready" && householdSize > latestPlan.member_count;
+    latestPlan?.status === "ready" && pendingMembers.length > 0;
+  const pendingNames = pendingMembers.map((m) => m.name);
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -99,7 +103,7 @@ export default async function DashboardPage() {
 
         {showAddFamily && <AddFamilyBanner />}
 
-        {needsFamilyPlan && <GenerateFamilyPlanBanner />}
+        {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
 
         <div className="mb-8">
           <p className="text-brand-ink-muted text-sm">أهلاً،</p>

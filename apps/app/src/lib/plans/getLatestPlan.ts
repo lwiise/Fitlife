@@ -9,6 +9,7 @@ export interface LatestPlanSummary {
   plan_data: MealPlan | null;
   week_start_date: string | null;
   member_count: number;
+  member_ids: string[];
   error_message: string | null;
   updated_at: string;
 }
@@ -72,6 +73,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     plan_data: validatedPlanData,
     week_start_date: validatedPlanData?.week_start_date ?? null,
     member_count: validatedPlanData?.members.length ?? 0,
+    member_ids: validatedPlanData?.members.map((m) => m.member_id) ?? [],
     error_message: row.error_message ?? null,
     updated_at: row.updated_at,
   };
