@@ -30,5 +30,6 @@ export async function GET() {
     id: latest.id,
     status: latest.status,
     updated_at: latest.updated_at,
+    error_message: latest.status === "failed" ? latest.error_message : null,
   });
 }

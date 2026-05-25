@@ -113,17 +113,24 @@ export async function triggerPlanGeneration(params: {
       },
     );
     if (!res.ok && res.status !== 202) {
-      throw new Error(`background fn returned ${res.status}`);
+      // Include the status + a body snippet so a misconfig (e.g. missing
+      // ANTHROPIC_API_KEY → 500 "Server misconfigured") is diagnosable.
+      const snippet = (await res.text().catch(() => "")).slice(0, 200);
+      throw new Error(
+        `background fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`,
+      );
     }
   } catch (err) {
     console.error("[triggerPlanGeneration] failed to start background generation", err);
     Sentry.captureException(err, {
       tags: { area: "plan-generation", step: "dispatch-bg", userId },
     });
+    const errorMessage =
+      err instanceof Error ? err.message : "failed to start generation";
     await supabase
       .from("meal_plans")
       // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-      .update({ status: "failed", error_message: "failed to start generation" })
+      .update({ status: "failed", error_message: errorMessage })
       .eq("id", mealPlanId);
     return { ok: false, kind: "dispatch" };
   }

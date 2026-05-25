@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
 
-export function PlanFailedState({ planId: _planId }: { planId: string }) {
+export function PlanFailedState({
+  planId: _planId,
+  reason,
+}: {
+  planId: string;
+  reason?: string | null;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,6 +55,17 @@ export function PlanFailedState({ planId: _planId }: { planId: string }) {
         >
           {errorMessage}
         </p>
+      )}
+
+      {reason && (
+        <details className="mt-4 text-start">
+          <summary className="cursor-pointer text-brand-ink-muted/70 text-xs hover:text-brand-ink-muted">
+            تفاصيل تقنية
+          </summary>
+          <p className="mt-2 text-brand-ink-muted/80 text-xs leading-relaxed break-words bg-brand-surface rounded-lg p-3">
+            {reason}
+          </p>
+        </details>
       )}
 
       <div className="mt-6 flex flex-col sm:flex-row gap-3">

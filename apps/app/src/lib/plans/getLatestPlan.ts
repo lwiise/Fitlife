@@ -9,6 +9,7 @@ export interface LatestPlanSummary {
   plan_data: MealPlan | null;
   week_start_date: string | null;
   member_count: number;
+  error_message: string | null;
   updated_at: string;
 }
 
@@ -25,6 +26,7 @@ type MealPlanRow = {
   status: string;
   plan_data: unknown;
   generated_at: string | null;
+  error_message: string | null;
   updated_at: string;
 };
 
@@ -33,7 +35,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
 
   const { data, error } = await supabase
     .from("meal_plans")
-    .select("id, status, plan_data, generated_at, updated_at")
+    .select("id, status, plan_data, generated_at, error_message, updated_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -70,6 +72,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     plan_data: validatedPlanData,
     week_start_date: validatedPlanData?.week_start_date ?? null,
     member_count: validatedPlanData?.members.length ?? 0,
+    error_message: row.error_message ?? null,
     updated_at: row.updated_at,
   };
 }

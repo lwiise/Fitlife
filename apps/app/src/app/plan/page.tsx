@@ -50,7 +50,9 @@ export default async function PlanPage() {
           <PlanGeneratingState planId={latest.id} />
         )}
 
-        {latest?.status === "failed" && <PlanFailedState planId={latest.id} />}
+        {latest?.status === "failed" && (
+          <PlanFailedState planId={latest.id} reason={latest.error_message} />
+        )}
 
         {latest?.status === "ready" && latest.plan_data && (
           <PlanViewer plan={latest.plan_data} planId={latest.id} />

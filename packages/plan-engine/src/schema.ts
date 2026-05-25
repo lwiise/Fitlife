@@ -101,7 +101,9 @@ export const MemberPlanSchema = z.object({
   primary_goal: z.enum(PRIMARY_GOALS).optional(),
   daily_calories_target: z.number(),
   macros_target: MacrosSchema,
-  days: z.array(DaySchema).length(7),
+  // Prompt asks for exactly 7; tolerate an occasional short week (the UI fills
+  // 7 day-tabs with fallbacks) rather than failing the whole plan.
+  days: z.array(DaySchema).min(1).max(7),
 });
 export type MemberPlan = z.infer<typeof MemberPlanSchema>;
 

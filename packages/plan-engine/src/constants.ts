@@ -15,9 +15,9 @@ export const PRICING_USD_PER_MTOK = {
 
 /**
  * Output-token ceiling for the WHOLE family's weekly plan (single call).
- * Sara's family-as-unit writes each shared recipe once with compact per-member
- * portions, so the full plan fits comfortably; 16000 gives rich plans room to
- * finish. If a large household (5-6) truncates (stop_reason=max_tokens), bump
- * to 32000.
+ * A full 7-day plan with rich 8-field recipes can exceed 16k even for a solo
+ * member, and multi-member plans definitely do — truncation (stop_reason=
+ * max_tokens) was failing generations, so this is 32000. Bump further only if a
+ * very large household still truncates.
  */
-export const PLAN_MAX_TOKENS = 16000;
+export const PLAN_MAX_TOKENS = 32000;
