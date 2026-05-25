@@ -264,7 +264,7 @@ function PricingCard({
           <Button
             asChild
             size="lg"
-            className="w-full min-h-11 bg-brand-yellow font-bold text-primary shadow-none transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-yellow hover:shadow-lg hover:brightness-110"
+            className="w-full min-h-11 bg-brand-yellow font-bold text-primary shadow-none transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-yellow [a]:hover:bg-brand-yellow hover:shadow-lg hover:brightness-110"
           >
             <a
               href={getTierSignupUrl(id, billing)}
