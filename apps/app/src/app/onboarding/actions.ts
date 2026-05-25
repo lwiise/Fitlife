@@ -32,6 +32,7 @@ type ProfileUpdates = Partial<{
 // the expect-error pragmas (TS will tell us — they become unused).
 type FamilyMemberInsertRow =
   Database["public"]["Tables"]["family_members"]["Insert"];
+type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -355,4 +356,237 @@ async function runFamilyGeneration(
     default:
       return { ok: false, error: "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية" };
   }
+}
+
+export type MemberType = "adult" | "child" | "pregnant" | "lactating";
+
+export interface FamilyMemberInput {
+  member_type: MemberType;
+  role: string; // dad | other_adult | son | daughter | other_child
+  name: string;
+  birth_year: number;
+  sex?: string | null;
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  activity_level?: string | null;
+  user_goal?: UserGoal; // adult only
+  preferred_language?: string;
+  allergies: string[];
+  dislikes: string[];
+  conditions: string[];
+  other_condition?: string;
+  consulted_doctor: boolean;
+  // child
+  school_meal_handling?: string | null;
+  picky_eater?: boolean;
+  // pregnant
+  trimester?: number | null;
+  high_risk_pregnancy?: boolean;
+  // lactating
+  months_postpartum?: number | null;
+}
+
+type AddMemberResult =
+  | { ok: true; member_id: string; plan_generation_id: string | null }
+  | { ok: false; error: string };
+
+/** Build the family_members row payload from a wizard input (shared add/update). */
+function buildMemberRow(input: FamilyMemberInput, userId: string) {
+  const conditions = [...input.conditions];
+  const other = input.other_condition?.trim();
+  if (other) conditions.push(other);
+  const hasMedical = conditions.length > 0;
+
+  let primaryGoal: string | null;
+  if (input.member_type === "pregnant" || input.member_type === "lactating") {
+    primaryGoal = "pregnancy_lactation";
+  } else if (input.member_type === "child") {
+    primaryGoal = null; // children: food-pyramid portions, no goal-based calories
+  } else {
+    primaryGoal = mapUserGoalToSara(input.user_goal ?? "maintain_health", {
+      hasMedical,
+      isPregnantOrLactating: false,
+      conditions,
+    });
+  }
+
+  return {
+    user_id: userId,
+    name: input.name,
+    role: input.role,
+    member_type: input.member_type,
+    sex: input.sex ?? null,
+    birth_year: input.birth_year,
+    height_cm: input.height_cm ?? null,
+    weight_kg: input.weight_kg ?? null,
+    activity_level: input.activity_level ?? null,
+    primary_goal: primaryGoal,
+    preferred_language: input.preferred_language ?? "ar",
+    medical_conditions: conditions,
+    allergies: input.allergies,
+    dislikes: input.dislikes,
+    consulted_doctor: input.consulted_doctor,
+    trimester: input.member_type === "pregnant" ? (input.trimester ?? null) : null,
+    months_postpartum:
+      input.member_type === "lactating" ? (input.months_postpartum ?? null) : null,
+    high_risk_pregnancy:
+      input.member_type === "pregnant" ? !!input.high_risk_pregnancy : false,
+    school_meal_handling:
+      input.member_type === "child" ? (input.school_meal_handling ?? null) : null,
+    picky_eater: input.member_type === "child" ? !!input.picky_eater : false,
+  };
+}
+
+/** Phase 2 — add a family member, then regenerate the whole-family plan (free). */
+export async function addFamilyMember(
+  input: FamilyMemberInput,
+): Promise<AddMemberResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  // Next display_order = current max + 1.
+  const { data: existingRows } = await supabase
+    .from("family_members")
+    .select("display_order")
+    .eq("user_id", user.id)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  const existing = existingRows as { display_order: number | null }[] | null;
+  const nextOrder =
+    existing && existing.length > 0 ? (existing[0]!.display_order ?? 0) + 1 : 0;
+
+  const memberId = crypto.randomUUID();
+  const row = {
+    ...buildMemberRow(input, user.id),
+    id: memberId,
+    display_order: nextOrder,
+  };
+
+  const { error: insertError } = await supabase
+    .from("family_members")
+    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+    .insert(row);
+  if (insertError) {
+    Sentry.captureException(insertError, {
+      tags: { area: "family", step: "addFamilyMember.insert", userId: user.id },
+    });
+    return { ok: false, error: insertError.message };
+  }
+
+  // Append to member_addition_order (best-effort; not load-bearing).
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("member_addition_order")
+    .eq("id", user.id)
+    .single();
+  const additionOrder = (profileRow as { member_addition_order: unknown } | null)
+    ?.member_addition_order;
+  const order = Array.isArray(additionOrder) ? (additionOrder as string[]) : [];
+  await supabase
+    .from("profiles")
+    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+    .update({ member_addition_order: [...order, memberId] })
+    .eq("id", user.id);
+
+  revalidatePath("/family");
+  const gen = await runFamilyGeneration(supabase, user.id);
+  if (!gen.ok) return { ok: false, error: gen.error };
+  return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
+}
+
+/** Phase 2 — remove a member, then regenerate (or skip if only Mom remains). */
+export async function removeFamilyMember(
+  memberId: string,
+): Promise<{ ok: true; plan_generation_id: string | null } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const { error } = await supabase
+    .from("family_members")
+    .delete()
+    .eq("id", memberId)
+    .eq("user_id", user.id);
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "family", step: "removeFamilyMember", userId: user.id },
+    });
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/family");
+
+  const { count } = await supabase
+    .from("family_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .neq("role", "housekeeper");
+
+  if ((count ?? 0) === 0) {
+    return { ok: true, plan_generation_id: null };
+  }
+  const gen = await runFamilyGeneration(supabase, user.id);
+  if (!gen.ok) return { ok: false, error: gen.error };
+  return { ok: true, plan_generation_id: gen.plan_generation_id };
+}
+
+/** Phase 2 — edit a member; regenerate only when a substantive field changed. */
+export async function updateFamilyMember(
+  memberId: string,
+  input: FamilyMemberInput,
+): Promise<AddMemberResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const { data: beforeRow } = await supabase
+    .from("family_members")
+    .select("*")
+    .eq("id", memberId)
+    .eq("user_id", user.id)
+    .single();
+  const before = beforeRow as FamilyMemberRow | null;
+
+  const row = buildMemberRow(input, user.id);
+  const { error } = await supabase
+    .from("family_members")
+    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+    .update(row)
+    .eq("id", memberId)
+    .eq("user_id", user.id);
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "family", step: "updateFamilyMember", userId: user.id },
+    });
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/family");
+
+  // Substantive change → regenerate; cosmetic (name only) → skip.
+  const substantive =
+    !before ||
+    before.birth_year !== input.birth_year ||
+    Number(before.weight_kg) !== Number(input.weight_kg ?? before.weight_kg) ||
+    before.primary_goal !== row.primary_goal ||
+    before.member_type !== row.member_type ||
+    JSON.stringify(before.medical_conditions ?? []) !==
+      JSON.stringify(row.medical_conditions);
+
+  if (!substantive) {
+    return { ok: true, member_id: memberId, plan_generation_id: null };
+  }
+  const gen = await runFamilyGeneration(supabase, user.id);
+  if (!gen.ok) return { ok: false, error: gen.error };
+  return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
 }

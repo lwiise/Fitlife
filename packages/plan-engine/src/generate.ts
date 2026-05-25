@@ -133,10 +133,16 @@ export async function generateMealPlan(params: {
   const nameById = new Map(
     beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
   );
-  const ageById = new Map<string, number | null>([
-    ["mom", context.mom.age],
+  // Children are portion-based (food pyramid), never calorie-floored. Mark them
+  // by member_type OR age<18 — family members carry a precomputed is_child flag.
+  const isChildById = new Map<string, boolean>([
+    [
+      "mom",
+      context.mom.member_type === "child" ||
+        (context.mom.age != null && context.mom.age < 18),
+    ],
     ...context.family_members.map(
-      (m) => [m.id, m.age] as [string, number | null],
+      (m) => [m.id, m.is_child] as [string, boolean],
     ),
   ]);
 
@@ -151,8 +157,7 @@ export async function generateMealPlan(params: {
 
   // ── Sara's safety guards (post-validation) ──
   for (const memberPlan of plan.members) {
-    const age = ageById.get(memberPlan.member_id);
-    const isChild = age != null && age < 18; // children: portion-based, no kcal floor
+    const isChild = isChildById.get(memberPlan.member_id) ?? false;
     if (!isChild && memberPlan.daily_calories_target < 1400) {
       throw new PlanValidationError(
         `Calories ${memberPlan.daily_calories_target} below the 1400 safety floor for ${memberPlan.member_id}`,
