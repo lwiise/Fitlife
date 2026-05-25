@@ -36,7 +36,10 @@ export function LoginForm() {
       ? `/onboarding?tier=${tier}&cadence=${cadence}`
       : searchParams.get("redirect_to") || "/dashboard";
 
-  const [mode, setMode] = useState<Mode>("signin");
+  // Landing CTAs pass ?mode=signup so new users start on "create account".
+  const [mode, setMode] = useState<Mode>(
+    searchParams.get("mode") === "signup" ? "signup" : "signin",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<
