@@ -297,7 +297,13 @@ export async function saveMomProfile(
   }
 
   revalidatePath("/dashboard");
-  return runFamilyGeneration(supabase, user.id);
+  const gen = await runFamilyGeneration(supabase, user.id);
+  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
+  // A lone mom can't exceed any tier; treat upgrade as a generic error fallback.
+  return {
+    ok: false,
+    error: gen.kind === "upgrade" ? "باقتك لا تكفي. جددي باقتك للمتابعة" : gen.error,
+  };
 }
 
 export async function finalizeOnboarding(): Promise<void> {
@@ -323,10 +329,15 @@ export async function finalizeOnboarding(): Promise<void> {
  * map the dispatch result to a user-facing Arabic message. Shared by
  * saveMomProfile and the Phase 2 family actions.
  */
+type FamilyGenResult =
+  | { ok: true; plan_generation_id: string }
+  | { ok: false; kind: "upgrade"; current: number; max: number }
+  | { ok: false; kind: "error"; error: string };
+
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-): Promise<GenerateActionResult> {
+): Promise<FamilyGenResult> {
   const result = await triggerPlanGeneration({
     supabase,
     userId,
@@ -339,22 +350,28 @@ async function runFamilyGeneration(
     case "medical":
       return {
         ok: false,
+        kind: "error",
         error: "يجب استشارة الطبيب قبل إنشاء الخطة بسبب حالة صحية مذكورة",
       };
     case "access": {
-      const reason = result.access.reason;
-      if (reason === "person_count_exceeded") {
+      if (result.access.reason === "person_count_exceeded") {
         return {
           ok: false,
-          error: "عدد أفراد العائلة تجاوز حد باقتك. رقّي باقتك لإضافة المزيد",
+          kind: "upgrade",
+          current: result.access.details?.current_people ?? 0,
+          max: result.access.details?.max_people ?? 0,
         };
       }
-      return { ok: false, error: "اشتراكك غير نشط. جددي الاشتراك للمتابعة" };
+      return {
+        ok: false,
+        kind: "error",
+        error: "اشتراكك غير نشط. جددي الاشتراك للمتابعة",
+      };
     }
     case "onboarding":
-      return { ok: false, error: "أكملي بياناتك أولاً قبل إنشاء الخطة" };
+      return { ok: false, kind: "error", error: "أكملي بياناتك أولاً قبل إنشاء الخطة" };
     default:
-      return { ok: false, error: "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية" };
+      return { ok: false, kind: "error", error: "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية" };
   }
 }
 
@@ -388,6 +405,7 @@ export interface FamilyMemberInput {
 
 type AddMemberResult =
   | { ok: true; member_id: string; plan_generation_id: string | null }
+  | { ok: false; upgrade_required: true; member_id: string; current: number; max: number }
   | { ok: false; error: string };
 
 /** Build the family_members row payload from a wizard input (shared add/update). */
@@ -494,8 +512,11 @@ export async function addFamilyMember(
 
   revalidatePath("/family");
   const gen = await runFamilyGeneration(supabase, user.id);
-  if (!gen.ok) return { ok: false, error: gen.error };
-  return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
+  if (gen.ok)
+    return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
+  if (gen.kind === "upgrade")
+    return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
+  return { ok: false, error: gen.error };
 }
 
 /** Phase 2 — remove a member, then regenerate (or skip if only Mom remains). */
@@ -533,8 +554,9 @@ export async function removeFamilyMember(
     return { ok: true, plan_generation_id: null };
   }
   const gen = await runFamilyGeneration(supabase, user.id);
-  if (!gen.ok) return { ok: false, error: gen.error };
-  return { ok: true, plan_generation_id: gen.plan_generation_id };
+  // Removing a member can't push over a tier limit, so 'upgrade' won't occur here.
+  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
+  return { ok: false, error: gen.kind === "upgrade" ? "باقتك لا تكفي." : gen.error };
 }
 
 /** Phase 2 — edit a member; regenerate only when a substantive field changed. */
@@ -587,6 +609,31 @@ export async function updateFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: null };
   }
   const gen = await runFamilyGeneration(supabase, user.id);
-  if (!gen.ok) return { ok: false, error: gen.error };
-  return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
+  if (gen.ok)
+    return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
+  if (gen.kind === "upgrade")
+    return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
+  return { ok: false, error: gen.error };
+}
+
+/**
+ * One-click family-plan generation (e.g. the post-upgrade dashboard banner).
+ * Rate-limit-bypassed like other family changes; surfaces the upgrade gate.
+ */
+export async function generateFamilyPlan(): Promise<
+  | { ok: true; plan_generation_id: string }
+  | { ok: false; upgrade_required: true }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const gen = await runFamilyGeneration(supabase, user.id);
+  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
+  if (gen.kind === "upgrade") return { ok: false, upgrade_required: true };
+  return { ok: false, error: gen.error };
 }

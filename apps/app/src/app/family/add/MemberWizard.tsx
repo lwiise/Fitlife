@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import {
   GATE_CONDITIONS,
@@ -181,6 +181,7 @@ export function MemberWizard({
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [polling, setPolling] = useState(false);
+  const [upgrade, setUpgrade] = useState<{ current: number; max: number } | null>(null);
 
   const [name, setName] = useState(initial?.name ?? "");
   const [birthYear, setBirthYear] = useState(initial?.birth_year?.toString() ?? "");
@@ -285,6 +286,11 @@ export function MemberWizard({
         ? await updateFamilyMember(editMemberId, input)
         : await addFamilyMember(input);
       if (!result.ok) {
+        // Member is saved, but their tier can't cover the new headcount → upgrade.
+        if ("upgrade_required" in result) {
+          setUpgrade({ current: result.current, max: result.max });
+          return;
+        }
         setError(result.error);
         return;
       }
@@ -323,6 +329,39 @@ export function MemberWizard({
   const isLastBeforeDoctor = step === baseSteps.length - 1;
   const nextLabel =
     isLastBeforeDoctor && !doctorNeeded ? "أنشئي الخطة" : "التالي";
+
+  if (upgrade) {
+    return (
+      <main className="min-h-screen bg-brand-surface">
+        <div className="container-app py-12 md:py-16 max-w-md">
+          <div className="bg-white rounded-3xl border border-brand-ink/5 shadow-xl p-8 text-center">
+            <div className="inline-flex items-center justify-center size-14 rounded-full bg-brand-lavender/40 mb-4">
+              <Sparkles className="size-7 text-brand-purple-900" aria-hidden="true" />
+            </div>
+            <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+              محتاجة باقة أكبر لإضافة أفراد
+            </h2>
+            <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
+              باقتك الحالية تكفي {upgrade.max}، وعائلتك صارت {upgrade.current}.
+              حفظنا بيانات {name}، ورقّي باقتك عشان نجهّز خطط العائلة المنسقة.
+            </p>
+            <a
+              href="/pricing"
+              className="mt-6 w-full inline-flex items-center justify-center bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              عرض الباقات
+            </a>
+            <a
+              href="/family"
+              className="mt-3 inline-block text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
+            >
+              رجوع للعائلة
+            </a>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (polling) {
     return (

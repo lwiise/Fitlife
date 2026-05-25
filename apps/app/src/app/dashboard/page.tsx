@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
+import { GenerateFamilyPlanBanner } from "./GenerateFamilyPlanBanner";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -53,6 +54,12 @@ export default async function DashboardPage() {
   const showAddFamily =
     profile.mom_profile_completed_at !== null && beneficiaryCount === 0;
 
+  // Household grew beyond what the current plan covers (e.g. a member was added
+  // but generation was gated on a tier upgrade) → offer one-click regeneration.
+  const householdSize = beneficiaryCount + 1; // + Mom
+  const needsFamilyPlan =
+    latestPlan?.status === "ready" && householdSize > latestPlan.member_count;
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -91,6 +98,8 @@ export default async function DashboardPage() {
         )}
 
         {showAddFamily && <AddFamilyBanner />}
+
+        {needsFamilyPlan && <GenerateFamilyPlanBanner />}
 
         <div className="mb-8">
           <p className="text-brand-ink-muted text-sm">أهلاً،</p>

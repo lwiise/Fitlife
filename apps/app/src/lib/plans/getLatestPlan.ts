@@ -8,6 +8,7 @@ export interface LatestPlanSummary {
   status: "generating" | "ready" | "failed";
   plan_data: MealPlan | null;
   week_start_date: string | null;
+  member_count: number;
   updated_at: string;
 }
 
@@ -68,6 +69,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     status: finalStatus,
     plan_data: validatedPlanData,
     week_start_date: validatedPlanData?.week_start_date ?? null,
+    member_count: validatedPlanData?.members.length ?? 0,
     updated_at: row.updated_at,
   };
 }
