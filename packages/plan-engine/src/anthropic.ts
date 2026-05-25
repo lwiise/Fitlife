@@ -20,6 +20,10 @@ export async function streamAnthropic(params: {
   model: string;
   maxTokens: number;
   systemPrompt: string;
+  // Large static prefix (e.g. Sara's methodology) identical across calls — sent
+  // as a cached system block so repeated parallel calls only pay ~10% input
+  // cost for it after the first. Optional; plain string if omitted.
+  systemStatic?: string;
   userMessage?: string;
 }): Promise<StreamResult> {
   const {
@@ -27,8 +31,20 @@ export async function streamAnthropic(params: {
     model,
     maxTokens,
     systemPrompt,
+    systemStatic,
     userMessage = "أنشئي الخطة الآن.",
   } = params;
+
+  const system = systemStatic
+    ? [
+        {
+          type: "text",
+          text: systemStatic,
+          cache_control: { type: "ephemeral" },
+        },
+        { type: "text", text: systemPrompt },
+      ]
+    : systemPrompt;
 
   let res: Response;
   try {
@@ -42,7 +58,7 @@ export async function streamAnthropic(params: {
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system,
         messages: [{ role: "user", content: userMessage }],
         stream: true,
       }),

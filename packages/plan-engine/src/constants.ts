@@ -24,3 +24,11 @@ export const PRICING_USD_PER_MTOK = {
  * very large household still truncates.
  */
 export const PLAN_MAX_TOKENS = 32000;
+
+// Parallel-by-day generation caps. Phase 1 (skeleton) is names + targets only
+// (small). Phase 2 expands one day at a time, in parallel, so wall-clock ≈ one
+// day regardless of week/family size. DAY_CONCURRENCY caps simultaneous calls to
+// stay under Anthropic rate limits (with retry/backoff on 429).
+export const SKELETON_MAX_TOKENS = 6000;
+export const DAY_MAX_TOKENS = 12000;
+export const DAY_CONCURRENCY = 5;

@@ -116,3 +116,45 @@ export const MealPlanSchema = z.object({
   safety_disclaimer_ar: z.string().optional(),
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
+
+// ─── Parallel-by-day generation (phase 1 skeleton + phase 2 day slices) ──────
+// Phase 1: targets + a week of dish NAMES only (fast, small output). The model
+// sees the whole week here, so variety + shared-recipe coordination are decided
+// once. Phase 2 expands each day's named meals into full recipes, in parallel.
+export const SkeletonMealSchema = z.object({
+  slot: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+  slot_name_ar: z.string().min(1),
+  recipe_name_ar: z.string().min(1),
+});
+export const SkeletonDaySchema = z.object({
+  day_index: z.number().int().min(0).max(6),
+  day_name_ar: z.string().min(1),
+  meals: z.array(SkeletonMealSchema).min(1),
+});
+export const SkeletonMemberSchema = z.object({
+  member_id: z.string().min(1),
+  member_name_ar: z.string().optional(),
+  primary_goal: z.enum(PRIMARY_GOALS).optional(),
+  daily_calories_target: z.number(),
+  macros_target: MacrosSchema,
+  days: z.array(SkeletonDaySchema).min(1).max(7),
+});
+export const PlanSkeletonSchema = z.object({
+  members: z.array(SkeletonMemberSchema).min(1),
+  methodology_notes_ar: z.string().optional(),
+  safety_disclaimer_ar: z.string().optional(),
+});
+export type PlanSkeleton = z.infer<typeof PlanSkeletonSchema>;
+
+// Phase 2 output: one day expanded for all members (day_total is summed in code,
+// so the model doesn't return it here).
+export const DaySliceMemberSchema = z.object({
+  member_id: z.string().min(1),
+  meals: z.array(MealSchema).min(1),
+});
+export const DaySliceSchema = z.object({
+  day_index: z.number().int().min(0).max(6),
+  day_name_ar: z.string().optional(),
+  members: z.array(DaySliceMemberSchema).min(1),
+});
+export type DaySlice = z.infer<typeof DaySliceSchema>;

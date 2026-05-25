@@ -13,7 +13,7 @@ export {
 } from "./generate";
 export type { GenerateResult } from "./generate";
 
-export { buildSystemPrompt } from "./systemPrompt";
+export { STATIC_SYSTEM, buildSkeletonPrompt, buildDayPrompt } from "./systemPrompt";
 
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";

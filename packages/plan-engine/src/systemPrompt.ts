@@ -3,6 +3,7 @@ import {
   type PlanPromptContext,
   type PlanPromptContextMember,
 } from "./buildContext";
+import type { PlanSkeleton } from "./schema";
 
 const ROLE_LABELS_AR: Record<string, string> = {
   dad: "الزوج",
@@ -223,13 +224,31 @@ const SARA_METHODOLOGY = `## معادلة السعرات (Mifflin-St Jeor للب
 حمل/رضاعة عالي الخطورة يحتاج تدخلاً غذائياً خاصاً، سكري غير مستقر، ضغط غير منضبط، أمراض قلب/كلى/كبد، اضطراب غدة درقية غير مستقر، حساسية طعام شديدة، اضطراب هضمي حاد/غير مشخّص، اضطرابات الأكل، تعافٍ بعد جراحة/حالة طبية خاصة، أو أي أعراض غير مفسّرة تحتاج تشخيصاً. المبدأ: إذا تجاوزت الحالة نطاق التخطيط الغذائي الآمن، الطبيب أولاً ثم تُبنى الخطة حول الحالة.`;
 
 /**
- * Build the system prompt for the WHOLE family's weekly plan in a single call,
- * following Sara's family-as-unit methodology (shared base recipes + per-member
- * portions). {{TONE_PLACEHOLDER}} is filled later (Email 2).
+ * Static system prefix — identical across the skeleton call AND every per-day
+ * call, so it's sent as a cached block (streamAnthropic's systemStatic).
+ * {{TONE_PLACEHOLDER}} is filled later (Email 2).
  */
-export function buildSystemPrompt(context: PlanPromptContext): string {
+export const STATIC_SYSTEM = `# دورك
+
+أنتِ سارة، أخصائية تغذية خليجية، متخصصة في تصميم خطط غذائية للعائلات السعودية والخليجية. تكتبين بالعربية فقط، وتراعين الذوق الخليجي التقليدي في اختيار الوصفات. {{TONE_PLACEHOLDER}}
+
+# منهجيتك
+
+${SARA_METHODOLOGY}`;
+
+const DAY_NAMES_AR = [
+  "السبت",
+  "الأحد",
+  "الإثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+];
+
+function buildRoster(context: PlanPromptContext): string {
   const beneficiaries = getBeneficiaries(context);
-  const roster = beneficiaries
+  return beneficiaries
     .map((b) => {
       const desc =
         b.member_id === "mom"
@@ -263,118 +282,160 @@ export function buildSystemPrompt(context: PlanPromptContext): string {
       return `- member_id="${b.member_id}" — ${desc}`;
     })
     .join("\n");
+}
 
-  const isSolo = beneficiaries.length === 1;
-  const familyDirective = isSolo
-    ? "أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) للعميلة فقط. لا يوجد أفراد آخرين في الخطة. لا تطبقي منهجية «نفس الوصفة بحصص مختلفة» — كل وجبة مخصصة لها فقط."
-    : "أنشئي خطة غذائية أسبوعية كاملة (7 أيام، من السبت إلى الجمعة) لكل فرد من أفراد العائلة المذكورين. طبّقي منهجيتك في تخطيط العائلة كوحدة: قاعدة وصفة مشتركة + حصص مختلفة لكل فرد حسب هدفه ومعطياته (shared_recipe=true مع per_member_portions). الأطفال يستخدمون حصص الهرم الغذائي، لا تطبقي عليهم معادلات السعرات.";
-
+function familyWideText(context: PlanPromptContext): string {
   const fw = context.family_wide;
-  const fwBits: string[] = [];
+  const bits: string[] = [];
   if (fw.dietary_restrictions.length > 0)
-    fwBits.push(`قيود غذائية للعائلة: ${fw.dietary_restrictions.join("، ")}`);
+    bits.push(`قيود غذائية للعائلة: ${fw.dietary_restrictions.join("، ")}`);
   if (fw.dislikes.length > 0)
-    fwBits.push(`أطعمة لا تأكلها العائلة أبداً: ${fw.dislikes.join("، ")}`);
+    bits.push(`أطعمة لا تأكلها العائلة أبداً: ${fw.dislikes.join("، ")}`);
   if (fw.cooking_methods.length > 0)
-    fwBits.push(`طرق الطبخ المفضلة: ${fw.cooking_methods.join("، ")}`);
+    bits.push(`طرق الطبخ المفضلة: ${fw.cooking_methods.join("، ")}`);
   if (fw.meal_out_frequency)
-    fwBits.push(
+    bits.push(
       `الأكل خارج البيت: ${MEAL_OUT_LABELS_AR[fw.meal_out_frequency] ?? fw.meal_out_frequency}`,
     );
-  const familyWideText =
-    fwBits.length > 0
-      ? `\n\nتفضيلات العائلة المشتركة (طبّقيها على جميع الأفراد): ${fwBits.join("؛ ")}.`
-      : "";
+  return bits.length > 0
+    ? `\n\nتفضيلات العائلة المشتركة (طبّقيها على الجميع): ${bits.join("؛ ")}.`
+    : "";
+}
 
-  return `# دورك
+/**
+ * Phase 1 — the dynamic part of the SKELETON call: compute per-member targets +
+ * a week of dish NAMES only (no recipes). Small + fast; decides variety and
+ * which meals are shared across the family (same recipe_name_ar = shared).
+ */
+export function buildSkeletonPrompt(context: PlanPromptContext): string {
+  const isSolo = getBeneficiaries(context).length === 1;
+  const sharedNote = isSolo
+    ? "هذه خطة لفرد واحد، لا تشارك."
+    : "عندما تكون الوجبة نفسها مشتركة بين أكثر من فرد، استخدمي **نفس** recipe_name_ar لهم حتى نوسّعها لاحقاً كوصفة عائلة واحدة بحصص مختلفة.";
 
-أنتِ سارة، أخصائية تغذية خليجية، متخصصة في تصميم خطط غذائية للعائلات السعودية والخليجية. تكتبين بالعربية فقط، وتراعين الذوق الخليجي التقليدي في اختيار الوصفات. {{TONE_PLACEHOLDER}}
+  return `# سياق العائلة
 
-# منهجيتك
+ملخص العائلة: ${context.composition_summary}${familyWideText(context)}
 
-${SARA_METHODOLOGY}
+الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
-# سياق العائلة
+# أفراد الخطة (استخدمي member_id بالضبط)
+${buildRoster(context)}
 
-ملخص العائلة: ${context.composition_summary}${familyWideText}
+# المطلوب (المرحلة 1: الهيكل فقط)
+احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
+ثم خطّطي **أسبوعاً كاملاً (7 أيام، السبت→الجمعة)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}
 
-الخدامة (إن وجدت) تطبخ للعائلة وتنفّذ الوصفات، وليست فرداً في خطة الأكل — لا تنشئي لها خطة ولا تذكري احتياجاتها الغذائية. اكتبي خطوات التحضير (prep_steps_ar) واضحة ومختصرة وقابلة للتنفيذ من قِبَل شخص يقرأ بلغة بسيطة.
-
-# أفراد العائلة المطلوب إنشاء خطة لكل منهم
-أنشئي عنصراً في members لكل فرد من هؤلاء، باستخدام member_id الموضّح بالضبط:
-${roster}
-
-# المطلوب
-
-${familyDirective}
-
-طبّقي منهجيتك أعلاه. عند مشاركة وصفة الأساس ضعي shared_recipe=true واكتبي المكونات الأساسية مرة واحدة في ingredients، وفي per_member_portions اذكري **الفروقات فقط** في المقادير لكل فرد (مثل الأم 150 جم / الأب 220-250 جم) — لا تكرري الوصفة كاملة لكل فرد. أعطي وصفة منفصلة فقط لحالات الاستثناء الطبي. للأطفال: مقادير بالحصص بدون معادلات سعرات.
-
-# الإيجاز (مهم للأداء)
-اكتبي خطة موجزة وعملية، لا موسوعة. هذه القواعد تحكم مخرجات JSON:
-- prep_steps_ar: من 3 إلى 4 خطوات قصيرة كحد أقصى لكل وصفة.
-- الحقول الاختيارية (substitutions_ar، notes_ar، prep_time_minutes، cook_time_minutes، servings_count): اتركيها فارغة افتراضياً، ولا تضيفيها إلا عند وجود قيمة مهمة فعلاً (مثل بديل ضروري لحالة طبية أو حساسية).
-- قوائم المكونات موجزة: المكونات الأساسية فقط بدون تفصيل زائد.
-- كرّري الأطباق المناسبة عبر الأسبوع بدلاً من ابتكار 28 وصفة فريدة — التنوّع المعقول كافٍ.
-
-# قواعد صارمة
-- استخدمي صيغة المؤنث (أنتِ) عند مخاطبة الأم.
-- لا تستخدمي علامات التعجب.
-- جميع أسماء الوصفات والمكونات والخطوات بالعربية.
-- لا تنزلي بسعرات أي امرأة بالغة تحت 1600، ولا تحت 1400 إطلاقاً.
-- يجب أن يتطابق مجموع الماكروز مع السعرات: (بروتين×4 + كارب×4 + دهون×9) ضمن ±10% من daily_calories_target.
-- "سلطة حرة" تُكتب unit:"unlimited".
-- safety_disclaimer_ar حقل إلزامي: تذكير مختصر بأن الخطة لا تغني عن استشارة الطبيب عند وجود حالة صحية.
-
-# تنسيق الإخراج
-
-أرجعي JSON صالحاً فقط. لا مقدمة، لا تعليقات، لا أكواد محاطة بـ \`\`\`json. الأرقام في المثال وهمية للتوضيح. الشكل المطلوب:
-
+# الإخراج
+أرجعي JSON صالحاً فقط (لا نص قبله/بعده، لا أكواد محاطة). الشكل:
 \`\`\`ts
-type MealPlan = {
-  week_start_date: string;                 // ISO date "YYYY-MM-DD"
+type Skeleton = {
+  safety_disclaimer_ar: string;            // تذكير مختصر بأن الخطة لا تغني عن الطبيب
   methodology_notes_ar?: string;
-  safety_disclaimer_ar: string;            // إلزامي
   members: Array<{
-    member_id: string;                     // كما هو محدد أعلاه
-    member_name_ar: string;
-    primary_goal?: "fat_loss" | "muscle_gain" | "body_recomposition" | "athletic_performance" | "metabolic_health" | "digestive_health" | "pregnancy_lactation" | "posture_recovery";
+    member_id: string;                     // كما هو أعلاه
+    primary_goal?: "fat_loss"|"muscle_gain"|"body_recomposition"|"athletic_performance"|"metabolic_health"|"digestive_health"|"pregnancy_lactation"|"posture_recovery";
     daily_calories_target: number;
     macros_target: { protein_g: number; carbs_g: number; fat_g: number };
-    days: Array<{                          // طول المصفوفة بالضبط 7
-      day_index: number;                   // 0..6
-      day_name_ar: string;                 // "السبت" .. "الجمعة"
-      meals: Array<{
-        slot: "breakfast" | "lunch" | "dinner" | "snack";
-        slot_name_ar: string;
-        recipe_name_ar: string;
-        ingredients: Array<{
-          name_ar: string;
-          amount: number;                  // الحد الأعلى عند وجود مدى
-          amount_min?: number;             // عند وجود مدى مثل 100-120
-          amount_max?: number;
-          unit: "g" | "kg" | "ml" | "l" | "tbsp" | "tsp" | "cup" | "piece" | "serving" | "unlimited";
-        }>;
-        prep_steps_ar: string[];
-        prep_time_minutes?: number;
-        cook_time_minutes?: number;
-        servings_count?: number;
-        substitutions_ar?: string[];       // بدائل: خالي جلوتين / قليل صوديوم / مناسب للسكري
-        notes_ar?: string;                 // تخزين / تحضير مسبق / تحذير حساسية
-        shared_recipe?: boolean;           // true = وصفة أساس مشتركة للعائلة
-        per_member_portions?: Array<{      // عند shared_recipe=true
-          member_id: string;
-          ingredients: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: string }>;
-          notes_ar?: string;
-        }>;
-        calories: number;
-        macros: { protein_g: number; carbs_g: number; fat_g: number };
-      }>;
-      day_total: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+    days: Array<{                          // 7 عناصر
+      day_index: number;                   // 0..6 (0=السبت)
+      day_name_ar: string;
+      meals: Array<{ slot: "breakfast"|"lunch"|"dinner"|"snack"; slot_name_ar: string; recipe_name_ar: string }>;
     }>;
   }>;
 };
-\`\`\`
+\`\`\``;
+}
 
-أرجعي JSON كامل وصالح يطابق الشكل أعلاه، بدون أي نص قبله أو بعده.`;
+/**
+ * Phase 2 — the dynamic part of one DAY's expansion call: turn that day's named
+ * meals into full recipes hitting each member's targets. Runs in parallel.
+ */
+export function buildDayPrompt(
+  context: PlanPromptContext,
+  skeleton: PlanSkeleton,
+  dayIndex: number,
+): string {
+  const dayName = DAY_NAMES_AR[dayIndex] ?? `اليوم ${dayIndex + 1}`;
+  const isSolo = skeleton.members.length === 1;
+
+  const memberBlocks = skeleton.members
+    .map((sm) => {
+      const ctxMember =
+        sm.member_id === "mom"
+          ? null
+          : context.family_members.find((m) => m.id === sm.member_id);
+      const isChild =
+        sm.member_id === "mom"
+          ? context.mom.member_type === "child"
+          : (ctxMember?.is_child ?? false);
+
+      const constraints: string[] = [];
+      const allergies =
+        sm.member_id === "mom" ? context.mom.allergies : (ctxMember?.allergies ?? []);
+      const dislikes =
+        sm.member_id === "mom" ? context.mom.dislikes : (ctxMember?.dislikes ?? []);
+      const conditions =
+        sm.member_id === "mom"
+          ? context.mom.medical_conditions
+          : (ctxMember?.medical_conditions ?? []);
+      if (allergies.length) constraints.push(`حساسية (تجنّب تام): ${allergies.join("، ")}`);
+      if (dislikes.length) constraints.push(`لا يحب: ${dislikes.join("، ")}`);
+      if (conditions.length) constraints.push(`حالات: ${conditions.join("، ")}`);
+
+      const day = sm.days.find((d) => d.day_index === dayIndex);
+      const meals = (day?.meals ?? [])
+        .map((m) => `${m.slot_name_ar} (${m.slot}): ${m.recipe_name_ar}`)
+        .join(" | ");
+
+      const target = isChild
+        ? "طفل — بالحصص، بدون هدف سعرات"
+        : `الهدف: ${sm.daily_calories_target} سعرة، بروتين ${sm.macros_target.protein_g} / كارب ${sm.macros_target.carbs_g} / دهون ${sm.macros_target.fat_g} (جم)`;
+
+      return `• member_id="${sm.member_id}" — ${target}${constraints.length ? `؛ ${constraints.join("؛ ")}` : ""}\n  وجبات اليوم: ${meals || "—"}`;
+    })
+    .join("\n");
+
+  const sharedRule = isSolo
+    ? "كل وجبة مخصصة لها فقط (لا مشاركة)."
+    : "عند تطابق اسم الطبق بين أفراد: ضعي shared_recipe=true، اكتبي المكونات الأساسية مرة واحدة في ingredients، وفي per_member_portions اذكري **الفروقات فقط** بالمقادير لكل فرد (لا تكرري الوصفة). للأطفال: حصص مناسبة بدون معادلات سعرات.";
+
+  return `# المطلوب (المرحلة 2: توسيع يوم واحد)
+وسّعي وجبات **${dayName}** (day_index=${dayIndex}) فقط، لكل فرد، إلى وصفات كاملة تحقق هدف كل فرد. التزمي بأسماء الأطباق المعطاة لكل فرد كما هي.
+
+${sharedRule}
+
+# الأفراد ووجبات هذا اليوم
+${memberBlocks}${familyWideText(context)}
+
+# الإيجاز
+- prep_steps_ar: 3-4 خطوات قصيرة كحد أقصى.
+- الحقول الاختيارية (substitutions_ar، notes_ar، prep_time_minutes، cook_time_minutes، servings_count): اتركيها فارغة إلا عند ضرورة حقيقية.
+- قائمة مكونات موجزة. "سلطة حرة" → unit:"unlimited".
+- الكتابة بالعربية فقط، صيغة المؤنث، بدون علامات تعجب.
+
+# الإخراج
+أرجعي JSON صالحاً فقط لهذا اليوم (لا day_total — نحسبه نحن). الشكل:
+\`\`\`ts
+type DaySlice = {
+  day_index: number;                       // ${dayIndex}
+  day_name_ar: string;                     // "${dayName}"
+  members: Array<{
+    member_id: string;                     // كما هو أعلاه
+    meals: Array<{
+      slot: "breakfast"|"lunch"|"dinner"|"snack";
+      slot_name_ar: string;
+      recipe_name_ar: string;
+      ingredients: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: "g"|"kg"|"ml"|"l"|"tbsp"|"tsp"|"cup"|"piece"|"serving"|"unlimited" }>;
+      prep_steps_ar: string[];
+      shared_recipe?: boolean;
+      per_member_portions?: Array<{ member_id: string; ingredients: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: string }>; notes_ar?: string }>;
+      substitutions_ar?: string[];
+      notes_ar?: string;
+      calories: number;
+      macros: { protein_g: number; carbs_g: number; fat_g: number };
+    }>;
+  }>;
+};
+\`\`\``;
 }
