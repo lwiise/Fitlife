@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react";
 // silent, looping, showing the actual app feature.
 //
 // Required files in /public/:
-//   /public/how-it-works-1.mp4 — 20-question onboarding flow
+//   /public/how-it-works-1.mp4 — 8-question personal onboarding flow
 //   /public/how-it-works-1.webm — same content as WebM (smaller, modern browsers)
 //   /public/how-it-works-2.mp4 — multi-member plan generation
 //   /public/how-it-works-2.webm
@@ -38,9 +38,9 @@ type Step = {
 const steps: Step[] = [
   {
     number: "01",
-    title: "جاوبي على 20 سؤال",
+    title: "جاوبي على ٨ أسئلة عنك",
     description:
-      "عن صحة عائلتك، أهدافك، وأكلكم المفضل. الأسئلة بالعربي، وسهلة.",
+      "عن صحتك وهدفك وأكلك المفضل. الأسئلة بالعربي وسهلة.",
     videoSrc: "/how-it-works-1.mp4",
     videoSrcWebm: "/how-it-works-1.webm",
     posterSrc: "/how-it-works-1-poster.svg",
@@ -50,9 +50,9 @@ const steps: Step[] = [
   },
   {
     number: "02",
-    title: "استلمي خطة لكل فرد",
+    title: "اضيفي عائلتك واحد واحد، كل فرد يجاوب ٨ أسئلة عنه",
     description:
-      "خطة غذائية لكل فرد من عائلتك حسب احتياجه، وتعليمات الطبخ توصل لمطبخك باللغة اللي تطبخ فيها الخدامة.",
+      "كل فرد له ملفه الخاص — الزوج والأطفال وكل من في البيت — وكل واحد يأخذ خطته حسب احتياجه.",
     videoSrc: "/how-it-works-2.mp4",
     videoSrcWebm: "/how-it-works-2.webm",
     posterSrc: "/how-it-works-2-poster.svg",
@@ -62,9 +62,9 @@ const steps: Step[] = [
   },
   {
     number: "03",
-    title: "تابعي تقدمك يومياً",
+    title: "احصلي على خطط متناسقة لكل العائلة + تعليمات الطبخ",
     description:
-      "تشات بالعربي يجاوب على أسئلتك، صور قبل/بعد، وقياسات في مكان واحد.",
+      "خطط منسقة للعائلة كوحدة، وتعليمات الطبخ توصل لمطبخك باللغة اللي تطبخ فيها الخدامة.",
     videoSrc: "/how-it-works-3.mp4",
     videoSrcWebm: "/how-it-works-3.webm",
     posterSrc: "/how-it-works-3-poster.svg",

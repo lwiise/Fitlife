@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Camera,
   ChefHat,
   Languages,
   MessageCircleHeart,
   Sparkles,
+  UsersRound,
   Watch,
   type LucideIcon,
 } from "lucide-react";
@@ -62,12 +62,13 @@ const cards: Card[] = [
   {
     area: "card4",
     areaClass: "md:[grid-area:card4]",
-    Icon: Camera,
+    Icon: UsersRound,
     iconBgClass: "bg-brand-lavender/40",
     iconHoverBgClass: "group-hover/card:bg-brand-lavender/50",
     iconColorClass: "text-primary",
-    title: "صور قبل/بعد، قياسات، وزن",
-    description: "كل تقدمك في مكان واحد، مشفّر، وآمن.",
+    title: "ملف شخصي لكل فرد",
+    description:
+      "كل فرد عنده ملفه الشخصي مع ٨ أسئلة مخصصة حسب عمره وحالته.",
   },
   {
     area: "card5",

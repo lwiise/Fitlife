@@ -473,7 +473,7 @@ export default function Hero() {
             }
             className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#1A1023]/70 md:text-xl"
           >
-            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك بلغته، بإشراف خبيرة تغذية سعودية.
+            ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك بلغته، بإشراف خبيرة تغذية سعودية. كل فرد بـ ٨ أسئلة، والعائلة كوحدة.
           </motion.p>
 
           <motion.div

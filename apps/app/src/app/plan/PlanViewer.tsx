@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
+import { UserPlus } from "lucide-react";
 import type { MealPlan, MemberPlan } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
@@ -58,6 +60,8 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
     [plan.members],
   );
 
+  const isSolo = plan.members.length === 1;
+
   if (!activeMember) {
     return (
       <div className="text-center py-12">
@@ -79,6 +83,15 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {isSolo && (
+            <Link
+              href="/family"
+              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              إضافة فرد
+            </Link>
+          )}
           <DownloadPDFButton
             memberPlan={activeMember}
             planMetadata={{ week_start_date: plan.week_start_date }}
@@ -87,9 +100,11 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
         </div>
       </div>
 
-      {/* Member tabs */}
+      {/* Member tabs (hidden for a solo plan) */}
+      {!isSolo && (
       <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
-        <div className="flex gap-1 min-w-max">
+        <div className="flex items-center justify-between gap-2 min-w-max">
+        <div className="flex gap-1">
           {plan.members.map((m) => {
             const isActive = m.member_id === activeMemberId;
             const isMom = m.member_id === "mom";
@@ -119,7 +134,16 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
             );
           })}
         </div>
+        <Link
+          href="/family"
+          className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+        >
+          <UserPlus className="size-4" aria-hidden="true" />
+          إضافة فرد
+        </Link>
+        </div>
       </div>
+      )}
 
       {/* Member summary tiles */}
       <div className="grid grid-cols-4 gap-2">

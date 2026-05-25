@@ -191,8 +191,9 @@ export default function FamilyMode() {
             transition={{ duration: 0.4, ease: "easeOut" as const, delay: 0.25 }}
             className="mx-auto mt-5 max-w-[600px] text-lg leading-[1.7] text-brand-lavender"
           >
-            أنتِ تشتركين مرة، وكل فرد من عائلتك يحصل على خطته الخاصة. وتعليمات
-            الطبخ توصل لمطبخك باللغة اللي تطبخ فيها الخدامة.
+            أنتِ تشتركين مرة، وكل فرد من عائلتك يحصل على خطته الخاصة. نبدأ بخطتك،
+            بعدها تضيفين عائلتك واحد واحد. وتعليمات الطبخ توصل لمطبخك باللغة اللي
+            تطبخ فيها الخدامة.
           </motion.p>
         </header>
 

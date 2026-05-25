@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   getCurrentUserLatestPlan,
   getCurrentUserProfile,
@@ -8,6 +9,7 @@ import { EmptyState } from "./EmptyState";
 import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
+import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 
 export const metadata = {
   title: "خطتي — فت لايف",
@@ -38,6 +40,10 @@ export default async function PlanPage() {
       </header>
 
       <div className="container-app py-8 md:py-12">
+        <Suspense fallback={null}>
+          <PlanOnboardingBanner />
+        </Suspense>
+
         {!latest && <EmptyState isOnboarded={isOnboarded} />}
 
         {latest?.status === "generating" && (
