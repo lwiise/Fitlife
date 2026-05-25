@@ -9,11 +9,5 @@ export default async function FamilyWidePage() {
   if (!profile) redirect("/auth/login");
   if (profile.onboarding_completed_at) redirect("/dashboard");
 
-  return (
-    <main className="min-h-screen bg-brand-surface">
-      <div className="container-app py-8 md:py-12 max-w-2xl">
-        <FamilyWideForm />
-      </div>
-    </main>
-  );
+  return <FamilyWideForm />;
 }
