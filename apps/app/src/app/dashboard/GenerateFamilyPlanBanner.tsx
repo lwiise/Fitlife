@@ -27,7 +27,8 @@ export function GenerateFamilyPlanBanner({ names }: { names: string[] }) {
     startTransition(async () => {
       const result = await generateFamilyPlan();
       if (result.ok) {
-        router.push("/plan");
+        // Carry the member's name so the generating screen shows it, not Mom's.
+        router.push(one ? `/plan?member=${encodeURIComponent(one)}` : "/plan");
         return;
       }
       if ("upgrade_required" in result) {
