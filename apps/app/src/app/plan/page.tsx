@@ -63,7 +63,11 @@ export default async function PlanPage({
         )}
 
         {latest?.status === "ready" && latest.plan_data && (
-          <PlanViewer plan={latest.plan_data} planId={latest.id} />
+          <PlanViewer
+            plan={latest.plan_data}
+            planId={latest.id}
+            generating={latest.in_progress}
+          />
         )}
       </div>
     </main>

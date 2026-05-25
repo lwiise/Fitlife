@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { UserPlus } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import type { MealPlan, MemberPlan } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
@@ -36,11 +37,29 @@ function formatWeekRange(weekStart: string): string {
   }
 }
 
-export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: string }) {
+export function PlanViewer({
+  plan,
+  planId: _planId,
+  generating = false,
+}: {
+  plan: MealPlan;
+  planId: string;
+  generating?: boolean;
+}) {
+  const router = useRouter();
   const [activeMemberId, setActiveMemberId] = useState<string>(
     plan.members[0]?.member_id ?? "mom",
   );
   const [activeDayIndex, setActiveDayIndex] = useState<number>(0);
+
+  // While later days are still being prepared, poll for them: a periodic
+  // router.refresh pulls the newly-persisted days; once `generating` is false
+  // the next render stops the interval.
+  useEffect(() => {
+    if (!generating) return;
+    const t = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(t);
+  }, [generating, router]);
 
   const activeMember: MemberPlan | undefined = useMemo(
     () => plan.members.find((m) => m.member_id === activeMemberId) ?? plan.members[0],
@@ -182,19 +201,26 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
           const day = activeMember.days.find((d) => d.day_index === i);
           const label = day?.day_name_ar ?? FALLBACK_DAY_NAMES[i] ?? `${i + 1}`;
           const isActive = i === activeDayIndex;
+          const pending = generating && (!day || day.meals.length === 0);
           return (
             <button
               key={i}
               type="button"
               onClick={() => setActiveDayIndex(i)}
               aria-pressed={isActive}
-              className={`rounded-xl py-2.5 font-bold text-xs transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+              className={`relative rounded-xl py-2.5 font-bold text-xs transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
                 isActive
                   ? "bg-brand-purple-900 text-white"
                   : "bg-brand-lavender/30 text-brand-purple-900 hover:bg-brand-lavender/50"
               }`}
             >
               {label}
+              {pending && (
+                <Loader2
+                  className="absolute top-1 end-1 size-3 animate-spin motion-reduce:animate-none opacity-70"
+                  aria-hidden="true"
+                />
+              )}
             </button>
           );
         })}
@@ -236,6 +262,16 @@ export function PlanViewer({ plan, planId: _planId }: { plan: MealPlan; planId: 
             activeDay.meals.map((meal, i) => (
               <MealCard key={i} meal={meal} memberNames={memberNames} />
             ))
+          ) : generating ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Loader2
+                className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
+                aria-hidden="true"
+              />
+              <p className="text-brand-ink-muted text-sm">
+                هذا اليوم لسه نجهّزه… بيظهر خلال لحظات
+              </p>
+            </div>
           ) : (
             <div className="text-center py-8 text-brand-ink-muted text-sm">
               ما عندك وجبات لهذا اليوم

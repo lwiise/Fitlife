@@ -114,6 +114,11 @@ export const MealPlanSchema = z.object({
   methodology_notes_ar: z.string().optional(), // Sara-style coaching note (tone via Email 2)
   // Always produced by the prompt; optional in schema so older plans parse.
   safety_disclaimer_ar: z.string().optional(),
+  // Progressive (day-by-day) rendering: `generating` is true while later days
+  // are still being expanded; `days_total` is the target day count so the UI
+  // knows which day tabs are still pending. Both absent on older plans (=done).
+  days_total: z.number().int().optional(),
+  generating: z.boolean().optional(),
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 

@@ -18,6 +18,7 @@ import {
   type MealPlan,
   type PlanSkeleton,
   type Meal,
+  type Day,
 } from "./schema";
 import { PlanValidationError, AnthropicCallError } from "./errors";
 import { getBeneficiaries, type PlanPromptContext } from "./buildContext";
@@ -155,11 +156,17 @@ function sumDayTotal(meals: Meal[]) {
 export async function generateMealPlan(params: {
   anthropicApiKey: string;
   context: PlanPromptContext;
+  // Called (serialized) after each day completes with the plan-so-far, so the
+  // caller can persist progressively and let the user view it day-by-day.
+  onProgress?: (
+    snapshot: MealPlan,
+    info: { readyDays: number; totalDays: number },
+  ) => Promise<void> | void;
 }): Promise<{
   plan: MealPlan;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
 }> {
-  const { anthropicApiKey, context } = params;
+  const { anthropicApiKey, context, onProgress } = params;
   let totalIn = 0;
   let totalOut = 0;
 
@@ -202,55 +209,9 @@ export async function generateMealPlan(params: {
   const dayIndices = Array.from(
     new Set(skeleton.members.flatMap((m) => m.days.map((d) => d.day_index))),
   ).sort((a, b) => a - b);
+  const totalDays = dayIndices.length;
 
-  // ── Phase 2: expand each day in parallel ──
-  const dayUsages: { tokensIn: number; tokensOut: number }[] = [];
-  const slices = await mapWithConcurrency(
-    dayIndices,
-    DAY_CONCURRENCY,
-    async (dayIndex) => {
-      const prompt = buildDayPrompt(context, skeleton, dayIndex);
-      let attempt = 0;
-      for (;;) {
-        try {
-          const res = await streamAnthropic({
-            apiKey: anthropicApiKey,
-            model: PLAN_MODEL,
-            maxTokens: DAY_MAX_TOKENS,
-            systemStatic: STATIC_SYSTEM,
-            systemPrompt: prompt,
-          });
-          dayUsages.push({ tokensIn: res.tokensIn, tokensOut: res.tokensOut });
-          if (res.stopReason === "max_tokens")
-            throw new PlanValidationError(
-              `Day ${dayIndex} hit max_tokens (${DAY_MAX_TOKENS})`,
-              res.text,
-            );
-          const parsed = JSON.parse(stripMarkdownFence(res.text));
-          const r = DaySliceSchema.safeParse(parsed);
-          if (!r.success)
-            throw new PlanValidationError(
-              `Day ${dayIndex} failed validation: ${r.error.message.slice(0, 300)}`,
-              res.text,
-            );
-          return r.data;
-        } catch (err) {
-          if (isRetryable(err) && attempt < 2) {
-            attempt++;
-            await sleep(800 * attempt);
-            continue;
-          }
-          throw err;
-        }
-      }
-    },
-  );
-  for (const u of dayUsages) {
-    totalIn += u.tokensIn;
-    totalOut += u.tokensOut;
-  }
-
-  // ── Assemble into a MealPlan ──
+  // ── Assembly that grows as days complete ──
   const beneficiaries = getBeneficiaries(context);
   const nameById = new Map(
     beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
@@ -265,42 +226,119 @@ export async function generateMealPlan(params: {
       (m) => [m.id, m.is_child] as [string, boolean],
     ),
   ]);
-  const sliceByDay = new Map(slices.map((s) => [s.day_index, s]));
   const dayNameByIndex = new Map(
     (skeleton.members[0]?.days ?? []).map((d) => [d.day_index, d.day_name_ar]),
   );
+  // member_id -> (day_index -> Day), filled as each day resolves.
+  const daysByMember = new Map<string, Map<number, Day>>(
+    skeleton.members.map((sm) => [sm.member_id, new Map<number, Day>()]),
+  );
+  let readyDays = 0;
 
-  const members = skeleton.members.map((sm) => {
-    const days = dayIndices.map((di) => {
-      const slice = sliceByDay.get(di);
-      const sliceMember = slice?.members.find(
-        (m) => m.member_id === sm.member_id,
-      );
-      const meals = sliceMember?.meals ?? [];
-      return {
-        day_index: di,
-        day_name_ar:
-          slice?.day_name_ar || dayNameByIndex.get(di) || `اليوم ${di + 1}`,
-        meals,
-        day_total: sumDayTotal(meals),
-      };
-    });
-    return {
+  const snapshot = (generating: boolean): MealPlan => ({
+    week_start_date: nextSaturdayISO(),
+    members: skeleton.members.map((sm) => ({
       member_id: sm.member_id,
       member_name_ar: nameById.get(sm.member_id) ?? sm.member_name_ar ?? "",
       primary_goal: sm.primary_goal,
       daily_calories_target: sm.daily_calories_target,
       macros_target: sm.macros_target,
-      days,
-    };
-  });
-
-  const result = MealPlanSchema.safeParse({
-    week_start_date: nextSaturdayISO(),
-    members,
+      days: [...daysByMember.get(sm.member_id)!.values()].sort(
+        (a, b) => a.day_index - b.day_index,
+      ),
+    })),
     methodology_notes_ar: skeleton.methodology_notes_ar,
     safety_disclaimer_ar: skeleton.safety_disclaimer_ar,
+    days_total: totalDays,
+    generating,
   });
+
+  // Serialize onProgress so concurrent day-workers don't clobber the DB write.
+  let progressTail: Promise<void> = Promise.resolve();
+  const emitProgress = () => {
+    if (!onProgress) return;
+    const snap = snapshot(readyDays < totalDays);
+    const ready = readyDays;
+    progressTail = progressTail.then(() =>
+      Promise.resolve(onProgress(snap, { readyDays: ready, totalDays })).catch(
+        (e) => console.error("[plan-generate] onProgress failed", e),
+      ),
+    );
+  };
+
+  // ── Phase 2: expand each day in parallel; merge + emit as each completes ──
+  await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
+    const prompt = buildDayPrompt(context, skeleton, dayIndex);
+    let attempt = 0;
+    for (;;) {
+      try {
+        const res = await streamAnthropic({
+          apiKey: anthropicApiKey,
+          model: PLAN_MODEL,
+          maxTokens: DAY_MAX_TOKENS,
+          systemStatic: STATIC_SYSTEM,
+          systemPrompt: prompt,
+        });
+        totalIn += res.tokensIn;
+        totalOut += res.tokensOut;
+        if (res.stopReason === "max_tokens")
+          throw new PlanValidationError(
+            `Day ${dayIndex} hit max_tokens (${DAY_MAX_TOKENS})`,
+            res.text,
+          );
+        const parsed = JSON.parse(stripMarkdownFence(res.text));
+        const r = DaySliceSchema.safeParse(parsed);
+        if (!r.success)
+          throw new PlanValidationError(
+            `Day ${dayIndex} failed validation: ${r.error.message.slice(0, 300)}`,
+            res.text,
+          );
+        const slice = r.data;
+        for (const sm of skeleton.members) {
+          const sliceMember = slice.members.find(
+            (m) => m.member_id === sm.member_id,
+          );
+          const meals = sliceMember?.meals ?? [];
+          daysByMember.get(sm.member_id)!.set(dayIndex, {
+            day_index: dayIndex,
+            day_name_ar:
+              slice.day_name_ar ||
+              dayNameByIndex.get(dayIndex) ||
+              `اليوم ${dayIndex + 1}`,
+            meals,
+            day_total: sumDayTotal(meals),
+          });
+        }
+        readyDays++;
+        emitProgress();
+        return;
+      } catch (err) {
+        if (isRetryable(err) && attempt < 2) {
+          attempt++;
+          await sleep(800 * attempt);
+          continue;
+        }
+        // Tolerate a single failed day — omit it, keep the rest (the UI shows a
+        // "couldn't prepare this day" state). Only a total failure is fatal.
+        console.error(
+          "[plan-generate] day failed (omitting)",
+          dayIndex,
+          err instanceof Error ? err.message : String(err),
+        );
+        return;
+      }
+    }
+  });
+
+  // Wait for any pending progress writes to settle.
+  await progressTail;
+
+  if (readyDays === 0) {
+    throw new PlanValidationError(`All ${totalDays} day generations failed`);
+  }
+
+  // ── Final assembled MealPlan ──
+  const result = MealPlanSchema.safeParse(snapshot(false));
   if (!result.success)
     throw new PlanValidationError(
       `Assembled plan failed validation: ${result.error.message.slice(0, 400)}`,
@@ -366,6 +404,17 @@ export async function runMealPlanGeneration(params: {
     const result = await generateMealPlan({
       anthropicApiKey,
       context,
+      // Persist progressively so the plan is viewable after the first day.
+      onProgress: async (snapshot, { readyDays }) => {
+        await supabase
+          .from("meal_plans")
+          .update(
+            readyDays >= 1
+              ? { status: "ready", plan_data: snapshot }
+              : { plan_data: snapshot },
+          )
+          .eq("id", mealPlanId);
+      },
     });
     plan = result.plan;
     usage = result.usage;
