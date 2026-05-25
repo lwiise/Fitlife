@@ -233,40 +233,60 @@ export async function generateMealPlan(params: {
   const daysByMember = new Map<string, Map<number, Day>>(
     skeleton.members.map((sm) => [sm.member_id, new Map<number, Day>()]),
   );
-  let readyDays = 0;
+  // Days compute in parallel but are REVEALED in order: a day is shown only once
+  // every earlier day has settled (succeeded or permanently failed).
+  const done = new Set<number>(); // expanded successfully (has meals)
+  const settled = new Set<number>(); // done OR permanently failed
+  let revealed = -1; // highest index into dayIndices revealed so far
 
-  const snapshot = (generating: boolean): MealPlan => ({
-    week_start_date: nextSaturdayISO(),
-    members: skeleton.members.map((sm) => ({
-      member_id: sm.member_id,
-      member_name_ar: nameById.get(sm.member_id) ?? sm.member_name_ar ?? "",
-      primary_goal: sm.primary_goal,
-      daily_calories_target: sm.daily_calories_target,
-      macros_target: sm.macros_target,
-      days: [...daysByMember.get(sm.member_id)!.values()].sort(
-        (a, b) => a.day_index - b.day_index,
-      ),
-    })),
-    methodology_notes_ar: skeleton.methodology_notes_ar,
-    safety_disclaimer_ar: skeleton.safety_disclaimer_ar,
-    days_total: totalDays,
-    generating,
-  });
+  const snapshot = (generating: boolean): MealPlan => {
+    const prefix = dayIndices.slice(0, revealed + 1);
+    return {
+      week_start_date: nextSaturdayISO(),
+      members: skeleton.members.map((sm) => {
+        const dmap = daysByMember.get(sm.member_id)!;
+        const days = prefix
+          .map((di) => dmap.get(di))
+          .filter((d): d is Day => !!d)
+          .sort((a, b) => a.day_index - b.day_index);
+        return {
+          member_id: sm.member_id,
+          member_name_ar: nameById.get(sm.member_id) ?? sm.member_name_ar ?? "",
+          primary_goal: sm.primary_goal,
+          daily_calories_target: sm.daily_calories_target,
+          macros_target: sm.macros_target,
+          days,
+        };
+      }),
+      methodology_notes_ar: skeleton.methodology_notes_ar,
+      safety_disclaimer_ar: skeleton.safety_disclaimer_ar,
+      days_total: totalDays,
+      generating,
+    };
+  };
 
   // Serialize onProgress so concurrent day-workers don't clobber the DB write.
   let progressTail: Promise<void> = Promise.resolve();
-  const emitProgress = () => {
-    if (!onProgress) return;
-    const snap = snapshot(readyDays < totalDays);
-    const ready = readyDays;
+  const tryReveal = () => {
+    let advanced = false;
+    while (revealed + 1 < totalDays && settled.has(dayIndices[revealed + 1]!)) {
+      revealed++;
+      advanced = true;
+    }
+    if (!advanced || !onProgress) return;
+    const generating = settled.size < totalDays;
+    const readyDays = dayIndices
+      .slice(0, revealed + 1)
+      .filter((di) => done.has(di)).length;
+    const snap = snapshot(generating);
     progressTail = progressTail.then(() =>
-      Promise.resolve(onProgress(snap, { readyDays: ready, totalDays })).catch(
-        (e) => console.error("[plan-generate] onProgress failed", e),
+      Promise.resolve(onProgress(snap, { readyDays, totalDays })).catch((e) =>
+        console.error("[plan-generate] onProgress failed", e),
       ),
     );
   };
 
-  // ── Phase 2: expand each day in parallel; merge + emit as each completes ──
+  // ── Phase 2: expand each day in parallel; reveal the prefix in order ──
   await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
     const prompt = buildDayPrompt(context, skeleton, dayIndex);
     let attempt = 0;
@@ -309,8 +329,9 @@ export async function generateMealPlan(params: {
             day_total: sumDayTotal(meals),
           });
         }
-        readyDays++;
-        emitProgress();
+        done.add(dayIndex);
+        settled.add(dayIndex);
+        tryReveal();
         return;
       } catch (err) {
         if (isRetryable(err) && attempt < 2) {
@@ -318,13 +339,16 @@ export async function generateMealPlan(params: {
           await sleep(800 * attempt);
           continue;
         }
-        // Tolerate a single failed day — omit it, keep the rest (the UI shows a
-        // "couldn't prepare this day" state). Only a total failure is fatal.
+        // Tolerate a single failed day — settle it so it doesn't stall the
+        // reveal of later days (its tab shows "no meals"). Only a total failure
+        // is fatal.
         console.error(
           "[plan-generate] day failed (omitting)",
           dayIndex,
           err instanceof Error ? err.message : String(err),
         );
+        settled.add(dayIndex);
+        tryReveal();
         return;
       }
     }
@@ -333,11 +357,12 @@ export async function generateMealPlan(params: {
   // Wait for any pending progress writes to settle.
   await progressTail;
 
-  if (readyDays === 0) {
+  if (done.size === 0) {
     throw new PlanValidationError(`All ${totalDays} day generations failed`);
   }
 
-  // ── Final assembled MealPlan ──
+  // ── Final assembled MealPlan ── (reveal everything that succeeded)
+  revealed = totalDays - 1;
   const result = MealPlanSchema.safeParse(snapshot(false));
   if (!result.success)
     throw new PlanValidationError(
