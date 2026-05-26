@@ -4,6 +4,7 @@ import {
   type PlanPromptContextMember,
 } from "./buildContext";
 import type { PlanSkeleton } from "./schema";
+import { DAY_NAMES_AR } from "./dates";
 
 const ROLE_LABELS_AR: Record<string, string> = {
   dad: "الزوج",
@@ -236,16 +237,6 @@ export const STATIC_SYSTEM = `# دورك
 
 ${SARA_METHODOLOGY}`;
 
-const DAY_NAMES_AR = [
-  "السبت",
-  "الأحد",
-  "الإثنين",
-  "الثلاثاء",
-  "الأربعاء",
-  "الخميس",
-  "الجمعة",
-];
-
 function buildRoster(
   context: PlanPromptContext,
   targetMemberIds?: string[],
@@ -337,7 +328,7 @@ ${buildRoster(context, targetMemberIds)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
-ثم خطّطي **أسبوعاً كاملاً (7 أيام، السبت→الجمعة)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}
+ثم خطّطي **أسبوعاً كاملاً (7 أيام متتالية)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}
 
 # الإخراج
 أرجعي JSON صالحاً فقط (لا نص قبله/بعده، لا أكواد محاطة). الشكل:
@@ -351,7 +342,7 @@ type Skeleton = {
     daily_calories_target: number;
     macros_target: { protein_g: number; carbs_g: number; fat_g: number };
     days: Array<{                          // 7 عناصر
-      day_index: number;                   // 0..6 (0=السبت)
+      day_index: number;                   // 0..6 (0 = أول يوم في الخطة)
       day_name_ar: string;
       meals: Array<{ slot: "breakfast"|"lunch"|"dinner"|"snack"; slot_name_ar: string; recipe_name_ar: string }>;
     }>;
@@ -368,8 +359,9 @@ export function buildDayPrompt(
   context: PlanPromptContext,
   skeleton: PlanSkeleton,
   dayIndex: number,
+  dayNameOverride?: string,
 ): string {
-  const dayName = DAY_NAMES_AR[dayIndex] ?? `اليوم ${dayIndex + 1}`;
+  const dayName = dayNameOverride ?? DAY_NAMES_AR[dayIndex] ?? `اليوم ${dayIndex + 1}`;
   const isSolo = skeleton.members.length === 1;
 
   const memberBlocks = skeleton.members

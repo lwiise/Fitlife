@@ -4,17 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Loader2, ChevronLeft } from "lucide-react";
 import type { MemberPlan } from "@fitlife/plan-engine";
-import {
-  getCurrentKhaleejiDayIndex,
-  getDayNameAr,
-  type KhaleejiDayIndex,
-} from "@/lib/plans/dayMapping";
+import { dayIndexFromWeekStart } from "@/lib/plans/dayMapping";
 import { MealCard } from "@/app/plan/MealCard";
 
 /**
- * Client-side "today" selection: the device day index drives which day of each
- * member's plan is shown. Computed after mount (null until then) so it reflects
- * the user's device, not the UTC server, and avoids a hydration mismatch.
+ * Client-side "today" selection. The plan's week is anchored to its generation
+ * day, so today's slot = whole days elapsed since `weekStartDate` (computed in
+ * Riyadh time, after mount — reflects the user's day, avoids hydration mismatch).
  *
  * TODO (polish, post-MVP): re-check the day every ~5 min and re-render if it
  * rolled over while the dashboard stayed open overnight.
@@ -22,12 +18,22 @@ import { MealCard } from "@/app/plan/MealCard";
 export function TodaysMealsClient({
   members,
   planId: _planId,
+  weekStartDate,
 }: {
   members: MemberPlan[];
   planId: string;
+  weekStartDate: string | null;
 }) {
-  const [dayIndex, setDayIndex] = useState<KhaleejiDayIndex | null>(null);
-  useEffect(() => setDayIndex(getCurrentKhaleejiDayIndex()), []);
+  // null = not mounted yet; -1 = the plan's 7 days have ended.
+  const [dayIndex, setDayIndex] = useState<number | null>(null);
+  useEffect(() => {
+    if (!weekStartDate) {
+      setDayIndex(0);
+      return;
+    }
+    const raw = dayIndexFromWeekStart(weekStartDate);
+    setDayIndex(raw > 6 ? -1 : Math.max(0, raw));
+  }, [weekStartDate]);
 
   const memberNames = useMemo(
     () => Object.fromEntries(members.map((m) => [m.member_id, m.member_name_ar])),
@@ -42,6 +48,23 @@ export function TodaysMealsClient({
     );
   }
 
+  if (dayIndex === -1) {
+    return (
+      <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
+        <p className="font-bold text-brand-ink">انتهت أيام خطتك لهذا الأسبوع</p>
+        <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
+          أنشئي خطة جديدة لأسبوع جديد
+        </p>
+        <Link
+          href="/plan"
+          className="inline-flex items-center justify-center min-h-11 mt-4 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+        >
+          الخطة الكاملة
+        </Link>
+      </div>
+    );
+  }
+
   const sections = members
     .map((m) => ({
       member: m,
@@ -52,9 +75,7 @@ export function TodaysMealsClient({
   if (sections.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
-        <p className="font-bold text-brand-ink">
-          اليوم {getDayNameAr(dayIndex)} ما فيه وجبات في خطتك
-        </p>
+        <p className="font-bold text-brand-ink">ما فيه وجبات لهذا اليوم في خطتك</p>
         <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
           تحققي من الخطة الكاملة أو أنشئي خطة جديدة
         </p>

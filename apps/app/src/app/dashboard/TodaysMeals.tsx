@@ -102,7 +102,11 @@ export async function TodaysMeals({
   return (
     <section className="space-y-4">
       <HeaderStrip showWeekLink />
-      <TodaysMealsClient members={view.members} planId={view.planId} />
+      <TodaysMealsClient
+        members={view.members}
+        planId={view.planId}
+        weekStartDate={view.weekStartDate}
+      />
     </section>
   );
 }

@@ -23,6 +23,7 @@ import {
 } from "./schema";
 import { PlanValidationError, AnthropicCallError } from "./errors";
 import { getBeneficiaries, type PlanPromptContext } from "./buildContext";
+import { riyadhTodayISO, khaleejiDayName } from "./dates";
 
 // Accepts any Supabase client shape (cookie-typed or service-role admin).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,20 +38,6 @@ export interface GenerateResult {
     cost_usd: number;
     duration_ms: number;
   };
-}
-
-/** ISO date (YYYY-MM-DD) of the upcoming Saturday — the Gulf week start. */
-function nextSaturdayISO(): string {
-  const now = new Date();
-  const daysUntilSat = (6 - now.getUTCDay() + 7) % 7;
-  const sat = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() + daysUntilSat,
-    ),
-  );
-  return sat.toISOString().slice(0, 10);
 }
 
 /**
@@ -173,6 +160,10 @@ export async function generateMealPlan(params: {
   let totalIn = 0;
   let totalOut = 0;
 
+  // The week is anchored to the generation day (carried over on incremental
+  // member changes). Day names are computed from this anchor, not the model.
+  const weekStart = existingPlan?.week_start_date ?? riyadhTodayISO();
+
   const beneficiaries = getBeneficiaries(context);
   const beneIds = new Set(beneficiaries.map((b) => b.member_id));
   const nameById = new Map(
@@ -192,7 +183,6 @@ export async function generateMealPlan(params: {
   // ── Analyse the prior plan: which members carry over, the family day grid ──
   const seeded = new Map<string, MemberPlan>(); // complete members carried over
   let familyDayIndices: number[] = [];
-  const familyDayNames = new Map<number, string>();
   const familyDishGrid = new Map<
     number,
     { slot: Meal["slot"]; slot_name_ar: string; recipe_name_ar: string }[]
@@ -207,7 +197,6 @@ export async function generateMealPlan(params: {
       (a, b) => b.days.length - a.days.length,
     )[0];
     for (const d of ref?.days ?? []) {
-      familyDayNames.set(d.day_index, d.day_name_ar);
       familyDishGrid.set(
         d.day_index,
         d.meals.map((m) => ({
@@ -237,7 +226,7 @@ export async function generateMealPlan(params: {
       return { ...m, member_name_ar: nameById.get(b.member_id) ?? m.member_name_ar };
     });
     const plan = MealPlanSchema.parse({
-      week_start_date: existingPlan?.week_start_date ?? nextSaturdayISO(),
+      week_start_date: weekStart,
       members,
       methodology_notes_ar: existingPlan?.methodology_notes_ar,
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
@@ -295,14 +284,11 @@ export async function generateMealPlan(params: {
           new Set(skeleton.members.flatMap((m) => m.days.map((d) => d.day_index))),
         ).sort((a, b) => a - b);
   const totalDays = dayIndices.length;
+  // Day names are computed from the week anchor (generation day), not the model
+  // or the prior plan — deterministic and consistent across regenerations.
   const dayNameByIndex = new Map<number, string>();
   for (const di of dayIndices) {
-    dayNameByIndex.set(
-      di,
-      familyDayNames.get(di) ??
-        skeleton.members[0]?.days.find((d) => d.day_index === di)?.day_name_ar ??
-        `اليوم ${di + 1}`,
-    );
+    dayNameByIndex.set(di, khaleejiDayName(weekStart, di));
   }
 
   // Align new members to the family's existing dishes (same dish each day).
@@ -367,7 +353,7 @@ export async function generateMealPlan(params: {
   const done = new Set<number>(); // toGenerate days expanded successfully
 
   const snapshot = (generating: boolean): MealPlan => ({
-    week_start_date: existingPlan?.week_start_date ?? nextSaturdayISO(),
+    week_start_date: weekStart,
     members: beneficiaries.map((b) => {
       const t = targetsById.get(b.member_id)!;
       return {
@@ -407,7 +393,12 @@ export async function generateMealPlan(params: {
 
   // ── Phase 2: expand each day sequentially (toGenerate members only) ──
   await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
-    const prompt = buildDayPrompt(context, workingSkeleton, dayIndex);
+    const prompt = buildDayPrompt(
+      context,
+      workingSkeleton,
+      dayIndex,
+      dayNameByIndex.get(dayIndex),
+    );
     let attempt = 0;
     for (;;) {
       try {

@@ -11,16 +11,7 @@ import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
 import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
-
-const FALLBACK_DAY_NAMES = [
-  "السبت",
-  "الأحد",
-  "الإثنين",
-  "الثلاثاء",
-  "الأربعاء",
-  "الخميس",
-  "الجمعة",
-];
+import { dayIndexFromWeekStart, dayNameFromWeekStart } from "@/lib/plans/dayMapping";
 
 function formatWeekRange(weekStart: string): string {
   try {
@@ -54,7 +45,11 @@ export function PlanViewer({
       ? preselectedMember
       : (plan.members[0]?.member_id ?? "mom"),
   );
-  const [activeDayIndex, setActiveDayIndex] = useState<number>(0);
+  // The week is anchored to the generation day → default to today's slot.
+  const [activeDayIndex, setActiveDayIndex] = useState<number>(() => {
+    const i = dayIndexFromWeekStart(plan.week_start_date);
+    return i >= 0 && i <= 6 ? i : 0;
+  });
 
   // The ?member= param only seeds the initial tab; strip it after mount so a
   // later refresh doesn't override the user's subsequent tab clicks.
@@ -211,7 +206,8 @@ export function PlanViewer({
       <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
-          const label = day?.day_name_ar ?? FALLBACK_DAY_NAMES[i] ?? `${i + 1}`;
+          const label =
+            day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
           const isActive = i === activeDayIndex;
           const pending = generating && (!day || day.meals.length === 0);
           return (

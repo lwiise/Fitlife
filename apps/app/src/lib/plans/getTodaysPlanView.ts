@@ -8,7 +8,12 @@ export type TodaysPlanView =
   | { status: "no_plan" }
   | { status: "generating"; planId: string }
   | { status: "failed"; planId: string; error: string | null }
-  | { status: "ready"; planId: string; members: MemberPlan[] };
+  | {
+      status: "ready";
+      planId: string;
+      members: MemberPlan[];
+      weekStartDate: string | null;
+    };
 
 /**
  * Server-side fetch + status branch + member ordering for the dashboard's
@@ -38,5 +43,10 @@ export async function getTodaysPlanView(userId: string): Promise<TodaysPlanView>
   };
   const ordered = [...members].sort((a, b) => rank(a) - rank(b));
 
-  return { status: "ready", planId: latest.id, members: ordered };
+  return {
+    status: "ready",
+    planId: latest.id,
+    members: ordered,
+    weekStartDate: latest.week_start_date,
+  };
 }

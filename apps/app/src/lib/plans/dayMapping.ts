@@ -52,3 +52,31 @@ export function formatTodayHeader(date: Date = new Date()): string {
   const dayName = getDayNameAr(getCurrentKhaleejiDayIndex(date));
   return `اليوم ${dayName} — ${HEADER_DATE_FMT.format(date)}`;
 }
+
+const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** "Today" as a Riyadh (UTC+3) calendar date — matches the engine's anchor. */
+export function riyadhTodayISO(): string {
+  return new Date(Date.now() + RIYADH_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Whole days from the plan's week_start_date to today (Riyadh). 0 = the plan's
+ * first day (its generation day). Can be negative (legacy future-anchored plans)
+ * or > 6 (the plan's week has ended).
+ */
+export function dayIndexFromWeekStart(weekStartISO: string): number {
+  const start = Date.parse(`${weekStartISO}T00:00:00Z`);
+  const today = Date.parse(`${riyadhTodayISO()}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(today)) return 0;
+  return Math.round((today - start) / 86_400_000);
+}
+
+/** Arabic weekday name for (weekStartISO + dayIndex) — mirrors the engine. */
+export function dayNameFromWeekStart(weekStartISO: string, dayIndex: number): string {
+  const d = new Date(`${weekStartISO}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() + dayIndex);
+  const khaleeji = (JS_TO_KHALEEJI[d.getUTCDay()] ?? 0) as KhaleejiDayIndex;
+  return getDayNameAr(khaleeji);
+}
