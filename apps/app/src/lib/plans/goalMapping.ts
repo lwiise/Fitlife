@@ -58,3 +58,25 @@ export function mapUserGoalToSara(
       return medicalGoal;
   }
 }
+
+// Best-effort inverse of mapUserGoalToSara, used to pre-select the goal radio
+// when editing a profile. The forward map is lossy (medical/pregnancy override
+// the chosen goal), so this returns the closest user-facing option; the real
+// goal is re-derived from the full form on save.
+export function mapSaraGoalToUser(goal: SaraGoal): UserGoal {
+  switch (goal) {
+    case "fat_loss":
+      return "lose_weight";
+    case "muscle_gain":
+      return "build_muscle";
+    case "athletic_performance":
+      return "athletic";
+    case "metabolic_health":
+    case "digestive_health":
+      return "manage_condition";
+    case "body_recomposition":
+    case "pregnancy_lactation":
+    case "posture_recovery":
+      return "maintain_health";
+  }
+}
