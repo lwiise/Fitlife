@@ -101,6 +101,8 @@ Before building ANY section, you must:
 
 **Settings page**: PDPL compliance shipped — /settings has account info + data export + immediate hard-delete via typed-confirmation modal. Public routes /privacy and /terms exist with placeholder Markdown content (needs real legal text before scaling).
 
+**Server Actions encryption key (ops — must stay set)**: Set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (stable, base64 32-byte) in Netlify env for the fitlife-app-mvp site AND in local `.env.local`. Without it, Next.js generates a random server-actions key per build, so every deploy invalidates already-open tabs → saves fail with `UnrecognizedActionError: Server Action was not found on the server` (full-page error). Keep the value STABLE across deploys; rotating it breaks server actions for any open tab. Generate once with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. (Note: the repo's background `auto:` commit hook deploys frequently, which amplifies skew — a stable key is what keeps server actions working across those deploys.)
+
 ## Current Database Schema (verified 05/26/2026)
 
 Point-in-time snapshot of the **production** `public` schema (from `information_schema.columns`).
