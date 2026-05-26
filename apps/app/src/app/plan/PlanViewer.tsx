@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, UserPlus, History } from "lucide-react";
 import type { MealPlan, MemberPlan } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
@@ -33,11 +33,15 @@ export function PlanViewer({
   planId: _planId,
   generating = false,
   preselectedMember,
+  readOnly = false,
 }: {
   plan: MealPlan;
   planId: string;
   generating?: boolean;
   preselectedMember?: string;
+  // Historical view (e.g. /plan/history/[id]): hide regenerate + add-member,
+  // and don't rewrite the URL.
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [activeMemberId, setActiveMemberId] = useState<string>(
@@ -54,10 +58,11 @@ export function PlanViewer({
   // The ?member= param only seeds the initial tab; strip it after mount so a
   // later refresh doesn't override the user's subsequent tab clicks.
   useEffect(() => {
+    if (readOnly) return;
     if (typeof window !== "undefined" && window.location.search.includes("member=")) {
       window.history.replaceState(null, "", "/plan");
     }
-  }, []);
+  }, [readOnly]);
 
   // While later days are still being prepared, poll for them: a periodic
   // router.refresh pulls the newly-persisted days; once `generating` is false
@@ -109,7 +114,7 @@ export function PlanViewer({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {isSolo && (
+          {!readOnly && isSolo && (
             <Link
               href="/family"
               className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
@@ -118,11 +123,20 @@ export function PlanViewer({
               إضافة فرد
             </Link>
           )}
+          {!readOnly && (
+            <Link
+              href="/plan/history"
+              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              <History className="size-4" aria-hidden="true" />
+              الخطط السابقة
+            </Link>
+          )}
           <DownloadPDFButton
             memberPlan={activeMember}
             planMetadata={{ week_start_date: plan.week_start_date }}
           />
-          <RegenerateButton />
+          {!readOnly && <RegenerateButton />}
         </div>
       </div>
 
@@ -160,13 +174,15 @@ export function PlanViewer({
             );
           })}
         </div>
-        <Link
-          href="/family"
-          className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-        >
-          <UserPlus className="size-4" aria-hidden="true" />
-          إضافة فرد
-        </Link>
+        {!readOnly && (
+          <Link
+            href="/family"
+            className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+          >
+            <UserPlus className="size-4" aria-hidden="true" />
+            إضافة فرد
+          </Link>
+        )}
         </div>
       </div>
       )}
