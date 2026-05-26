@@ -100,3 +100,141 @@ Before building ANY section, you must:
 **Plan engine package**: Lives at packages/plan-engine (was originally inline in apps/app).
 
 **Settings page**: PDPL compliance shipped — /settings has account info + data export + immediate hard-delete via typed-confirmation modal. Public routes /privacy and /terms exist with placeholder Markdown content (needs real legal text before scaling).
+
+## Current Database Schema (verified 05/26/2026)
+
+Point-in-time snapshot of the **production** `public` schema (from `information_schema.columns`).
+This is the source of truth for column names — reconcile `apps/app/src/lib/supabase/database.types.ts`
+to it if they differ. `ARRAY` = Postgres array (`text[]`). `nullable` maps `is_nullable` (YES→yes / NO→no).
+
+### family_members
+
+| column_name | data_type | nullable |
+| --- | --- | --- |
+| id | uuid | no |
+| user_id | uuid | no |
+| name | text | no |
+| role | text | no |
+| birth_year | integer | yes |
+| weight_kg | numeric | yes |
+| height_cm | numeric | yes |
+| activity_level | text | yes |
+| primary_goal | text | yes |
+| preferred_language | text | no |
+| dietary_restrictions | ARRAY | yes |
+| medical_conditions | ARRAY | yes |
+| display_order | integer | no |
+| created_at | timestamp with time zone | no |
+| updated_at | timestamp with time zone | no |
+| member_type | text | no |
+| sex | text | yes |
+| consulted_doctor | boolean | yes |
+| allergies | jsonb | yes |
+| dislikes | jsonb | yes |
+| trimester | integer | yes |
+| months_postpartum | integer | yes |
+| high_risk_pregnancy | boolean | yes |
+| school_meal_handling | text | yes |
+| picky_eater | boolean | yes |
+
+### meal_plans
+
+| column_name | data_type | nullable |
+| --- | --- | --- |
+| id | uuid | no |
+| user_id | uuid | no |
+| status | text | no |
+| generated_at | timestamp with time zone | yes |
+| error_message | text | yes |
+| plan_data | jsonb | yes |
+| ai_model | text | yes |
+| ai_input_tokens | integer | yes |
+| ai_output_tokens | integer | yes |
+| ai_generation_seconds | numeric | yes |
+| created_at | timestamp with time zone | no |
+| updated_at | timestamp with time zone | no |
+
+### plan_generations
+
+| column_name | data_type | nullable |
+| --- | --- | --- |
+| id | uuid | no |
+| user_id | uuid | no |
+| meal_plan_id | uuid | yes |
+| ai_input_tokens | integer | no |
+| ai_output_tokens | integer | no |
+| estimated_cost_usd | numeric | no |
+| status | text | no |
+| failure_reason | text | yes |
+| created_at | timestamp with time zone | no |
+| model | text | yes |
+| tokens_in | integer | yes |
+| tokens_out | integer | yes |
+| cost_usd | numeric | yes |
+| duration_ms | integer | yes |
+| error_message | text | yes |
+| started_at | timestamp with time zone | no |
+| completed_at | timestamp with time zone | yes |
+
+### profiles
+
+| column_name | data_type | nullable |
+| --- | --- | --- |
+| id | uuid | no |
+| display_name | text | yes |
+| preferred_language | text | no |
+| birth_year | integer | yes |
+| weight_kg | numeric | yes |
+| height_cm | numeric | yes |
+| activity_level | text | yes |
+| primary_goal | text | yes |
+| cuisine_preference | text | no |
+| dietary_restrictions | ARRAY | yes |
+| has_medical_conditions | boolean | no |
+| medical_conditions | ARRAY | yes |
+| is_pregnant | boolean | no |
+| pregnancy_trimester | integer | yes |
+| consulted_doctor | boolean | no |
+| onboarding_completed_at | timestamp with time zone | yes |
+| created_at | timestamp with time zone | no |
+| updated_at | timestamp with time zone | no |
+| sex | text | yes |
+| member_type | text | no |
+| allergies | jsonb | yes |
+| dislikes | jsonb | yes |
+| months_postpartum | integer | yes |
+| high_risk_pregnancy | boolean | yes |
+| family_dietary_restrictions | jsonb | yes |
+| family_dislikes | jsonb | yes |
+| cooking_methods | jsonb | yes |
+| meal_out_frequency | text | yes |
+| family_wide_completed_at | timestamp with time zone | yes |
+| mom_profile_completed_at | timestamp with time zone | yes |
+| member_addition_order | jsonb | yes |
+
+### subscriptions
+
+| column_name | data_type | nullable |
+| --- | --- | --- |
+| id | uuid | no |
+| user_id | uuid | no |
+| ls_subscription_id | text | yes |
+| ls_customer_id | text | yes |
+| ls_variant_id | text | yes |
+| ls_order_id | text | yes |
+| tier | text | no |
+| status | text | no |
+| billing_interval | text | yes |
+| current_period_start | timestamp with time zone | yes |
+| current_period_end | timestamp with time zone | yes |
+| trial_ends_at | timestamp with time zone | yes |
+| cancelled_at | timestamp with time zone | yes |
+| ends_at | timestamp with time zone | yes |
+| created_at | timestamp with time zone | no |
+
+> **Known drift (subscriptions):** application code (`lib/subscription/state.ts`, the Lemonsqueezy
+> webhook, `database.types.ts`, the account-deletion route) references columns that are **absent from
+> production** above: `lemonsqueezy_subscription_id`, `lemonsqueezy_customer_id`, `lemonsqueezy_variant_id`,
+> `cadence`, `cancel_at_period_end`, `trial_started_at`, `updated_at`. Production still has the legacy
+> `ls_*` columns + `billing_interval` instead. The migration that renamed/added these (00004) appears
+> unapplied in prod. Reconcile before relying on subscription reads/writes.
