@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { GenerateFamilyPlanBanner } from "./GenerateFamilyPlanBanner";
+import { TodaysMeals } from "./TodaysMeals";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -109,11 +110,13 @@ export default async function DashboardPage() {
 
         {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
 
-        <div className="mb-8">
-          <p className="text-brand-ink-muted text-sm">أهلاً،</p>
-          <h2 className="font-extrabold text-2xl md:text-3xl text-brand-ink mt-1 leading-tight">
-            {displayName}
-          </h2>
+        <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">
+          أهلاً، {displayName}
+        </h2>
+
+        {/* Primary content: what am I cooking today? */}
+        <div className="mb-10">
+          {user && <TodaysMeals userId={user.id} isOnboarded={onboardingDone} />}
         </div>
 
         {!onboardingDone && (
@@ -138,10 +141,11 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <p className="text-brand-ink-muted text-xs font-bold mb-3">نظرة سريعة</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Link
             href="/family"
-            className="block bg-white rounded-2xl p-6 border border-brand-ink/5 hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            className="block bg-white rounded-2xl p-4 border border-brand-ink/5 hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center">
@@ -149,7 +153,7 @@ export default async function DashboardPage() {
               </div>
               <p className="text-brand-ink-muted text-sm font-medium">أفراد العائلة</p>
             </div>
-            <p className="font-extrabold text-3xl text-brand-ink mt-1 tabular-nums">
+            <p className="font-extrabold text-xl text-brand-ink mt-1 tabular-nums">
               {familyMembers.length}
             </p>
             <p className="inline-flex items-center gap-1 text-brand-purple-900 text-xs font-bold mt-1">
@@ -159,7 +163,7 @@ export default async function DashboardPage() {
           </Link>
 
           {isPaywalled ? (
-            <div className="bg-brand-purple-900 text-white rounded-2xl p-6">
+            <div className="bg-brand-purple-900 text-white rounded-2xl p-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="size-10 rounded-full bg-white/15 flex items-center justify-center">
                   <Lock className="size-5 text-brand-yellow" aria-hidden="true" />
@@ -180,7 +184,7 @@ export default async function DashboardPage() {
               </a>
             </div>
           ) : (
-          <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center">
                 <Calendar className="size-5 text-brand-pink" aria-hidden="true" />
@@ -189,7 +193,7 @@ export default async function DashboardPage() {
             </div>
             {latestPlan?.status === "ready" && (
               <>
-                <p className="font-extrabold text-3xl text-brand-ink mt-1">نشطة</p>
+                <p className="font-extrabold text-xl text-brand-ink mt-1">نشطة</p>
                 <p className="text-brand-ink-muted text-xs mt-1">
                   {latestPlan.week_start_date
                     ? `تبدأ ${new Date(latestPlan.week_start_date).toLocaleDateString("ar-SA")}`
@@ -232,7 +236,7 @@ export default async function DashboardPage() {
             )}
             {!latestPlan && (
               <>
-                <p className="font-extrabold text-3xl text-brand-ink mt-1">—</p>
+                <p className="font-extrabold text-xl text-brand-ink mt-1">—</p>
                 <p className="text-brand-ink-muted text-xs mt-1">ما عندك خطة بعد</p>
                 {onboardingDone && <CreateFirstPlanButton />}
               </>
@@ -240,7 +244,7 @@ export default async function DashboardPage() {
           </div>
           )}
 
-          <div className="bg-white rounded-2xl p-6 border border-brand-ink/5">
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-yellow/20 flex items-center justify-center">
                 <Sparkles className="size-5 text-brand-yellow" aria-hidden="true" />

@@ -41,16 +41,28 @@ export function PlanViewer({
   plan,
   planId: _planId,
   generating = false,
+  preselectedMember,
 }: {
   plan: MealPlan;
   planId: string;
   generating?: boolean;
+  preselectedMember?: string;
 }) {
   const router = useRouter();
   const [activeMemberId, setActiveMemberId] = useState<string>(
-    plan.members[0]?.member_id ?? "mom",
+    preselectedMember && plan.members.some((m) => m.member_id === preselectedMember)
+      ? preselectedMember
+      : (plan.members[0]?.member_id ?? "mom"),
   );
   const [activeDayIndex, setActiveDayIndex] = useState<number>(0);
+
+  // The ?member= param only seeds the initial tab; strip it after mount so a
+  // later refresh doesn't override the user's subsequent tab clicks.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("member=")) {
+      window.history.replaceState(null, "", "/plan");
+    }
+  }, []);
 
   // While later days are still being prepared, poll for them: a periodic
   // router.refresh pulls the newly-persisted days; once `generating` is false

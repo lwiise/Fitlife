@@ -73,6 +73,7 @@ export default async function PlanPage({
             plan={latest.plan_data}
             planId={latest.id}
             generating={latest.in_progress}
+            preselectedMember={member}
           />
         )}
       </div>
