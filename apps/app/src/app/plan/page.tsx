@@ -5,6 +5,7 @@ import {
 } from "@/lib/supabase/queries";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
+import { BackToDashboard } from "@/components/BackToDashboard";
 import { EmptyState } from "./EmptyState";
 import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
@@ -43,7 +44,10 @@ export default async function PlanPage({
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <LogoutButton />
+          <div className="flex items-center gap-2">
+            <BackToDashboard />
+            <LogoutButton />
+          </div>
         </div>
       </header>
 

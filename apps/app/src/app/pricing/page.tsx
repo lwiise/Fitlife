@@ -5,6 +5,7 @@ import { PricingToggle } from "./PricingToggle";
 import { TierCard } from "./TierCard";
 import { PreselectionScroll } from "./PreselectionScroll";
 import { Logo } from "@/components/Logo";
+import { BackToDashboard } from "@/components/BackToDashboard";
 
 export const metadata = {
   title: "الأسعار — فت لايف",
@@ -32,7 +33,10 @@ export default async function PricingPage({
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <LogoutButton />
+          <div className="flex items-center gap-2">
+            <BackToDashboard />
+            <LogoutButton />
+          </div>
         </div>
       </header>
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
+import { BackToDashboard } from "@/components/BackToDashboard";
 import {
   GATE_CONDITIONS,
   STABLE_CONDITIONS,
@@ -381,9 +382,12 @@ export function MemberWizard({
         <div className="container-app py-4">
           <div className="flex items-center justify-between mb-3">
             <h1 className="font-bold text-base text-brand-ink">{TYPE_TITLES[type]}</h1>
-            <span className="text-brand-ink-muted text-xs font-medium tabular-nums">
-              {step + 1} / {total}
-            </span>
+            <div className="flex items-center gap-2">
+              <BackToDashboard />
+              <span className="text-brand-ink-muted text-xs font-medium tabular-nums">
+                {step + 1} / {total}
+              </span>
+            </div>
           </div>
           <div
             className="h-1.5 bg-brand-surface rounded-full overflow-hidden"
