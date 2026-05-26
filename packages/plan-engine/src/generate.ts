@@ -16,6 +16,7 @@ import {
   PlanSkeletonSchema,
   DaySliceSchema,
   type MealPlan,
+  type MemberPlan,
   type PlanSkeleton,
   type Meal,
   type Day,
@@ -147,17 +148,19 @@ function sumDayTotal(meals: Meal[]) {
 }
 
 /**
- * Generate the whole family plan in two phases to break the single-call time
- * ceiling: (1) a small "skeleton" call sets per-member targets + a week of dish
- * NAMES (variety + shared-recipe coordination decided once); (2) each day is
- * expanded into full recipes in PARALLEL (capped + retried). Wall-clock ≈ one
- * day regardless of week/family size. No DB access — callers persist the result.
+ * Generate the family plan day-by-day (sequential, all days shown as "loading").
+ * INCREMENTAL: members already complete in `existingPlan` are carried over
+ * verbatim; only new/incomplete members are generated, and they're aligned to
+ * the family's existing dishes (same dish per day, that member's own portions).
+ * No DB access — callers persist the result (progressively via `onProgress`).
  */
 export async function generateMealPlan(params: {
   anthropicApiKey: string;
   context: PlanPromptContext;
-  // Called (serialized) after each day completes with the plan-so-far, so the
-  // caller can persist progressively and let the user view it day-by-day.
+  // Prior plan to carry completed members over from (family add/edit). When
+  // omitted, everyone is generated fresh (manual "new plan").
+  existingPlan?: MealPlan | null;
+  // Called (serialized) after each day completes with the plan-so-far.
   onProgress?: (
     snapshot: MealPlan,
     info: { readyDays: number; totalDays: number },
@@ -166,17 +169,94 @@ export async function generateMealPlan(params: {
   plan: MealPlan;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
 }> {
-  const { anthropicApiKey, context, onProgress } = params;
+  const { anthropicApiKey, context, existingPlan, onProgress } = params;
   let totalIn = 0;
   let totalOut = 0;
 
-  // ── Phase 1: skeleton (targets + dish names) ──
+  const beneficiaries = getBeneficiaries(context);
+  const beneIds = new Set(beneficiaries.map((b) => b.member_id));
+  const nameById = new Map(
+    beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
+  );
+  const isChildById = new Map<string, boolean>([
+    [
+      "mom",
+      context.mom.member_type === "child" ||
+        (context.mom.age != null && context.mom.age < 18),
+    ],
+    ...context.family_members.map(
+      (m) => [m.id, m.is_child] as [string, boolean],
+    ),
+  ]);
+
+  // ── Analyse the prior plan: which members carry over, the family day grid ──
+  const seeded = new Map<string, MemberPlan>(); // complete members carried over
+  let familyDayIndices: number[] = [];
+  const familyDayNames = new Map<number, string>();
+  const familyDishGrid = new Map<
+    number,
+    { slot: Meal["slot"]; slot_name_ar: string; recipe_name_ar: string }[]
+  >();
+  if (existingPlan && existingPlan.members.length > 0) {
+    familyDayIndices = Array.from(
+      new Set(
+        existingPlan.members.flatMap((m) => m.days.map((d) => d.day_index)),
+      ),
+    ).sort((a, b) => a - b);
+    const ref = [...existingPlan.members].sort(
+      (a, b) => b.days.length - a.days.length,
+    )[0];
+    for (const d of ref?.days ?? []) {
+      familyDayNames.set(d.day_index, d.day_name_ar);
+      familyDishGrid.set(
+        d.day_index,
+        d.meals.map((m) => ({
+          slot: m.slot,
+          slot_name_ar: m.slot_name_ar,
+          recipe_name_ar: m.recipe_name_ar,
+        })),
+      );
+    }
+    const complete = (m: MemberPlan) =>
+      familyDayIndices.length > 0 &&
+      familyDayIndices.every((di) => {
+        const day = m.days.find((d) => d.day_index === di);
+        return !!day && day.meals.length > 0;
+      });
+    for (const m of existingPlan.members) {
+      if (beneIds.has(m.member_id) && complete(m)) seeded.set(m.member_id, m);
+    }
+  }
+
+  const toGenerate = beneficiaries.filter((b) => !seeded.has(b.member_id));
+
+  // ── Fast path: nothing to generate (e.g. a member was removed) ──
+  if (toGenerate.length === 0) {
+    const members = beneficiaries.map((b) => {
+      const m = seeded.get(b.member_id)!;
+      return { ...m, member_name_ar: nameById.get(b.member_id) ?? m.member_name_ar };
+    });
+    const plan = MealPlanSchema.parse({
+      week_start_date: existingPlan?.week_start_date ?? nextSaturdayISO(),
+      members,
+      methodology_notes_ar: existingPlan?.methodology_notes_ar,
+      safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
+      days_total: familyDayIndices.length || members[0]?.days.length || 7,
+      generating: false,
+    });
+    if (onProgress)
+      await Promise.resolve(onProgress(plan, { readyDays: 0, totalDays: 0 }));
+    return { plan, usage: { input_tokens: 0, output_tokens: 0, cost_usd: 0 } };
+  }
+
+  // ── Phase 1: skeleton for the members we need to generate ──
+  const targetMemberIds = toGenerate.map((b) => b.member_id);
   const sk = await streamAnthropic({
     apiKey: anthropicApiKey,
     model: PLAN_MODEL,
     maxTokens: SKELETON_MAX_TOKENS,
     systemStatic: STATIC_SYSTEM,
-    systemPrompt: buildSkeletonPrompt(context),
+    systemPrompt: buildSkeletonPrompt(context, targetMemberIds),
   });
   totalIn += sk.tokensIn;
   totalOut += sk.tokensOut;
@@ -205,62 +285,106 @@ export async function generateMealPlan(params: {
       sk.text,
     );
   }
+  const skeletonById = new Map(skeleton.members.map((m) => [m.member_id, m]));
 
-  const dayIndices = Array.from(
-    new Set(skeleton.members.flatMap((m) => m.days.map((d) => d.day_index))),
-  ).sort((a, b) => a - b);
+  // Day grid: the family's (when carrying over) else the skeleton's own.
+  const dayIndices =
+    familyDayIndices.length > 0
+      ? familyDayIndices
+      : Array.from(
+          new Set(skeleton.members.flatMap((m) => m.days.map((d) => d.day_index))),
+        ).sort((a, b) => a - b);
   const totalDays = dayIndices.length;
+  const dayNameByIndex = new Map<number, string>();
+  for (const di of dayIndices) {
+    dayNameByIndex.set(
+      di,
+      familyDayNames.get(di) ??
+        skeleton.members[0]?.days.find((d) => d.day_index === di)?.day_name_ar ??
+        `اليوم ${di + 1}`,
+    );
+  }
 
-  // ── Assembly that grows as days complete ──
-  const beneficiaries = getBeneficiaries(context);
-  const nameById = new Map(
-    beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
-  );
-  const isChildById = new Map<string, boolean>([
-    [
-      "mom",
-      context.mom.member_type === "child" ||
-        (context.mom.age != null && context.mom.age < 18),
-    ],
-    ...context.family_members.map(
-      (m) => [m.id, m.is_child] as [string, boolean],
-    ),
-  ]);
-  const dayNameByIndex = new Map(
-    (skeleton.members[0]?.days ?? []).map((d) => [d.day_index, d.day_name_ar]),
-  );
-  // Pre-seed every day as an empty "loading" slot so the plan opens showing all
-  // days at once; each slot's meals fill in as that day is generated (in order).
-  const daysByMember = new Map<string, Map<number, Day>>(
-    skeleton.members.map((sm) => [sm.member_id, new Map<number, Day>()]),
-  );
-  for (const sm of skeleton.members) {
-    const dmap = daysByMember.get(sm.member_id)!;
-    for (const di of dayIndices) {
-      dmap.set(di, {
+  // Align new members to the family's existing dishes (same dish each day).
+  const aligned = familyDishGrid.size > 0;
+  const workingSkeleton: PlanSkeleton = {
+    ...skeleton,
+    members: skeleton.members.map((sm) => ({
+      ...sm,
+      days: dayIndices.map((di) => ({
         day_index: di,
-        day_name_ar: dayNameByIndex.get(di) ?? `اليوم ${di + 1}`,
-        meals: [],
-        day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        day_name_ar: dayNameByIndex.get(di)!,
+        meals: aligned
+          ? (familyDishGrid.get(di) ??
+            sm.days.find((d) => d.day_index === di)?.meals ??
+            [])
+          : (sm.days.find((d) => d.day_index === di)?.meals ?? []),
+      })),
+    })),
+  };
+
+  // ── Assembly: seed complete members, shell the rest ──
+  const daysByMember = new Map<string, Map<number, Day>>();
+  const targetsById = new Map<
+    string,
+    {
+      primary_goal?: MemberPlan["primary_goal"];
+      daily_calories_target: number;
+      macros_target: MemberPlan["macros_target"];
+    }
+  >();
+  for (const b of beneficiaries) {
+    const dmap = new Map<number, Day>();
+    const seededMember = seeded.get(b.member_id);
+    if (seededMember) {
+      for (const d of seededMember.days) dmap.set(d.day_index, d);
+      targetsById.set(b.member_id, {
+        primary_goal: seededMember.primary_goal,
+        daily_calories_target: seededMember.daily_calories_target,
+        macros_target: seededMember.macros_target,
+      });
+    } else {
+      for (const di of dayIndices)
+        dmap.set(di, {
+          day_index: di,
+          day_name_ar: dayNameByIndex.get(di)!,
+          meals: [],
+          day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        });
+      const skM = skeletonById.get(b.member_id);
+      targetsById.set(b.member_id, {
+        primary_goal: skM?.primary_goal,
+        daily_calories_target: skM?.daily_calories_target ?? 0,
+        macros_target: skM?.macros_target ?? {
+          protein_g: 0,
+          carbs_g: 0,
+          fat_g: 0,
+        },
       });
     }
+    daysByMember.set(b.member_id, dmap);
   }
-  const done = new Set<number>(); // days expanded successfully (have meals)
+  const done = new Set<number>(); // toGenerate days expanded successfully
 
   const snapshot = (generating: boolean): MealPlan => ({
-    week_start_date: nextSaturdayISO(),
-    members: skeleton.members.map((sm) => ({
-      member_id: sm.member_id,
-      member_name_ar: nameById.get(sm.member_id) ?? sm.member_name_ar ?? "",
-      primary_goal: sm.primary_goal,
-      daily_calories_target: sm.daily_calories_target,
-      macros_target: sm.macros_target,
-      days: [...daysByMember.get(sm.member_id)!.values()].sort(
-        (a, b) => a.day_index - b.day_index,
-      ),
-    })),
-    methodology_notes_ar: skeleton.methodology_notes_ar,
-    safety_disclaimer_ar: skeleton.safety_disclaimer_ar,
+    week_start_date: existingPlan?.week_start_date ?? nextSaturdayISO(),
+    members: beneficiaries.map((b) => {
+      const t = targetsById.get(b.member_id)!;
+      return {
+        member_id: b.member_id,
+        member_name_ar: nameById.get(b.member_id) ?? "",
+        primary_goal: t.primary_goal,
+        daily_calories_target: t.daily_calories_target,
+        macros_target: t.macros_target,
+        days: [...daysByMember.get(b.member_id)!.values()].sort(
+          (a, b2) => a.day_index - b2.day_index,
+        ),
+      };
+    }),
+    methodology_notes_ar:
+      skeleton.methodology_notes_ar ?? existingPlan?.methodology_notes_ar,
+    safety_disclaimer_ar:
+      skeleton.safety_disclaimer_ar ?? existingPlan?.safety_disclaimer_ar,
     days_total: totalDays,
     generating,
   });
@@ -278,12 +402,12 @@ export async function generateMealPlan(params: {
     );
   };
 
-  // Open the plan immediately with all days shown as "loading" (the shell).
+  // Open the plan immediately: existing members complete, new members loading.
   emit();
 
-  // ── Phase 2: expand each day sequentially, in order; fill its slot + emit ──
+  // ── Phase 2: expand each day sequentially (toGenerate members only) ──
   await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
-    const prompt = buildDayPrompt(context, skeleton, dayIndex);
+    const prompt = buildDayPrompt(context, workingSkeleton, dayIndex);
     let attempt = 0;
     for (;;) {
       try {
@@ -309,17 +433,14 @@ export async function generateMealPlan(params: {
             res.text,
           );
         const slice = r.data;
-        for (const sm of skeleton.members) {
+        for (const sm of workingSkeleton.members) {
           const sliceMember = slice.members.find(
             (m) => m.member_id === sm.member_id,
           );
           const meals = sliceMember?.meals ?? [];
           daysByMember.get(sm.member_id)!.set(dayIndex, {
             day_index: dayIndex,
-            day_name_ar:
-              slice.day_name_ar ||
-              dayNameByIndex.get(dayIndex) ||
-              `اليوم ${dayIndex + 1}`,
+            day_name_ar: dayNameByIndex.get(dayIndex) ?? `اليوم ${dayIndex + 1}`,
             meals,
             day_total: sumDayTotal(meals),
           });
@@ -333,8 +454,6 @@ export async function generateMealPlan(params: {
           await sleep(800 * attempt);
           continue;
         }
-        // Tolerate a single failed day — leave its empty slot ("no meals" when
-        // done). Only a total failure (all days) is fatal.
         console.error(
           "[plan-generate] day failed (omitting)",
           dayIndex,
@@ -346,14 +465,14 @@ export async function generateMealPlan(params: {
     }
   });
 
-  // Wait for any pending progress writes to settle.
   await progressTail;
 
-  if (done.size === 0) {
+  // Fatal only if there were no carried-over members AND nothing generated.
+  if (done.size === 0 && seeded.size === 0) {
     throw new PlanValidationError(`All ${totalDays} day generations failed`);
   }
 
-  // ── Final assembled MealPlan ── (all days that succeeded; failed = empty)
+  // ── Final assembled MealPlan ──
   const result = MealPlanSchema.safeParse(snapshot(false));
   if (!result.success)
     throw new PlanValidationError(
@@ -361,8 +480,9 @@ export async function generateMealPlan(params: {
     );
   const plan: MealPlan = result.data;
 
-  // Non-fatal numeric guards (targets come from the skeleton; drift is rare now).
+  // Non-fatal numeric guards (skip seeded members — already validated).
   for (const memberPlan of plan.members) {
+    if (seeded.has(memberPlan.member_id)) continue;
     const isChild = isChildById.get(memberPlan.member_id) ?? false;
     if (!isChild && memberPlan.daily_calories_target < 1400) {
       console.warn(
@@ -410,8 +530,9 @@ export async function runMealPlanGeneration(params: {
   anthropicApiKey: string;
   mealPlanId: string;
   context: PlanPromptContext;
+  existingPlan?: MealPlan | null;
 }): Promise<GenerateResult> {
-  const { supabase, anthropicApiKey, mealPlanId, context } = params;
+  const { supabase, anthropicApiKey, mealPlanId, context, existingPlan } = params;
   const startMs = Date.now();
 
   let plan: MealPlan;
@@ -420,6 +541,7 @@ export async function runMealPlanGeneration(params: {
     const result = await generateMealPlan({
       anthropicApiKey,
       context,
+      existingPlan,
       // Persist progressively; flip "ready" on the first emit (the shell) so the
       // plan opens showing all days loading and they fill in 1→7.
       onProgress: async (snapshot) => {

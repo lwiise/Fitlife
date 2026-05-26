@@ -9,6 +9,7 @@
 // @fitlife/plan-engine; the relative path lets esbuild inline it.
 
 import { generateMealPlan } from "../../../../packages/plan-engine/src/generate";
+import type { MealPlan } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
   PlanPromptContextMember,
@@ -264,13 +265,17 @@ export default async (req: Request): Promise<Response> => {
     return new Response("Server misconfigured", { status: 500 });
   }
 
-  let body: { userId?: string; mealPlanId?: string };
+  let body: {
+    userId?: string;
+    mealPlanId?: string;
+    existingPlan?: MealPlan | null;
+  };
   try {
     body = await req.json();
   } catch {
     return new Response("Bad request", { status: 400 });
   }
-  const { userId, mealPlanId } = body;
+  const { userId, mealPlanId, existingPlan } = body;
   if (!userId || !mealPlanId) {
     return new Response("Missing userId or mealPlanId", { status: 400 });
   }
@@ -282,6 +287,7 @@ export default async (req: Request): Promise<Response> => {
     const { plan, usage } = await generateMealPlan({
       anthropicApiKey: anthropicKey,
       context,
+      existingPlan: existingPlan ?? null,
       // Persist progressively + flip "ready" on the first emit (the shell), so
       // the plan opens showing all days as loading and they fill in 1→7.
       onProgress: async (snapshot) => {

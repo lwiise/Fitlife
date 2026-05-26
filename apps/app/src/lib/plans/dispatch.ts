@@ -8,8 +8,10 @@ import {
   OnboardingIncompleteError,
   MedicalGateError,
   PlanValidationError,
+  type MealPlan,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
+import { getLatestPlan } from "@/lib/plans/getLatestPlan";
 import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
@@ -39,8 +41,18 @@ export async function triggerPlanGeneration(params: {
   supabase: ServerClient;
   userId: string;
   bypassRateLimit?: boolean;
+  // Family changes carry completed members over from the prior plan and
+  // generate only the new/changed member. Manual "new plan" leaves these off.
+  carryOver?: boolean;
+  regenerateMemberId?: string;
 }): Promise<DispatchResult> {
-  const { supabase, userId, bypassRateLimit = false } = params;
+  const {
+    supabase,
+    userId,
+    bypassRateLimit = false,
+    carryOver = false,
+    regenerateMemberId,
+  } = params;
 
   const access = bypassRateLimit
     ? await canGenerateForFamilyChange(userId)
@@ -58,6 +70,23 @@ export async function triggerPlanGeneration(params: {
       tags: { area: "plan-generation", step: "build-context", userId },
     });
     return { ok: false, kind: "server" };
+  }
+
+  // Carry over the prior plan's completed members (minus the edited member, so
+  // it regenerates). Fetched BEFORE createPlanRows so it's the previous plan.
+  let existingPlan: MealPlan | null = null;
+  if (carryOver) {
+    const prior = await getLatestPlan(userId);
+    if (prior?.status === "ready" && prior.plan_data) {
+      existingPlan = regenerateMemberId
+        ? {
+            ...prior.plan_data,
+            members: prior.plan_data.members.filter(
+              (m) => m.member_id !== regenerateMemberId,
+            ),
+          }
+        : prior.plan_data;
+    }
   }
 
   let mealPlanId: string;
@@ -79,6 +108,7 @@ export async function triggerPlanGeneration(params: {
         anthropicApiKey: getAnthropicKey(),
         mealPlanId,
         context,
+        existingPlan,
       });
       return { ok: true, mealPlanId, status: "ready" };
     } catch (err) {
@@ -109,7 +139,7 @@ export async function triggerPlanGeneration(params: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
         },
-        body: JSON.stringify({ userId, mealPlanId }),
+        body: JSON.stringify({ userId, mealPlanId, existingPlan }),
       },
     );
     if (!res.ok && res.status !== 202) {

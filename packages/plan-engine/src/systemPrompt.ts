@@ -246,8 +246,15 @@ const DAY_NAMES_AR = [
   "الجمعة",
 ];
 
-function buildRoster(context: PlanPromptContext): string {
-  const beneficiaries = getBeneficiaries(context);
+function buildRoster(
+  context: PlanPromptContext,
+  targetMemberIds?: string[],
+): string {
+  let beneficiaries = getBeneficiaries(context);
+  if (targetMemberIds) {
+    const set = new Set(targetMemberIds);
+    beneficiaries = beneficiaries.filter((b) => set.has(b.member_id));
+  }
   return beneficiaries
     .map((b) => {
       const desc =
@@ -307,8 +314,14 @@ function familyWideText(context: PlanPromptContext): string {
  * a week of dish NAMES only (no recipes). Small + fast; decides variety and
  * which meals are shared across the family (same recipe_name_ar = shared).
  */
-export function buildSkeletonPrompt(context: PlanPromptContext): string {
-  const isSolo = getBeneficiaries(context).length === 1;
+export function buildSkeletonPrompt(
+  context: PlanPromptContext,
+  targetMemberIds?: string[],
+): string {
+  const count = targetMemberIds
+    ? targetMemberIds.length
+    : getBeneficiaries(context).length;
+  const isSolo = count === 1;
   const sharedNote = isSolo
     ? "هذه خطة لفرد واحد، لا تشارك."
     : "عندما تكون الوجبة نفسها مشتركة بين أكثر من فرد، استخدمي **نفس** recipe_name_ar لهم حتى نوسّعها لاحقاً كوصفة عائلة واحدة بحصص مختلفة.";
@@ -319,8 +332,8 @@ export function buildSkeletonPrompt(context: PlanPromptContext): string {
 
 الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
-# أفراد الخطة (استخدمي member_id بالضبط)
-${buildRoster(context)}
+# أفراد الخطة المطلوبة الآن (استخدمي member_id بالضبط)
+${buildRoster(context, targetMemberIds)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).

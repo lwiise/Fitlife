@@ -337,11 +337,16 @@ type FamilyGenResult =
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
+  opts: { regenerateMemberId?: string } = {},
 ): Promise<FamilyGenResult> {
   const result = await triggerPlanGeneration({
     supabase,
     userId,
     bypassRateLimit: true,
+    // Family changes are incremental: keep already-generated members and
+    // generate only the new/edited one (aligned to the family's dishes).
+    carryOver: true,
+    regenerateMemberId: opts.regenerateMemberId,
   });
 
   if (result.ok) return { ok: true, plan_generation_id: result.mealPlanId };
@@ -608,7 +613,9 @@ export async function updateFamilyMember(
   if (!substantive) {
     return { ok: true, member_id: memberId, plan_generation_id: null };
   }
-  const gen = await runFamilyGeneration(supabase, user.id);
+  const gen = await runFamilyGeneration(supabase, user.id, {
+    regenerateMemberId: memberId,
+  });
   if (gen.ok)
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")
