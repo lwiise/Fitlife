@@ -325,7 +325,7 @@ function SaraPill({ reduced }: { reduced: boolean }) {
           س
         </div>
         <div className="text-start">
-          <p className="text-xs font-bold leading-tight">ساره العتيبي</p>
+          <p className="text-xs font-bold leading-tight">ساره الشيخ</p>
           <p className="text-[10px] leading-tight text-white/60">
             خبيرة تغذية
           </p>

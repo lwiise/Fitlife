@@ -245,7 +245,7 @@ export default function Trust() {
               >
                 <Image
                   src="/sara-portrait.svg"
-                  alt="ساره العتيبي — خبيرة التغذية المعتمدة في فت لايف"
+                  alt="ساره الشيخ — خبيرة التغذية المعتمدة في فت لايف"
                   width={480}
                   height={640}
                   unoptimized
@@ -259,7 +259,7 @@ export default function Trust() {
                 {...fadeUp(1.3, 10)}
                 className="text-[28px] font-extrabold leading-tight text-ink"
               >
-                ساره العتيبي
+                ساره الشيخ
               </motion.h3>
               <motion.p
                 {...fadeUp(1.4, 10)}

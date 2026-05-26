@@ -20,7 +20,7 @@ const productLinks: FooterLink[] = [
 
 const companyLinks: FooterLink[] = [
   { href: "/about", label: "عن فت لايف" },
-  { href: "#trust", label: "ساره العتيبي (الخبيرة)" },
+  { href: "#trust", label: "ساره الشيخ (الخبيرة)" },
   { href: "/contact", label: "تواصل معنا" },
   { href: "/careers", label: "وظائف" },
 ];
