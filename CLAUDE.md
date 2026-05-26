@@ -214,12 +214,9 @@ to it if they differ. `ARRAY` = Postgres array (`text[]`). `nullable` maps `is_n
 
 ### subscriptions
 
-> **⚠️ Incomplete — the source query output was truncated at this (alphabetically last) table.**
-> The columns below are only the first 15 (through `created_at`); migration 00001 defines `updated_at`
-> after `created_at`, and migration 00004 adds `cadence`, `trial_started_at`, `cancel_at_period_end`,
-> `lemonsqueezy_subscription_id`, `lemonsqueezy_customer_id`, `lemonsqueezy_variant_id` (higher ordinal
-> positions, sorted after `created_at`) — none of which appear here because the paste was cut off.
-> Re-run the query for `subscriptions` alone and replace this block with the full result before relying on it.
+Both the legacy `ls_*` columns (+ `billing_interval`) and the 00004 `lemonsqueezy_*` (+ `cadence`,
+`trial_started_at`, `cancel_at_period_end`) columns coexist. Current code reads/writes the
+`lemonsqueezy_*` + `cadence` set; the `ls_*` + `billing_interval` columns are legacy.
 
 | column_name | data_type | nullable |
 | --- | --- | --- |
@@ -238,4 +235,10 @@ to it if they differ. `ARRAY` = Postgres array (`text[]`). `nullable` maps `is_n
 | cancelled_at | timestamp with time zone | yes |
 | ends_at | timestamp with time zone | yes |
 | created_at | timestamp with time zone | no |
-| _(more — truncated)_ | | |
+| updated_at | timestamp with time zone | no |
+| cadence | text | yes |
+| trial_started_at | timestamp with time zone | yes |
+| cancel_at_period_end | boolean | no |
+| lemonsqueezy_subscription_id | text | yes |
+| lemonsqueezy_customer_id | text | yes |
+| lemonsqueezy_variant_id | text | yes |
