@@ -80,3 +80,23 @@ Before building ANY section, you must:
 2. Walk through the 4-dimension framework for that section
 3. Wait for my approval of the design direction
 4. Then write code
+
+## Architecture Changes Since Original Handoff (May 24-26, 2026)
+
+**Auth method**: Switched from magic-link (passwordless) to email + password. Supabase auth via signInWithPassword and signUp. Forms include both email and password inputs.
+
+**Site architecture**: Merged from two Netlify sites to one unified site.
+- Single production site: fitlife-app-mvp.netlify.app
+- Landing page lives at apps/app/src/marketing (the live one)
+- apps/web is DEAD CODE — do not edit
+- Old fitlife-landing.netlify.app site is decommissioned
+
+**Database migration baseline**: Production Supabase has migrations 00001 through 00005 applied. Migration 00005 added per-member fields (member_type, sex, allergies, dislikes, trimester, school_meal_handling, picky_eater) and family-wide preferences (cuisine, dietary_restrictions, cooking_methods, meal_out_frequency).
+
+**Onboarding restructure (Prompt 1.8c)**: 5 family-wide questions → Mom's 8 personal questions → sequential per-member additions with branched wizards (adult/child/pregnant/lactating). Solo plans hide member tabs.
+
+**AI generation**: Day-by-day streaming, incremental per-member updates that don't wipe existing family plans when adding/editing one member.
+
+**Plan engine package**: Lives at packages/plan-engine (was originally inline in apps/app).
+
+**Settings page**: PDPL compliance shipped — /settings has account info + data export + immediate hard-delete via typed-confirmation modal. Public routes /privacy and /terms exist with placeholder Markdown content (needs real legal text before scaling).
