@@ -19,7 +19,10 @@ export async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith("/api");
   const isPublicAsset = pathname.startsWith("/_next") || pathname.includes(".");
   // The marketing landing page lives at "/" and is public to everyone.
-  const isPublicRoute = pathname === "/";
+  // Privacy + Terms must be readable WITHOUT a session (PDPL: users must be
+  // able to read them before signing up).
+  const isPublicRoute =
+    pathname === "/" || pathname === "/privacy" || pathname === "/terms";
 
   if (isApiRoute || isPublicAsset) {
     return response;

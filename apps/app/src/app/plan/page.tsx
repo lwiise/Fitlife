@@ -6,6 +6,7 @@ import {
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
+import { SettingsLink } from "@/components/SettingsLink";
 import { EmptyState } from "./EmptyState";
 import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
@@ -46,6 +47,7 @@ export default async function PlanPage({
           </a>
           <div className="flex items-center gap-2">
             <BackToDashboard />
+            <SettingsLink />
             <LogoutButton />
           </div>
         </div>

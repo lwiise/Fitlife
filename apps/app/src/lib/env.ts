@@ -41,6 +41,11 @@ export const env = {
     process.env.NEXT_PUBLIC_WEB_URL,
   ).replace(/\/+$/, ""),
 
+  // Public optional support contacts — empty by default; Anas populates them in
+  // .env.local + Netlify. Direct refs so Next.js inlines them; never throws.
+  NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "",
+  NEXT_PUBLIC_SUPPORT_WHATSAPP: process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || "",
+
   // Server-only optional (never sent to browser; resolve to undefined in client bundle)
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
 } as const;
