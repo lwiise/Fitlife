@@ -214,6 +214,13 @@ to it if they differ. `ARRAY` = Postgres array (`text[]`). `nullable` maps `is_n
 
 ### subscriptions
 
+> **⚠️ Incomplete — the source query output was truncated at this (alphabetically last) table.**
+> The columns below are only the first 15 (through `created_at`); migration 00001 defines `updated_at`
+> after `created_at`, and migration 00004 adds `cadence`, `trial_started_at`, `cancel_at_period_end`,
+> `lemonsqueezy_subscription_id`, `lemonsqueezy_customer_id`, `lemonsqueezy_variant_id` (higher ordinal
+> positions, sorted after `created_at`) — none of which appear here because the paste was cut off.
+> Re-run the query for `subscriptions` alone and replace this block with the full result before relying on it.
+
 | column_name | data_type | nullable |
 | --- | --- | --- |
 | id | uuid | no |
@@ -231,10 +238,4 @@ to it if they differ. `ARRAY` = Postgres array (`text[]`). `nullable` maps `is_n
 | cancelled_at | timestamp with time zone | yes |
 | ends_at | timestamp with time zone | yes |
 | created_at | timestamp with time zone | no |
-
-> **Known drift (subscriptions):** application code (`lib/subscription/state.ts`, the Lemonsqueezy
-> webhook, `database.types.ts`, the account-deletion route) references columns that are **absent from
-> production** above: `lemonsqueezy_subscription_id`, `lemonsqueezy_customer_id`, `lemonsqueezy_variant_id`,
-> `cadence`, `cancel_at_period_end`, `trial_started_at`, `updated_at`. Production still has the legacy
-> `ls_*` columns + `billing_interval` instead. The migration that renamed/added these (00004) appears
-> unapplied in prod. Reconcile before relying on subscription reads/writes.
+| _(more — truncated)_ | | |
