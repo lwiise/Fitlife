@@ -28,11 +28,20 @@ export default async function HousekeeperPage() {
   const locale = housekeeper.preferred_language;
   if (!isLocaleCode(locale) || locale === "ar") redirect("/plan");
 
+  // Any meal not yet translated to her locale → the view self-heals (trigger +
+  // poll). The locale stamp is set whenever recipe/ingredients/steps translate.
+  const needsTranslation = latest.plan_data.members.some((m) =>
+    m.days.some((d) =>
+      d.meals.some((meal) => meal.prep_steps_translated_locale !== locale),
+    ),
+  );
+
   return (
     <HousekeeperPlanView
       plan={latest.plan_data}
       planId={latest.id}
       locale={locale}
+      needsTranslation={needsTranslation}
     />
   );
 }

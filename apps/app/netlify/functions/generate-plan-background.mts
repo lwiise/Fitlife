@@ -9,6 +9,7 @@
 // @fitlife/plan-engine; the relative path lets esbuild inline it.
 
 import { generateMealPlan, translateMealPlan } from "../../../../packages/plan-engine/src/generate";
+import { LOCALE_CODES } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
@@ -218,6 +219,15 @@ async function buildContextViaFetch(
     };
   });
 
+  // Housekeeper's reading language (only when she exists and it's not Arabic) —
+  // drives the day-prompt translation directive. Mirrors buildContext.ts.
+  const housekeeper = family_members.find((m) => m.role === "housekeeper");
+  const hkLang = housekeeper?.preferred_language;
+  const housekeeper_locale =
+    hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
+      ? (hkLang as LocaleCode)
+      : undefined;
+
   return {
     mom: {
       id: profile.id as string,
@@ -248,6 +258,7 @@ async function buildContextViaFetch(
       meal_out_frequency: (profile.meal_out_frequency as string | null) ?? null,
     },
     composition_summary: buildCompositionSummary(family_members),
+    housekeeper_locale,
   };
 }
 
