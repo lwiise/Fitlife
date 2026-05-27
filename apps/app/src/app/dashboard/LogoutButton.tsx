@@ -21,14 +21,15 @@ export function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={isPending}
-      className="inline-flex items-center gap-2 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50"
+      aria-label="تسجيل خروج"
+      className="inline-flex items-center justify-center gap-2 min-h-11 min-w-11 sm:min-w-0 px-2.5 sm:px-3 rounded-full text-brand-ink-muted hover:text-brand-ink hover:bg-brand-surface text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
     >
       {isPending ? (
-        <Loader2 className="size-4 animate-spin" />
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
       ) : (
         <LogOut className="size-4" />
       )}
-      تسجيل خروج
+      <span className="hidden sm:inline">تسجيل خروج</span>
     </button>
   );
 }

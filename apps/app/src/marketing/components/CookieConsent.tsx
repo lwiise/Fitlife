@@ -36,10 +36,10 @@ export function CookieConsent() {
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="mx-auto max-w-3xl rounded-t-2xl bg-surface"
+        className="mx-auto max-h-[40vh] max-w-3xl rounded-t-2xl bg-surface"
       >
-        <div className="flex flex-col items-start gap-4 p-4 md:flex-row md:items-center md:p-2">
-          <p className="flex-1 text-sm leading-relaxed text-ink">
+        <div className="flex flex-row items-center justify-between gap-3 p-3 md:p-4">
+          <p className="flex-1 text-xs leading-snug text-ink text-center sm:text-sm md:text-start">
             نستخدم ملفات تعريف الارتباط لتحسين تجربتك. بالاستمرار، توافقين على ذلك.
             <a
               href="/privacy"
@@ -48,18 +48,18 @@ export function CookieConsent() {
               المزيد
             </a>
           </p>
-          <div className="flex shrink-0 flex-row gap-3">
+          <div className="flex shrink-0 flex-row gap-2">
             <button
               type="button"
               onClick={decline}
-              className="min-h-11 rounded-lg px-4 text-sm font-medium text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="min-h-11 rounded-lg px-3 text-xs font-medium text-ink-muted transition-colors hover:text-ink sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               رفض
             </button>
             <button
               type="button"
               onClick={accept}
-              className="min-h-11 rounded-lg bg-brand-yellow px-5 text-sm font-bold text-primary transition-colors hover:bg-[#FFC927] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="min-h-11 rounded-lg bg-brand-yellow px-4 text-xs font-bold text-primary transition-colors hover:bg-[#FFC927] sm:text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               قبول
             </button>
