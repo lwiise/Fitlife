@@ -12,6 +12,7 @@ import {
   buildSkeletonPrompt,
   buildDayPrompt,
   buildTranslatePrompt,
+  buildNameTranslatePrompt,
 } from "./systemPrompt";
 import {
   MealPlanSchema,
@@ -695,6 +696,10 @@ const TranslateOutSchema = z.array(
   }),
 );
 
+const NameTranslateOutSchema = z.array(
+  z.object({ i: z.number().int(), name: z.string() }),
+);
+
 export async function translateMealPlan(params: {
   anthropicApiKey: string;
   plan: MealPlan;
@@ -789,6 +794,57 @@ export async function translateMealPlan(params: {
       }
     }
   });
+
+  // ── Transliterate member names into the locale (one call, non-fatal) ──
+  const nameTodo = members.filter(
+    (m) => m.member_name_translated_locale !== locale,
+  );
+  if (nameTodo.length > 0) {
+    const items = nameTodo.map((m, i) => ({ i, name_ar: m.member_name_ar }));
+    let attempt = 0;
+    for (;;) {
+      try {
+        const res = await streamAnthropic({
+          apiKey: anthropicApiKey,
+          model: PLAN_MODEL,
+          maxTokens: DAY_MAX_TOKENS,
+          systemPrompt: buildNameTranslatePrompt(items, locale),
+          userMessage: "ترجمي الآن.",
+        });
+        totalIn += res.tokensIn;
+        totalOut += res.tokensOut;
+        if (res.stopReason === "max_tokens")
+          throw new PlanValidationError("Name translate hit max_tokens", res.text);
+        const parsed = NameTranslateOutSchema.safeParse(
+          JSON.parse(stripMarkdownFence(res.text)),
+        );
+        if (!parsed.success)
+          throw new PlanValidationError(
+            `Name translate failed validation: ${parsed.error.message.slice(0, 200)}`,
+            res.text,
+          );
+        for (const out of parsed.data) {
+          const member = nameTodo[out.i];
+          if (!member) continue;
+          member.member_name_translated = out.name;
+          member.member_name_translated_locale = locale;
+        }
+        break;
+      } catch (err) {
+        if (isRetryable(err) && attempt < 2) {
+          attempt++;
+          await sleep(800 * attempt);
+          continue;
+        }
+        // Non-fatal: maid view falls back to the Arabic name.
+        console.warn(
+          "[translateMealPlan] name translation failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+        break;
+      }
+    }
+  }
 
   return {
     plan: { ...plan, members },

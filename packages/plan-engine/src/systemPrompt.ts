@@ -41,6 +41,34 @@ type Out = Array<{
 \`\`\``;
 }
 
+/**
+ * Standalone name-transliteration prompt — renders family members' personal
+ * names in the housekeeper's language/script (how she'd read the name aloud),
+ * NOT a meaning translation.
+ */
+export function buildNameTranslatePrompt(
+  names: { i: number; name_ar: string }[],
+  locale: LocaleCode,
+): string {
+  const name = HK_LANG_NAMES[locale] ?? locale;
+  return `# دورك
+أنتِ مساعدة تكتب أسماء الأشخاص بحروف لغة أخرى. حوّلي كل اسم شخص من العربية إلى كتابته بـ ${name} كما يُنطق (نقل صوتي/transliteration) — وليس ترجمة معناه. اكتبي الاسم بحروف ${name} كما تقرؤه طبّاخة تعرف ${name} فقط.
+
+# الأسماء
+\`\`\`json
+${JSON.stringify(names)}
+\`\`\`
+
+# الإخراج
+أرجعي JSON صالحاً فقط (لا نص قبله/بعده): مصفوفة بنفس عدد العناصر وبنفس قيم i:
+\`\`\`ts
+type Out = Array<{
+  i: number;       // كما في المدخل
+  name: string;    // الاسم بحروف ${name}
+}>;
+\`\`\``;
+}
+
 // Human-readable names for the housekeeper's language, interpolated into the
 // day-expansion translation directive. (ar is never a translation target.)
 const HK_LANG_NAMES: Record<LocaleCode, string> = {

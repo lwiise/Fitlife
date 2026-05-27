@@ -110,6 +110,9 @@ export const PRIMARY_GOALS = [
 export const MemberPlanSchema = z.object({
   member_id: z.string().min(1),
   member_name_ar: z.string().min(1),
+  // Housekeeper view: the member's name rendered in her language/script.
+  member_name_translated: z.string().optional(),
+  member_name_translated_locale: z.enum(LOCALE_CODES).optional(),
   primary_goal: z.enum(PRIMARY_GOALS).optional(),
   daily_calories_target: z.number(),
   macros_target: MacrosSchema,

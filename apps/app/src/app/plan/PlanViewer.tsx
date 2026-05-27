@@ -99,12 +99,16 @@ export function PlanViewer({
     return activeMember.days.find((d) => d.day_index === activeDayIndex);
   }, [activeMember, activeDayIndex]);
 
+  const memberLabel = (m: MemberPlan) =>
+    translated ? (m.member_name_translated ?? m.member_name_ar) : m.member_name_ar;
+
   const memberNames = useMemo(
     () =>
       Object.fromEntries(
-        plan.members.map((m) => [m.member_id, m.member_name_ar]),
+        plan.members.map((m) => [m.member_id, memberLabel(m)]),
       ),
-    [plan.members],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plan.members, translated],
   );
 
   const isSolo = plan.members.length === 1;
@@ -185,10 +189,10 @@ export function PlanViewer({
                     : "text-brand-ink-muted hover:text-brand-ink"
                 }`}
               >
-                {isMom && (
+                {isMom && !translated && (
                   <span className="text-brand-pink me-1">{t.you} ·</span>
                 )}
-                {m.member_name_ar}
+                {memberLabel(m)}
                 {isActive && (
                   <motion.span
                     layoutId="member-tab-underline"
