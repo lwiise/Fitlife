@@ -3,6 +3,7 @@ import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { AdultWizard } from "./wizards/AdultWizard";
 import { ChildWizard } from "./wizards/ChildWizard";
 import { PregLactSwitch } from "./PregLactSwitch";
+import { HousekeeperForm } from "./HousekeeperForm";
 
 export const metadata = { title: "إضافة فرد" };
 
@@ -26,6 +27,8 @@ export default async function AddMemberPage({
       return <ChildWizard role="son" />;
     case "preg":
       return <PregLactSwitch />;
+    case "housekeeper":
+      return <HousekeeperForm />;
     default:
       redirect("/family");
   }

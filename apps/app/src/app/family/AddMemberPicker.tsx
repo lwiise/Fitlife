@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { UserPlus, User, Baby, HeartPulse } from "lucide-react";
+import { UserPlus, User, Baby, HeartPulse, ChefHat } from "lucide-react";
 
 const OPTIONS: { type: string; label: string; Icon: typeof User }[] = [
   { type: "husband", label: "زوج", Icon: User },
   { type: "adult", label: "بالغ ثاني", Icon: UserPlus },
   { type: "child", label: "طفل", Icon: Baby },
   { type: "preg", label: "امرأة حامل/مرضعة", Icon: HeartPulse },
+  { type: "housekeeper", label: "خدامة تطبخ للعائلة", Icon: ChefHat },
 ];
 
 export function AddMemberPicker() {

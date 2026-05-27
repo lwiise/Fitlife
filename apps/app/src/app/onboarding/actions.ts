@@ -337,7 +337,7 @@ type FamilyGenResult =
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  opts: { regenerateMemberId?: string } = {},
+  opts: { regenerateMemberId?: string; fullRegen?: boolean } = {},
 ): Promise<FamilyGenResult> {
   const result = await triggerPlanGeneration({
     supabase,
@@ -345,7 +345,9 @@ async function runFamilyGeneration(
     bypassRateLimit: true,
     // Family changes are incremental: keep already-generated members and
     // generate only the new/edited one (aligned to the family's dishes).
-    carryOver: true,
+    // A full regen (fullRegen) is needed when the change affects EVERY meal —
+    // e.g. adding a housekeeper, which requires translating all recipes.
+    carryOver: !opts.fullRegen,
     regenerateMemberId: opts.regenerateMemberId,
   });
 
@@ -522,6 +524,89 @@ export async function addFamilyMember(
   if (gen.kind === "upgrade")
     return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
   return { ok: false, error: gen.error };
+}
+
+/**
+ * Add a housekeeper (the cook — not a plan beneficiary, so no tier gating, no
+ * physical/medical fields). Triggers a FULL regen so every recipe gets
+ * translated into her language. Can be added post-onboarding from /family.
+ */
+export async function addHousekeeper(input: {
+  name: string;
+  preferred_language: string;
+}): Promise<{ ok: true; plan_generation_id: string | null } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  // One housekeeper per household — reuse the existing row if present.
+  const { data: existingHk } = await supabase
+    .from("family_members")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("role", "housekeeper")
+    .maybeSingle();
+
+  const { data: orderRows } = await supabase
+    .from("family_members")
+    .select("display_order")
+    .eq("user_id", user.id)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  const ord = orderRows as { display_order: number | null }[] | null;
+  const nextOrder = ord && ord.length > 0 ? (ord[0]!.display_order ?? 0) + 1 : 0;
+
+  const existingId = (existingHk as { id: string } | null)?.id;
+  const hkName = input.name || "الخدامة";
+  if (existingId) {
+    const updateRow = {
+      name: hkName,
+      preferred_language: input.preferred_language,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from("family_members")
+      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+      .update(updateRow)
+      .eq("id", existingId)
+      .eq("user_id", user.id);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "family", step: "addHousekeeper.update", userId: user.id },
+      });
+      return { ok: false, error: error.message };
+    }
+  } else {
+    const insertRow = {
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      name: hkName,
+      role: "housekeeper",
+      member_type: "housekeeper",
+      preferred_language: input.preferred_language,
+      consulted_doctor: false,
+      display_order: nextOrder,
+    };
+    const { error } = await supabase
+      .from("family_members")
+      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+      .insert(insertRow);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "family", step: "addHousekeeper.insert", userId: user.id },
+      });
+      return { ok: false, error: error.message };
+    }
+  }
+
+  revalidatePath("/family");
+  // Full regen so all recipes get translated into the housekeeper's language.
+  const gen = await runFamilyGeneration(supabase, user.id, { fullRegen: true });
+  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
+  return { ok: false, error: gen.kind === "upgrade" ? "حدث خطأ. حاولي مرة ثانية" : gen.error };
 }
 
 /** Phase 2 — remove a member, then regenerate (or skip if only Mom remains). */
