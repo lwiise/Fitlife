@@ -3,8 +3,20 @@ import {
   type PlanPromptContext,
   type PlanPromptContextMember,
 } from "./buildContext";
-import type { PlanSkeleton } from "./schema";
+import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
+
+// Human-readable names for the housekeeper's language, interpolated into the
+// day-expansion translation directive. (ar is never a translation target.)
+const HK_LANG_NAMES: Record<LocaleCode, string> = {
+  ar: "العربية",
+  en: "English",
+  tl: "Tagalog (Filipino)",
+  id: "Bahasa Indonesia",
+  bn: "Bengali (বাংলা)",
+  am: "Amharic (አማርኛ)",
+  ur: "Urdu (اردو)",
+};
 
 const ROLE_LABELS_AR: Record<string, string> = {
   dad: "الزوج",
@@ -364,6 +376,27 @@ export function buildDayPrompt(
   const dayName = dayNameOverride ?? DAY_NAMES_AR[dayIndex] ?? `اليوم ${dayIndex + 1}`;
   const isSolo = skeleton.members.length === 1;
 
+  // Housekeeper translation: when set, every meal must also carry the recipe in
+  // her language (produced in this same call). When absent, the prompt stays lean.
+  const hkLocale = context.housekeeper_locale;
+  const hkName = hkLocale ? HK_LANG_NAMES[hkLocale] : null;
+  const translationDirective =
+    hkLocale && hkName
+      ? `\n\n# ترجمة الوصفة للخادمة (إلزامي)
+الخدامة تطبخ وتقرأ بـ ${hkName}. لكل وجبة، أضيفي بجانب الحقول العربية:
+- recipe_name_translated: اسم الطبق بـ ${hkName}.
+- ingredients_translated: نفس المكونات (بنفس البنية والمقادير) وأسماؤها بـ ${hkName}.
+- prep_steps_translated: نفس خطوات prep_steps_ar مترجمة بـ ${hkName}، ترجمة طبيعية عملية كأنك تكتبين لطباخة تقرأ هذه اللغة كلغة أم (تجنّبي الترجمة الحرفية).
+الحقول العربية تبقى كما هي (هي المرجع للأم).`
+      : "";
+  const translationShape =
+    hkLocale && hkName
+      ? `
+      recipe_name_translated: string;        // اسم الطبق بـ ${hkName}
+      ingredients_translated: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: string }>;
+      prep_steps_translated: string[];       // خطوات الطبخ بـ ${hkName}`
+      : "";
+
   const memberBlocks = skeleton.members
     .map((sm) => {
       const ctxMember =
@@ -417,7 +450,7 @@ ${memberBlocks}${familyWideText(context)}
 - prep_steps_ar: 3-4 خطوات قصيرة كحد أقصى.
 - الحقول الاختيارية (substitutions_ar، notes_ar، prep_time_minutes، cook_time_minutes، servings_count): اتركيها فارغة إلا عند ضرورة حقيقية.
 - قائمة مكونات موجزة. "سلطة حرة" → unit:"unlimited".
-- الكتابة بالعربية فقط، صيغة المؤنث، بدون علامات تعجب.
+- الكتابة بالعربية فقط، صيغة المؤنث، بدون علامات تعجب.${translationDirective}
 
 # الإخراج
 أرجعي JSON صالحاً فقط لهذا اليوم (لا day_total — نحسبه نحن). الشكل:
@@ -432,7 +465,7 @@ type DaySlice = {
       slot_name_ar: string;
       recipe_name_ar: string;
       ingredients: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: "g"|"kg"|"ml"|"l"|"tbsp"|"tsp"|"cup"|"piece"|"serving"|"unlimited" }>;
-      prep_steps_ar: string[];
+      prep_steps_ar: string[];${translationShape}
       shared_recipe?: boolean;
       per_member_portions?: Array<{ member_id: string; ingredients: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: string }>; notes_ar?: string }>;
       substitutions_ar?: string[];

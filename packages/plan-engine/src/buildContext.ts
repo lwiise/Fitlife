@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
+import { LOCALE_CODES, type LocaleCode } from "./schema";
 
 // Accepts any Supabase client shape — the app's <Database>-typed cookie client
 // or the plain service-role admin client. The engine queries untyped.
@@ -85,6 +86,9 @@ export interface PlanPromptContext {
   family_members: PlanPromptContextMember[];
   family_wide: PlanPromptContextFamilyWide;
   composition_summary: string;
+  // The household housekeeper's reading language, when she exists AND it's not
+  // Arabic. Drives the day-prompt translation directive. Undefined otherwise.
+  housekeeper_locale?: LocaleCode;
 }
 
 function ageFromBirthYear(birthYear: number | null): number | null {
@@ -264,11 +268,20 @@ export async function buildPlanContext(
     meal_out_frequency: profile.meal_out_frequency ?? null,
   };
 
+  // Housekeeper's reading language (only when she exists and it's not Arabic).
+  const housekeeper = family_members.find((m) => m.role === "housekeeper");
+  const hkLang = housekeeper?.preferred_language;
+  const housekeeper_locale =
+    hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
+      ? (hkLang as LocaleCode)
+      : undefined;
+
   return {
     mom,
     family_members,
     family_wide,
     composition_summary: buildCompositionSummary(family_members),
+    housekeeper_locale,
   };
 }
 

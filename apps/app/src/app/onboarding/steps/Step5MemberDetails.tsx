@@ -6,20 +6,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import type { z } from "zod";
 import { step4Schema, step5Schema } from "../schema";
+import { LOCALE_CODES_ORDERED, LOCALE_INFO } from "@/lib/plans/locales";
 
 type Composition = z.infer<typeof step4Schema>;
 type FormData = z.infer<typeof step5Schema>;
 type Member = FormData["members"][number];
 
-const LANGUAGE_OPTIONS: Array<{ value: Member["preferred_language"]; label: string }> = [
-  { value: "ar", label: "العربية" },
-  { value: "en", label: "English" },
-  { value: "tl", label: "Tagalog" },
-  { value: "id", label: "Bahasa Indonesia" },
-  { value: "bn", label: "বাংলা" },
-  { value: "am", label: "አማርኛ" },
-  { value: "ur", label: "اردو" },
-];
+// Arabic name + native name, e.g. "الفلبينية (Tagalog)". Arabic itself stays "العربية".
+const LANGUAGE_OPTIONS: Array<{ value: Member["preferred_language"]; label: string }> =
+  LOCALE_CODES_ORDERED.map((code) => {
+    const info = LOCALE_INFO[code];
+    return {
+      value: code,
+      label: code === "ar" ? info.native_name : `${info.ar_name} (${info.native_name})`,
+    };
+  });
 
 function defaultMembers(composition: Composition): Member[] {
   const out: Member[] = [];

@@ -199,3 +199,43 @@ export async function saveMomFamilyPreferences(
   revalidatePath("/profile");
   return { ok: true };
 }
+
+// ── Housekeeper reading language ──────────────────────────────────────────
+const HousekeeperLanguageSchema = z.object({
+  housekeeper_id: z.string().uuid(),
+  preferred_language: z.enum(["ar", "en", "tl", "id", "bn", "am", "ur"]),
+});
+
+export async function saveHousekeeperLanguage(
+  input: z.infer<typeof HousekeeperLanguageSchema>,
+): Promise<SaveResult> {
+  const parsed = HousekeeperLanguageSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const { error } = await supabase
+    .from("family_members")
+    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+    .update({
+      preferred_language: parsed.data.preferred_language,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.data.housekeeper_id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "profile-edit-housekeeper-lang", userId: user.id },
+    });
+    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+  }
+  revalidatePath("/profile");
+  revalidatePath("/plan");
+  return { ok: true };
+}

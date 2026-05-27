@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import {
   getCurrentUserLatestPlan,
   getCurrentUserProfile,
+  getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
@@ -23,13 +24,20 @@ export default async function PlanPage({
 }: {
   searchParams: Promise<{ member?: string }>;
 }) {
-  const [{ member }, profile, latest] = await Promise.all([
+  const [{ member }, profile, latest, familyMembers] = await Promise.all([
     searchParams,
     getCurrentUserProfile(),
     getCurrentUserLatestPlan(),
+    getCurrentUserFamilyMembers(),
   ]);
 
   const isOnboarded = !!profile?.onboarding_completed_at;
+  // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
+  const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
+  const housekeeperLocale =
+    housekeeper && housekeeper.preferred_language !== "ar"
+      ? housekeeper.preferred_language
+      : undefined;
   // Who we're generating for: the just-added member (from the redirect param),
   // otherwise the account owner. Never framed as "the family".
   const generatingFor = member || profile?.display_name || null;
@@ -74,6 +82,7 @@ export default async function PlanPage({
             planId={latest.id}
             generating={latest.in_progress}
             preselectedMember={member}
+            housekeeperLocale={housekeeperLocale}
           />
         )}
       </div>

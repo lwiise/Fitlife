@@ -429,6 +429,14 @@ export async function generateMealPlan(params: {
             (m) => m.member_id === sm.member_id,
           );
           const meals = sliceMember?.meals ?? [];
+          // Stamp the translation locale in code (don't trust the model to echo it).
+          if (context.housekeeper_locale) {
+            for (const meal of meals) {
+              if (meal.prep_steps_translated && meal.prep_steps_translated.length > 0) {
+                meal.prep_steps_translated_locale = context.housekeeper_locale;
+              }
+            }
+          }
           daysByMember.get(sm.member_id)!.set(dayIndex, {
             day_index: dayIndex,
             day_name_ar: dayNameByIndex.get(dayIndex) ?? `اليوم ${dayIndex + 1}`,
@@ -498,6 +506,26 @@ export async function generateMealPlan(params: {
         Math.round(calcKcal),
       );
       memberPlan.daily_calories_target = Math.round(calcKcal);
+    }
+  }
+
+  // Non-fatal observability guard: if the housekeeper needs translations, flag
+  // any meal the AI left untranslated. The housekeeper view degrades to Arabic,
+  // so we warn rather than fail the whole plan.
+  if (context.housekeeper_locale) {
+    let missing = 0;
+    for (const memberPlan of plan.members)
+      for (const day of memberPlan.days)
+        for (const meal of day.meals)
+          if (!meal.prep_steps_translated || meal.prep_steps_translated.length === 0)
+            missing++;
+    if (missing > 0) {
+      console.warn(
+        "[plan-generate] housekeeper translations missing on",
+        missing,
+        "meal(s) for locale",
+        context.housekeeper_locale,
+      );
     }
   }
 

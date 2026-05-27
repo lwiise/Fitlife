@@ -4,6 +4,12 @@
 
 import { z } from "zod";
 
+// ─── Locales ───────────────────────────────────────────────────────────
+// The 7 languages a household's housekeeper may read recipes in. Source of
+// truth for the locale CODE type (frontend metadata lives in apps/app locales.ts).
+export const LOCALE_CODES = ["ar", "en", "tl", "id", "bn", "am", "ur"] as const;
+export type LocaleCode = (typeof LOCALE_CODES)[number];
+
 // ─── Macros ────────────────────────────────────────────────────────────
 export const MacrosSchema = z.object({
   protein_g: z.number(),
@@ -52,6 +58,12 @@ export const MealSchema = z.object({
   recipe_name_ar: z.string().min(1),
   ingredients: z.array(IngredientSchema),
   prep_steps_ar: z.array(z.string()), // for the cook (الخدامة) to execute
+  // Housekeeper translations — present only when the household has a housekeeper
+  // whose language is not Arabic. Arabic stays the source of truth.
+  prep_steps_translated: z.array(z.string()).optional(),
+  prep_steps_translated_locale: z.enum(LOCALE_CODES).optional(),
+  recipe_name_translated: z.string().optional(),
+  ingredients_translated: z.array(IngredientSchema).optional(),
   calories: z.number(),
   macros: MacrosSchema,
   // Sara's required recipe fields (optional in schema for old-plan compat):

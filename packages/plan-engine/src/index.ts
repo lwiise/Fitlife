@@ -27,6 +27,7 @@ export {
   MemberPlanSchema,
   MealPlanSchema,
   PRIMARY_GOALS,
+  LOCALE_CODES,
 } from "./schema";
 export type {
   Macros,
@@ -36,6 +37,7 @@ export type {
   Day,
   MemberPlan,
   MealPlan,
+  LocaleCode,
 } from "./schema";
 
 export { PLAN_MODEL, PLAN_MAX_TOKENS, PRICING_USD_PER_MTOK } from "./constants";

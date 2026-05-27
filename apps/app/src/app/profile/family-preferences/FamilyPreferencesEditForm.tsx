@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import { CUISINES, DIETARY, COOKING, MEAL_OUT } from "../labels";
-import { saveMomFamilyPreferences } from "../actions";
+import { saveMomFamilyPreferences, saveHousekeeperLanguage } from "../actions";
+import {
+  LOCALE_CODES_ORDERED,
+  LOCALE_INFO,
+  type LocaleCode,
+} from "@/lib/plans/locales";
 
 type CuisineValue = "khaleeji" | "mediterranean" | "mixed" | "international";
 type MealOutValue = "never" | "rarely" | "sometimes" | "often";
@@ -86,8 +91,10 @@ function toggle(list: string[], value: string): string[] {
 
 export function FamilyPreferencesEditForm({
   initial,
+  housekeeper = null,
 }: {
   initial: FamilyPrefsInitial;
+  housekeeper?: { id: string; locale: LocaleCode } | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -98,6 +105,7 @@ export function FamilyPreferencesEditForm({
   const [dislikes, setDislikes] = useState<string[]>(initial.family_dislikes);
   const [cooking, setCooking] = useState<string[]>(initial.cooking_methods);
   const [mealOut, setMealOut] = useState(initial.meal_out_frequency);
+  const [hkLang, setHkLang] = useState<LocaleCode>(housekeeper?.locale ?? "ar");
 
   const submit = () => {
     setError(null);
@@ -113,6 +121,15 @@ export function FamilyPreferencesEditForm({
         meal_out_frequency: mealOut as MealOutValue,
       });
       if (!result.ok) return setError(result.error);
+
+      // Persist the housekeeper's reading language if it changed.
+      if (housekeeper && hkLang !== housekeeper.locale) {
+        const hkResult = await saveHousekeeperLanguage({
+          housekeeper_id: housekeeper.id,
+          preferred_language: hkLang,
+        });
+        if (!hkResult.ok) return setError(hkResult.error);
+      }
       router.push("/profile?edited=family");
     });
   };
@@ -189,6 +206,33 @@ export function FamilyPreferencesEditForm({
           ))}
         </div>
       </section>
+
+      {housekeeper && (
+        <section className="space-y-3">
+          <GroupHeading>لغة الخدامة</GroupHeading>
+          <p className="text-brand-ink-muted text-sm leading-relaxed">
+            باللغة اللي تقرأ بها الخدامة وصفات الطبخ.
+          </p>
+          <select
+            value={hkLang}
+            onChange={(e) => setHkLang(e.target.value as LocaleCode)}
+            disabled={isPending}
+            className="w-full min-h-11 px-4 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          >
+            {LOCALE_CODES_ORDERED.map((code) => {
+              const info = LOCALE_INFO[code];
+              return (
+                <option key={code} value={code}>
+                  {code === "ar" ? info.native_name : `${info.ar_name} (${info.native_name})`}
+                </option>
+              );
+            })}
+          </select>
+          <p className="text-brand-ink-muted text-xs leading-relaxed">
+            تغيير اللغة لن يطبق على الخطة الحالية. أنشئي خطة جديدة لتطبيق التغيير.
+          </p>
+        </section>
+      )}
 
       {error && (
         <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3">

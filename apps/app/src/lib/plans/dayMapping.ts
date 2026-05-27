@@ -7,6 +7,8 @@
  * naturally) — never computed server-side, to avoid a UTC off-by-one at night.
  */
 
+import type { LocaleCode } from "@fitlife/plan-engine";
+
 const DAYS_AR = [
   "السبت",
   "الأحد",
@@ -79,4 +81,38 @@ export function dayNameFromWeekStart(weekStartISO: string, dayIndex: number): st
   d.setUTCDate(d.getUTCDate() + dayIndex);
   const khaleeji = (JS_TO_KHALEEJI[d.getUTCDay()] ?? 0) as KhaleejiDayIndex;
   return getDayNameAr(khaleeji);
+}
+
+// ─── Localized day + slot names (housekeeper view) ───────────────────────
+// Indexed by the plan's Khaleeji day_index (0=Saturday … 6=Friday). Best-effort
+// for tl/id/bn/am/ur — review with native speakers before scale.
+const DAY_NAMES_BY_LOCALE: Record<LocaleCode, string[]> = {
+  ar: ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"],
+  en: ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+  tl: ["Sabado", "Linggo", "Lunes", "Martes", "Miyerkules", "Huwebes", "Biyernes"],
+  id: ["Sabtu", "Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+  bn: ["শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"],
+  am: ["ቅዳሜ", "እሁድ", "ሰኞ", "ማክሰኞ", "ረቡዕ", "ሐሙስ", "ዓርብ"],
+  ur: ["ہفتہ", "اتوار", "پیر", "منگل", "بدھ", "جمعرات", "جمعہ"],
+};
+
+type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
+
+const SLOT_NAMES_BY_LOCALE: Record<LocaleCode, Record<MealSlot, string>> = {
+  ar: { breakfast: "الفطور", lunch: "الغداء", dinner: "العشاء", snack: "وجبة خفيفة" },
+  en: { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" },
+  tl: { breakfast: "Almusal", lunch: "Tanghalian", dinner: "Hapunan", snack: "Meryenda" },
+  id: { breakfast: "Sarapan", lunch: "Makan Siang", dinner: "Makan Malam", snack: "Camilan" },
+  bn: { breakfast: "নাস্তা", lunch: "দুপুরের খাবার", dinner: "রাতের খাবার", snack: "হালকা খাবার" },
+  am: { breakfast: "ቁርስ", lunch: "ምሳ", dinner: "እራት", snack: "መክሰስ" },
+  ur: { breakfast: "ناشتہ", lunch: "دوپہر کا کھانا", dinner: "رات کا کھانا", snack: "ہلکی غذا" },
+};
+
+export function getDayNameInLocale(dayIndex: number, locale: LocaleCode): string {
+  return DAY_NAMES_BY_LOCALE[locale]?.[dayIndex] ?? DAY_NAMES_BY_LOCALE.en[dayIndex] ?? "";
+}
+
+export function getSlotNameInLocale(slot: string, locale: LocaleCode): string {
+  const table = SLOT_NAMES_BY_LOCALE[locale];
+  return (table as Record<string, string>)[slot] ?? slot;
 }

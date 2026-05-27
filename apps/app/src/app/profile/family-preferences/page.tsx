@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
-import { getCurrentUserProfile } from "@/lib/supabase/queries";
+import {
+  getCurrentUserProfile,
+  getCurrentUserFamilyMembers,
+} from "@/lib/supabase/queries";
+import { isLocaleCode } from "@/lib/plans/locales";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { asStringArray } from "../labels";
@@ -13,6 +17,15 @@ export const metadata = {
 export default async function FamilyPreferencesEditPage() {
   const profile = await getCurrentUserProfile();
   if (!profile) redirect("/onboarding");
+
+  const members = await getCurrentUserFamilyMembers();
+  const hk = members.find((m) => m.role === "housekeeper");
+  const housekeeper =
+    hk && isLocaleCode(hk.preferred_language)
+      ? { id: hk.id, locale: hk.preferred_language }
+      : hk
+        ? { id: hk.id, locale: "ar" as const }
+        : null;
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -41,6 +54,7 @@ export default async function FamilyPreferencesEditPage() {
             cooking_methods: asStringArray(profile.cooking_methods),
             meal_out_frequency: profile.meal_out_frequency || "",
           }}
+          housekeeper={housekeeper}
         />
       </div>
     </main>
