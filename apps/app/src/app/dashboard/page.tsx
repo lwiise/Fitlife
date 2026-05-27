@@ -118,20 +118,20 @@ export default async function DashboardPage() {
 
         {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-          <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink leading-tight">
-            أهلاً، {displayName}
-          </h2>
-          {showHousekeeperLink && (
-            <Link
-              href="/plan/housekeeper"
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <ChefHat className="size-4" aria-hidden="true" />
-              وصفات الخدامة
-            </Link>
-          )}
-        </div>
+        <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">
+          أهلاً، {displayName}
+        </h2>
+
+        {/* Housekeeper recipes — directly above today's meals. */}
+        {showHousekeeperLink && (
+          <Link
+            href="/plan/housekeeper"
+            className="inline-flex items-center justify-center gap-2 min-h-11 px-5 mb-4 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+          >
+            <ChefHat className="size-4" aria-hidden="true" />
+            وصفات الطبخ بلغة الخدامة
+          </Link>
+        )}
 
         {/* Primary content: what am I cooking today? */}
         <div className="mb-10">
