@@ -27,7 +27,6 @@ export function RestorePlanButton({
         router.push("/plan");
         return;
       }
-      setOpen(false);
       setError(result.error);
     });
   }
@@ -36,7 +35,10 @@ export function RestorePlanButton({
     <div className={className}>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
         disabled={isPending}
         className="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
       >
@@ -47,11 +49,6 @@ export function RestorePlanButton({
         )}
         استعادة
       </button>
-      {error && (
-        <p role="alert" className="mt-1.5 text-red-700 text-xs leading-relaxed">
-          {error}
-        </p>
-      )}
 
       <ConfirmDialog
         open={open}
@@ -60,8 +57,13 @@ export function RestorePlanButton({
         confirmLabel="استعادة"
         cancelLabel="إلغاء"
         isPending={isPending}
+        error={error}
         onConfirm={handleConfirm}
-        onCancel={() => !isPending && setOpen(false)}
+        onCancel={() => {
+          if (isPending) return;
+          setOpen(false);
+          setError(null);
+        }}
       />
     </div>
   );

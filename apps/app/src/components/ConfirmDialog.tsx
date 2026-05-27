@@ -17,6 +17,7 @@ export function ConfirmDialog({
   confirmLabel = "تأكيد",
   cancelLabel = "إلغاء",
   isPending = false,
+  error = null,
   onConfirm,
   onCancel,
 }: {
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   isPending?: boolean;
+  error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -86,6 +88,15 @@ export function ConfirmDialog({
             </h2>
             {body && (
               <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">{body}</p>
+            )}
+
+            {error && (
+              <div
+                role="alert"
+                className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3"
+              >
+                <p className="text-red-700 text-sm leading-relaxed">{error}</p>
+              </div>
             )}
 
             <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">

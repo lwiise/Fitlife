@@ -18,10 +18,10 @@ export function RemoveMemberButton({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleConfirm = () => {
+    setError(null);
     startTransition(async () => {
       const result = await removeFamilyMember(memberId);
       if (!result.ok) {
-        setConfirmOpen(false);
         setError(result.error);
         return;
       }
@@ -34,13 +34,15 @@ export function RemoveMemberButton({
     <>
       <button
         type="button"
-        onClick={() => setConfirmOpen(true)}
+        onClick={() => {
+          setError(null);
+          setConfirmOpen(true);
+        }}
         disabled={isPending}
         className="text-brand-ink-muted hover:text-red-600 text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md px-1 min-h-11"
       >
         {isPending ? "جاري الحذف…" : "حذف"}
       </button>
-      {error && <span className="text-red-600 text-xs ms-2">{error}</span>}
 
       <ConfirmDialog
         open={confirmOpen}
@@ -49,8 +51,13 @@ export function RemoveMemberButton({
         confirmLabel="حذف"
         cancelLabel="إلغاء"
         isPending={isPending}
+        error={error}
         onConfirm={handleConfirm}
-        onCancel={() => !isPending && setConfirmOpen(false)}
+        onCancel={() => {
+          if (isPending) return;
+          setConfirmOpen(false);
+          setError(null);
+        }}
       />
     </>
   );
