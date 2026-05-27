@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft } from "lucide-react";
+import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { GenerateFamilyPlanBanner } from "./GenerateFamilyPlanBanner";
 import { TodaysMeals } from "./TodaysMeals";
@@ -66,6 +66,14 @@ export default async function DashboardPage() {
     latestPlan?.status === "ready" && pendingMembers.length > 0;
   const pendingNames = pendingMembers.map((m) => m.name);
 
+  // Housekeeper recipe view: show only when a non-Arabic housekeeper exists AND
+  // there's a ready plan (the /plan/housekeeper page redirects otherwise).
+  const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
+  const showHousekeeperLink =
+    latestPlan?.status === "ready" &&
+    !!housekeeper &&
+    housekeeper.preferred_language !== "ar";
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -110,9 +118,20 @@ export default async function DashboardPage() {
 
         {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
 
-        <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">
-          أهلاً، {displayName}
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+          <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink leading-tight">
+            أهلاً، {displayName}
+          </h2>
+          {showHousekeeperLink && (
+            <Link
+              href="/plan/housekeeper"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              <ChefHat className="size-4" aria-hidden="true" />
+              وصفات الخدامة
+            </Link>
+          )}
+        </div>
 
         {/* Primary content: what am I cooking today? */}
         <div className="mb-10">
