@@ -37,99 +37,242 @@ export function isLocaleCode(v: string | null | undefined): v is LocaleCode {
   return v != null && v in LOCALE_INFO;
 }
 
+type UnitKey =
+  | "g" | "kg" | "ml" | "l" | "cup" | "tbsp" | "tsp" | "piece" | "serving" | "unlimited";
+
+export interface PlanStrings {
+  this_week: string;
+  daily_calories: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  grams: string;
+  day_total: string;
+  calories_unit: string;
+  you: string;
+  generating: string;
+  no_meals: string;
+  empty_plan: string;
+  prep_time: string;
+  cook_time: string;
+  min_abbr: string;
+  servings_unit: string;
+  family_recipe: string;
+  ingredients: string;
+  base_recipe: string;
+  per_member_portions: string;
+  prep_steps: string;
+  substitutions: string;
+  switch_to_arabic: string;
+  print: string;
+  arabic_names_note: string;
+  units: Record<UnitKey, string>;
+}
+
 /**
- * Static UI labels for the housekeeper view, per locale. en/ar are confident;
- * tl/id/bn/am/ur are best-effort and should get native-speaker review before scale.
+ * UI strings for PlanViewer/MealCard, per locale. `ar` mirrors the exact current
+ * /plan literals (the wife's view must not change). en/ar confident; the others
+ * are best-effort and should get native-speaker review before scale.
  */
-export const HOUSEKEEPER_STRINGS: Record<
-  LocaleCode,
-  {
-    this_week: string;
-    meals: string;
-    ingredients: string;
-    cooking_time: string; // "Cooking time" — minutes appended after
-    minutes: string;
-    switch_to_arabic: string;
-    print: string;
-    arabic_names_note: string;
-    fallback_note: string;
-  }
-> = {
+export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
   ar: {
-    this_week: "هذا الأسبوع",
-    meals: "وجبات",
+    this_week: "الأسبوع",
+    daily_calories: "السعرات اليومية",
+    protein: "بروتين",
+    carbs: "كارب",
+    fat: "دهون",
+    grams: "جم",
+    day_total: "إجمالي اليوم",
+    calories_unit: "سعرة",
+    you: "أنتِ",
+    generating: "هذا اليوم لسه نجهّزه… بيظهر خلال لحظات",
+    no_meals: "ما عندك وجبات لهذا اليوم",
+    empty_plan: "الخطة فارغة. حاولي إعادة الإنشاء.",
+    prep_time: "تحضير",
+    cook_time: "طبخ",
+    min_abbr: "د",
+    servings_unit: "حصص",
+    family_recipe: "وصفة العائلة",
     ingredients: "المكونات",
-    cooking_time: "وقت الطبخ",
-    minutes: "دقيقة",
+    base_recipe: "الوصفة الأساس",
+    per_member_portions: "مقادير كل فرد",
+    prep_steps: "طريقة التحضير",
+    substitutions: "بدائل وتعديلات",
     switch_to_arabic: "العرض بالعربية",
     print: "طباعة",
     arabic_names_note: "الأسماء بالعربية",
-    fallback_note: "أُنشئت قبل توفّر الترجمة. أنشئي خطة جديدة للوصفات المترجمة.",
+    units: { g: "جم", kg: "كجم", ml: "مل", l: "لتر", cup: "كوب", tbsp: "ملعقة كبيرة", tsp: "ملعقة صغيرة", piece: "حبة", serving: "حصة", unlimited: "حسب الرغبة" },
   },
   en: {
-    this_week: "This week",
-    meals: "meals",
+    this_week: "Week",
+    daily_calories: "Daily calories",
+    protein: "Protein",
+    carbs: "Carbs",
+    fat: "Fat",
+    grams: "g",
+    day_total: "Day total",
+    calories_unit: "cal",
+    you: "You",
+    generating: "Still preparing this day… coming shortly",
+    no_meals: "No meals for this day",
+    empty_plan: "The plan is empty. Try regenerating.",
+    prep_time: "Prep",
+    cook_time: "Cook",
+    min_abbr: "min",
+    servings_unit: "servings",
+    family_recipe: "Family recipe",
     ingredients: "Ingredients",
-    cooking_time: "Cooking time",
-    minutes: "minutes",
+    base_recipe: "base recipe",
+    per_member_portions: "Per-person amounts",
+    prep_steps: "Steps",
+    substitutions: "Substitutions",
     switch_to_arabic: "Arabic view",
     print: "Print",
     arabic_names_note: "Names in Arabic",
-    fallback_note: "Generated before translations were available. Regenerate the plan for translated recipes.",
+    units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cup", tbsp: "tbsp", tsp: "tsp", piece: "pc", serving: "serving", unlimited: "as desired" },
   },
   tl: {
-    this_week: "Ngayong linggo",
-    meals: "pagkain",
+    this_week: "Linggo",
+    daily_calories: "Calories kada araw",
+    protein: "Protina",
+    carbs: "Karbohidrat",
+    fat: "Taba",
+    grams: "g",
+    day_total: "Kabuuan ng araw",
+    calories_unit: "cal",
+    you: "Ikaw",
+    generating: "Inihahanda pa ang araw na ito…",
+    no_meals: "Walang pagkain sa araw na ito",
+    empty_plan: "Walang laman ang plano.",
+    prep_time: "Paghahanda",
+    cook_time: "Pagluluto",
+    min_abbr: "min",
+    servings_unit: "servings",
+    family_recipe: "Recipe ng pamilya",
     ingredients: "Mga sangkap",
-    cooking_time: "Oras ng pagluluto",
-    minutes: "minuto",
+    base_recipe: "batayang recipe",
+    per_member_portions: "Dami kada tao",
+    prep_steps: "Mga hakbang",
+    substitutions: "Mga kapalit",
     switch_to_arabic: "Arabic view",
     print: "I-print",
     arabic_names_note: "Mga pangalan sa Arabic",
-    fallback_note: "Ginawa bago available ang mga pagsasalin. I-regenerate ang plano para sa mga isinaling recipe.",
+    units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "tasa", tbsp: "kutsara", tsp: "kutsarita", piece: "piraso", serving: "serving", unlimited: "ayon sa gusto" },
   },
   id: {
-    this_week: "Minggu ini",
-    meals: "makanan",
+    this_week: "Minggu",
+    daily_calories: "Kalori harian",
+    protein: "Protein",
+    carbs: "Karbohidrat",
+    fat: "Lemak",
+    grams: "g",
+    day_total: "Total hari",
+    calories_unit: "kal",
+    you: "Anda",
+    generating: "Masih menyiapkan hari ini…",
+    no_meals: "Tidak ada makanan untuk hari ini",
+    empty_plan: "Rencana kosong.",
+    prep_time: "Persiapan",
+    cook_time: "Memasak",
+    min_abbr: "mnt",
+    servings_unit: "porsi",
+    family_recipe: "Resep keluarga",
     ingredients: "Bahan",
-    cooking_time: "Waktu memasak",
-    minutes: "menit",
+    base_recipe: "resep dasar",
+    per_member_portions: "Takaran per orang",
+    prep_steps: "Langkah",
+    substitutions: "Pengganti",
     switch_to_arabic: "Tampilan Arab",
     print: "Cetak",
     arabic_names_note: "Nama dalam bahasa Arab",
-    fallback_note: "Dibuat sebelum terjemahan tersedia. Buat ulang rencana untuk resep terjemahan.",
+    units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cangkir", tbsp: "sdm", tsp: "sdt", piece: "buah", serving: "porsi", unlimited: "sesukanya" },
   },
   bn: {
-    this_week: "এই সপ্তাহ",
-    meals: "খাবার",
+    this_week: "সপ্তাহ",
+    daily_calories: "দৈনিক ক্যালোরি",
+    protein: "প্রোটিন",
+    carbs: "কার্বোহাইড্রেট",
+    fat: "ফ্যাট",
+    grams: "গ্রাম",
+    day_total: "দিনের মোট",
+    calories_unit: "ক্যালোরি",
+    you: "আপনি",
+    generating: "এই দিনটি এখনও প্রস্তুত হচ্ছে…",
+    no_meals: "এই দিনের জন্য কোনো খাবার নেই",
+    empty_plan: "পরিকল্পনা খালি।",
+    prep_time: "প্রস্তুতি",
+    cook_time: "রান্না",
+    min_abbr: "মিনিট",
+    servings_unit: "পরিবেশন",
+    family_recipe: "পরিবারের রেসিপি",
     ingredients: "উপকরণ",
-    cooking_time: "রান্নার সময়",
-    minutes: "মিনিট",
+    base_recipe: "মূল রেসিপি",
+    per_member_portions: "জনপ্রতি পরিমাণ",
+    prep_steps: "ধাপ",
+    substitutions: "বিকল্প",
     switch_to_arabic: "আরবি ভিউ",
     print: "প্রিন্ট",
     arabic_names_note: "নাম আরবিতে",
-    fallback_note: "অনুবাদ উপলব্ধ হওয়ার আগে তৈরি। অনূদিত রেসিপির জন্য নতুন পরিকল্পনা তৈরি করুন।",
+    units: { g: "গ্রাম", kg: "কেজি", ml: "মিলি", l: "লিটার", cup: "কাপ", tbsp: "টেবিল চামচ", tsp: "চা চামচ", piece: "টুকরা", serving: "পরিবেশন", unlimited: "ইচ্ছেমতো" },
   },
   am: {
-    this_week: "በዚህ ሳምንት",
-    meals: "ምግቦች",
+    this_week: "ሳምንት",
+    daily_calories: "የቀን ካሎሪ",
+    protein: "ፕሮቲን",
+    carbs: "ካርቦሃይድሬት",
+    fat: "ስብ",
+    grams: "ግራም",
+    day_total: "የቀኑ ጠቅላላ",
+    calories_unit: "ካሎሪ",
+    you: "እርስዎ",
+    generating: "ይህ ቀን አሁንም በዝግጅት ላይ ነው…",
+    no_meals: "ለዚህ ቀን ምግብ የለም",
+    empty_plan: "ዕቅዱ ባዶ ነው።",
+    prep_time: "ዝግጅት",
+    cook_time: "ማብሰል",
+    min_abbr: "ደቂቃ",
+    servings_unit: "ድርሻ",
+    family_recipe: "የቤተሰብ የምግብ አዘገጃጀት",
     ingredients: "ግብዓቶች",
-    cooking_time: "የማብሰያ ጊዜ",
-    minutes: "ደቂቃ",
+    base_recipe: "መሰረታዊ አዘገጃጀት",
+    per_member_portions: "ለእያንዳንዱ ሰው መጠን",
+    prep_steps: "ደረጃዎች",
+    substitutions: "ምትኮች",
     switch_to_arabic: "የአረብኛ እይታ",
     print: "አትም",
     arabic_names_note: "ስሞች በአረብኛ",
-    fallback_note: "ትርጉም ከመገኘቱ በፊት የተፈጠረ። ለተተረጎሙ የምግብ አዘገጃጀቶች አዲስ እቅድ ይፍጠሩ።",
+    units: { g: "ግራም", kg: "ኪግ", ml: "ሚሊ", l: "ሊትር", cup: "ኩባያ", tbsp: "የሾርባ ማንኪያ", tsp: "የሻይ ማንኪያ", piece: "ቁራጭ", serving: "ድርሻ", unlimited: "እንደ ፍላጎት" },
   },
   ur: {
-    this_week: "اس ہفتے",
-    meals: "کھانے",
+    this_week: "ہفتہ",
+    daily_calories: "روزانہ کیلوریز",
+    protein: "پروٹین",
+    carbs: "کاربوہائیڈریٹ",
+    fat: "چکنائی",
+    grams: "گرام",
+    day_total: "دن کا مجموعہ",
+    calories_unit: "کیلوری",
+    you: "آپ",
+    generating: "یہ دن ابھی تیار ہو رہا ہے…",
+    no_meals: "اس دن کے لیے کوئی کھانا نہیں",
+    empty_plan: "پلان خالی ہے۔",
+    prep_time: "تیاری",
+    cook_time: "پکانا",
+    min_abbr: "منٹ",
+    servings_unit: "سرونگ",
+    family_recipe: "خاندانی ترکیب",
     ingredients: "اجزاء",
-    cooking_time: "پکانے کا وقت",
-    minutes: "منٹ",
+    base_recipe: "بنیادی ترکیب",
+    per_member_portions: "فی فرد مقدار",
+    prep_steps: "اقدامات",
+    substitutions: "متبادل",
     switch_to_arabic: "عربی منظر",
     print: "پرنٹ",
     arabic_names_note: "نام عربی میں",
-    fallback_note: "ترجمہ دستیاب ہونے سے پہلے بنایا گیا۔ ترجمہ شدہ ترکیبوں کے لیے نیا پلان بنائیں۔",
+    units: { g: "گرام", kg: "کلوگرام", ml: "ملی لیٹر", l: "لیٹر", cup: "کپ", tbsp: "کھانے کا چمچ", tsp: "چائے کا چمچ", piece: "عدد", serving: "سرونگ", unlimited: "حسبِ خواہش" },
   },
 };
+
+export function getPlanStrings(locale: LocaleCode): PlanStrings {
+  return PLAN_STRINGS[locale] ?? PLAN_STRINGS.ar;
+}

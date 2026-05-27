@@ -10,10 +10,17 @@ export {
   createPlanRows,
   runMealPlanGeneration,
   generateMealPlan,
+  translateMealPlan,
+  runMealPlanTranslation,
 } from "./generate";
 export type { GenerateResult } from "./generate";
 
-export { STATIC_SYSTEM, buildSkeletonPrompt, buildDayPrompt } from "./systemPrompt";
+export {
+  STATIC_SYSTEM,
+  buildSkeletonPrompt,
+  buildDayPrompt,
+  buildTranslatePrompt,
+} from "./systemPrompt";
 
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";

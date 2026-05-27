@@ -6,6 +6,41 @@ import {
 import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
 
+/**
+ * Standalone translation prompt — translates an existing plan's meals into the
+ * housekeeper's language (no generation). Names/amounts/units come from the
+ * source; only the human-readable strings are translated.
+ */
+export function buildTranslatePrompt(
+  items: {
+    i: number;
+    recipe_name_ar: string;
+    ingredient_names: string[];
+    prep_steps_ar: string[];
+  }[],
+  locale: LocaleCode,
+): string {
+  const name = HK_LANG_NAMES[locale] ?? locale;
+  return `# دورك
+أنتِ مترجمة محترفة لوصفات الطبخ. تترجمين من العربية إلى ${name} ترجمة طبيعية عملية — كأنك تكتبين لطبّاخة تقرأ ${name} كلغة أم. تجنّبي الترجمة الحرفية، وحافظي على نفس المعنى والمقادير.
+
+# العناصر المطلوب ترجمتها
+\`\`\`json
+${JSON.stringify(items)}
+\`\`\`
+
+# الإخراج
+أرجعي JSON صالحاً فقط (لا نص قبله/بعده، لا أكواد محاطة بغير اللازم): مصفوفة بنفس عدد العناصر وبنفس قيم i:
+\`\`\`ts
+type Out = Array<{
+  i: number;                    // كما في المدخل
+  recipe_name: string;          // اسم الطبق بـ ${name}
+  ingredient_names: string[];   // أسماء المكونات بـ ${name} — نفس العدد والترتيب
+  steps: string[];              // خطوات الطبخ بـ ${name} — نفس العدد والترتيب
+}>;
+\`\`\``;
+}
+
 // Human-readable names for the housekeeper's language, interpolated into the
 // day-expansion translation directive. (ar is never a translation target.)
 const HK_LANG_NAMES: Record<LocaleCode, string> = {

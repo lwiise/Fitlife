@@ -229,7 +229,7 @@ export function FamilyPreferencesEditForm({
             })}
           </select>
           <p className="text-brand-ink-muted text-xs leading-relaxed">
-            تغيير اللغة لن يطبق على الخطة الحالية. أنشئي خطة جديدة لتطبيق التغيير.
+            تغيير اللغة يترجم خطتك الحالية للغة الجديدة خلال لحظات.
           </p>
         </section>
       )}

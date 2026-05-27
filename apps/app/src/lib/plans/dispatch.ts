@@ -5,10 +5,12 @@ import {
   buildPlanContext,
   createPlanRows,
   runMealPlanGeneration,
+  runMealPlanTranslation,
   OnboardingIncompleteError,
   MedicalGateError,
   PlanValidationError,
   type MealPlan,
+  type LocaleCode,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
@@ -166,4 +168,67 @@ export async function triggerPlanGeneration(params: {
   }
 
   return { ok: true, mealPlanId, status: "generating" };
+}
+
+/**
+ * Translate the user's current plan IN PLACE into `locale` (no regeneration, no
+ * new row, status stays "ready"). Fire-and-forget: used when a housekeeper is
+ * added or her language changes. No-op if there's no ready plan.
+ */
+export async function triggerPlanTranslation(params: {
+  supabase: ServerClient;
+  userId: string;
+  locale: LocaleCode;
+}): Promise<void> {
+  const { supabase, userId, locale } = params;
+  if (locale === "ar") return; // Arabic is the source — nothing to translate.
+
+  const latest = await getLatestPlan(userId);
+  if (!latest || latest.status !== "ready" || !latest.plan_data) return;
+  const mealPlanId = latest.id;
+  const plan = latest.plan_data;
+
+  // Development: run inline.
+  if (process.env.NODE_ENV === "development") {
+    try {
+      await runMealPlanTranslation({
+        supabase,
+        anthropicApiKey: getAnthropicKey(),
+        mealPlanId,
+        plan,
+        locale,
+      });
+    } catch (err) {
+      console.error("[triggerPlanTranslation] inline translation failed", err);
+      Sentry.captureException(err, {
+        tags: { area: "plan-translation", step: "inline", userId },
+      });
+    }
+    return;
+  }
+
+  // Production: fire the background function (translate mode) and return.
+  try {
+    const res = await fetch(
+      `${env.NEXT_PUBLIC_APP_URL}/.netlify/functions/generate-plan-background`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-internal-secret": getSupabaseServiceRoleKey(),
+        },
+        body: JSON.stringify({ mode: "translate", userId, mealPlanId, plan, locale }),
+      },
+    );
+    if (!res.ok && res.status !== 202) {
+      const snippet = (await res.text().catch(() => "")).slice(0, 200);
+      throw new Error(`translate bg fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`);
+    }
+  } catch (err) {
+    // Non-fatal: the maid view falls back to Arabic until a successful translate.
+    console.error("[triggerPlanTranslation] failed to start translation", err);
+    Sentry.captureException(err, {
+      tags: { area: "plan-translation", step: "dispatch-bg", userId },
+    });
+  }
 }

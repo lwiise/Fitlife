@@ -8,8 +8,8 @@
 // parallel calls, system prompt, schema) stays the single source of truth in
 // @fitlife/plan-engine; the relative path lets esbuild inline it.
 
-import { generateMealPlan } from "../../../../packages/plan-engine/src/generate";
-import type { MealPlan } from "../../../../packages/plan-engine/src/schema";
+import { generateMealPlan, translateMealPlan } from "../../../../packages/plan-engine/src/generate";
+import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
   PlanPromptContextMember,
@@ -269,6 +269,9 @@ export default async (req: Request): Promise<Response> => {
     userId?: string;
     mealPlanId?: string;
     existingPlan?: MealPlan | null;
+    mode?: "generate" | "translate";
+    plan?: MealPlan | null;
+    locale?: LocaleCode;
   };
   try {
     body = await req.json();
@@ -278,6 +281,28 @@ export default async (req: Request): Promise<Response> => {
   const { userId, mealPlanId, existingPlan } = body;
   if (!userId || !mealPlanId) {
     return new Response("Missing userId or mealPlanId", { status: 400 });
+  }
+
+  // ── Translate mode: translate the existing plan IN PLACE (no regen) ──
+  if (body.mode === "translate") {
+    if (!body.plan || !body.locale) {
+      return new Response("Missing plan or locale", { status: 400 });
+    }
+    try {
+      const { plan: translated } = await translateMealPlan({
+        anthropicApiKey: anthropicKey,
+        plan: body.plan,
+        locale: body.locale,
+      });
+      await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+        plan_data: translated,
+      });
+      return new Response("OK", { status: 200 });
+    } catch (err) {
+      console.error("[generate-plan-background] translate failed", err);
+      // Non-fatal: leave the plan as-is (maid view falls back to Arabic).
+      return new Response("Translate failed", { status: 200 });
+    }
   }
 
   const startMs = Date.now();

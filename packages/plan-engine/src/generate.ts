@@ -5,11 +5,13 @@ import {
   DAY_MAX_TOKENS,
   DAY_CONCURRENCY,
 } from "./constants";
+import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 import {
   STATIC_SYSTEM,
   buildSkeletonPrompt,
   buildDayPrompt,
+  buildTranslatePrompt,
 } from "./systemPrompt";
 import {
   MealPlanSchema,
@@ -20,6 +22,7 @@ import {
   type PlanSkeleton,
   type Meal,
   type Day,
+  type LocaleCode,
 } from "./schema";
 import { PlanValidationError, AnthropicCallError } from "./errors";
 import { getBeneficiaries, type PlanPromptContext } from "./buildContext";
@@ -676,4 +679,149 @@ export async function runMealPlanGeneration(params: {
       duration_ms: durationMs,
     },
   };
+}
+
+// ─── Translation pass (housekeeper) ──────────────────────────────────────
+// Translates an EXISTING plan's meals into `locale` without regenerating any
+// meal content. Fills recipe_name_translated / ingredients_translated /
+// prep_steps_translated. Per-day concurrent calls; meals already translated to
+// the target locale are skipped.
+const TranslateOutSchema = z.array(
+  z.object({
+    i: z.number().int(),
+    recipe_name: z.string(),
+    ingredient_names: z.array(z.string()),
+    steps: z.array(z.string()),
+  }),
+);
+
+export async function translateMealPlan(params: {
+  anthropicApiKey: string;
+  plan: MealPlan;
+  locale: LocaleCode;
+}): Promise<{ plan: MealPlan; usage: { input_tokens: number; output_tokens: number; cost_usd: number } }> {
+  const { anthropicApiKey, plan, locale } = params;
+  let totalIn = 0;
+  let totalOut = 0;
+
+  // Deep-clone the parts we mutate so the caller's object is untouched.
+  const members: MemberPlan[] = plan.members.map((m) => ({
+    ...m,
+    days: m.days.map((d) => ({ ...d, meals: d.meals.map((meal) => ({ ...meal })) })),
+  }));
+
+  const dayIndices = Array.from(
+    new Set(members.flatMap((m) => m.days.map((d) => d.day_index))),
+  ).sort((a, b) => a - b);
+
+  await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
+    const refs: Meal[] = [];
+    for (const m of members) {
+      const day = m.days.find((d) => d.day_index === dayIndex);
+      if (!day) continue;
+      for (const meal of day.meals) {
+        const alreadyDone =
+          meal.prep_steps_translated_locale === locale &&
+          !!meal.prep_steps_translated?.length;
+        if (!alreadyDone) refs.push(meal);
+      }
+    }
+    if (refs.length === 0) return;
+
+    const items = refs.map((meal, i) => ({
+      i,
+      recipe_name_ar: meal.recipe_name_ar,
+      ingredient_names: meal.ingredients.map((g) => g.name_ar),
+      prep_steps_ar: meal.prep_steps_ar,
+    }));
+
+    let attempt = 0;
+    for (;;) {
+      try {
+        const res = await streamAnthropic({
+          apiKey: anthropicApiKey,
+          model: PLAN_MODEL,
+          maxTokens: DAY_MAX_TOKENS,
+          systemPrompt: buildTranslatePrompt(items, locale),
+          userMessage: "ترجمي الآن.",
+        });
+        totalIn += res.tokensIn;
+        totalOut += res.tokensOut;
+        if (res.stopReason === "max_tokens")
+          throw new PlanValidationError(
+            `Translate day ${dayIndex} hit max_tokens`,
+            res.text,
+          );
+        const parsed = TranslateOutSchema.safeParse(
+          JSON.parse(stripMarkdownFence(res.text)),
+        );
+        if (!parsed.success)
+          throw new PlanValidationError(
+            `Translate day ${dayIndex} failed validation: ${parsed.error.message.slice(0, 200)}`,
+            res.text,
+          );
+        for (const out of parsed.data) {
+          const meal = refs[out.i];
+          if (!meal) continue;
+          meal.recipe_name_translated = out.recipe_name;
+          meal.prep_steps_translated = out.steps;
+          meal.prep_steps_translated_locale = locale;
+          meal.ingredients_translated = meal.ingredients.map((g, k) => ({
+            ...g,
+            name_ar: out.ingredient_names[k] ?? g.name_ar,
+          }));
+        }
+        return;
+      } catch (err) {
+        if (isRetryable(err) && attempt < 2) {
+          attempt++;
+          await sleep(800 * attempt);
+          continue;
+        }
+        // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
+        console.warn(
+          "[translateMealPlan] day",
+          dayIndex,
+          "translation failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+        return;
+      }
+    }
+  });
+
+  return {
+    plan: { ...plan, members },
+    usage: {
+      input_tokens: totalIn,
+      output_tokens: totalOut,
+      cost_usd: computeCostUsd(totalIn, totalOut),
+    },
+  };
+}
+
+/**
+ * Translate an existing meal_plan row IN PLACE (no new row, status unchanged).
+ * Used when a housekeeper is added / her language changes.
+ */
+export async function runMealPlanTranslation(params: {
+  supabase: AnyClient;
+  anthropicApiKey: string;
+  mealPlanId: string;
+  plan: MealPlan;
+  locale: LocaleCode;
+}): Promise<void> {
+  const { supabase, anthropicApiKey, mealPlanId, plan, locale } = params;
+  const { plan: translated } = await translateMealPlan({
+    anthropicApiKey,
+    plan,
+    locale,
+  });
+  const { error } = await supabase
+    .from("meal_plans")
+    .update({ plan_data: translated })
+    .eq("id", mealPlanId);
+  if (error) {
+    throw new Error(`Failed to update meal_plan (translate): ${error.message}`);
+  }
 }

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
 import { hasGateCondition } from "@/lib/plans/medicalConditions";
+import { triggerPlanTranslation } from "@/lib/plans/dispatch";
 
 export type SaveResult = { ok: true } | { ok: false; error: string };
 
@@ -235,6 +236,16 @@ export async function saveHousekeeperLanguage(
     });
     return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
   }
+
+  // Re-translate the existing plan into the new language (in place, no regen).
+  if (parsed.data.preferred_language !== "ar") {
+    await triggerPlanTranslation({
+      supabase,
+      userId: user.id,
+      locale: parsed.data.preferred_language,
+    });
+  }
+
   revalidatePath("/profile");
   revalidatePath("/plan");
   return { ok: true };

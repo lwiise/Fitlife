@@ -5,20 +5,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2, UserPlus, History, ChefHat } from "lucide-react";
-import type { MealPlan, MemberPlan } from "@fitlife/plan-engine";
+import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
 import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
-import { dayIndexFromWeekStart, dayNameFromWeekStart } from "@/lib/plans/dayMapping";
+import {
+  dayIndexFromWeekStart,
+  dayNameFromWeekStart,
+  getDayNameInLocale,
+} from "@/lib/plans/dayMapping";
+import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
 
-function formatWeekRange(weekStart: string): string {
+function formatWeekRange(weekStart: string, locale?: LocaleCode): string {
   try {
     const start = new Date(weekStart);
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
-    const fmt = new Intl.DateTimeFormat("ar-SA", {
+    const intlLocale = locale && locale !== "ar" ? `${locale}-u-ca-gregory` : "ar-SA";
+    const fmt = new Intl.DateTimeFormat(intlLocale, {
       day: "numeric",
       month: "long",
     });
@@ -35,6 +41,7 @@ export function PlanViewer({
   preselectedMember,
   readOnly = false,
   housekeeperLocale,
+  locale,
 }: {
   plan: MealPlan;
   planId: string;
@@ -46,8 +53,13 @@ export function PlanViewer({
   // Set (to a non-Arabic locale) when the household has a housekeeper who reads
   // another language → show the "housekeeper recipes" entry link.
   housekeeperLocale?: string;
+  // Housekeeper view: render translated content + localized chrome + dir/lang.
+  locale?: LocaleCode;
 }) {
   const router = useRouter();
+  const translated = !!locale && locale !== "ar";
+  const t = getPlanStrings(locale ?? "ar");
+  const dir = translated ? getLocaleInfo(locale).direction : undefined;
   const [activeMemberId, setActiveMemberId] = useState<string>(
     preselectedMember && plan.members.some((m) => m.member_id === preselectedMember)
       ? preselectedMember
@@ -100,21 +112,19 @@ export function PlanViewer({
   if (!activeMember) {
     return (
       <div className="text-center py-12">
-        <p className="text-brand-ink-muted">
-          الخطة فارغة. حاولي إعادة الإنشاء.
-        </p>
+        <p className="text-brand-ink-muted">{t.empty_plan}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
       {/* Top strip: week range + actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <p className="text-brand-ink-muted text-xs">الأسبوع</p>
+          <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
           <p className="font-bold text-brand-ink text-base tabular-nums">
-            {formatWeekRange(plan.week_start_date)}
+            {formatWeekRange(plan.week_start_date, locale)}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -145,10 +155,12 @@ export function PlanViewer({
               وصفات الخدامة
             </Link>
           )}
-          <DownloadPDFButton
-            memberPlan={activeMember}
-            planMetadata={{ week_start_date: plan.week_start_date }}
-          />
+          {!translated && (
+            <DownloadPDFButton
+              memberPlan={activeMember}
+              planMetadata={{ week_start_date: plan.week_start_date }}
+            />
+          )}
           {!readOnly && <RegenerateButton />}
         </div>
       </div>
@@ -174,7 +186,7 @@ export function PlanViewer({
                 }`}
               >
                 {isMom && (
-                  <span className="text-brand-pink me-1">أنتِ ·</span>
+                  <span className="text-brand-pink me-1">{t.you} ·</span>
                 )}
                 {m.member_name_ar}
                 {isActive && (
@@ -203,30 +215,30 @@ export function PlanViewer({
       {/* Member summary tiles */}
       <div className="grid grid-cols-4 gap-2">
         <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">السعرات اليومية</p>
+          <p className="text-brand-ink-muted text-xs">{t.daily_calories}</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {activeMember.daily_calories_target}
           </p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">بروتين</p>
+          <p className="text-brand-ink-muted text-xs">{t.protein}</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {activeMember.macros_target.protein_g}
-            <span className="text-brand-ink-muted text-xs ms-1">جم</span>
+            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
           </p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">كارب</p>
+          <p className="text-brand-ink-muted text-xs">{t.carbs}</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {activeMember.macros_target.carbs_g}
-            <span className="text-brand-ink-muted text-xs ms-1">جم</span>
+            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
           </p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">دهون</p>
+          <p className="text-brand-ink-muted text-xs">{t.fat}</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {activeMember.macros_target.fat_g}
-            <span className="text-brand-ink-muted text-xs ms-1">جم</span>
+            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
           </p>
         </div>
       </div>
@@ -235,8 +247,9 @@ export function PlanViewer({
       <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
-          const label =
-            day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
+          const label = translated
+            ? getDayNameInLocale(i, locale)
+            : day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
           const isActive = i === activeDayIndex;
           const pending = generating && (!day || day.meals.length === 0);
           return (
@@ -266,21 +279,21 @@ export function PlanViewer({
       {/* Day total pill */}
       {activeDay && (
         <div className="inline-flex flex-wrap items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
-          <span className="text-brand-ink-muted text-xs">إجمالي اليوم:</span>
+          <span className="text-brand-ink-muted text-xs">{t.day_total}:</span>
           <span className="font-bold text-brand-ink text-sm tabular-nums">
-            {activeDay.day_total.calories} سعرة
+            {activeDay.day_total.calories} {t.calories_unit}
           </span>
           <span className="text-brand-ink-muted/40">·</span>
           <span className="text-brand-ink text-xs tabular-nums">
-            {activeDay.day_total.protein_g} بروتين
+            {activeDay.day_total.protein_g} {t.protein}
           </span>
           <span className="text-brand-ink-muted/40">·</span>
           <span className="text-brand-ink text-xs tabular-nums">
-            {activeDay.day_total.carbs_g} كارب
+            {activeDay.day_total.carbs_g} {t.carbs}
           </span>
           <span className="text-brand-ink-muted/40">·</span>
           <span className="text-brand-ink text-xs tabular-nums">
-            {activeDay.day_total.fat_g} دهون
+            {activeDay.day_total.fat_g} {t.fat}
           </span>
         </div>
       )}
@@ -297,7 +310,7 @@ export function PlanViewer({
         >
           {activeDay && activeDay.meals.length > 0 ? (
             activeDay.meals.map((meal, i) => (
-              <MealCard key={i} meal={meal} memberNames={memberNames} />
+              <MealCard key={i} meal={meal} memberNames={memberNames} locale={locale} />
             ))
           ) : generating ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
@@ -305,13 +318,11 @@ export function PlanViewer({
                 className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
                 aria-hidden="true"
               />
-              <p className="text-brand-ink-muted text-sm">
-                هذا اليوم لسه نجهّزه… بيظهر خلال لحظات
-              </p>
+              <p className="text-brand-ink-muted text-sm">{t.generating}</p>
             </div>
           ) : (
             <div className="text-center py-8 text-brand-ink-muted text-sm">
-              ما عندك وجبات لهذا اليوم
+              {t.no_meals}
             </div>
           )}
         </motion.div>

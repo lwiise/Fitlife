@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
-import { triggerPlanGeneration } from "@/lib/plans/dispatch";
+import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
+import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -603,10 +604,16 @@ export async function addHousekeeper(input: {
   }
 
   revalidatePath("/family");
-  // Full regen so all recipes get translated into the housekeeper's language.
-  const gen = await runFamilyGeneration(supabase, user.id, { fullRegen: true });
-  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
-  return { ok: false, error: gen.kind === "upgrade" ? "حدث خطأ. حاولي مرة ثانية" : gen.error };
+  // Do NOT regenerate the family's meals — just translate the EXISTING plan into
+  // her language in place (fire-and-forget). The wife's plan is untouched.
+  if (isLocaleCode(input.preferred_language) && input.preferred_language !== "ar") {
+    await triggerPlanTranslation({
+      supabase,
+      userId: user.id,
+      locale: input.preferred_language,
+    });
+  }
+  return { ok: true, plan_generation_id: null };
 }
 
 /** Phase 2 — remove a member, then regenerate (or skip if only Mom remains). */

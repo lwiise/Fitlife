@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
-import type { Meal, Ingredient } from "@fitlife/plan-engine";
+import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
+import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
+import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
 
 const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   breakfast: { bg: "bg-brand-yellow/25", text: "text-brand-ink" },
@@ -12,22 +14,9 @@ const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   snack: { bg: "bg-brand-lavender/40", text: "text-brand-purple-900" },
 };
 
-const UNIT_AR: Record<string, string> = {
-  g: "جم",
-  kg: "كجم",
-  ml: "مل",
-  l: "لتر",
-  cup: "كوب",
-  tbsp: "ملعقة كبيرة",
-  tsp: "ملعقة صغيرة",
-  piece: "حبة",
-  serving: "حصة",
-  unlimited: "حسب الرغبة",
-};
-
-function formatAmount(ing: Ingredient): string {
-  if (ing.unit === "unlimited") return "حسب الرغبة";
-  const unit = UNIT_AR[ing.unit] ?? ing.unit;
+function formatAmount(ing: Ingredient, units: PlanStrings["units"]): string {
+  if (ing.unit === "unlimited") return units.unlimited;
+  const unit = units[ing.unit] ?? ing.unit;
   const hasRange =
     ing.amount_min != null &&
     ing.amount_max != null &&
@@ -36,7 +25,13 @@ function formatAmount(ing: Ingredient): string {
   return `${ing.amount} ${unit}`;
 }
 
-function IngredientList({ items }: { items: Ingredient[] }) {
+function IngredientList({
+  items,
+  units,
+}: {
+  items: Ingredient[];
+  units: PlanStrings["units"];
+}) {
   return (
     <ul className="space-y-1.5">
       {items.map((ing, i) => (
@@ -46,7 +41,7 @@ function IngredientList({ items }: { items: Ingredient[] }) {
         >
           <span className="text-brand-ink">{ing.name_ar}</span>
           <span className="text-brand-ink-muted tabular-nums text-xs">
-            {formatAmount(ing)}
+            {formatAmount(ing, units)}
           </span>
         </li>
       ))}
@@ -57,20 +52,38 @@ function IngredientList({ items }: { items: Ingredient[] }) {
 export function MealCard({
   meal,
   memberNames,
+  locale,
 }: {
   meal: Meal;
   memberNames?: Record<string, string>;
+  // When set to a non-Arabic locale, render translated fields + localized chrome.
+  locale?: LocaleCode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const slotStyle = SLOT_STYLE[meal.slot];
 
+  const translated = !!locale && locale !== "ar";
+  const t = getPlanStrings(locale ?? "ar");
+
+  const slotLabel = translated ? getSlotNameInLocale(meal.slot, locale) : meal.slot_name_ar;
+  const recipeName = translated
+    ? (meal.recipe_name_translated ?? meal.recipe_name_ar)
+    : meal.recipe_name_ar;
+  const ingredients = translated
+    ? (meal.ingredients_translated ?? meal.ingredients)
+    : meal.ingredients;
+  const steps =
+    translated && meal.prep_steps_translated?.length
+      ? meal.prep_steps_translated
+      : meal.prep_steps_ar;
+
   const metaBits: string[] = [];
   if (meal.prep_time_minutes != null)
-    metaBits.push(`تحضير ${meal.prep_time_minutes} د`);
+    metaBits.push(`${t.prep_time} ${meal.prep_time_minutes} ${t.min_abbr}`);
   if (meal.cook_time_minutes != null)
-    metaBits.push(`طبخ ${meal.cook_time_minutes} د`);
+    metaBits.push(`${t.cook_time} ${meal.cook_time_minutes} ${t.min_abbr}`);
   if (meal.servings_count != null)
-    metaBits.push(`${meal.servings_count} حصص`);
+    metaBits.push(`${meal.servings_count} ${t.servings_unit}`);
 
   const sharedPortions =
     meal.shared_recipe && meal.per_member_portions?.length
@@ -89,27 +102,27 @@ export function MealCard({
           <span
             className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold flex-shrink-0 ${slotStyle.bg} ${slotStyle.text}`}
           >
-            {meal.slot_name_ar}
+            {slotLabel}
           </span>
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-brand-ink text-base leading-snug">
-              {meal.recipe_name_ar}
+              {recipeName}
               {meal.shared_recipe && (
                 <span className="ms-2 inline-block align-middle text-[10px] font-bold text-brand-purple-900 bg-brand-lavender/40 rounded-full px-2 py-0.5">
-                  وصفة العائلة
+                  {t.family_recipe}
                 </span>
               )}
             </h3>
             <p className="mt-1 text-brand-ink-muted text-xs leading-relaxed tabular-nums">
-              {meal.macros.protein_g} بروتين · {meal.macros.carbs_g} كارب ·{" "}
-              {meal.macros.fat_g} دهون (جم)
+              {meal.macros.protein_g} {t.protein} · {meal.macros.carbs_g} {t.carbs} ·{" "}
+              {meal.macros.fat_g} {t.fat} ({t.grams})
             </p>
           </div>
           <div className="flex flex-col items-end flex-shrink-0">
             <span className="font-extrabold text-brand-ink text-xl tabular-nums">
               {meal.calories}
             </span>
-            <span className="text-brand-ink-muted text-xs">سعرة</span>
+            <span className="text-brand-ink-muted text-xs">{t.calories_unit}</span>
           </div>
           <motion.span
             animate={{ rotate: expanded ? 180 : 0 }}
@@ -140,15 +153,15 @@ export function MealCard({
 
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2">
-                  المكونات{sharedPortions ? " (الوصفة الأساس)" : ""}
+                  {t.ingredients}{sharedPortions ? ` (${t.base_recipe})` : ""}
                 </h4>
-                <IngredientList items={meal.ingredients} />
+                <IngredientList items={ingredients} units={t.units} />
               </section>
 
               {sharedPortions && (
                 <section>
                   <h4 className="font-bold text-brand-ink text-sm mb-2">
-                    مقادير كل فرد
+                    {t.per_member_portions}
                   </h4>
                   <div className="space-y-3">
                     {sharedPortions.map((portion, i) => (
@@ -160,8 +173,8 @@ export function MealCard({
                           {memberNames?.[portion.member_id] ??
                             portion.member_id}
                         </p>
-                        <IngredientList items={portion.ingredients} />
-                        {portion.notes_ar && (
+                        <IngredientList items={portion.ingredients} units={t.units} />
+                        {!translated && portion.notes_ar && (
                           <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
                             {portion.notes_ar}
                           </p>
@@ -174,10 +187,10 @@ export function MealCard({
 
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2">
-                  طريقة التحضير
+                  {t.prep_steps}
                 </h4>
                 <ol className="space-y-2 list-decimal list-inside marker:text-brand-purple-900 marker:font-bold">
-                  {meal.prep_steps_ar.map((step, i) => (
+                  {steps.map((step, i) => (
                     <li
                       key={i}
                       className="text-brand-ink text-sm leading-relaxed"
@@ -188,10 +201,11 @@ export function MealCard({
                 </ol>
               </section>
 
-              {meal.substitutions_ar && meal.substitutions_ar.length > 0 && (
+              {/* Substitutions + notes have no translated source → Arabic-only view. */}
+              {!translated && meal.substitutions_ar && meal.substitutions_ar.length > 0 && (
                 <section>
                   <h4 className="font-bold text-brand-ink text-sm mb-2">
-                    بدائل وتعديلات
+                    {t.substitutions}
                   </h4>
                   <ul className="space-y-1.5 list-disc list-inside marker:text-brand-purple-900">
                     {meal.substitutions_ar.map((sub, i) => (
@@ -206,7 +220,7 @@ export function MealCard({
                 </section>
               )}
 
-              {meal.notes_ar && (
+              {!translated && meal.notes_ar && (
                 <p className="text-brand-ink-muted text-xs leading-relaxed bg-brand-surface/60 rounded-xl p-3">
                   {meal.notes_ar}
                 </p>

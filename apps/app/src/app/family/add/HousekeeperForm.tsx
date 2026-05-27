@@ -76,7 +76,7 @@ export function HousekeeperForm() {
             })}
           </select>
           <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
-            بنعيد إنشاء الخطة عشان نضيف الوصفات بلغتها.
+            بنترجم خطتك الحالية للغتها — بدون إعادة إنشاء الخطة.
           </p>
         </div>
 
@@ -95,7 +95,7 @@ export function HousekeeperForm() {
           {isPending && (
             <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           )}
-          {isPending ? "جاري التجهيز…" : "إضافة وإنشاء الخطة"}
+          {isPending ? "جاري التجهيز…" : "إضافة الخدامة"}
         </button>
 
         <button

@@ -31,7 +31,7 @@ export default async function HousekeeperPage() {
   return (
     <HousekeeperPlanView
       plan={latest.plan_data}
-      weekStartDate={latest.week_start_date}
+      planId={latest.id}
       locale={locale}
     />
   );
