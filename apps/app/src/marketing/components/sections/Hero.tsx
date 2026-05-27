@@ -360,7 +360,7 @@ export default function Hero() {
   return (
     <section
       aria-label="القسم الرئيسي"
-      className="relative overflow-hidden pt-32 pb-0"
+      className="relative overflow-hidden pt-24 pb-0 md:pt-32"
     >
       <div
         aria-hidden="true"
@@ -394,16 +394,16 @@ export default function Hero() {
       <HousekeeperFloatingCard reduced={reduced} />
 
       <div className="container-page relative pb-32">
-        <div className="relative mx-auto max-w-5xl pt-12 text-center md:pt-20">
+        <div className="relative mx-auto max-w-5xl pt-6 text-center md:pt-20">
           {reduced ? (
             <h1 className="font-extrabold leading-[0.95] tracking-tight">
-              <span className="block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
+              <span className="block text-[clamp(34px,7vw,96px)] text-[#1A1023]">
                 خطة غذائية للعائلة.
               </span>
-              <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-[#1A1023]">
+              <span className="mt-2 block text-[clamp(34px,7vw,96px)] text-[#1A1023]">
                 وتعليمات الطبخ
               </span>
-              <span className="mt-2 block text-[clamp(48px,7vw,96px)] text-primary">
+              <span className="mt-2 block text-[clamp(34px,7vw,96px)] text-primary">
                 توصل للخدامة بلغتها.
               </span>
             </h1>
@@ -418,7 +418,7 @@ export default function Hero() {
               <motion.span
                 variants={wordContainer}
                 transition={{ staggerChildren: 0.06, delayChildren: 0.1 }}
-                className="block text-[clamp(48px,7vw,96px)] text-[#1A1023]"
+                className="block text-[clamp(34px,7vw,96px)] text-[#1A1023]"
               >
                 {line1Words.map((word, i) => (
                   <motion.span
@@ -433,7 +433,7 @@ export default function Hero() {
               <motion.span
                 variants={wordContainer}
                 transition={{ staggerChildren: 0.06, delayChildren: 0.4 }}
-                className="mt-2 block text-[clamp(48px,7vw,96px)] text-[#1A1023]"
+                className="mt-2 block text-[clamp(34px,7vw,96px)] text-[#1A1023]"
               >
                 {line2Words.map((word, i) => (
                   <motion.span
@@ -448,7 +448,7 @@ export default function Hero() {
               <motion.span
                 variants={wordContainer}
                 transition={{ staggerChildren: 0.06, delayChildren: 0.7 }}
-                className="mt-2 block text-[clamp(48px,7vw,96px)] text-primary"
+                className="mt-2 block text-[clamp(34px,7vw,96px)] text-primary"
               >
                 {line3Words.map((word, i) => (
                   <motion.span
@@ -471,7 +471,7 @@ export default function Hero() {
                 ? { duration: 0 }
                 : { duration: 0.5, ease: easeOut, delay: 1.0 }
             }
-            className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#1A1023]/70 md:text-xl"
+            className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-[#1A1023]/70 md:mt-8 md:text-xl"
           >
             ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك بلغته، بإشراف خبيرة تغذية سعودية. كل فرد بـ ٨ أسئلة، والعائلة كوحدة.
           </motion.p>
@@ -484,7 +484,7 @@ export default function Hero() {
                 ? { duration: 0 }
                 : { duration: 0.5, ease: easeOut, delay: 1.2 }
             }
-            className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
+            className="mt-6 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row"
           >
             <a
               href={getSignupUrl()}
