@@ -13,7 +13,10 @@ export default function MarketingLayout({
   return (
     <DirProvider>
       <Providers>
-        {children}
+        {/* overflow-x-clip kills any horizontal overflow from section decorations
+            on mobile without creating a scroll container (sticky/fixed-safe) and
+            without clipping vertical shadows. */}
+        <div className="overflow-x-clip">{children}</div>
         <CookieConsent />
         <ScrollToTop />
       </Providers>
