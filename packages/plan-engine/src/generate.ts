@@ -238,6 +238,40 @@ export async function generateMealPlan(params: {
     return { plan, usage: { input_tokens: 0, output_tokens: 0, cost_usd: 0 } };
   }
 
+  // Incremental add/edit: open the plan IMMEDIATELY (before the skeleton call)
+  // with the carried-over members intact and the new/edited member as an empty
+  // loading placeholder — so the user never sees a full-screen "generating"
+  // screen that hides the prior plan while the skeleton runs.
+  if (onProgress && seeded.size > 0 && familyDayIndices.length > 0) {
+    const preMembers: MemberPlan[] = beneficiaries.map((b) => {
+      const s = seeded.get(b.member_id);
+      if (s) return { ...s, member_name_ar: nameById.get(b.member_id) ?? s.member_name_ar };
+      return {
+        member_id: b.member_id,
+        member_name_ar: nameById.get(b.member_id) ?? "",
+        daily_calories_target: 0,
+        macros_target: { protein_g: 0, carbs_g: 0, fat_g: 0 },
+        days: familyDayIndices.map((di) => ({
+          day_index: di,
+          day_name_ar: khaleejiDayName(weekStart, di),
+          meals: [],
+          day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        })),
+      };
+    });
+    const preShell: MealPlan = {
+      week_start_date: weekStart,
+      members: preMembers,
+      methodology_notes_ar: existingPlan?.methodology_notes_ar,
+      safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
+      days_total: familyDayIndices.length,
+      generating: true,
+    };
+    await Promise.resolve(
+      onProgress(preShell, { readyDays: 0, totalDays: familyDayIndices.length }),
+    ).catch((e) => console.error("[plan-generate] pre-skeleton onProgress failed", e));
+  }
+
   // ── Phase 1: skeleton for the members we need to generate ──
   const targetMemberIds = toGenerate.map((b) => b.member_id);
   const sk = await streamAnthropic({
