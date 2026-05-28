@@ -122,44 +122,6 @@ export default async function DashboardPage() {
           أهلاً، {displayName}
         </h2>
 
-        {/* Housekeeper recipes — directly above today's meals. */}
-        {showHousekeeperLink && (
-          <Link
-            href="/plan/housekeeper"
-            className="inline-flex items-center justify-center gap-2 min-h-11 px-5 mb-4 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-          >
-            <ChefHat className="size-4" aria-hidden="true" />
-            وصفات الطبخ بلغة الخدامة
-          </Link>
-        )}
-
-        {/* Primary content: what am I cooking today? */}
-        <div className="mb-10">
-          {user && <TodaysMeals userId={user.id} isOnboarded={onboardingDone} />}
-        </div>
-
-        {!onboardingDone && (
-          <div className="bg-brand-purple-900 text-white rounded-3xl p-6 md:p-8 mb-8">
-            <div className="flex items-start gap-3 mb-3">
-              <Sparkles className="size-6 text-brand-yellow flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-lg md:text-xl leading-tight">
-                  خطتك على بعد دقيقتين
-                </h3>
-                <p className="text-white/80 text-sm mt-2 leading-relaxed">
-                  جاوبي على أسئلة سريعة عنك وعن عائلتك عشان نصمم لكِ خطة غذائية شخصية.
-                </p>
-              </div>
-            </div>
-            <a
-              href="/onboarding"
-              className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-5 py-2.5 rounded-full mt-2 transition-colors"
-            >
-              ابدئي الآن
-            </a>
-          </div>
-        )}
-
         <p className="text-brand-ink-muted text-xs font-bold mb-3">نظرة سريعة</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Link
@@ -288,6 +250,44 @@ export default async function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Housekeeper recipes — directly above today's meals. */}
+        {showHousekeeperLink && (
+          <Link
+            href="/plan/housekeeper"
+            className="inline-flex items-center justify-center gap-2 min-h-11 px-5 mt-10 mb-4 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+          >
+            <ChefHat className="size-4" aria-hidden="true" />
+            وصفات الطبخ بلغة الخدامة
+          </Link>
+        )}
+
+        {/* What am I cooking today? */}
+        <div className={`mb-10 ${showHousekeeperLink ? "" : "mt-10"}`}>
+          {user && <TodaysMeals userId={user.id} isOnboarded={onboardingDone} />}
+        </div>
+
+        {!onboardingDone && (
+          <div className="bg-brand-purple-900 text-white rounded-3xl p-6 md:p-8 mb-8">
+            <div className="flex items-start gap-3 mb-3">
+              <Sparkles className="size-6 text-brand-yellow flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-lg md:text-xl leading-tight">
+                  خطتك على بعد دقيقتين
+                </h3>
+                <p className="text-white/80 text-sm mt-2 leading-relaxed">
+                  جاوبي على أسئلة سريعة عنك وعن عائلتك عشان نصمم لكِ خطة غذائية شخصية.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/onboarding"
+              className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-5 py-2.5 rounded-full mt-2 transition-colors"
+            >
+              ابدئي الآن
+            </a>
+          </div>
+        )}
 
         <details className="mt-12 text-xs text-brand-ink-muted/40">
           <summary className="cursor-pointer hover:text-brand-ink-muted transition-colors">
