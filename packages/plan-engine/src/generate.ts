@@ -429,8 +429,22 @@ export async function generateMealPlan(params: {
   // Open the plan immediately: existing members complete, new members loading.
   emit();
 
+  // Generate starting from TODAY so the day the user is viewing fills first, then
+  // forward (wrapping earlier days to the end). Order only — day_index unchanged.
+  const startMs = Date.parse(`${weekStart}T00:00:00Z`);
+  const todayMs = Date.parse(`${riyadhTodayISO()}T00:00:00Z`);
+  const todayIndex =
+    Number.isNaN(startMs) || Number.isNaN(todayMs)
+      ? -1
+      : Math.round((todayMs - startMs) / 86_400_000);
+  const startPos = dayIndices.indexOf(todayIndex);
+  const generationOrder =
+    startPos > 0
+      ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
+      : dayIndices; // today is day 0, or outside the week → keep ascending
+
   // ── Phase 2: expand each day sequentially (toGenerate members only) ──
-  await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
+  await mapWithConcurrency(generationOrder, DAY_CONCURRENCY, async (dayIndex) => {
     const prompt = buildDayPrompt(
       context,
       workingSkeleton,
