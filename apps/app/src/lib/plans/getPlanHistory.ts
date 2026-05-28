@@ -9,6 +9,7 @@ export interface PlanHistoryItem {
   generatedAt: string | null;
   createdAt: string;
   memberCount: number;
+  memberIds: string[];
   memberNames: string[];
   isCurrent: boolean;
 }
@@ -48,6 +49,7 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
       generatedAt: row.generated_at,
       createdAt: row.created_at,
       memberCount: parsed.data.members.length,
+      memberIds: parsed.data.members.map((m) => m.member_id),
       memberNames: parsed.data.members.map((m) => m.member_name_ar),
       isCurrent: false,
     });

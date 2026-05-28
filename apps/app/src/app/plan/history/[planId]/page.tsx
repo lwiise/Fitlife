@@ -15,10 +15,13 @@ export const metadata = {
 
 export default async function HistoryPlanViewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ planId: string }>;
+  searchParams: Promise<{ member?: string }>;
 }) {
   const { planId } = await params;
+  const { member } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,7 +49,7 @@ export default async function HistoryPlanViewPage({
       <div className="container-app py-8 md:py-12">
         <div className="flex items-center justify-between gap-3 mb-6">
           <Link
-            href="/plan/history"
+            href={member ? `/plan/history?member=${member}` : "/plan/history"}
             className="inline-flex items-center gap-1 min-h-11 px-2 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
@@ -55,7 +58,12 @@ export default async function HistoryPlanViewPage({
           {!result.isCurrent && <RestorePlanButton planId={result.id} />}
         </div>
 
-        <PlanViewer plan={result.plan} planId={result.id} readOnly />
+        <PlanViewer
+          plan={result.plan}
+          planId={result.id}
+          readOnly
+          preselectedMember={member}
+        />
       </div>
     </main>
   );

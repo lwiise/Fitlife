@@ -8,6 +8,7 @@ import { BackToDashboard } from "@/components/BackToDashboard";
 import { SettingsLink } from "@/components/SettingsLink";
 import { RestorePlanButton } from "./RestorePlanButton";
 import { DeletePlanButton } from "./DeletePlanButton";
+import { MemberHistorySelect } from "./MemberHistorySelect";
 
 export const metadata = {
   title: "الخطط السابقة — فت لايف",
@@ -36,7 +37,12 @@ function formatWeekRange(weekStart: string | null): string {
   }
 }
 
-export default async function PlanHistoryPage() {
+export default async function PlanHistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ member?: string }>;
+}) {
+  const { member } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,6 +50,29 @@ export default async function PlanHistoryPage() {
   if (!user) redirect("/auth/login");
 
   const history = await getPlanHistory(user.id);
+
+  // Per-member lens: the selectable members are the union across all plans
+  // (the maid is never in plan_data, so never appears). "mom" first, then by
+  // first appearance; use each member's most-recent name.
+  const memberOrder: string[] = [];
+  const memberNameById = new Map<string, string>();
+  for (const item of history) {
+    item.memberIds.forEach((id, i) => {
+      if (!memberNameById.has(id)) {
+        memberNameById.set(id, item.memberNames[i] ?? id);
+        memberOrder.push(id);
+      }
+    });
+  }
+  memberOrder.sort((a, b) => (a === "mom" ? -1 : b === "mom" ? 1 : 0));
+  const members = memberOrder.map((id) => ({
+    id,
+    name: memberNameById.get(id) ?? id,
+  }));
+
+  const selected =
+    member && memberNameById.has(member) ? member : (members[0]?.id ?? "");
+  const filtered = history.filter((item) => item.memberIds.includes(selected));
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -69,7 +98,7 @@ export default async function PlanHistoryPage() {
             الخطط السابقة
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            شوفي خططك القديمة، واستعيدي أي وحدة تبينها لهذا الأسبوع.
+            اختاري الفرد وشوفي خططه السابقة، واستعيدي أي وحدة تبينها لهذا الأسبوع.
           </p>
         </header>
 
@@ -84,8 +113,20 @@ export default async function PlanHistoryPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            {history.map((item) => (
+          <>
+            {members.length > 1 && (
+              <MemberHistorySelect members={members} selected={selected} />
+            )}
+
+            {filtered.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
+                <p className="font-bold text-brand-ink">ما عنده خطط سابقة</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((item, idx) => {
+                  const isCurrentForMember = idx === 0;
+                  return (
               <div
                 key={item.id}
                 className="bg-white rounded-2xl border border-brand-ink/5 p-5"
@@ -99,7 +140,7 @@ export default async function PlanHistoryPage() {
                       <p className="font-bold text-brand-ink tabular-nums">
                         {formatWeekRange(item.weekStartDate)}
                       </p>
-                      {item.isCurrent && (
+                      {isCurrentForMember && (
                         <span className="inline-flex items-center rounded-full bg-brand-emerald/10 text-brand-emerald px-2.5 py-0.5 text-xs font-bold">
                           الحالية
                         </span>
@@ -116,18 +157,21 @@ export default async function PlanHistoryPage() {
 
                 <div className="flex items-center justify-end gap-2 mt-4">
                   <Link
-                    href={`/plan/history/${item.id}`}
+                    href={`/plan/history/${item.id}?member=${selected}`}
                     className="inline-flex items-center gap-1 min-h-11 px-4 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
                   >
                     عرض
                     <ChevronLeft className="size-4" aria-hidden="true" />
                   </Link>
-                  {!item.isCurrent && <RestorePlanButton planId={item.id} />}
+                  {!isCurrentForMember && <RestorePlanButton planId={item.id} />}
                   <DeletePlanButton planId={item.id} />
                 </div>
               </div>
-            ))}
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
