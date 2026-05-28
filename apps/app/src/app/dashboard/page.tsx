@@ -243,9 +243,14 @@ export default async function DashboardPage() {
                 التجديد القادم: {new Date(subscription.current_period_end).toLocaleDateString("ar-SA")}
               </p>
             )}
-            {(subStatus === "active" || subStatus === "past_due") && subscription?.lemonsqueezy_customer_id && (
+            {subscription && (
               <div className="mt-3">
-                <BillingPortalButton variant="ghost" />
+                <Link
+                  href="/subscription"
+                  className="inline-flex items-center gap-2 bg-brand-ink text-white hover:bg-brand-purple-900 font-bold text-sm px-4 py-2 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                >
+                  إدارة الاشتراك
+                </Link>
               </div>
             )}
           </div>
