@@ -752,7 +752,21 @@ export async function translateMealPlan(params: {
     new Set(members.flatMap((m) => m.days.map((d) => d.day_index))),
   ).sort((a, b) => a - b);
 
-  await mapWithConcurrency(dayIndices, DAY_CONCURRENCY, async (dayIndex) => {
+  // Translate starting from TODAY so the day the maid lands on resolves first,
+  // then forward (wrapping earlier days to the end).
+  const startMs = Date.parse(`${plan.week_start_date}T00:00:00Z`);
+  const todayMs = Date.parse(`${riyadhTodayISO()}T00:00:00Z`);
+  const todayIndex =
+    Number.isNaN(startMs) || Number.isNaN(todayMs)
+      ? -1
+      : Math.round((todayMs - startMs) / 86_400_000);
+  const startPos = dayIndices.indexOf(todayIndex);
+  const order =
+    startPos > 0
+      ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
+      : dayIndices;
+
+  await mapWithConcurrency(order, DAY_CONCURRENCY, async (dayIndex) => {
     const refs: Meal[] = [];
     for (const m of members) {
       const day = m.days.find((d) => d.day_index === dayIndex);

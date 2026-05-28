@@ -18,7 +18,7 @@ export function HousekeeperForm() {
     startTransition(async () => {
       const result = await addHousekeeper({ name: name.trim(), preferred_language: lang });
       if (!result.ok) return setError(result.error);
-      router.push("/plan");
+      router.push(lang === "ar" ? "/plan" : "/plan/housekeeper");
     });
   };
 

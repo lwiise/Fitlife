@@ -116,3 +116,21 @@ export function getSlotNameInLocale(slot: string, locale: LocaleCode): string {
   const table = SLOT_NAMES_BY_LOCALE[locale];
   return (table as Record<string, string>)[slot] ?? slot;
 }
+
+/**
+ * Localized weekday name for (weekStart + dayIndex). The plan's day_index is
+ * anchored to the generation day, NOT a fixed Saturday=0, so the maid view must
+ * derive the real weekday from the date rather than indexing the locale array
+ * by day_index directly.
+ */
+export function getLocalizedDayNameFromWeekStart(
+  weekStartISO: string,
+  dayIndex: number,
+  locale: LocaleCode,
+): string {
+  const d = new Date(`${weekStartISO}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() + dayIndex);
+  const khaleeji = (JS_TO_KHALEEJI[d.getUTCDay()] ?? 0) as KhaleejiDayIndex;
+  return getDayNameInLocale(khaleeji, locale);
+}

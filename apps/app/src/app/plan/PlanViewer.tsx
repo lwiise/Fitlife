@@ -14,7 +14,7 @@ import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
 import {
   dayIndexFromWeekStart,
   dayNameFromWeekStart,
-  getDayNameInLocale,
+  getLocalizedDayNameFromWeekStart,
 } from "@/lib/plans/dayMapping";
 import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
 
@@ -60,6 +60,12 @@ export function PlanViewer({
   const translated = !!locale && locale !== "ar";
   const t = getPlanStrings(locale ?? "ar");
   const dir = translated ? getLocaleInfo(locale).direction : undefined;
+  // Maid view: a day is shown only once ALL its recipes are translated to her
+  // locale — otherwise we show a loading state, never the Arabic fallback.
+  const isDayTranslated = (day?: MemberPlan["days"][number]) =>
+    !!day &&
+    day.meals.length > 0 &&
+    day.meals.every((m) => m.prep_steps_translated_locale === locale);
   const [activeMemberId, setActiveMemberId] = useState<string>(
     preselectedMember && plan.members.some((m) => m.member_id === preselectedMember)
       ? preselectedMember
@@ -252,10 +258,12 @@ export function PlanViewer({
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
           const label = translated
-            ? getDayNameInLocale(i, locale)
+            ? getLocalizedDayNameFromWeekStart(plan.week_start_date, i, locale)
             : day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
           const isActive = i === activeDayIndex;
-          const pending = generating && (!day || day.meals.length === 0);
+          const pending =
+            (generating && (!day || day.meals.length === 0)) ||
+            (translated && !isDayTranslated(day));
           return (
             <button
               key={i}
@@ -312,7 +320,15 @@ export function PlanViewer({
           transition={{ duration: 0.2 }}
           className="space-y-3"
         >
-          {activeDay && activeDay.meals.length > 0 ? (
+          {translated && activeDay && !isDayTranslated(activeDay) ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Loader2
+                className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
+                aria-hidden="true"
+              />
+              <p className="text-brand-ink-muted text-sm">{t.translating}</p>
+            </div>
+          ) : activeDay && activeDay.meals.length > 0 ? (
             activeDay.meals.map((meal, i) => (
               <MealCard key={i} meal={meal} memberNames={memberNames} locale={locale} />
             ))
