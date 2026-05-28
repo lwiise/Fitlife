@@ -10,19 +10,35 @@ export function RegenerateButton({ className = "" }: { className?: string }) {
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [issues, setIssues] = useState("");
+  const [improvements, setImprovements] = useState("");
 
   function openDialog() {
     setErrorMessage(null);
     setConfirmOpen(true);
   }
 
+  function closeDialog() {
+    setConfirmOpen(false);
+    setErrorMessage(null);
+    setIssues("");
+    setImprovements("");
+  }
+
   function handleConfirm() {
     setErrorMessage(null);
     startTransition(async () => {
       try {
-        const res = await fetch("/api/plans/generate", { method: "POST" });
+        const res = await fetch("/api/plans/generate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            issues: issues.trim(),
+            improvements: improvements.trim(),
+          }),
+        });
         if (res.ok) {
-          setConfirmOpen(false);
+          closeDialog();
           router.refresh();
           return;
         }
@@ -57,7 +73,7 @@ export function RegenerateButton({ className = "" }: { className?: string }) {
       <ConfirmDialog
         open={confirmOpen}
         title="إنشاء خطة جديدة"
-        body="بتنشأ خطة جديدة، والخطة الحالية بتنحفظ في السجل. تأكدين؟"
+        body="عشان نصمم لكِ خطة أنسب، قوليلنا ايش تبين نغيّر. الخطة الحالية بتنحفظ في السجل."
         confirmLabel="أنشئي الخطة"
         cancelLabel="إلغاء"
         isPending={isPending}
@@ -65,10 +81,46 @@ export function RegenerateButton({ className = "" }: { className?: string }) {
         onConfirm={handleConfirm}
         onCancel={() => {
           if (isPending) return;
-          setConfirmOpen(false);
-          setErrorMessage(null);
+          closeDialog();
         }}
-      />
+      >
+        <div className="space-y-4">
+          <div>
+            <label
+              htmlFor="regen-issues"
+              className="block text-sm font-bold text-brand-ink mb-1.5"
+            >
+              ايش ما عجبك في الخطة الحالية؟ <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+            </label>
+            <textarea
+              id="regen-issues"
+              value={issues}
+              onChange={(e) => setIssues(e.target.value)}
+              disabled={isPending}
+              rows={2}
+              placeholder="مثلاً: الوجبات متكررة، أو ما أحب السمك"
+              className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="regen-improvements"
+              className="block text-sm font-bold text-brand-ink mb-1.5"
+            >
+              ايش تحبين نغيّر أو نحسّن؟ <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+            </label>
+            <textarea
+              id="regen-improvements"
+              value={improvements}
+              onChange={(e) => setImprovements(e.target.value)}
+              disabled={isPending}
+              rows={2}
+              placeholder="مثلاً: تنوع أكثر، وجبات أخف للعشاء"
+              className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+            />
+          </div>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

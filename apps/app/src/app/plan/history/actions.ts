@@ -74,3 +74,38 @@ export async function restorePlan(planId: string): Promise<RestoreResult> {
   revalidatePath("/plan");
   return { ok: true };
 }
+
+export type DeleteResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Delete a plan the user no longer needs (soft-delete → status "archived").
+ * Hidden everywhere: history lists only "ready" plans, and getLatestPlan skips
+ * archived (so deleting the current plan falls back to the next). Avoids
+ * orphaning plan_generations audit rows. Admin client (RLS blocks user writes).
+ */
+export async function deletePlan(planId: string): Promise<DeleteResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("meal_plans")
+    .update({ status: "archived", updated_at: new Date().toISOString() })
+    .eq("id", planId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "plan-delete", userId: user.id },
+    });
+    return { ok: false, error: "فشل الحذف. حاولي مرة ثانية" };
+  }
+
+  revalidatePath("/plan/history");
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}

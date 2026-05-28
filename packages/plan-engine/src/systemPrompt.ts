@@ -513,6 +513,19 @@ function familyWideText(context: PlanPromptContext): string {
 }
 
 /**
+ * The user's regeneration feedback ("what's wrong / what to improve"), layered
+ * in as guidance. Methodology + cookbook stay first, so they take precedence;
+ * this adapts the new plan to the user without breaking the core rules.
+ */
+function feedbackText(context: PlanPromptContext): string {
+  const fb = context.user_feedback?.trim();
+  if (!fb) return "";
+  return `\n\n# ملاحظات العميلة (راعيها في هذه الخطة الجديدة)
+${fb}
+طبّقي هذه الملاحظات قدر الإمكان مع الحفاظ على منهجيتك وأسلوب كتابك وبنية الوصفات والقواعد الصحية.`;
+}
+
+/**
  * Phase 1 — the dynamic part of the SKELETON call: compute per-member targets +
  * a week of dish NAMES only (no recipes). Small + fast; decides variety and
  * which meals are shared across the family (same recipe_name_ar = shared).
@@ -536,7 +549,7 @@ export function buildSkeletonPrompt(
 الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
 # أفراد الخطة المطلوبة الآن (استخدمي member_id بالضبط)
-${buildRoster(context, targetMemberIds)}
+${buildRoster(context, targetMemberIds)}${feedbackText(context)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
@@ -644,7 +657,7 @@ export function buildDayPrompt(
 ${sharedRule}
 
 # الأفراد ووجبات هذا اليوم
-${memberBlocks}${familyWideText(context)}
+${memberBlocks}${familyWideText(context)}${feedbackText(context)}
 
 # الإيجاز
 - prep_steps_ar: 3-4 خطوات قصيرة كحد أقصى.

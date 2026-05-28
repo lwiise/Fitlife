@@ -89,6 +89,9 @@ export interface PlanPromptContext {
   // The household housekeeper's reading language, when she exists AND it's not
   // Arabic. Drives the day-prompt translation directive. Undefined otherwise.
   housekeeper_locale?: LocaleCode;
+  // The user's free-text feedback for a manual regeneration ("what's wrong /
+  // what to improve"). Layered into the prompt as guidance. Undefined otherwise.
+  user_feedback?: string;
 }
 
 function ageFromBirthYear(birthYear: number | null): number | null {

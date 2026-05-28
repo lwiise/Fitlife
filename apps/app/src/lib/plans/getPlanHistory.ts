@@ -60,7 +60,7 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
 export async function getPlanById(
   userId: string,
   planId: string,
-): Promise<{ id: string; plan: MealPlan } | null> {
+): Promise<{ id: string; plan: MealPlan; isCurrent: boolean } | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("meal_plans")
@@ -72,5 +72,16 @@ export async function getPlanById(
   if (error || !data || data.status !== "ready") return null;
   const parsed = MealPlanSchema.safeParse(data.plan_data);
   if (!parsed.success) return null;
-  return { id: data.id, plan: parsed.data };
+
+  // Current = the newest ready plan; Restore is hidden for it.
+  const { data: newest } = await supabase
+    .from("meal_plans")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  return { id: data.id, plan: parsed.data, isCurrent: newest?.id === data.id };
 }

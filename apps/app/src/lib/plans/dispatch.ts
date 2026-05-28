@@ -47,6 +47,9 @@ export async function triggerPlanGeneration(params: {
   // generate only the new/changed member. Manual "new plan" leaves these off.
   carryOver?: boolean;
   regenerateMemberId?: string;
+  // Manual regeneration: the user's "what's wrong / what to improve" feedback,
+  // layered into the generation prompt (methodology/cookbook still take precedence).
+  feedback?: string;
 }): Promise<DispatchResult> {
   const {
     supabase,
@@ -54,6 +57,7 @@ export async function triggerPlanGeneration(params: {
     bypassRateLimit = false,
     carryOver = false,
     regenerateMemberId,
+    feedback,
   } = params;
 
   const access = bypassRateLimit
@@ -73,6 +77,9 @@ export async function triggerPlanGeneration(params: {
     });
     return { ok: false, kind: "server" };
   }
+
+  // Layer the user's regeneration feedback into the prompt context.
+  if (feedback) context.user_feedback = feedback;
 
   // Carry over the prior plan's completed members (minus the edited member, so
   // it regenerates). Fetched BEFORE createPlanRows so it's the previous plan.
@@ -141,7 +148,7 @@ export async function triggerPlanGeneration(params: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
         },
-        body: JSON.stringify({ userId, mealPlanId, existingPlan }),
+        body: JSON.stringify({ userId, mealPlanId, existingPlan, feedback }),
       },
     );
     if (!res.ok && res.status !== 202) {

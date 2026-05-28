@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { SettingsLink } from "@/components/SettingsLink";
 import { RestorePlanButton } from "./RestorePlanButton";
+import { DeletePlanButton } from "./DeletePlanButton";
 
 export const metadata = {
   title: "الخطط السابقة — فت لايف",
@@ -122,6 +123,7 @@ export default async function PlanHistoryPage() {
                     <ChevronLeft className="size-4" aria-hidden="true" />
                   </Link>
                   {!item.isCurrent && <RestorePlanButton planId={item.id} />}
+                  <DeletePlanButton planId={item.id} />
                 </div>
               </div>
             ))}

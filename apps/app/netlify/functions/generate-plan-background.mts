@@ -283,6 +283,7 @@ export default async (req: Request): Promise<Response> => {
     mode?: "generate" | "translate";
     plan?: MealPlan | null;
     locale?: LocaleCode;
+    feedback?: string;
   };
   try {
     body = await req.json();
@@ -319,6 +320,7 @@ export default async (req: Request): Promise<Response> => {
   const startMs = Date.now();
   try {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
+    if (body.feedback) context.user_feedback = body.feedback;
 
     const { plan, usage } = await generateMealPlan({
       anthropicApiKey: anthropicKey,

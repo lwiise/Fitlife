@@ -18,7 +18,7 @@ const GENERIC_502 = "حدث خطأ في إنشاء الخطة. حاولي مرة
  * Always enforces the full rate limit. Onboarding + family-change generation
  * runs through server actions that call triggerPlanGeneration with the bypass.
  */
-export async function POST() {
+export async function POST(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -29,7 +29,28 @@ export async function POST() {
     return NextResponse.json({ error: "يجب تسجيل الدخول" }, { status: 401 });
   }
 
-  const result = await triggerPlanGeneration({ supabase, userId: user.id });
+  // Optional regeneration feedback (the "what's wrong / what to improve" popup).
+  let feedback: string | undefined;
+  const body = (await req
+    .json()
+    .catch(() => ({}))) as { issues?: string; improvements?: string };
+  const issues = body.issues?.trim();
+  const improvements = body.improvements?.trim();
+  if (issues || improvements) {
+    feedback = [
+      "ملاحظات العميلة على الخطة الحالية:",
+      issues ? `- ما لم يعجبها: ${issues}` : null,
+      improvements ? `- التحسينات المطلوبة: ${improvements}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  const result = await triggerPlanGeneration({
+    supabase,
+    userId: user.id,
+    feedback,
+  });
 
   if (result.ok) {
     return NextResponse.json(

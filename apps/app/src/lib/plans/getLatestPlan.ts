@@ -39,6 +39,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     .from("meal_plans")
     .select("id, status, plan_data, generated_at, error_message, updated_at")
     .eq("user_id", userId)
+    .neq("status", "archived")
     .order("created_at", { ascending: false })
     .limit(1)
     .returns<MealPlanRow[]>();

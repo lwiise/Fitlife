@@ -14,6 +14,7 @@ export function ConfirmDialog({
   open,
   title,
   body,
+  children,
   confirmLabel = "تأكيد",
   cancelLabel = "إلغاء",
   isPending = false,
@@ -24,6 +25,8 @@ export function ConfirmDialog({
   open: boolean;
   title: string;
   body?: string;
+  /** Optional extra content (e.g. a form) rendered below the body. */
+  children?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   isPending?: boolean;
@@ -45,13 +48,14 @@ export function ConfirmDialog({
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const t = setTimeout(() => confirmRef.current?.focus(), 50);
+    // Don't steal focus to the confirm button when there's a form to fill in.
+    const t = children ? undefined : setTimeout(() => confirmRef.current?.focus(), 50);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
-      clearTimeout(t);
+      if (t) clearTimeout(t);
     };
-  }, [open, isPending, onCancel]);
+  }, [open, isPending, onCancel, children]);
 
   if (!mounted) return null;
 
@@ -89,6 +93,8 @@ export function ConfirmDialog({
             {body && (
               <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">{body}</p>
             )}
+
+            {children && <div className="mt-4">{children}</div>}
 
             {error && (
               <div
