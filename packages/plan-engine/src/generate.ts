@@ -547,6 +547,25 @@ export async function generateMealPlan(params: {
     }
   }
 
+  // Non-fatal cookbook-style guard: surface refined-flour/sugar deviations from
+  // Sara's cookbook in logs so the prompt can be tuned. Never blocks generation.
+  const REFINED_FLAGS = ["سكر أبيض", "دقيق أبيض", "طحين أبيض"];
+  for (const memberPlan of plan.members) {
+    for (const day of memberPlan.days) {
+      for (const meal of day.meals) {
+        const ingredientText = meal.ingredients.map((i) => i.name_ar).join(" ");
+        const violations = REFINED_FLAGS.filter((f) => ingredientText.includes(f));
+        if (violations.length > 0) {
+          console.warn("[plan-generate] cookbook style violation", {
+            userId: context.mom.id,
+            meal: meal.recipe_name_ar,
+            violations,
+          });
+        }
+      }
+    }
+  }
+
   // Non-fatal observability guard: if the housekeeper needs translations, flag
   // any meal the AI left untranslated. The housekeeper view degrades to Arabic,
   // so we warn rather than fail the whole plan.
