@@ -29,11 +29,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "يجب تسجيل الدخول" }, { status: 401 });
   }
 
-  // Optional regeneration feedback (the "what's wrong / what to improve" popup).
+  // Optional regeneration feedback (the "what's wrong / what to improve" popup)
+  // + optional memberId to scope the regen to a single member.
   let feedback: string | undefined;
-  const body = (await req
-    .json()
-    .catch(() => ({}))) as { issues?: string; improvements?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    issues?: string;
+    improvements?: string;
+    memberId?: string;
+  };
   const issues = body.issues?.trim();
   const improvements = body.improvements?.trim();
   if (issues || improvements) {
@@ -46,10 +49,17 @@ export async function POST(req: Request) {
       .join("\n");
   }
 
+  const memberId = body.memberId?.trim();
+
   const result = await triggerPlanGeneration({
     supabase,
     userId: user.id,
     feedback,
+    // Scope to the viewed member: carry the rest over, regenerate only this one
+    // with fresh independent dishes. No memberId → full regen (fallback).
+    ...(memberId
+      ? { carryOver: true, regenerateMemberId: memberId, independentRegen: true }
+      : {}),
   });
 
   if (result.ok) {

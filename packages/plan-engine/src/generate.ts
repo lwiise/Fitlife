@@ -151,6 +151,10 @@ export async function generateMealPlan(params: {
   // Prior plan to carry completed members over from (family add/edit). When
   // omitted, everyone is generated fresh (manual "new plan").
   existingPlan?: MealPlan | null;
+  // Per-member regenerate: the member(s) being generated get FRESH independent
+  // dishes instead of being aligned to the family's existing dish grid. Used by
+  // the per-member "new plan" button; left off for add/edit (which stay aligned).
+  independentRegen?: boolean;
   // Called (serialized) after each day completes with the plan-so-far.
   onProgress?: (
     snapshot: MealPlan,
@@ -160,7 +164,7 @@ export async function generateMealPlan(params: {
   plan: MealPlan;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
 }> {
-  const { anthropicApiKey, context, existingPlan, onProgress } = params;
+  const { anthropicApiKey, context, existingPlan, independentRegen, onProgress } = params;
   let totalIn = 0;
   let totalOut = 0;
 
@@ -329,8 +333,10 @@ export async function generateMealPlan(params: {
     dayNameByIndex.set(di, khaleejiDayName(weekStart, di));
   }
 
-  // Align new members to the family's existing dishes (same dish each day).
-  const aligned = familyDishGrid.size > 0;
+  // Align new members to the family's existing dishes (same dish each day) —
+  // unless this is an independent per-member regen, where the member gets fresh
+  // dishes of their own.
+  const aligned = familyDishGrid.size > 0 && !independentRegen;
   const workingSkeleton: PlanSkeleton = {
     ...skeleton,
     members: skeleton.members.map((sm) => ({
@@ -621,8 +627,9 @@ export async function runMealPlanGeneration(params: {
   mealPlanId: string;
   context: PlanPromptContext;
   existingPlan?: MealPlan | null;
+  independentRegen?: boolean;
 }): Promise<GenerateResult> {
-  const { supabase, anthropicApiKey, mealPlanId, context, existingPlan } = params;
+  const { supabase, anthropicApiKey, mealPlanId, context, existingPlan, independentRegen } = params;
   const startMs = Date.now();
 
   let plan: MealPlan;
@@ -632,6 +639,7 @@ export async function runMealPlanGeneration(params: {
       anthropicApiKey,
       context,
       existingPlan,
+      independentRegen,
       // Persist progressively; flip "ready" on the first emit (the shell) so the
       // plan opens showing all days loading and they fill in 1→7.
       onProgress: async (snapshot) => {

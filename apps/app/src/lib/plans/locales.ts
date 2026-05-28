@@ -52,6 +52,7 @@ export interface PlanStrings {
   you: string;
   generating: string;
   translating: string;
+  day_queued: string;
   no_meals: string;
   empty_plan: string;
   prep_time: string;
@@ -88,6 +89,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "أنتِ",
     generating: "هذا اليوم لسه نجهّزه… بيظهر خلال لحظات",
     translating: "نجهّز الوصفات بلغتك… تظهر خلال لحظات",
+    day_queued: "بنجهّز هذا اليوم بالترتيب — بعد الأيام اللي قبله",
     no_meals: "ما عندك وجبات لهذا اليوم",
     empty_plan: "الخطة فارغة. حاولي إعادة الإنشاء.",
     prep_time: "تحضير",
@@ -117,6 +119,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "You",
     generating: "Still preparing this day… coming shortly",
     translating: "Preparing the recipes in your language… ready shortly",
+    day_queued: "This day is queued — it comes after the earlier days",
     no_meals: "No meals for this day",
     empty_plan: "The plan is empty. Try regenerating.",
     prep_time: "Prep",
@@ -146,6 +149,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "Ikaw",
     generating: "Inihahanda pa ang araw na ito…",
     translating: "Inihahanda ang mga recipe sa iyong wika… handa na sa ilang sandali",
+    day_queued: "Nakapila ang araw na ito — kasunod ng mga naunang araw",
     no_meals: "Walang pagkain sa araw na ito",
     empty_plan: "Walang laman ang plano.",
     prep_time: "Paghahanda",
@@ -175,6 +179,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "Anda",
     generating: "Masih menyiapkan hari ini…",
     translating: "Menyiapkan resep dalam bahasa Anda… segera siap",
+    day_queued: "Hari ini dalam antrean — setelah hari-hari sebelumnya",
     no_meals: "Tidak ada makanan untuk hari ini",
     empty_plan: "Rencana kosong.",
     prep_time: "Persiapan",
@@ -204,6 +209,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "আপনি",
     generating: "এই দিনটি এখনও প্রস্তুত হচ্ছে…",
     translating: "আপনার ভাষায় রেসিপি প্রস্তুত হচ্ছে… শীঘ্রই দেখা যাবে",
+    day_queued: "এই দিনটি সারিতে আছে — আগের দিনগুলোর পরে",
     no_meals: "এই দিনের জন্য কোনো খাবার নেই",
     empty_plan: "পরিকল্পনা খালি।",
     prep_time: "প্রস্তুতি",
@@ -233,6 +239,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "እርስዎ",
     generating: "ይህ ቀን አሁንም በዝግጅት ላይ ነው…",
     translating: "የምግብ አዘገጃጀቶቹ በቋንቋዎ እየተዘጋጁ ነው… በቅርቡ ይታያል",
+    day_queued: "ይህ ቀን በተራ ላይ ነው — ካለፉት ቀናት በኋላ",
     no_meals: "ለዚህ ቀን ምግብ የለም",
     empty_plan: "ዕቅዱ ባዶ ነው።",
     prep_time: "ዝግጅት",
@@ -262,6 +269,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     you: "آپ",
     generating: "یہ دن ابھی تیار ہو رہا ہے…",
     translating: "ترکیبیں آپ کی زبان میں تیار ہو رہی ہیں… تھوڑی دیر میں ظاہر ہوں گی",
+    day_queued: "یہ دن قطار میں ہے — پچھلے دنوں کے بعد",
     no_meals: "اس دن کے لیے کوئی کھانا نہیں",
     empty_plan: "پلان خالی ہے۔",
     prep_time: "تیاری",

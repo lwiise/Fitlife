@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-export function RegenerateButton({ className = "" }: { className?: string }) {
+export function RegenerateButton({
+  className = "",
+  memberId,
+  memberName,
+}: {
+  className?: string;
+  // Scope the regen to the member being viewed (others kept untouched).
+  memberId?: string;
+  memberName?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -35,6 +44,7 @@ export function RegenerateButton({ className = "" }: { className?: string }) {
           body: JSON.stringify({
             issues: issues.trim(),
             improvements: improvements.trim(),
+            ...(memberId ? { memberId } : {}),
           }),
         });
         if (res.ok) {
@@ -72,8 +82,12 @@ export function RegenerateButton({ className = "" }: { className?: string }) {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="إنشاء خطة جديدة"
-        body="عشان نصمم لكِ خطة أنسب، قوليلنا ايش تبين نغيّر. الخطة الحالية بتنحفظ في السجل."
+        title={memberName ? `إنشاء خطة جديدة لـ ${memberName}` : "إنشاء خطة جديدة"}
+        body={
+          memberName
+            ? `بننشئ خطة جديدة لـ ${memberName} فقط — باقي الأفراد ما تتغيّر خططهم. الخطة الحالية تنحفظ في السجل. قوليلنا ايش تبين نغيّر.`
+            : "عشان نصمم لكِ خطة أنسب، قوليلنا ايش تبين نغيّر. الخطة الحالية بتنحفظ في السجل."
+        }
         confirmLabel="أنشئي الخطة"
         cancelLabel="إلغاء"
         isPending={isPending}

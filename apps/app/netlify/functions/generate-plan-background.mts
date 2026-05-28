@@ -284,6 +284,7 @@ export default async (req: Request): Promise<Response> => {
     plan?: MealPlan | null;
     locale?: LocaleCode;
     feedback?: string;
+    independentRegen?: boolean;
   };
   try {
     body = await req.json();
@@ -326,6 +327,7 @@ export default async (req: Request): Promise<Response> => {
       anthropicApiKey: anthropicKey,
       context,
       existingPlan: existingPlan ?? null,
+      independentRegen: body.independentRegen,
       // Persist progressively + flip "ready" on the first emit (the shell), so
       // the plan opens showing all days as loading and they fill in 1→7.
       onProgress: async (snapshot) => {

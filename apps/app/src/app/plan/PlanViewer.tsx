@@ -119,6 +119,21 @@ export function PlanViewer({
 
   const isSolo = plan.members.length === 1;
 
+  // Day generation runs today-first, one at a time (mirrors the engine). Compute
+  // the same order so the UI shows ONE day "preparing" while the rest wait —
+  // instead of every tab spinning at once (which reads as random).
+  const currentPreparingIndex = useMemo(() => {
+    if (!generating || !activeMember) return -1;
+    const start = dayIndexFromWeekStart(plan.week_start_date);
+    const today = start >= 0 && start <= 6 ? start : 0;
+    const order = Array.from({ length: 7 }, (_, k) => (today + k) % 7);
+    for (const di of order) {
+      const day = activeMember.days.find((d) => d.day_index === di);
+      if (!day || day.meals.length === 0) return di;
+    }
+    return -1;
+  }, [generating, activeMember, plan.week_start_date]);
+
   if (!activeMember) {
     return (
       <div className="text-center py-12">
@@ -171,7 +186,12 @@ export function PlanViewer({
               planMetadata={{ week_start_date: plan.week_start_date }}
             />
           )}
-          {!readOnly && <RegenerateButton />}
+          {!readOnly && (
+            <RegenerateButton
+              memberId={activeMember.member_id}
+              memberName={activeMember.member_name_ar}
+            />
+          )}
         </div>
       </div>
 
@@ -262,7 +282,7 @@ export function PlanViewer({
             : day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
           const isActive = i === activeDayIndex;
           const pending =
-            (generating && (!day || day.meals.length === 0)) ||
+            (generating && i === currentPreparingIndex) ||
             (translated && !isDayTranslated(day));
           return (
             <button
@@ -332,13 +352,17 @@ export function PlanViewer({
             activeDay.meals.map((meal, i) => (
               <MealCard key={i} meal={meal} memberNames={memberNames} locale={locale} />
             ))
-          ) : generating ? (
+          ) : generating && activeDayIndex === currentPreparingIndex ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <Loader2
                 className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
                 aria-hidden="true"
               />
               <p className="text-brand-ink-muted text-sm">{t.generating}</p>
+            </div>
+          ) : generating ? (
+            <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
+              {t.day_queued}
             </div>
           ) : (
             <div className="text-center py-8 text-brand-ink-muted text-sm">

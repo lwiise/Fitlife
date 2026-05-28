@@ -47,6 +47,9 @@ export async function triggerPlanGeneration(params: {
   // generate only the new/changed member. Manual "new plan" leaves these off.
   carryOver?: boolean;
   regenerateMemberId?: string;
+  // Per-member "new plan": the regenerated member gets fresh independent dishes
+  // (not aligned to the family's shared dish grid).
+  independentRegen?: boolean;
   // Manual regeneration: the user's "what's wrong / what to improve" feedback,
   // layered into the generation prompt (methodology/cookbook still take precedence).
   feedback?: string;
@@ -57,6 +60,7 @@ export async function triggerPlanGeneration(params: {
     bypassRateLimit = false,
     carryOver = false,
     regenerateMemberId,
+    independentRegen,
     feedback,
   } = params;
 
@@ -118,6 +122,7 @@ export async function triggerPlanGeneration(params: {
         mealPlanId,
         context,
         existingPlan,
+        independentRegen,
       });
       return { ok: true, mealPlanId, status: "ready" };
     } catch (err) {
@@ -148,7 +153,7 @@ export async function triggerPlanGeneration(params: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
         },
-        body: JSON.stringify({ userId, mealPlanId, existingPlan, feedback }),
+        body: JSON.stringify({ userId, mealPlanId, existingPlan, feedback, independentRegen }),
       },
     );
     if (!res.ok && res.status !== 202) {
