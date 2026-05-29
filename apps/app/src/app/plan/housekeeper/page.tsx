@@ -49,16 +49,33 @@ export default async function HousekeeperPage() {
     ),
   );
 
-  // Allergy backstop: sourced DIRECTLY from the DB (profiles + family_members),
-  // never from recipe prose or plan_data. Mom first, then members in display order.
+  // Allergy backstop: allergens sourced DIRECTLY from the DB (profiles +
+  // family_members), never from recipe prose or plan_data. The member NAME is
+  // joined to the plan's transliterated form (member_id "mom" for the owner,
+  // family_members.id otherwise) so a non-Arabic cook can read whose line it is;
+  // it falls back to the Arabic name until translation lands. Mom first, then
+  // members in display order. The housekeeper is the cook, not a beneficiary —
+  // she's excluded (and never appears in plan_data.members anyway).
+  const nameByMember = new Map(
+    latest.plan_data.members.map((m) => [m.member_id, m.member_name_translated]),
+  );
   const allergyEntries: AllergyEntry[] = [
     ...(profile
-      ? [{ name: profile.display_name ?? "", allergies: asStringArray(profile.allergies) }]
+      ? [
+          {
+            name: profile.display_name ?? "",
+            nameTranslated: nameByMember.get("mom"),
+            allergies: asStringArray(profile.allergies),
+          },
+        ]
       : []),
-    ...familyMembers.map((m) => ({
-      name: m.name,
-      allergies: asStringArray(m.allergies),
-    })),
+    ...familyMembers
+      .filter((m) => m.role !== "housekeeper")
+      .map((m) => ({
+        name: m.name,
+        nameTranslated: nameByMember.get(m.id),
+        allergies: asStringArray(m.allergies),
+      })),
   ].filter((e) => e.allergies.length > 0);
 
   return (

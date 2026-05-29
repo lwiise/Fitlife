@@ -4,6 +4,9 @@ import { getPlanStrings } from "@/lib/plans/locales";
 
 export interface AllergyEntry {
   name: string;
+  // The member's name rendered in the cook's script (from the plan's translation
+  // pass). Falls back to the Arabic `name` until transliteration lands.
+  nameTranslated?: string;
   allergies: string[];
 }
 
@@ -11,8 +14,9 @@ export interface AllergyEntry {
  * Cook-facing allergy backstop for the maid view. Each beneficiary's recorded
  * allergies come straight from the DB (profiles/family_members), NEVER from the
  * recipe prose or plan_data. The warning chrome is localized to the maid's
- * language; the allergen terms and names are user-entered Arabic, so they render
- * verbatim (dir="rtl") rather than being translated. Display-only.
+ * language; the allergen terms are user-entered Arabic, so they render verbatim
+ * (dir="rtl"). The member NAME uses the transliterated form when available so a
+ * non-Arabic cook can tell whose allergy each line is. Display-only.
  */
 export function AllergyBackstop({
   entries,
@@ -41,7 +45,11 @@ export function AllergyBackstop({
           <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
             <span className="text-brand-ink font-bold">
               <span className="text-brand-ink-muted font-medium">{t.allergy_for} </span>
-              <span dir="rtl" lang="ar">{entry.name}</span>
+              {entry.nameTranslated ? (
+                <span>{entry.nameTranslated}</span>
+              ) : (
+                <span dir="rtl" lang="ar">{entry.name}</span>
+              )}
             </span>
             {entry.allergies.map((allergen, j) => (
               <span
