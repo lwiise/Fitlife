@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
+import { getLatestPlan } from "@/lib/plans/getLatestPlan";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import type { Database } from "@/lib/supabase/database.types";
@@ -321,6 +322,34 @@ export async function finalizeOnboarding(): Promise<void> {
     // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
     .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
+
+  // First-run auto-drain: a member added while mom's solo generation was still in
+  // flight gets deferred by the dispatch busy guard (saved to family_members but
+  // not in plan_data.members). Rather than land a brand-new user on a "only mom +
+  // manual banner" first view, generate the deferred members now. Same pending
+  // diff the dashboard uses. If a generation is still in flight (busy) or this
+  // throws, we silently fall back to the dashboard banner — no worse than before.
+  try {
+    const [latest, membersRes] = await Promise.all([
+      getLatestPlan(user.id),
+      supabase
+        .from("family_members")
+        .select("id, role")
+        .eq("user_id", user.id)
+        .returns<{ id: string; role: string }[]>(),
+    ]);
+    const planMemberIds = latest?.member_ids ?? [];
+    const pending = (membersRes.data ?? []).filter(
+      (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
+    );
+    if (pending.length > 0) {
+      await runFamilyGeneration(supabase, user.id);
+    }
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { area: "onboarding", step: "finalizeOnboarding.drain", userId: user.id },
+    });
+  }
 
   revalidatePath("/dashboard");
   redirect("/dashboard");

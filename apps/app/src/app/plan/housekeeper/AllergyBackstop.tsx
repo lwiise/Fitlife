@@ -56,6 +56,7 @@ export function AllergyBackstop({
           </li>
         ))}
       </ul>
+      <p className="mt-3 text-sm text-brand-ink-muted leading-relaxed">{t.allergy_disclaimer}</p>
     </section>
   );
 }

@@ -71,6 +71,7 @@ export interface PlanStrings {
   day_failed: string;
   allergy_title: string;
   allergy_for: string;
+  allergy_disclaimer: string;
   units: Record<UnitKey, string>;
 }
 
@@ -111,6 +112,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "تعذّر تجهيز هذا اليوم. جرّبي إعادة الإنشاء.",
     allergy_title: "⚠ حساسية — لا تقدّمي هذه الأصناف",
     allergy_for: "لـ",
+    allergy_disclaimer: "هذه معلومات مساعِدة فقط — تحقّقي دائماً من المكونات بنفسك",
     units: { g: "جم", kg: "كجم", ml: "مل", l: "لتر", cup: "كوب", tbsp: "ملعقة كبيرة", tsp: "ملعقة صغيرة", piece: "حبة", serving: "حصة", unlimited: "حسب الرغبة" },
   },
   en: {
@@ -144,6 +146,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "This day couldn't be prepared. Try regenerating.",
     allergy_title: "⚠ Allergies — do not serve these",
     allergy_for: "For",
+    allergy_disclaimer: "This is decision-support only — always check the ingredients yourself",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cup", tbsp: "tbsp", tsp: "tsp", piece: "pc", serving: "serving", unlimited: "as desired" },
   },
   tl: {
@@ -177,6 +180,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "Hindi naihanda ang araw na ito. Subukang i-regenerate.",
     allergy_title: "⚠ Allergy — huwag ihain ang mga ito",
     allergy_for: "Para kay",
+    allergy_disclaimer: "Gabay-impormasyon lamang ito — laging suriin mismo ang mga sangkap",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "tasa", tbsp: "kutsara", tsp: "kutsarita", piece: "piraso", serving: "serving", unlimited: "ayon sa gusto" },
   },
   id: {
@@ -210,6 +214,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "Hari ini gagal disiapkan. Coba buat ulang.",
     allergy_title: "⚠ Alergi — jangan sajikan ini",
     allergy_for: "Untuk",
+    allergy_disclaimer: "Ini hanya informasi pendukung — selalu periksa sendiri bahannya",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cangkir", tbsp: "sdm", tsp: "sdt", piece: "buah", serving: "porsi", unlimited: "sesukanya" },
   },
   bn: {
@@ -243,6 +248,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "এই দিনটি প্রস্তুত করা যায়নি। আবার তৈরি করার চেষ্টা করুন।",
     allergy_title: "⚠ অ্যালার্জি — এগুলো পরিবেশন করবেন না",
     allergy_for: "জন্য",
+    allergy_disclaimer: "এটি শুধুমাত্র সহায়ক তথ্য — সর্বদা উপাদানগুলো নিজে যাচাই করুন",
     units: { g: "গ্রাম", kg: "কেজি", ml: "মিলি", l: "লিটার", cup: "কাপ", tbsp: "টেবিল চামচ", tsp: "চা চামচ", piece: "টুকরা", serving: "পরিবেশন", unlimited: "ইচ্ছেমতো" },
   },
   am: {
@@ -276,6 +282,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "ይህ ቀን ሊዘጋጅ አልቻለም። እንደገና ለማመንጨት ይሞክሩ።",
     allergy_title: "⚠ አለርጂ — እነዚህን አታቅርቡ",
     allergy_for: "ለ",
+    allergy_disclaimer: "ይህ የድጋፍ መረጃ ብቻ ነው — ሁልጊዜ ንጥረ ነገሮቹን እራስዎ ያረጋግጡ",
     units: { g: "ግራም", kg: "ኪግ", ml: "ሚሊ", l: "ሊትር", cup: "ኩባያ", tbsp: "የሾርባ ማንኪያ", tsp: "የሻይ ማንኪያ", piece: "ቁራጭ", serving: "ድርሻ", unlimited: "እንደ ፍላጎት" },
   },
   ur: {
@@ -309,6 +316,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     day_failed: "یہ دن تیار نہیں ہو سکا۔ دوبارہ بنانے کی کوشش کریں۔",
     allergy_title: "⚠ الرجی — یہ چیزیں پیش نہ کریں",
     allergy_for: "برائے",
+    allergy_disclaimer: "یہ صرف معاون معلومات ہے — اجزاء ہمیشہ خود جانچ لیں",
     units: { g: "گرام", kg: "کلوگرام", ml: "ملی لیٹر", l: "لیٹر", cup: "کپ", tbsp: "کھانے کا چمچ", tsp: "چائے کا چمچ", piece: "عدد", serving: "سرونگ", unlimited: "حسبِ خواہش" },
   },
 };
