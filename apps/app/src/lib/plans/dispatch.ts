@@ -29,7 +29,14 @@ export type DispatchResult =
   | { ok: false; kind: "onboarding" }
   | { ok: false; kind: "medical" }
   | { ok: false; kind: "server" }
-  | { ok: false; kind: "dispatch" };
+  | { ok: false; kind: "dispatch" }
+  // A generation is already running — don't start a second one (it would restart
+  // everyone from scratch since the in-progress plan isn't "ready" to carry over).
+  | { ok: false; kind: "busy" };
+
+// A "generating" plan older than this is treated as crashed/stale and no longer
+// blocks a new generation (the background function's budget is ~15 min).
+const STALE_GENERATION_MIN = 15;
 
 /**
  * Shared plan-generation dispatch used by both the public route (full rate
@@ -68,6 +75,18 @@ export async function triggerPlanGeneration(params: {
     ? await canGenerateForFamilyChange(userId)
     : await canGenerateNewPlan(userId);
   if (!access.allowed) return { ok: false, kind: "access", access };
+
+  // Don't start a new generation while one is still running. A second run can't
+  // carry the in-progress plan over (it isn't "ready" yet), so it would restart
+  // every member from scratch — and two background functions would race.
+  const inProgress = await getLatestPlan(userId);
+  if (inProgress?.status === "generating") {
+    const updatedMs = Date.parse(inProgress.updated_at);
+    const ageMin = Number.isNaN(updatedMs)
+      ? Infinity
+      : (Date.now() - updatedMs) / 60_000;
+    if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
+  }
 
   let context;
   try {

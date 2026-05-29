@@ -122,6 +122,11 @@ export async function POST(req: Request) {
         { error: "يجب استشارة الطبيب قبل إنشاء الخطة بسبب حالتك الصحية" },
         { status: 403 },
       );
+    case "busy":
+      return NextResponse.json(
+        { error: "خطتك لسه قيد التجهيز. انتظري لين تخلص ثم حاولي مرة ثانية" },
+        { status: 409 },
+      );
     case "dispatch":
       return NextResponse.json({ error: GENERIC_502 }, { status: 502 });
     case "server":

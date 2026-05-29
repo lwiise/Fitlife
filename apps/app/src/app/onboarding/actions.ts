@@ -300,6 +300,7 @@ export async function saveMomProfile(
   revalidatePath("/dashboard");
   const gen = await runFamilyGeneration(supabase, user.id);
   if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
+  if (gen.kind === "busy") return { ok: false, error: PLAN_BUSY_MESSAGE };
   // A lone mom can't exceed any tier; treat upgrade as a generic error fallback.
   return {
     ok: false,
@@ -333,7 +334,11 @@ export async function finalizeOnboarding(): Promise<void> {
 type FamilyGenResult =
   | { ok: true; plan_generation_id: string }
   | { ok: false; kind: "upgrade"; current: number; max: number }
+  | { ok: false; kind: "busy" }
   | { ok: false; kind: "error"; error: string };
+
+const PLAN_BUSY_MESSAGE =
+  "خطتك لسه قيد التجهيز. انتظري لين تخلص ثم حاولي مرة ثانية";
 
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -355,6 +360,8 @@ async function runFamilyGeneration(
   if (result.ok) return { ok: true, plan_generation_id: result.mealPlanId };
 
   switch (result.kind) {
+    case "busy":
+      return { ok: false, kind: "busy" };
     case "medical":
       return {
         ok: false,
@@ -524,6 +531,10 @@ export async function addFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")
     return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
+  // Current plan still generating → member is saved; defer their generation (the
+  // dashboard "generate plan" banner picks it up once the current plan is ready).
+  if (gen.kind === "busy")
+    return { ok: true, member_id: memberId, plan_generation_id: null };
   return { ok: false, error: gen.error };
 }
 
@@ -653,6 +664,8 @@ export async function removeFamilyMember(
   const gen = await runFamilyGeneration(supabase, user.id);
   // Removing a member can't push over a tier limit, so 'upgrade' won't occur here.
   if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
+  // Current plan still generating → removal is saved; defer the regen.
+  if (gen.kind === "busy") return { ok: true, plan_generation_id: null };
   return { ok: false, error: gen.kind === "upgrade" ? "باقتك لا تكفي." : gen.error };
 }
 
@@ -712,6 +725,9 @@ export async function updateFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")
     return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
+  // Current plan still generating → edit is saved; defer the regen.
+  if (gen.kind === "busy")
+    return { ok: true, member_id: memberId, plan_generation_id: null };
   return { ok: false, error: gen.error };
 }
 
@@ -734,5 +750,6 @@ export async function generateFamilyPlan(): Promise<
   const gen = await runFamilyGeneration(supabase, user.id);
   if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade") return { ok: false, upgrade_required: true };
+  if (gen.kind === "busy") return { ok: false, error: PLAN_BUSY_MESSAGE };
   return { ok: false, error: gen.error };
 }
