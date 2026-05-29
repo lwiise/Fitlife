@@ -78,6 +78,23 @@ async function sbUpdate(
   }
 }
 
+async function sbInsert(
+  base: string,
+  serviceKey: string,
+  table: string,
+  row: Record<string, unknown>,
+): Promise<void> {
+  const res = await fetch(`${base}/rest/v1/${table}`, {
+    method: "POST",
+    headers: { ...sbHeaders(serviceKey), prefer: "return=minimal" },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`PostgREST insert ${table} → ${res.status} ${text}`);
+  }
+}
+
 // ─── Context shaping (mirror of buildContext, but fed by PostgREST rows) ────
 function ageFromBirthYear(birthYear: number | null): number | null {
   if (!birthYear) return null;
@@ -301,8 +318,9 @@ export default async (req: Request): Promise<Response> => {
     if (!body.plan || !body.locale) {
       return new Response("Missing plan or locale", { status: 400 });
     }
+    const translateStartMs = Date.now();
     try {
-      const { plan: translated } = await translateMealPlan({
+      const { plan: translated, usage } = await translateMealPlan({
         anthropicApiKey: anthropicKey,
         plan: body.plan,
         locale: body.locale,
@@ -310,6 +328,29 @@ export default async (req: Request): Promise<Response> => {
       await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
         plan_data: translated,
       });
+      // Audit the translation's token spend (see runMealPlanTranslation). The
+      // weekly rate limit counts DISTINCT meal_plan_id, so this extra row
+      // sharing the plan's id never consumes a generation slot.
+      try {
+        const completedAt = new Date().toISOString();
+        await sbInsert(supabaseUrl, expected, "plan_generations", {
+          user_id: userId,
+          meal_plan_id: mealPlanId,
+          model: usage.model,
+          status: "completed",
+          tokens_in: usage.input_tokens,
+          tokens_out: usage.output_tokens,
+          cost_usd: usage.cost_usd,
+          duration_ms: Date.now() - translateStartMs,
+          started_at: new Date(translateStartMs).toISOString(),
+          completed_at: completedAt,
+        });
+      } catch (auditErr) {
+        console.error(
+          "[generate-plan-background] translate audit row failed",
+          auditErr,
+        );
+      }
       return new Response("OK", { status: 200 });
     } catch (err) {
       console.error("[generate-plan-background] translate failed", err);

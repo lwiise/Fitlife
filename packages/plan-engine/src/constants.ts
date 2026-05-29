@@ -11,10 +11,28 @@
 // model — no code change needed; remove the env var to go back to Opus.
 export const PLAN_MODEL = process.env.PLAN_MODEL?.trim() || "claude-opus-4-7";
 
-export const PRICING_USD_PER_MTOK = {
-  input: 15,
-  output: 75,
-} as const;
+// USD per million tokens, keyed by model id. cost_usd in plan_generations is an
+// internal audit figure (NOT the SAR price charged to users — that lives in
+// packages/config). Verify rates at https://docs.claude.com/en/docs/about-claude/pricing
+// before launch. Unknown models fall back to Opus rates (conservative: never
+// under-report spend).
+export const PRICING_USD_PER_MTOK_BY_MODEL: Record<
+  string,
+  { input: number; output: number }
+> = {
+  "claude-opus-4-7": { input: 15, output: 75 },
+  "claude-sonnet-4-6": { input: 3, output: 15 },
+  "claude-haiku-4-5-20251001": { input: 1, output: 5 },
+};
+
+const FALLBACK_PRICING = { input: 15, output: 75 } as const;
+
+export function pricingForModel(model: string): {
+  input: number;
+  output: number;
+} {
+  return PRICING_USD_PER_MTOK_BY_MODEL[model] ?? FALLBACK_PRICING;
+}
 
 /**
  * Output-token ceiling for the WHOLE family's weekly plan (single call).

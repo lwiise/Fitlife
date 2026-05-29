@@ -47,6 +47,11 @@ export type {
   LocaleCode,
 } from "./schema";
 
-export { PLAN_MODEL, PLAN_MAX_TOKENS, PRICING_USD_PER_MTOK } from "./constants";
+export {
+  PLAN_MODEL,
+  PLAN_MAX_TOKENS,
+  PRICING_USD_PER_MTOK_BY_MODEL,
+  pricingForModel,
+} from "./constants";
 
 export * from "./errors";

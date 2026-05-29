@@ -3,6 +3,11 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
 
+// A 'generating' plan (or a 'ready' shell still flagged generating) whose
+// updated_at is older than this is treated as crashed/stale — the background
+// function's hard budget is ~15 min, so past that nothing is still writing.
+export const STALE_GENERATION_MIN = 15;
+
 export interface LatestPlanSummary {
   id: string;
   status: "generating" | "ready" | "failed";
@@ -69,6 +74,30 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     }
   }
 
+  // Dead-man's switch: if the background function was hard-killed at its 15-min
+  // budget, its catch never ran, so the row sits in 'generating' (or in a
+  // 'ready' shell still flagged generating) forever and the viewer shows a
+  // perpetual loader. Reclassify a stale in-flight row as failed so the UI's
+  // failed/retry branch fires. (Read-time only — the DB row is left as-is.)
+  const updatedMs = Date.parse(row.updated_at);
+  const ageMin = Number.isNaN(updatedMs)
+    ? Infinity
+    : (Date.now() - updatedMs) / 60_000;
+  const stillInFlight =
+    finalStatus === "generating" ||
+    (finalStatus === "ready" && validatedPlanData?.generating === true);
+  let errorMessage = row.error_message ?? null;
+  if (stillInFlight && ageMin >= STALE_GENERATION_MIN) {
+    console.warn("[getLatestPlan] stale in-flight plan; surfacing as failed", {
+      planId: row.id,
+      ageMin: Math.round(ageMin),
+    });
+    finalStatus = "failed";
+    validatedPlanData = null;
+    errorMessage =
+      errorMessage ?? "تعذّر إكمال إنشاء الخطة. حاولي مرة أخرى.";
+  }
+
   return {
     id: row.id,
     status: finalStatus,
@@ -77,7 +106,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     member_count: validatedPlanData?.members.length ?? 0,
     member_ids: validatedPlanData?.members.map((m) => m.member_id) ?? [],
     in_progress: validatedPlanData?.generating === true,
-    error_message: row.error_message ?? null,
+    error_message: errorMessage,
     updated_at: row.updated_at,
   };
 }

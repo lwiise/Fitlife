@@ -1,4 +1,4 @@
-import { PRICING_USD_PER_MTOK } from "./constants";
+import { pricingForModel } from "./constants";
 import { AnthropicCallError } from "./errors";
 
 export interface StreamResult {
@@ -144,9 +144,13 @@ export function stripMarkdownFence(text: string): string {
   return text.trim();
 }
 
-export function computeCostUsd(tokensIn: number, tokensOut: number): number {
+export function computeCostUsd(
+  tokensIn: number,
+  tokensOut: number,
+  model: string,
+): number {
+  const rate = pricingForModel(model);
   const cost =
-    (tokensIn / 1_000_000) * PRICING_USD_PER_MTOK.input +
-    (tokensOut / 1_000_000) * PRICING_USD_PER_MTOK.output;
+    (tokensIn / 1_000_000) * rate.input + (tokensOut / 1_000_000) * rate.output;
   return Math.round(cost * 1_000_000) / 1_000_000;
 }

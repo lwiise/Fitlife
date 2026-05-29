@@ -13,7 +13,7 @@ import {
   type LocaleCode,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
-import { getLatestPlan } from "@/lib/plans/getLatestPlan";
+import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
 import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
@@ -33,10 +33,6 @@ export type DispatchResult =
   // A generation is already running — don't start a second one (it would restart
   // everyone from scratch since the in-progress plan isn't "ready" to carry over).
   | { ok: false; kind: "busy" };
-
-// A "generating" plan older than this is treated as crashed/stale and no longer
-// blocks a new generation (the background function's budget is ~15 min).
-const STALE_GENERATION_MIN = 15;
 
 /**
  * Shared plan-generation dispatch used by both the public route (full rate
@@ -225,6 +221,7 @@ export async function triggerPlanTranslation(params: {
       await runMealPlanTranslation({
         supabase,
         anthropicApiKey: getAnthropicKey(),
+        userId,
         mealPlanId,
         plan,
         locale,

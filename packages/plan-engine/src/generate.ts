@@ -108,16 +108,27 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-/** A retryable Anthropic error (429 or 5xx, or a transient stream error). */
+/**
+ * A retryable Anthropic error: 429 (rate limit), 529 (overloaded), any 5xx, or a
+ * transient stream error. 529 is matched both explicitly and via the 5xx branch.
+ */
 function isRetryable(err: unknown): boolean {
   return (
     err instanceof AnthropicCallError &&
-    (/Anthropic API (429|5\d\d)/.test(err.message) ||
+    (/Anthropic API (429|529|5\d\d)/.test(err.message) ||
+      /overloaded/i.test(err.message) ||
       /stream error/.test(err.message))
   );
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Exponential backoff with full jitter. attempt is 1-based (first retry = 1).
+const MAX_RETRIES = 3;
+function backoffMs(attempt: number): number {
+  const base = 800 * 2 ** (attempt - 1); // 800, 1600, 3200
+  return base + Math.floor(Math.random() * 400); // jitter avoids thundering herd
+}
 
 function sumDayTotal(meals: Meal[]) {
   let calories = 0,
@@ -506,9 +517,9 @@ export async function generateMealPlan(params: {
         emit();
         return;
       } catch (err) {
-        if (isRetryable(err) && attempt < 2) {
+        if (isRetryable(err) && attempt < MAX_RETRIES) {
           attempt++;
-          await sleep(800 * attempt);
+          await sleep(backoffMs(attempt));
           continue;
         }
         console.error(
@@ -611,7 +622,7 @@ export async function generateMealPlan(params: {
     usage: {
       input_tokens: totalIn,
       output_tokens: totalOut,
-      cost_usd: computeCostUsd(totalIn, totalOut),
+      cost_usd: computeCostUsd(totalIn, totalOut, PLAN_MODEL),
     },
   };
 }
@@ -745,7 +756,7 @@ export async function translateMealPlan(params: {
   anthropicApiKey: string;
   plan: MealPlan;
   locale: LocaleCode;
-}): Promise<{ plan: MealPlan; usage: { input_tokens: number; output_tokens: number; cost_usd: number } }> {
+}): Promise<{ plan: MealPlan; usage: { input_tokens: number; output_tokens: number; cost_usd: number; model: string } }> {
   const { anthropicApiKey, plan, locale } = params;
   let totalIn = 0;
   let totalOut = 0;
@@ -833,9 +844,9 @@ export async function translateMealPlan(params: {
         }
         return;
       } catch (err) {
-        if (isRetryable(err) && attempt < 2) {
+        if (isRetryable(err) && attempt < MAX_RETRIES) {
           attempt++;
-          await sleep(800 * attempt);
+          await sleep(backoffMs(attempt));
           continue;
         }
         // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
@@ -886,9 +897,9 @@ export async function translateMealPlan(params: {
         }
         break;
       } catch (err) {
-        if (isRetryable(err) && attempt < 2) {
+        if (isRetryable(err) && attempt < MAX_RETRIES) {
           attempt++;
-          await sleep(800 * attempt);
+          await sleep(backoffMs(attempt));
           continue;
         }
         // Non-fatal: maid view falls back to the Arabic name.
@@ -906,7 +917,8 @@ export async function translateMealPlan(params: {
     usage: {
       input_tokens: totalIn,
       output_tokens: totalOut,
-      cost_usd: computeCostUsd(totalIn, totalOut),
+      cost_usd: computeCostUsd(totalIn, totalOut, PLAN_MODEL),
+      model: PLAN_MODEL,
     },
   };
 }
@@ -918,12 +930,14 @@ export async function translateMealPlan(params: {
 export async function runMealPlanTranslation(params: {
   supabase: AnyClient;
   anthropicApiKey: string;
+  userId: string;
   mealPlanId: string;
   plan: MealPlan;
   locale: LocaleCode;
 }): Promise<void> {
-  const { supabase, anthropicApiKey, mealPlanId, plan, locale } = params;
-  const { plan: translated } = await translateMealPlan({
+  const { supabase, anthropicApiKey, userId, mealPlanId, plan, locale } = params;
+  const startMs = Date.now();
+  const { plan: translated, usage } = await translateMealPlan({
     anthropicApiKey,
     plan,
     locale,
@@ -934,5 +948,30 @@ export async function runMealPlanTranslation(params: {
     .eq("id", mealPlanId);
   if (error) {
     throw new Error(`Failed to update meal_plan (translate): ${error.message}`);
+  }
+
+  // Audit the translation's token spend. A separate plan_generations row (status
+  // 'completed' — the only valid value besides started/failed) sharing this
+  // plan's meal_plan_id; the weekly rate limit counts DISTINCT meal_plan_id so
+  // this row never consumes a generation slot.
+  const completedAt = new Date().toISOString();
+  const { error: auditError } = await supabase.from("plan_generations").insert({
+    user_id: userId,
+    meal_plan_id: mealPlanId,
+    model: usage.model,
+    status: "completed",
+    tokens_in: usage.input_tokens,
+    tokens_out: usage.output_tokens,
+    cost_usd: usage.cost_usd,
+    duration_ms: Date.now() - startMs,
+    started_at: new Date(startMs).toISOString(),
+    completed_at: completedAt,
+  });
+  if (auditError) {
+    // Non-fatal: the translation itself succeeded; only the audit row failed.
+    console.error(
+      "[runMealPlanTranslation] failed to write translation audit row:",
+      auditError.message,
+    );
   }
 }

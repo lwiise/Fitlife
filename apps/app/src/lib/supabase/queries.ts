@@ -114,13 +114,22 @@ export async function canGeneratePlan(userId: string): Promise<boolean> {
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-  const { count, error } = await supabase
+  // Count DISTINCT meal_plan_id, not raw rows: a plan can have more than one
+  // 'completed' plan_generations row (e.g. a housekeeper-translation audit row
+  // shares the plan's meal_plan_id), and those must not consume generation
+  // slots. One generated plan === one slot regardless of translation passes.
+  const { data, error } = await supabase
     .from("plan_generations")
-    .select("*", { count: "exact", head: true })
+    .select("meal_plan_id")
     .eq("user_id", userId)
     .eq("status", "completed")
     .gte("created_at", oneWeekAgo.toISOString());
 
   if (error) return false;
-  return (count ?? 0) < 3;
+  const distinctPlans = new Set(
+    (data ?? [])
+      .map((r) => (r as { meal_plan_id: string | null }).meal_plan_id)
+      .filter((id): id is string => id != null),
+  );
+  return distinctPlans.size < 3;
 }
