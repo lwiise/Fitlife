@@ -137,6 +137,17 @@ export const MealPlanSchema = z.object({
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 
+/**
+ * True iff the plan has at least one member with at least one day that actually
+ * contains meals. A plan can be persisted as `status='ready'` with empty day
+ * shells (the progressive renderer flips ready on the first emit), so callers
+ * deciding "show the plan vs. show a loader" must gate on real content, not just
+ * status. Display-only check — does not mutate.
+ */
+export function planHasContent(plan: MealPlan): boolean {
+  return plan.members.some((m) => m.days.some((d) => d.meals.length > 0));
+}
+
 // ─── Parallel-by-day generation (phase 1 skeleton + phase 2 day slices) ──────
 // Phase 1: targets + a week of dish NAMES only (fast, small output). The model
 // sees the whole week here, so variety + shared-recipe coordination are decided

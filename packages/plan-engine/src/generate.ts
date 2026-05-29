@@ -174,6 +174,8 @@ export async function generateMealPlan(params: {
 }): Promise<{
   plan: MealPlan;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
+  // Day indices that were expected but dropped after retries (partial plan).
+  missingDays: number[];
 }> {
   const { anthropicApiKey, context, existingPlan, independentRegen, onProgress } = params;
   let totalIn = 0;
@@ -254,7 +256,7 @@ export async function generateMealPlan(params: {
     });
     if (onProgress)
       await Promise.resolve(onProgress(plan, { readyDays: 0, totalDays: 0 }));
-    return { plan, usage: { input_tokens: 0, output_tokens: 0, cost_usd: 0 } };
+    return { plan, usage: { input_tokens: 0, output_tokens: 0, cost_usd: 0 }, missingDays: [] };
   }
 
   // Incremental add/edit: open the plan IMMEDIATELY (before the skeleton call)
@@ -406,6 +408,7 @@ export async function generateMealPlan(params: {
     daysByMember.set(b.member_id, dmap);
   }
   const done = new Set<number>(); // toGenerate days expanded successfully
+  const failedDays = new Set<number>(); // days dropped after retries exhausted
 
   const snapshot = (generating: boolean): MealPlan => ({
     week_start_date: weekStart,
@@ -527,6 +530,7 @@ export async function generateMealPlan(params: {
           dayIndex,
           err instanceof Error ? err.message : String(err),
         );
+        failedDays.add(dayIndex);
         emit();
         return;
       }
@@ -624,6 +628,7 @@ export async function generateMealPlan(params: {
       output_tokens: totalOut,
       cost_usd: computeCostUsd(totalIn, totalOut, PLAN_MODEL),
     },
+    missingDays: [...failedDays].sort((a, b) => a - b),
   };
 }
 
@@ -645,6 +650,7 @@ export async function runMealPlanGeneration(params: {
 
   let plan: MealPlan;
   let usage: { input_tokens: number; output_tokens: number; cost_usd: number };
+  let missingDays: number[] = [];
   try {
     const result = await generateMealPlan({
       anthropicApiKey,
@@ -662,6 +668,7 @@ export async function runMealPlanGeneration(params: {
     });
     plan = result.plan;
     usage = result.usage;
+    missingDays = result.missingDays;
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -703,6 +710,15 @@ export async function runMealPlanGeneration(params: {
     throw new Error(`Failed to update meal_plan: ${updateMealError.message}`);
   }
 
+  // Partial plan: some days were dropped after retries. Status stays "completed"
+  // (the CHECK allows only started/completed/failed), but record a PII-safe note
+  // (day indices only — never recipe/member content) so partials are auditable.
+  const partialNote =
+    missingDays.length > 0 ? `partial: days [${missingDays.join(", ")}] failed` : null;
+  if (partialNote) {
+    console.warn(`[runMealPlanGeneration] ${partialNote}`);
+  }
+
   const { error: updateGenError } = await supabase
     .from("plan_generations")
     .update({
@@ -712,6 +728,7 @@ export async function runMealPlanGeneration(params: {
       cost_usd: usage.cost_usd,
       duration_ms: durationMs,
       completed_at: generatedAt,
+      error_message: partialNote,
     })
     .eq("meal_plan_id", mealPlanId);
 

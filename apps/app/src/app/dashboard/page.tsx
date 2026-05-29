@@ -9,6 +9,7 @@ import {
   getCurrentUserFamilyMembers,
   getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
+import { planHasContent } from "@fitlife/plan-engine";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
@@ -28,6 +29,16 @@ export default async function DashboardPage() {
   const profile = await getCurrentUserProfile();
   const familyMembers = await getCurrentUserFamilyMembers();
   const latestPlan = await getCurrentUserLatestPlan();
+
+  // A 'ready' plan with empty day shells isn't usable yet — treat it as still
+  // generating so the card shows the loader instead of "نشطة".
+  const planHasMeals = latestPlan?.plan_data
+    ? planHasContent(latestPlan.plan_data)
+    : false;
+  const planIsReady = latestPlan?.status === "ready" && planHasMeals;
+  const planIsGenerating =
+    latestPlan?.status === "generating" ||
+    (latestPlan?.status === "ready" && !planHasMeals);
 
   const supabase = await createClient();
   const {
@@ -172,7 +183,7 @@ export default async function DashboardPage() {
               </div>
               <p className="text-brand-ink-muted text-sm font-medium">الخطة الحالية</p>
             </div>
-            {latestPlan?.status === "ready" && (
+            {planIsReady && (
               <>
                 <p className="font-extrabold text-xl text-brand-ink mt-1">نشطة</p>
                 <p className="text-brand-ink-muted text-xs mt-1">
@@ -188,7 +199,7 @@ export default async function DashboardPage() {
                 </a>
               </>
             )}
-            {latestPlan?.status === "generating" && (
+            {planIsGenerating && (
               <>
                 <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
                   جاري إنشاء خطتك

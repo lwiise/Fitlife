@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, UserPlus, History, ChefHat } from "lucide-react";
+import { Loader2, UserPlus, History, ChefHat, AlertTriangle } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
@@ -363,6 +363,19 @@ export function PlanViewer({
           ) : generating ? (
             <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
               {t.day_queued}
+            </div>
+          ) : activeDay ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-brand-pink bg-brand-pink/5 py-8 px-4 text-center">
+              <AlertTriangle className="size-6 text-brand-pink" aria-hidden="true" />
+              <p className="text-brand-ink font-bold text-sm leading-relaxed">
+                {t.day_failed}
+              </p>
+              {!readOnly && (
+                <RegenerateButton
+                  memberId={activeMember.member_id}
+                  memberName={activeMember.member_name_ar}
+                />
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-brand-ink-muted text-sm">

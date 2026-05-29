@@ -68,6 +68,9 @@ export interface PlanStrings {
   switch_to_arabic: string;
   print: string;
   arabic_names_note: string;
+  day_failed: string;
+  allergy_title: string;
+  allergy_for: string;
   units: Record<UnitKey, string>;
 }
 
@@ -105,6 +108,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "العرض بالعربية",
     print: "طباعة",
     arabic_names_note: "الأسماء بالعربية",
+    day_failed: "تعذّر تجهيز هذا اليوم. جرّبي إعادة الإنشاء.",
+    allergy_title: "⚠ حساسية — لا تقدّمي هذه الأصناف",
+    allergy_for: "لـ",
     units: { g: "جم", kg: "كجم", ml: "مل", l: "لتر", cup: "كوب", tbsp: "ملعقة كبيرة", tsp: "ملعقة صغيرة", piece: "حبة", serving: "حصة", unlimited: "حسب الرغبة" },
   },
   en: {
@@ -135,6 +141,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "Arabic view",
     print: "Print",
     arabic_names_note: "Names in Arabic",
+    day_failed: "This day couldn't be prepared. Try regenerating.",
+    allergy_title: "⚠ Allergies — do not serve these",
+    allergy_for: "For",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cup", tbsp: "tbsp", tsp: "tsp", piece: "pc", serving: "serving", unlimited: "as desired" },
   },
   tl: {
@@ -165,6 +174,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "Arabic view",
     print: "I-print",
     arabic_names_note: "Mga pangalan sa Arabic",
+    day_failed: "Hindi naihanda ang araw na ito. Subukang i-regenerate.",
+    allergy_title: "⚠ Allergy — huwag ihain ang mga ito",
+    allergy_for: "Para kay",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "tasa", tbsp: "kutsara", tsp: "kutsarita", piece: "piraso", serving: "serving", unlimited: "ayon sa gusto" },
   },
   id: {
@@ -195,6 +207,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "Tampilan Arab",
     print: "Cetak",
     arabic_names_note: "Nama dalam bahasa Arab",
+    day_failed: "Hari ini gagal disiapkan. Coba buat ulang.",
+    allergy_title: "⚠ Alergi — jangan sajikan ini",
+    allergy_for: "Untuk",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cangkir", tbsp: "sdm", tsp: "sdt", piece: "buah", serving: "porsi", unlimited: "sesukanya" },
   },
   bn: {
@@ -225,6 +240,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "আরবি ভিউ",
     print: "প্রিন্ট",
     arabic_names_note: "নাম আরবিতে",
+    day_failed: "এই দিনটি প্রস্তুত করা যায়নি। আবার তৈরি করার চেষ্টা করুন।",
+    allergy_title: "⚠ অ্যালার্জি — এগুলো পরিবেশন করবেন না",
+    allergy_for: "জন্য",
     units: { g: "গ্রাম", kg: "কেজি", ml: "মিলি", l: "লিটার", cup: "কাপ", tbsp: "টেবিল চামচ", tsp: "চা চামচ", piece: "টুকরা", serving: "পরিবেশন", unlimited: "ইচ্ছেমতো" },
   },
   am: {
@@ -255,6 +273,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "የአረብኛ እይታ",
     print: "አትም",
     arabic_names_note: "ስሞች በአረብኛ",
+    day_failed: "ይህ ቀን ሊዘጋጅ አልቻለም። እንደገና ለማመንጨት ይሞክሩ።",
+    allergy_title: "⚠ አለርጂ — እነዚህን አታቅርቡ",
+    allergy_for: "ለ",
     units: { g: "ግራም", kg: "ኪግ", ml: "ሚሊ", l: "ሊትር", cup: "ኩባያ", tbsp: "የሾርባ ማንኪያ", tsp: "የሻይ ማንኪያ", piece: "ቁራጭ", serving: "ድርሻ", unlimited: "እንደ ፍላጎት" },
   },
   ur: {
@@ -285,6 +306,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     switch_to_arabic: "عربی منظر",
     print: "پرنٹ",
     arabic_names_note: "نام عربی میں",
+    day_failed: "یہ دن تیار نہیں ہو سکا۔ دوبارہ بنانے کی کوشش کریں۔",
+    allergy_title: "⚠ الرجی — یہ چیزیں پیش نہ کریں",
+    allergy_for: "برائے",
     units: { g: "گرام", kg: "کلوگرام", ml: "ملی لیٹر", l: "لیٹر", cup: "کپ", tbsp: "کھانے کا چمچ", tsp: "چائے کا چمچ", piece: "عدد", serving: "سرونگ", unlimited: "حسبِ خواہش" },
   },
 };

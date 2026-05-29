@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { MemberPlan } from "@fitlife/plan-engine";
+import { type MemberPlan, planHasContent } from "@fitlife/plan-engine";
 import { getLatestPlan } from "./getLatestPlan";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 
@@ -27,6 +27,11 @@ export async function getTodaysPlanView(userId: string): Promise<TodaysPlanView>
   if (latest.status === "generating") return { status: "generating", planId: latest.id };
   if (latest.status === "failed" || !latest.plan_data) {
     return { status: "failed", planId: latest.id, error: latest.error_message };
+  }
+  // A 'ready' plan whose days are still empty shells (shell flips ready on the
+  // first progress emit) isn't usable yet — show the loader, not an empty today.
+  if (!planHasContent(latest.plan_data)) {
+    return { status: "generating", planId: latest.id };
   }
 
   const members = latest.plan_data.members;

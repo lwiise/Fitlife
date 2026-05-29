@@ -33,6 +33,7 @@ export {
   DaySchema,
   MemberPlanSchema,
   MealPlanSchema,
+  planHasContent,
   PRIMARY_GOALS,
   LOCALE_CODES,
 } from "./schema";

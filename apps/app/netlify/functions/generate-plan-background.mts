@@ -364,7 +364,7 @@ export default async (req: Request): Promise<Response> => {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
     if (body.feedback) context.user_feedback = body.feedback;
 
-    const { plan, usage } = await generateMealPlan({
+    const { plan, usage, missingDays } = await generateMealPlan({
       anthropicApiKey: anthropicKey,
       context,
       existingPlan: existingPlan ?? null,
@@ -384,6 +384,16 @@ export default async (req: Request): Promise<Response> => {
 
     const durationMs = Date.now() - startMs;
     const generatedAt = new Date().toISOString();
+
+    // Partial plan: some days were dropped after retries. Status stays
+    // "completed" (the CHECK allows only started/completed/failed), but record a
+    // PII-safe note (day indices only — never recipe/member content) so partials
+    // are auditable.
+    const partialNote =
+      missingDays.length > 0 ? `partial: days [${missingDays.join(", ")}] failed` : null;
+    if (partialNote) {
+      console.warn(`[generate-plan-background] ${partialNote}`, { userId, mealPlanId });
+    }
 
     await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
       status: "ready",
@@ -405,6 +415,7 @@ export default async (req: Request): Promise<Response> => {
         cost_usd: usage.cost_usd,
         duration_ms: durationMs,
         completed_at: generatedAt,
+        error_message: partialNote,
       },
     );
 
@@ -413,6 +424,7 @@ export default async (req: Request): Promise<Response> => {
       mealPlanId,
       tokensOut: usage.output_tokens,
       durationMs,
+      missingDays,
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);

@@ -2,9 +2,13 @@ import { redirect } from "next/navigation";
 import {
   getCurrentUserLatestPlan,
   getCurrentUserFamilyMembers,
+  getCurrentUserProfile,
 } from "@/lib/supabase/queries";
+import { planHasContent } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
+import { asStringArray } from "@/app/profile/labels";
 import { HousekeeperPlanView } from "./HousekeeperPlanView";
+import type { AllergyEntry } from "./AllergyBackstop";
 
 export const metadata = {
   title: "وصفات الخدامة — فت لايف",
@@ -12,13 +16,22 @@ export const metadata = {
 };
 
 export default async function HousekeeperPage() {
-  const [latest, familyMembers] = await Promise.all([
+  const [latest, familyMembers, profile] = await Promise.all([
     getCurrentUserLatestPlan(),
     getCurrentUserFamilyMembers(),
+    getCurrentUserProfile(),
   ]);
 
-  // Need a ready plan with data.
-  if (!latest || latest.status !== "ready" || !latest.plan_data) redirect("/plan");
+  // Need a ready plan with data AND actual meals (a 'ready' shell with empty days
+  // isn't cookable yet — send her back to /plan, which shows the loading state).
+  if (
+    !latest ||
+    latest.status !== "ready" ||
+    !latest.plan_data ||
+    !planHasContent(latest.plan_data)
+  ) {
+    redirect("/plan");
+  }
 
   // Need a housekeeper.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
@@ -36,12 +49,25 @@ export default async function HousekeeperPage() {
     ),
   );
 
+  // Allergy backstop: sourced DIRECTLY from the DB (profiles + family_members),
+  // never from recipe prose or plan_data. Mom first, then members in display order.
+  const allergyEntries: AllergyEntry[] = [
+    ...(profile
+      ? [{ name: profile.display_name ?? "", allergies: asStringArray(profile.allergies) }]
+      : []),
+    ...familyMembers.map((m) => ({
+      name: m.name,
+      allergies: asStringArray(m.allergies),
+    })),
+  ].filter((e) => e.allergies.length > 0);
+
   return (
     <HousekeeperPlanView
       plan={latest.plan_data}
       planId={latest.id}
       locale={locale}
       needsTranslation={needsTranslation}
+      allergyEntries={allergyEntries}
     />
   );
 }

@@ -8,6 +8,7 @@ import type { MealPlan, LocaleCode } from "@fitlife/plan-engine";
 import { Logo } from "@/components/Logo";
 import { getLocaleInfo, getPlanStrings } from "@/lib/plans/locales";
 import { PlanViewer } from "../PlanViewer";
+import { AllergyBackstop, type AllergyEntry } from "./AllergyBackstop";
 import { requestHousekeeperTranslation } from "./actions";
 
 /**
@@ -23,11 +24,13 @@ export function HousekeeperPlanView({
   planId,
   locale,
   needsTranslation = false,
+  allergyEntries = [],
 }: {
   plan: MealPlan;
   planId: string;
   locale: LocaleCode;
   needsTranslation?: boolean;
+  allergyEntries?: AllergyEntry[];
 }) {
   const router = useRouter();
   const info = getLocaleInfo(locale);
@@ -78,6 +81,7 @@ export function HousekeeperPlanView({
       </header>
 
       <div className="container-app py-6 md:py-10 space-y-4">
+        <AllergyBackstop entries={allergyEntries} locale={locale} />
         {needsTranslation && (
           <div
             role="status"
