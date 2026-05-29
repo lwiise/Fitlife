@@ -323,36 +323,58 @@ export async function finalizeOnboarding(): Promise<void> {
     .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
 
-  // First-run auto-drain: a member added while mom's solo generation was still in
-  // flight gets deferred by the dispatch busy guard (saved to family_members but
-  // not in plan_data.members). Rather than land a brand-new user on a "only mom +
-  // manual banner" first view, generate the deferred members now. Same pending
-  // diff the dashboard uses. If a generation is still in flight (busy) or this
-  // throws, we silently fall back to the dashboard banner — no worse than before.
-  try {
-    const [latest, membersRes] = await Promise.all([
-      getLatestPlan(user.id),
-      supabase
-        .from("family_members")
-        .select("id, role")
-        .eq("user_id", user.id)
-        .returns<{ id: string; role: string }[]>(),
-    ]);
-    const planMemberIds = latest?.member_ids ?? [];
-    const pending = (membersRes.data ?? []).filter(
-      (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
-    );
-    if (pending.length > 0) {
-      await runFamilyGeneration(supabase, user.id);
-    }
-  } catch (err) {
-    Sentry.captureException(err, {
-      tags: { area: "onboarding", step: "finalizeOnboarding.drain", userId: user.id },
-    });
-  }
-
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+/**
+ * First-run auto-drain, evaluated LAZILY on a post-onboarding read (called from a
+ * client effect on /plan and the dashboard). A member added while mom's solo
+ * generation was still in flight gets deferred by the dispatch busy guard (saved
+ * to family_members but not in plan_data.members). Rather than leave a brand-new
+ * user on a "only mom + manual banner" first view, generate the deferred members
+ * onto the existing family grid (carry-over) once mom's plan is ready.
+ *
+ * Fires only when ALL hold: onboarding complete (prevents a mid-wizard partial
+ * drain), the latest plan is "ready" (so it's not generating/failed — and so the
+ * carry-over has a base to seed from), and at least one beneficiary is pending.
+ * Busy/upgrade/error → fired:false; the manual banner stays as the fallback.
+ * Terminates: a fired drain flips status to "generating" (blocks re-fire) and
+ * seeds the pending members (pending → empty).
+ */
+export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { fired: false };
+
+  const [profileRes, latest, membersRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("onboarding_completed_at")
+      .eq("id", user.id)
+      .returns<{ onboarding_completed_at: string | null }[]>()
+      .maybeSingle(),
+    getLatestPlan(user.id),
+    supabase
+      .from("family_members")
+      .select("id, role")
+      .eq("user_id", user.id)
+      .returns<{ id: string; role: string }[]>(),
+  ]);
+
+  if (!profileRes.data?.onboarding_completed_at) return { fired: false };
+  if (latest?.status !== "ready") return { fired: false };
+
+  const planMemberIds = latest.member_ids ?? [];
+  const pending = (membersRes.data ?? []).filter(
+    (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
+  );
+  if (pending.length === 0) return { fired: false };
+
+  const gen = await runFamilyGeneration(supabase, user.id);
+  return { fired: gen.ok };
 }
 
 /**

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { GenerateFamilyPlanBanner } from "./GenerateFamilyPlanBanner";
+import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { TodaysMeals } from "./TodaysMeals";
 import {
   getCurrentUserProfile,
@@ -127,6 +128,7 @@ export default async function DashboardPage() {
 
         {showAddFamily && <AddFamilyBanner />}
 
+        {onboardingDone && needsFamilyPlan && <DeferredMemberDrain />}
         {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
 
         <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">

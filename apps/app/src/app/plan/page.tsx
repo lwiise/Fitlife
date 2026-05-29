@@ -13,6 +13,7 @@ import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
+import { DeferredMemberDrain } from "./DeferredMemberDrain";
 
 export const metadata = {
   title: "خطتي — فت لايف",
@@ -32,6 +33,15 @@ export default async function PlanPage({
   ]);
 
   const isOnboarded = !!profile?.onboarding_completed_at;
+  // Members saved but not yet in the plan (deferred while a prior gen was in
+  // flight). When onboarding is done and the plan is ready, a lazy drain fills
+  // them in (mirrors the dashboard's pending diff; see DeferredMemberDrain).
+  const planMemberIds = latest?.member_ids ?? [];
+  const pendingMembers = familyMembers.filter(
+    (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
+  );
+  const shouldDrain =
+    isOnboarded && latest?.status === "ready" && pendingMembers.length > 0;
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =
@@ -77,13 +87,16 @@ export default async function PlanPage({
         )}
 
         {latest?.status === "ready" && latest.plan_data && (
-          <PlanViewer
-            plan={latest.plan_data}
-            planId={latest.id}
-            generating={latest.in_progress}
-            preselectedMember={member}
-            housekeeperLocale={housekeeperLocale}
-          />
+          <>
+            {shouldDrain && <DeferredMemberDrain />}
+            <PlanViewer
+              plan={latest.plan_data}
+              planId={latest.id}
+              generating={latest.in_progress}
+              preselectedMember={member}
+              housekeeperLocale={housekeeperLocale}
+            />
+          </>
         )}
       </div>
     </main>
