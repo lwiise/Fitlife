@@ -117,7 +117,8 @@ function isRetryable(err: unknown): boolean {
     err instanceof AnthropicCallError &&
     (/Anthropic API (429|529|5\d\d)/.test(err.message) ||
       /overloaded/i.test(err.message) ||
-      /stream error/.test(err.message))
+      /stream error/.test(err.message) ||
+      /timeout/i.test(err.message))
   );
 }
 

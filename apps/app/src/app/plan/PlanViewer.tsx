@@ -18,6 +18,11 @@ import {
 } from "@/lib/plans/dayMapping";
 import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
 
+// A day stuck "preparing" this long with no new write means the worker died —
+// far longer than a healthy day stream (~1-2 min), far shorter than the 15-min
+// server-side dead-man's switch.
+const STALE_PREPARING_MS = 180_000;
+
 function formatWeekRange(weekStart: string, locale?: LocaleCode): string {
   try {
     const start = new Date(weekStart);
@@ -38,6 +43,7 @@ export function PlanViewer({
   plan,
   planId: _planId,
   generating = false,
+  updatedAt,
   preselectedMember,
   readOnly = false,
   housekeeperLocale,
@@ -46,6 +52,10 @@ export function PlanViewer({
   plan: MealPlan;
   planId: string;
   generating?: boolean;
+  // Last write to the plan row. If a day stays "preparing" while this stops
+  // advancing, the background worker died — surface the retry box instead of
+  // spinning until the 15-min server-side dead-man's switch.
+  updatedAt?: string;
   preselectedMember?: string;
   // Historical view (e.g. /plan/history/[id]): hide regenerate + add-member,
   // and don't rewrite the URL.
@@ -94,6 +104,22 @@ export function PlanViewer({
     const t = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(t);
   }, [generating, router]);
+
+  // Ticking clock so `preparingStalled` re-evaluates without a server round-trip:
+  // if the worker died, updatedAt stops advancing and no refresh changes props.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!generating) return;
+    const t = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, [generating]);
+  // The plan row hasn't been written in a while but is still flagged generating
+  // → treat the active "preparing" day as failed so the retry box appears,
+  // instead of spinning until the server-side dead-man's switch (15 min).
+  const preparingStalled =
+    generating &&
+    !!updatedAt &&
+    now - Date.parse(updatedAt) > STALE_PREPARING_MS;
 
   const activeMember: MemberPlan | undefined = useMemo(
     () => plan.members.find((m) => m.member_id === activeMemberId) ?? plan.members[0],
@@ -352,7 +378,9 @@ export function PlanViewer({
             activeDay.meals.map((meal, i) => (
               <MealCard key={i} meal={meal} memberNames={memberNames} locale={locale} />
             ))
-          ) : generating && activeDayIndex === currentPreparingIndex ? (
+          ) : generating &&
+            !preparingStalled &&
+            activeDayIndex === currentPreparingIndex ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <Loader2
                 className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
@@ -360,7 +388,7 @@ export function PlanViewer({
               />
               <p className="text-brand-ink-muted text-sm">{t.generating}</p>
             </div>
-          ) : generating ? (
+          ) : generating && !preparingStalled ? (
             <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
               {t.day_queued}
             </div>
