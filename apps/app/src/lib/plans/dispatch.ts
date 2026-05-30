@@ -73,15 +73,38 @@ export async function triggerPlanGeneration(params: {
   if (!access.allowed) return { ok: false, kind: "access", access };
 
   // Don't start a new generation while one is still running. A second run can't
-  // carry the in-progress plan over (it isn't "ready" yet), so it would restart
-  // every member from scratch — and two background functions would race.
-  const inProgress = await getLatestPlan(userId);
-  if (inProgress?.status === "generating") {
-    const updatedMs = Date.parse(inProgress.updated_at);
-    const ageMin = Number.isNaN(updatedMs)
+  // carry the in-progress plan over (its members aren't complete yet), so it
+  // would restart every member from scratch — and two background functions would
+  // race. We CAN'T key this off meal_plans.status: the shell flips to 'ready' on
+  // the first emit and stays 'ready' for the whole run. The durable signal is the
+  // plan_generations 'started' row, created at dispatch (createPlanRows) and
+  // cleared only at terminal completion — the shell flip can't fake it.
+  const { data: liveGens } = await supabase
+    .from("plan_generations")
+    .select("id, started_at")
+    .eq("user_id", userId)
+    .eq("status", "started")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .returns<{ id: string; started_at: string }[]>();
+  const live = liveGens?.[0];
+  if (live) {
+    const startedMs = Date.parse(live.started_at);
+    const ageMin = Number.isNaN(startedMs)
       ? Infinity
-      : (Date.now() - updatedMs) / 60_000;
+      : (Date.now() - startedMs) / 60_000;
     if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
+    // Stale 'started' (the bg worker was hard-killed at its budget and its catch
+    // never ran) → reclassify so the guard can't deadlock 'busy' forever.
+    await supabase
+      .from("plan_generations")
+      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
+      .update({
+        status: "failed",
+        error_message: "stale generation reclassified",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", live.id);
   }
 
   let context;
