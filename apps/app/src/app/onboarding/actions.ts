@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
+import { planHasContent } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import type { Database } from "@/lib/supabase/database.types";
@@ -365,7 +366,14 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
   ]);
 
   if (!profileRes.data?.onboarding_completed_at) return { fired: false };
-  if (latest?.status !== "ready") return { fired: false };
+  // Need a ready plan WITH real content — never seed the carry-over off an empty
+  // shell (status flips to 'ready' on the first emit while still generating).
+  if (
+    latest?.status !== "ready" ||
+    !latest.plan_data ||
+    !planHasContent(latest.plan_data)
+  )
+    return { fired: false };
 
   const planMemberIds = latest.member_ids ?? [];
   const pending = (membersRes.data ?? []).filter(

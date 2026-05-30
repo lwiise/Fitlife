@@ -4,6 +4,7 @@ import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
+import { planHasContent } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -41,7 +42,11 @@ export default async function PlanPage({
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
   const shouldDrain =
-    isOnboarded && latest?.status === "ready" && pendingMembers.length > 0;
+    isOnboarded &&
+    latest?.status === "ready" &&
+    !!latest.plan_data &&
+    planHasContent(latest.plan_data) &&
+    pendingMembers.length > 0;
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =

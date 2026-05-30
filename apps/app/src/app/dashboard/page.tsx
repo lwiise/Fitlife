@@ -74,8 +74,10 @@ export default async function DashboardPage() {
   const pendingMembers = familyMembers.filter(
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
-  const needsFamilyPlan =
-    latestPlan?.status === "ready" && pendingMembers.length > 0;
+  // Gate on real content, not bare status: the plan flips to 'ready' on the
+  // first emit (an empty shell), so `planIsReady` (status + planHasContent)
+  // keeps the banner/drain from firing while the family is still generating.
+  const needsFamilyPlan = planIsReady && pendingMembers.length > 0;
   const pendingNames = pendingMembers.map((m) => m.name);
 
   // Housekeeper recipe view: show only when a non-Arabic housekeeper exists AND
