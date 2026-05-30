@@ -389,6 +389,60 @@ export default async (req: Request): Promise<Response> => {
       },
     });
 
+    // End-of-run housekeeper translation. Re-read the housekeeper FRESH (catches
+    // a maid added mid-generation, whose locale wasn't in the start context, so
+    // the meals weren't born-translated). Runs here — while this generation's
+    // plan_generations 'started' row is still live — so triggerPlanTranslation's
+    // busy guard keeps any concurrent translate from racing us. The translated
+    // plan becomes the final plan_data. Born-translated plans find nothing to do.
+    let finalPlan = plan;
+    let extraIn = 0;
+    let extraOut = 0;
+    let extraCost = 0;
+    try {
+      const hkRows = await sbSelectMany(
+        supabaseUrl,
+        expected,
+        "family_members",
+        `user_id=eq.${userId}&role=eq.housekeeper&select=preferred_language&limit=1`,
+      );
+      const hkLang = hkRows[0]?.preferred_language as string | undefined;
+      const endLocale =
+        hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
+          ? (hkLang as LocaleCode)
+          : undefined;
+      const needsTranslate =
+        !!endLocale &&
+        plan.members.some((m) =>
+          m.days.some((d) =>
+            d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
+          ),
+        );
+      if (endLocale && needsTranslate) {
+        const { plan: translated, usage: tUsage } = await translateMealPlan({
+          anthropicApiKey: anthropicKey,
+          plan,
+          locale: endLocale,
+          onDayTranslated: async (p) => {
+            await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+              plan_data: p,
+            });
+          },
+        });
+        finalPlan = translated;
+        extraIn = tUsage.input_tokens;
+        extraOut = tUsage.output_tokens;
+        extraCost = tUsage.cost_usd;
+      }
+    } catch (hkErr) {
+      // Non-fatal: leave the (untranslated) plan as-is; the maid view falls back
+      // to Arabic and her page re-triggers a translate on next visit.
+      console.warn(
+        "[generate-plan-background] end-of-run housekeeper translate failed",
+        hkErr,
+      );
+    }
+
     const durationMs = Date.now() - startMs;
     const generatedAt = new Date().toISOString();
 
@@ -404,7 +458,7 @@ export default async (req: Request): Promise<Response> => {
 
     await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
       status: "ready",
-      plan_data: plan,
+      plan_data: finalPlan,
       generated_at: generatedAt,
       ai_input_tokens: usage.input_tokens,
       ai_output_tokens: usage.output_tokens,
@@ -417,9 +471,9 @@ export default async (req: Request): Promise<Response> => {
       `meal_plan_id=eq.${mealPlanId}`,
       {
         status: "completed",
-        tokens_in: usage.input_tokens,
-        tokens_out: usage.output_tokens,
-        cost_usd: usage.cost_usd,
+        tokens_in: usage.input_tokens + extraIn,
+        tokens_out: usage.output_tokens + extraOut,
+        cost_usd: usage.cost_usd + extraCost,
         duration_ms: durationMs,
         completed_at: generatedAt,
         error_message: partialNote,

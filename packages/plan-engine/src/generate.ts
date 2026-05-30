@@ -19,6 +19,7 @@ import {
   MealPlanSchema,
   PlanSkeletonSchema,
   DaySliceSchema,
+  LOCALE_CODES,
   type MealPlan,
   type MemberPlan,
   type PlanSkeleton,
@@ -808,6 +809,56 @@ export async function runMealPlanGeneration(params: {
     throw err;
   }
 
+  // End-of-run housekeeper translation. Re-read the housekeeper FRESH (catches a
+  // maid added mid-generation, whose locale wasn't in the start context — so
+  // context.housekeeper_locale is stale and the meals weren't born-translated).
+  // Runs here, before flipping the plan_generations 'started' row to 'completed',
+  // so triggerPlanTranslation's busy guard keeps any concurrent translate from
+  // racing us. Born-translated plans find nothing to do.
+  let finalPlan = plan;
+  let extraIn = 0;
+  let extraOut = 0;
+  let extraCost = 0;
+  try {
+    const { data: hkRows } = await supabase
+      .from("family_members")
+      .select("preferred_language")
+      .eq("user_id", context.mom.id)
+      .eq("role", "housekeeper")
+      .limit(1)
+      .returns<{ preferred_language: string | null }[]>();
+    const hkLang = hkRows?.[0]?.preferred_language ?? undefined;
+    const endLocale =
+      hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
+        ? (hkLang as LocaleCode)
+        : undefined;
+    const needsTranslate =
+      !!endLocale &&
+      plan.members.some((m) =>
+        m.days.some((d) =>
+          d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
+        ),
+      );
+    if (endLocale && needsTranslate) {
+      const { plan: translated, usage: tUsage } = await translateMealPlan({
+        anthropicApiKey,
+        plan,
+        locale: endLocale,
+        onDayTranslated: async (p) => {
+          await supabase.from("meal_plans").update({ plan_data: p }).eq("id", mealPlanId);
+        },
+      });
+      finalPlan = translated;
+      extraIn = tUsage.input_tokens;
+      extraOut = tUsage.output_tokens;
+      extraCost = tUsage.cost_usd;
+    }
+  } catch (hkErr) {
+    // Non-fatal: leave the (untranslated) plan as-is; the maid view falls back to
+    // Arabic and her page re-triggers a translate on next visit.
+    console.warn("[runMealPlanGeneration] end-of-run housekeeper translate failed", hkErr);
+  }
+
   const durationMs = Date.now() - startMs;
   const generatedAt = new Date().toISOString();
 
@@ -815,7 +866,7 @@ export async function runMealPlanGeneration(params: {
     .from("meal_plans")
     .update({
       status: "ready",
-      plan_data: plan,
+      plan_data: finalPlan,
       generated_at: generatedAt,
       ai_input_tokens: usage.input_tokens,
       ai_output_tokens: usage.output_tokens,
@@ -840,9 +891,9 @@ export async function runMealPlanGeneration(params: {
     .from("plan_generations")
     .update({
       status: "completed",
-      tokens_in: usage.input_tokens,
-      tokens_out: usage.output_tokens,
-      cost_usd: usage.cost_usd,
+      tokens_in: usage.input_tokens + extraIn,
+      tokens_out: usage.output_tokens + extraOut,
+      cost_usd: usage.cost_usd + extraCost,
       duration_ms: durationMs,
       completed_at: generatedAt,
       error_message: partialNote,

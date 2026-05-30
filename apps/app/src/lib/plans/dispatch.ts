@@ -238,6 +238,31 @@ export async function triggerPlanTranslation(params: {
   const mealPlanId = latest.id;
   const plan = latest.plan_data;
 
+  // Don't translate while a generation is still writing plan_data — the two
+  // would race on the same row and the generation's (untranslated) day-writes
+  // would clobber the translation. Generation self-translates at its end (see
+  // runMealPlanGeneration / the background fn), so a no-op here is safe: the maid
+  // page keeps polling and the freshly-generated plan lands already translated.
+  // Same durable signal as triggerPlanGeneration: a live plan_generations
+  // 'started' row. Unlike that guard we do NOT reclassify a stale row here.
+  const { data: liveGens } = await supabase
+    .from("plan_generations")
+    .select("id, started_at")
+    .eq("user_id", userId)
+    .eq("status", "started")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .returns<{ id: string; started_at: string }[]>();
+  const live = liveGens?.[0];
+  if (live) {
+    const startedMs = Date.parse(live.started_at);
+    const ageMin = Number.isNaN(startedMs)
+      ? Infinity
+      : (Date.now() - startedMs) / 60_000;
+    if (ageMin < STALE_GENERATION_MIN) return;
+    // Stale 'started' (bg worker hard-killed) → nothing is writing; fall through.
+  }
+
   // Development: run inline.
   if (process.env.NODE_ENV === "development") {
     try {
