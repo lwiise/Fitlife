@@ -552,6 +552,20 @@ export async function generateMealPlan(params: {
     );
   const plan: MealPlan = result.data;
 
+  // Carry-over invariant (log-only tripwire): a carried-over member's meals must
+  // be byte-identical to the prior plan — adding/editing one member must never
+  // alter the others. Seeded days are placed verbatim and never touched by the
+  // generation loop, so this should never fire; if it ever does, a regression
+  // started rewriting existing members. Warn, never throw.
+  const daysFingerprint = (days: Day[]) =>
+    JSON.stringify([...days].sort((a, b) => a.day_index - b.day_index));
+  for (const [memberId, original] of seeded) {
+    const out = plan.members.find((m) => m.member_id === memberId);
+    if (!out || daysFingerprint(out.days) !== daysFingerprint(original.days)) {
+      console.warn("[plan-generate] carry-over invariant violated", { memberId });
+    }
+  }
+
   // Non-fatal numeric guards (skip seeded members — already validated).
   for (const memberPlan of plan.members) {
     if (seeded.has(memberPlan.member_id)) continue;
