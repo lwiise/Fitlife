@@ -324,6 +324,13 @@ export default async (req: Request): Promise<Response> => {
         anthropicApiKey: anthropicKey,
         plan: body.plan,
         locale: body.locale,
+        // Persist each day as it lands (today-first) so the maid sees recipes
+        // within seconds. The final update below is the complete snapshot.
+        onDayTranslated: async (p) => {
+          await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+            plan_data: p,
+          });
+        },
       });
       await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
         plan_data: translated,

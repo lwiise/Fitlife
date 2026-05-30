@@ -22,16 +22,8 @@ export default async function HousekeeperPage() {
     getCurrentUserProfile(),
   ]);
 
-  // Need a ready plan with data AND actual meals (a 'ready' shell with empty days
-  // isn't cookable yet — send her back to /plan, which shows the loading state).
-  if (
-    !latest ||
-    latest.status !== "ready" ||
-    !latest.plan_data ||
-    !planHasContent(latest.plan_data)
-  ) {
-    redirect("/plan");
-  }
+  // No plan at all → there's nothing for her page yet; /plan owns the empty state.
+  if (!latest) redirect("/plan");
 
   // Need a housekeeper.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
@@ -41,13 +33,26 @@ export default async function HousekeeperPage() {
   const locale = housekeeper.preferred_language;
   if (!isLocaleCode(locale) || locale === "ar") redirect("/plan");
 
+  // A plan exists but isn't ready+cookable yet (status still generating, or a
+  // 'ready' shell with empty days while a member's generation is in flight). Do
+  // NOT bounce her to the Arabic /plan view — that's the "appears → disappears →
+  // comes back" flicker. Keep her on her own page in a localized waiting state;
+  // the poll resolves it once the plan is ready and translated.
+  const preparing =
+    latest.status !== "ready" ||
+    !latest.plan_data ||
+    !planHasContent(latest.plan_data);
+
   // Any meal not yet translated to her locale → the view self-heals (trigger +
   // poll). The locale stamp is set whenever recipe/ingredients/steps translate.
-  const needsTranslation = latest.plan_data.members.some((m) =>
-    m.days.some((d) =>
-      d.meals.some((meal) => meal.prep_steps_translated_locale !== locale),
-    ),
-  );
+  const needsTranslation =
+    !preparing &&
+    !!latest.plan_data &&
+    latest.plan_data.members.some((m) =>
+      m.days.some((d) =>
+        d.meals.some((meal) => meal.prep_steps_translated_locale !== locale),
+      ),
+    );
 
   // Allergy backstop: allergens sourced DIRECTLY from the DB (profiles +
   // family_members), never from recipe prose or plan_data. The member NAME is
@@ -57,7 +62,10 @@ export default async function HousekeeperPage() {
   // members in display order. The housekeeper is the cook, not a beneficiary —
   // she's excluded (and never appears in plan_data.members anyway).
   const nameByMember = new Map(
-    latest.plan_data.members.map((m) => [m.member_id, m.member_name_translated]),
+    (latest.plan_data?.members ?? []).map((m) => [
+      m.member_id,
+      m.member_name_translated,
+    ]),
   );
   const allergyEntries: AllergyEntry[] = [
     ...(profile
@@ -80,10 +88,11 @@ export default async function HousekeeperPage() {
 
   return (
     <HousekeeperPlanView
-      plan={latest.plan_data}
+      plan={latest.plan_data ?? null}
       planId={latest.id}
       locale={locale}
       needsTranslation={needsTranslation}
+      preparing={preparing}
       allergyEntries={allergyEntries}
     />
   );

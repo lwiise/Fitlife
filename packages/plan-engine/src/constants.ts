@@ -52,3 +52,9 @@ export const DAY_MAX_TOKENS = 12000;
 // Sequential (one day at a time, in order): the plan opens showing all 7 days
 // as "loading" and they fill in 1→7. Higher values parallelize (faster total).
 export const DAY_CONCURRENCY = 1;
+
+// Translation (maid/housekeeper) is a separate pass over already-generated meals.
+// Days are fully independent here (no family-grid alignment), so parallelizing is
+// safe — 429/overload is covered by the per-day retry/backoff. This cuts the
+// maid's wall-clock ~3× vs. the sequential generation cadence.
+export const TRANSLATE_CONCURRENCY = 3;

@@ -4,6 +4,7 @@ import {
   SKELETON_MAX_TOKENS,
   DAY_MAX_TOKENS,
   DAY_CONCURRENCY,
+  TRANSLATE_CONCURRENCY,
 } from "./constants";
 import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
@@ -889,8 +890,12 @@ export async function translateMealPlan(params: {
   anthropicApiKey: string;
   plan: MealPlan;
   locale: LocaleCode;
+  // Called after each day's meals are translated, with a FULL snapshot of the
+  // plan so far. Lets callers persist progressively (today-first) so the maid
+  // sees recipes within seconds instead of waiting for all 7 days. Non-fatal.
+  onDayTranslated?: (plan: MealPlan) => void | Promise<void>;
 }): Promise<{ plan: MealPlan; usage: { input_tokens: number; output_tokens: number; cost_usd: number; model: string } }> {
-  const { anthropicApiKey, plan, locale } = params;
+  const { anthropicApiKey, plan, locale, onDayTranslated } = params;
   let totalIn = 0;
   let totalOut = 0;
 
@@ -918,7 +923,7 @@ export async function translateMealPlan(params: {
       ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
       : dayIndices;
 
-  await mapWithConcurrency(order, DAY_CONCURRENCY, async (dayIndex) => {
+  await mapWithConcurrency(order, TRANSLATE_CONCURRENCY, async (dayIndex) => {
     const refs: Meal[] = [];
     for (const m of members) {
       const day = m.days.find((d) => d.day_index === dayIndex);
@@ -974,6 +979,20 @@ export async function translateMealPlan(params: {
             ...g,
             name_ar: out.ingredient_names[k] ?? g.name_ar,
           }));
+        }
+        // Emit a full snapshot so the caller can persist progressively. `members`
+        // is the shared working array, so this includes every day done so far →
+        // writes are last-write-wins safe even when days finish concurrently.
+        // Non-fatal: a failed persist must not abort the translation pass.
+        try {
+          await onDayTranslated?.({ ...plan, members });
+        } catch (persistErr) {
+          console.warn(
+            "[translateMealPlan] day",
+            dayIndex,
+            "progressive persist failed:",
+            persistErr instanceof Error ? persistErr.message : String(persistErr),
+          );
         }
         return;
       } catch (err) {
@@ -1074,6 +1093,12 @@ export async function runMealPlanTranslation(params: {
     anthropicApiKey,
     plan,
     locale,
+    // Persist each day as it lands (today-first) so the maid sees recipes within
+    // seconds instead of waiting for all 7 days. The final update below is the
+    // complete, last-write snapshot.
+    onDayTranslated: async (p) => {
+      await supabase.from("meal_plans").update({ plan_data: p }).eq("id", mealPlanId);
+    },
   });
   const { error } = await supabase
     .from("meal_plans")

@@ -24,12 +24,17 @@ export function HousekeeperPlanView({
   planId,
   locale,
   needsTranslation = false,
+  preparing = false,
   allergyEntries = [],
 }: {
-  plan: MealPlan;
+  plan: MealPlan | null;
   planId: string;
   locale: LocaleCode;
   needsTranslation?: boolean;
+  // The family plan exists but isn't ready/translated yet (e.g. a member's
+  // generation is still in flight). Show a localized waiting state on HER page
+  // instead of bouncing to the Arabic /plan view — the poll resolves it.
+  preparing?: boolean;
   allergyEntries?: AllergyEntry[];
 }) {
   const router = useRouter();
@@ -44,13 +49,14 @@ export function HousekeeperPlanView({
     void requestHousekeeperTranslation();
   }, [needsTranslation]);
 
-  // While translations are missing, poll the server component for the updated
-  // plan_data; once they land the next render has needsTranslation=false.
+  // While the plan is preparing OR translations are missing, poll the server
+  // component for updated plan_data; once everything lands the next render has
+  // preparing=false and needsTranslation=false and the poll stops.
   useEffect(() => {
-    if (!needsTranslation) return;
+    if (!preparing && !needsTranslation) return;
     const id = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(id);
-  }, [needsTranslation, router]);
+  }, [preparing, needsTranslation, router]);
 
   return (
     <main dir={info.direction} lang={locale} className="min-h-screen bg-brand-surface">
@@ -82,7 +88,7 @@ export function HousekeeperPlanView({
 
       <div className="container-app py-6 md:py-10 space-y-4">
         <AllergyBackstop entries={allergyEntries} locale={locale} />
-        {needsTranslation && (
+        {(needsTranslation || preparing) && (
           <div
             role="status"
             className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
@@ -96,7 +102,9 @@ export function HousekeeperPlanView({
             </p>
           </div>
         )}
-        <PlanViewer plan={plan} planId={planId} readOnly locale={locale} />
+        {!preparing && plan && (
+          <PlanViewer plan={plan} planId={planId} readOnly locale={locale} />
+        )}
       </div>
     </main>
   );
