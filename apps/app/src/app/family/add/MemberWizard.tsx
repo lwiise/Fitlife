@@ -94,6 +94,27 @@ function OptionButton({
   );
 }
 
+// Mirror the family_members DB check constraints so a typo is caught with a
+// friendly Arabic message instead of a raw Postgres "numeric field overflow"
+// (numeric(5,2) overflows before the range check even fires).
+function physicalRangeError(
+  height: number | null | undefined,
+  weight: number | null | undefined,
+): string | null {
+  if (height != null && (height < 40 || height > 250))
+    return "الطول لازم يكون بين 40 و250 سم";
+  if (weight != null && (weight < 5 || weight > 300))
+    return "الوزن لازم يكون بين 5 و300 كجم";
+  return null;
+}
+
+function birthYearError(year: number): string | null {
+  const thisYear = new Date().getFullYear();
+  if (year < 1940 || year > thisYear)
+    return `سنة الميلاد لازم تكون بين 1940 و${thisYear}`;
+  return null;
+}
+
 function NumberField({
   id,
   label,
@@ -164,7 +185,7 @@ const TYPE_TITLES: Record<MemberType, string> = {
   lactating: "إضافة فرد (مرضعة)",
 };
 
-export interface MemberWizardInitial extends Partial<FamilyMemberInput> {}
+export type MemberWizardInitial = Partial<FamilyMemberInput>;
 
 export function MemberWizard({
   type,
@@ -282,6 +303,13 @@ export function MemberWizard({
     const input = assemble();
     if (!input.name || input.name.length < 2) return setError("اكتبي الاسم");
     if (!input.birth_year) return setError("اكتبي سنة الميلاد");
+    // Bounds mirror the DB check constraints (numeric(5,2)) — guard here so an
+    // out-of-range value gets a clear message instead of a raw "numeric field
+    // overflow" from Postgres.
+    const rangeError = physicalRangeError(input.height_cm, input.weight_kg);
+    if (rangeError) return setError(rangeError);
+    const yearError = birthYearError(input.birth_year);
+    if (yearError) return setError(yearError);
     startTransition(async () => {
       const result = editMemberId
         ? await updateFamilyMember(editMemberId, input)
@@ -428,7 +456,17 @@ export function MemberWizard({
                 </header>
                 <TextField id="m-name" label="الاسم" value={name} onChange={setName} placeholder="مثلاً: خالد" />
                 <NumberField id="m-by" label="سنة الميلاد" value={birthYear} onChange={setBirthYear} placeholder="1988" />
-                <PrimaryButton onClick={() => (name.trim().length >= 2 && birthYear ? goNext() : setError("أكملي الاسم وسنة الميلاد"))}>التالي</PrimaryButton>
+                <PrimaryButton
+                  onClick={() => {
+                    if (name.trim().length < 2 || !birthYear)
+                      return setError("أكملي الاسم وسنة الميلاد");
+                    const yearError = birthYearError(Number(birthYear));
+                    if (yearError) return setError(yearError);
+                    goNext();
+                  }}
+                >
+                  التالي
+                </PrimaryButton>
               </>
             )}
 
@@ -462,7 +500,16 @@ export function MemberWizard({
                 </header>
                 <NumberField id="m-h" label="الطول (سم)" value={heightCm} onChange={setHeightCm} placeholder="120" />
                 <NumberField id="m-w" label="الوزن (كجم)" value={weightKg} onChange={setWeightKg} placeholder="40" />
-                <PrimaryButton onClick={() => (heightCm && weightKg ? goNext() : setError("أكملي الطول والوزن"))}>التالي</PrimaryButton>
+                <PrimaryButton
+                  onClick={() => {
+                    if (!heightCm || !weightKg) return setError("أكملي الطول والوزن");
+                    const rangeError = physicalRangeError(Number(heightCm), Number(weightKg));
+                    if (rangeError) return setError(rangeError);
+                    goNext();
+                  }}
+                >
+                  التالي
+                </PrimaryButton>
               </>
             )}
 
