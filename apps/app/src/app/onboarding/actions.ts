@@ -795,7 +795,7 @@ export async function updateFamilyMember(
  * Rate-limit-bypassed like other family changes; surfaces the upgrade gate.
  */
 export async function generateFamilyPlan(): Promise<
-  | { ok: true; plan_generation_id: string }
+  | { ok: true; plan_generation_id: string | null; queued?: boolean }
   | { ok: false; upgrade_required: true }
   | { ok: false; error: string }
 > {
@@ -809,6 +809,8 @@ export async function generateFamilyPlan(): Promise<
   const gen = await runFamilyGeneration(supabase, user.id);
   if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade") return { ok: false, upgrade_required: true };
-  if (gen.kind === "busy") return { ok: false, error: PLAN_BUSY_MESSAGE };
+  // Current plan still generating → member already saved; queue it (the drain
+  // generates it after the in-flight run completes). No blocking error.
+  if (gen.kind === "busy") return { ok: true, plan_generation_id: null, queued: true };
   return { ok: false, error: gen.error };
 }

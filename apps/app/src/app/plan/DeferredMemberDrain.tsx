@@ -11,16 +11,20 @@ import { drainDeferredMembers } from "@/app/onboarding/actions";
  * again into the full family). All guards live server-side in drainDeferredMembers;
  * this just fires once per mount and reloads when something happened.
  */
-export function DeferredMemberDrain() {
+export function DeferredMemberDrain({ generating = false }: { generating?: boolean }) {
   const ran = useRef(false);
   useEffect(() => {
-    if (ran.current) return;
+    // Wait for the in-flight generation to finish — firing mid-run just hits the
+    // busy guard and wastes our one shot. When `generating` flips false (the RSC
+    // re-renders via the page's poll/refresh), this effect re-runs and drains the
+    // queued member, then reloads into its "generating" state.
+    if (generating || ran.current) return;
     ran.current = true;
     drainDeferredMembers()
       .then((r) => {
         if (r.fired) window.location.reload();
       })
       .catch(() => {});
-  }, []);
+  }, [generating]);
   return null;
 }

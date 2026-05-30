@@ -130,7 +130,9 @@ export default async function DashboardPage() {
 
         {showAddFamily && <AddFamilyBanner />}
 
-        {onboardingDone && needsFamilyPlan && <DeferredMemberDrain />}
+        {onboardingDone && needsFamilyPlan && (
+          <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
+        )}
         {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
 
         <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">

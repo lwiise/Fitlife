@@ -57,6 +57,13 @@ export default async function PlanPage({
   // otherwise the account owner. Never framed as "the family".
   const generatingFor = member || profile?.display_name || null;
 
+  // A member added mid-run is saved + queued (the drain generates them once the
+  // current run finishes) — reassure rather than show a "wait" error.
+  const isGenerating =
+    latest?.status === "generating" ||
+    (latest?.status === "ready" && latest.in_progress);
+  const queuedNames = pendingMembers.map((m) => m.name).join("، ");
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -81,6 +88,16 @@ export default async function PlanPage({
           <PlanOnboardingBanner />
         </Suspense>
 
+        {isGenerating && pendingMembers.length > 0 && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-3 mb-6 text-brand-ink text-sm font-medium leading-relaxed"
+          >
+            تمت إضافة {queuedNames} — سيُنشأ بعد اكتمال الخطة الحالية
+          </div>
+        )}
+
         {!latest && <EmptyState isOnboarded={isOnboarded} />}
 
         {latest?.status === "generating" && (
@@ -93,7 +110,7 @@ export default async function PlanPage({
 
         {latest?.status === "ready" && latest.plan_data && (
           <>
-            {shouldDrain && <DeferredMemberDrain />}
+            {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
             <PlanViewer
               plan={latest.plan_data}
               planId={latest.id}
