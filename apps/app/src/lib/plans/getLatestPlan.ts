@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
+import { MealPlanSchema, planHasContent, type MealPlan } from "@fitlife/plan-engine";
 
 // A 'generating' plan (or a 'ready' shell still flagged generating) whose
 // updated_at is older than this is treated as crashed/stale — the background
@@ -76,16 +76,26 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
 
   // Dead-man's switch: if the background function was hard-killed at its 15-min
   // budget, its catch never ran, so the row sits in 'generating' (or in a
-  // 'ready' shell still flagged generating) forever and the viewer shows a
-  // perpetual loader. Reclassify a stale in-flight row as failed so the UI's
-  // failed/retry branch fires. (Read-time only — the DB row is left as-is.)
+  // 'ready' shell still flagged generating, or a 'ready' shell with no meals at
+  // all) forever and the viewer shows a perpetual loader. Reclassify a stale
+  // in-flight row as failed so the UI's failed/retry branch fires. (Read-time
+  // only — the DB row is left as-is.) Staleness is measured off updated_at: an
+  // actively-progressing shell rewrites plan_data every day, so it stays fresh;
+  // only a dead one goes stale.
   const updatedMs = Date.parse(row.updated_at);
   const ageMin = Number.isNaN(updatedMs)
     ? Infinity
     : (Date.now() - updatedMs) / 60_000;
+  // A 'ready' shell that never filled in any meals (worker died after the flip,
+  // or every day failed) is empty — treat it as in-flight so the same staleness
+  // gate can reclassify it once nothing is writing.
+  const planEmpty =
+    finalStatus === "ready" &&
+    (!validatedPlanData || !planHasContent(validatedPlanData));
   const stillInFlight =
     finalStatus === "generating" ||
-    (finalStatus === "ready" && validatedPlanData?.generating === true);
+    (finalStatus === "ready" && validatedPlanData?.generating === true) ||
+    planEmpty;
   let errorMessage = row.error_message ?? null;
   if (stillInFlight && ageMin >= STALE_GENERATION_MIN) {
     console.warn("[getLatestPlan] stale in-flight plan; surfacing as failed", {
