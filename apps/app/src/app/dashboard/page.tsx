@@ -65,8 +65,13 @@ export default async function DashboardPage() {
     (m) => m.role !== "housekeeper",
   ).length;
   // Mom's plan exists but no other family members yet → nudge to add family.
+  // Gate on real readiness (content present, not still generating) so the
+  // "خطتك جاهزة" banner never shows over the generating loader.
   const showAddFamily =
-    profile.mom_profile_completed_at !== null && beneficiaryCount === 0;
+    profile.mom_profile_completed_at !== null &&
+    planIsReady &&
+    !latestPlan?.in_progress &&
+    beneficiaryCount === 0;
 
   // Members who exist but aren't in the current plan yet (e.g. added while a
   // tier upgrade was pending) → offer one-click generation, named for them.

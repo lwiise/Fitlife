@@ -64,6 +64,14 @@ export default async function PlanPage({
     (latest?.status === "ready" && latest.in_progress);
   const queuedNames = pendingMembers.map((m) => m.name).join("، ");
 
+  // "Plan ready" nudge must reflect real readiness — content present and no
+  // longer progressing — so it never shows over the generating loader.
+  const planReady =
+    latest?.status === "ready" &&
+    !!latest.plan_data &&
+    planHasContent(latest.plan_data) &&
+    !latest.in_progress;
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -85,7 +93,7 @@ export default async function PlanPage({
 
       <div className="container-app py-8 md:py-12">
         <Suspense fallback={null}>
-          <PlanOnboardingBanner />
+          <PlanOnboardingBanner planReady={planReady} />
         </Suspense>
 
         {isGenerating && pendingMembers.length > 0 && (

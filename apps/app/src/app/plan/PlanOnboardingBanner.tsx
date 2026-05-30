@@ -15,7 +15,7 @@ const DASHBOARD_KEY = "fitlife.addFamilyBanner.dismissed";
  *  - member-added: transient confirmation; strips its own query param on mount
  *    and auto-dismisses after 5s.
  */
-export function PlanOnboardingBanner() {
+export function PlanOnboardingBanner({ planReady = false }: { planReady?: boolean }) {
   const params = useSearchParams();
   const mode = params.get("onboarding");
   const memberName = params.get("member");
@@ -24,7 +24,11 @@ export function PlanOnboardingBanner() {
 
   useEffect(() => {
     if (mode === "mom-first") {
-      setVisible(sessionStorage.getItem(MOM_FIRST_KEY) !== "1");
+      // Only nudge once the plan is truly ready — never over the generating loader.
+      // SSR-safe sessionStorage read on mount; the effect+setState idiom here
+      // avoids a hydration mismatch, so the rule is a false positive.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setVisible(planReady && sessionStorage.getItem(MOM_FIRST_KEY) !== "1");
       return;
     }
     if (mode === "member-added") {
@@ -38,7 +42,7 @@ export function PlanOnboardingBanner() {
       return () => clearTimeout(t);
     }
     setVisible(false);
-  }, [mode]);
+  }, [mode, planReady]);
 
   if (!visible) return null;
 
