@@ -789,28 +789,3 @@ export async function updateFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: null };
   return { ok: false, error: gen.error };
 }
-
-/**
- * One-click family-plan generation (e.g. the post-upgrade dashboard banner).
- * Rate-limit-bypassed like other family changes; surfaces the upgrade gate.
- */
-export async function generateFamilyPlan(): Promise<
-  | { ok: true; plan_generation_id: string | null; queued?: boolean }
-  | { ok: false; upgrade_required: true }
-  | { ok: false; error: string }
-> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
-
-  const gen = await runFamilyGeneration(supabase, user.id);
-  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
-  if (gen.kind === "upgrade") return { ok: false, upgrade_required: true };
-  // Current plan still generating → member already saved; queue it (the drain
-  // generates it after the in-flight run completes). No blocking error.
-  if (gen.kind === "busy") return { ok: true, plan_generation_id: null, queued: true };
-  return { ok: false, error: gen.error };
-}

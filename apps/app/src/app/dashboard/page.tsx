@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
-import { GenerateFamilyPlanBanner } from "./GenerateFamilyPlanBanner";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { TodaysMeals } from "./TodaysMeals";
 import {
@@ -13,6 +12,7 @@ import {
 import { planHasContent } from "@fitlife/plan-engine";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
+import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { Logo } from "@/components/Logo";
@@ -84,6 +84,13 @@ export default async function DashboardPage() {
   // keeps the banner/drain from firing while the family is still generating.
   const needsFamilyPlan = planIsReady && pendingMembers.length > 0;
   const pendingNames = pendingMembers.map((m) => m.name);
+  // Pending members generate automatically (DeferredMemberDrain). The only case
+  // that can't be automated is exceeding the tier's people limit — surface an
+  // upgrade prompt then, otherwise a passive "being created" notice.
+  const familyChangeAccess =
+    needsFamilyPlan && user ? await canGenerateForFamilyChange(user.id) : null;
+  const pendingBlocked = familyChangeAccess?.allowed === false;
+  const pendingNamesText = pendingNames.join("، ");
 
   // Housekeeper recipe view: show only when a non-Arabic housekeeper exists AND
   // there's a ready plan (the /plan/housekeeper page redirects otherwise).
@@ -138,7 +145,43 @@ export default async function DashboardPage() {
         {onboardingDone && needsFamilyPlan && (
           <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
         )}
-        {needsFamilyPlan && <GenerateFamilyPlanBanner names={pendingNames} />}
+
+        {needsFamilyPlan && pendingBlocked && (
+          <div className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-4 mb-6">
+            <div className="flex items-start gap-3">
+              <Users
+                className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900"
+                aria-hidden="true"
+              />
+              <div className="flex-1">
+                <p className="text-brand-ink text-sm font-medium leading-relaxed">
+                  أضفتِ {pendingNamesText}، لكن باقتك الحالية ما تكفي. رقّي باقتك
+                  عشان نجهّز خططهم.
+                </p>
+                <Link
+                  href="/pricing"
+                  className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
+                >
+                  عرض الباقات
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {needsFamilyPlan && !pendingBlocked && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-3 mb-6 text-brand-ink text-sm font-medium leading-relaxed"
+          >
+            {latestPlan?.in_progress
+              ? `تمت إضافة ${pendingNamesText} — سيُنشأ بعد اكتمال الخطة الحالية`
+              : `تمت إضافة ${pendingNamesText} — ${
+                  pendingNames.length > 1 ? "جارٍ إنشاء خططهم" : "جارٍ إنشاء خطته"
+                } ضمن خطط العائلة المنسقة`}
+          </div>
+        )}
 
         <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">
           أهلاً، {displayName}
