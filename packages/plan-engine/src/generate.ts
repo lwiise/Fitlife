@@ -187,7 +187,6 @@ export async function generateMealPlan(params: {
   const weekStart = existingPlan?.week_start_date ?? riyadhTodayISO();
 
   const beneficiaries = getBeneficiaries(context);
-  const beneIds = new Set(beneficiaries.map((b) => b.member_id));
   const nameById = new Map(
     beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
   );
@@ -202,8 +201,13 @@ export async function generateMealPlan(params: {
     ),
   ]);
 
-  // ── Analyse the prior plan: which members carry over, the family day grid ──
-  const seeded = new Map<string, MemberPlan>(); // complete members carried over
+  // ── Analyse the prior plan: per-(member, day) carry-over and the family grid ──
+  // Each member keeps its COMPLETED days verbatim; only its empty/missing (member,
+  // day) cells are generated. familyDishGrid holds, per day, the dishes that ANY
+  // member already has — so new members and gap-fills align to the family's menu.
+  const priorById = new Map(
+    (existingPlan?.members ?? []).map((m) => [m.member_id, m] as const),
+  );
   let familyDayIndices: number[] = [];
   const familyDishGrid = new Map<
     number,
@@ -215,36 +219,44 @@ export async function generateMealPlan(params: {
         existingPlan.members.flatMap((m) => m.days.map((d) => d.day_index)),
       ),
     ).sort((a, b) => a - b);
-    const ref = [...existingPlan.members].sort(
-      (a, b) => b.days.length - a.days.length,
-    )[0];
-    for (const d of ref?.days ?? []) {
-      familyDishGrid.set(
-        d.day_index,
-        d.meals.map((m) => ({
-          slot: m.slot,
-          slot_name_ar: m.slot_name_ar,
-          recipe_name_ar: m.recipe_name_ar,
-        })),
-      );
-    }
-    const complete = (m: MemberPlan) =>
-      familyDayIndices.length > 0 &&
-      familyDayIndices.every((di) => {
+    for (const di of familyDayIndices) {
+      for (const m of existingPlan.members) {
         const day = m.days.find((d) => d.day_index === di);
-        return !!day && day.meals.length > 0;
-      });
-    for (const m of existingPlan.members) {
-      if (beneIds.has(m.member_id) && complete(m)) seeded.set(m.member_id, m);
+        if (day && day.meals.length > 0) {
+          familyDishGrid.set(
+            di,
+            day.meals.map((mm) => ({
+              slot: mm.slot,
+              slot_name_ar: mm.slot_name_ar,
+              recipe_name_ar: mm.recipe_name_ar,
+            })),
+          );
+          break;
+        }
+      }
     }
   }
+  // Completed days each beneficiary already has — carried over byte-identical.
+  const carriedDays = new Map<string, Map<number, Day>>(); // member_id → di → Day
+  for (const b of beneficiaries) {
+    const dm = new Map<number, Day>();
+    for (const d of priorById.get(b.member_id)?.days ?? [])
+      if (d.meals.length > 0) dm.set(d.day_index, d);
+    carriedDays.set(b.member_id, dm);
+  }
+  // A member is complete iff it carried every family day. Fresh plan (no prior) →
+  // everyone generates. Concrete missing-day lists are derived later, once the
+  // day grid is known (it comes from the skeleton on a from-scratch plan).
+  const isComplete = (b: { member_id: string }) =>
+    existingPlan != null &&
+    familyDayIndices.length > 0 &&
+    familyDayIndices.every((di) => carriedDays.get(b.member_id)!.has(di));
+  const membersToGenerate = beneficiaries.filter((b) => !isComplete(b));
 
-  const toGenerate = beneficiaries.filter((b) => !seeded.has(b.member_id));
-
-  // ── Fast path: nothing to generate (e.g. a member was removed) ──
-  if (toGenerate.length === 0) {
+  // ── Fast path: every member complete → return the prior plan untouched ──
+  if (existingPlan && membersToGenerate.length === 0) {
     const members = beneficiaries.map((b) => {
-      const m = seeded.get(b.member_id)!;
+      const m = priorById.get(b.member_id)!;
       return { ...m, member_name_ar: nameById.get(b.member_id) ?? m.member_name_ar };
     });
     const plan = MealPlanSchema.parse({
@@ -264,21 +276,25 @@ export async function generateMealPlan(params: {
   // with the carried-over members intact and the new/edited member as an empty
   // loading placeholder — so the user never sees a full-screen "generating"
   // screen that hides the prior plan while the skeleton runs.
-  if (onProgress && seeded.size > 0 && familyDayIndices.length > 0) {
+  if (onProgress && existingPlan && familyDayIndices.length > 0) {
     const preMembers: MemberPlan[] = beneficiaries.map((b) => {
-      const s = seeded.get(b.member_id);
-      if (s) return { ...s, member_name_ar: nameById.get(b.member_id) ?? s.member_name_ar };
+      const prior = priorById.get(b.member_id);
+      const carried = carriedDays.get(b.member_id)!;
       return {
         member_id: b.member_id,
-        member_name_ar: nameById.get(b.member_id) ?? "",
-        daily_calories_target: 0,
-        macros_target: { protein_g: 0, carbs_g: 0, fat_g: 0 },
-        days: familyDayIndices.map((di) => ({
-          day_index: di,
-          day_name_ar: khaleejiDayName(weekStart, di),
-          meals: [],
-          day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-        })),
+        member_name_ar: nameById.get(b.member_id) ?? prior?.member_name_ar ?? "",
+        primary_goal: prior?.primary_goal,
+        daily_calories_target: prior?.daily_calories_target ?? 0,
+        macros_target: prior?.macros_target ?? { protein_g: 0, carbs_g: 0, fat_g: 0 },
+        days: familyDayIndices.map(
+          (di) =>
+            carried.get(di) ?? {
+              day_index: di,
+              day_name_ar: khaleejiDayName(weekStart, di),
+              meals: [],
+              day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+            },
+        ),
       };
     });
     const preShell: MealPlan = {
@@ -294,41 +310,62 @@ export async function generateMealPlan(params: {
     ).catch((e) => console.error("[plan-generate] pre-skeleton onProgress failed", e));
   }
 
-  // ── Phase 1: skeleton for the members we need to generate ──
-  const targetMemberIds = toGenerate.map((b) => b.member_id);
-  const sk = await streamAnthropic({
-    apiKey: anthropicApiKey,
-    model: PLAN_MODEL,
-    maxTokens: SKELETON_MAX_TOKENS,
-    systemStatic: STATIC_SYSTEM,
-    systemPrompt: buildSkeletonPrompt(context, targetMemberIds),
-  });
-  totalIn += sk.tokensIn;
-  totalOut += sk.tokensOut;
-  if (!sk.text.trim())
-    throw new PlanValidationError("Empty skeleton from Anthropic", sk.text);
-  if (sk.stopReason === "max_tokens")
-    throw new PlanValidationError(
-      `Skeleton hit max_tokens (${SKELETON_MAX_TOKENS})`,
-      sk.text,
+  // ── Phase 1: skeleton ONLY for members that need fresh dishes ──
+  // A member needs a skeleton when it has a missing day with no dish source from
+  // the family grid: a brand-new member, or a partial member whose gap day is
+  // missing family-wide. Existing members reuse their prior targets + dishes, so
+  // a pure gap-fill that aligns to the family menu needs no skeleton call at all.
+  const needsSkeleton = membersToGenerate.filter((b) => {
+    if (!existingPlan || !priorById.has(b.member_id)) return true; // fresh / new
+    return familyDayIndices.some(
+      (di) => !carriedDays.get(b.member_id)!.has(di) && !familyDishGrid.get(di)?.length,
     );
+  });
 
   let skeleton: PlanSkeleton;
-  try {
-    const parsed = JSON.parse(stripMarkdownFence(sk.text));
-    const r = PlanSkeletonSchema.safeParse(parsed);
-    if (!r.success)
+  if (needsSkeleton.length > 0) {
+    const sk = await streamAnthropic({
+      apiKey: anthropicApiKey,
+      model: PLAN_MODEL,
+      maxTokens: SKELETON_MAX_TOKENS,
+      systemStatic: STATIC_SYSTEM,
+      systemPrompt: buildSkeletonPrompt(
+        context,
+        needsSkeleton.map((b) => b.member_id),
+      ),
+    });
+    totalIn += sk.tokensIn;
+    totalOut += sk.tokensOut;
+    if (!sk.text.trim())
+      throw new PlanValidationError("Empty skeleton from Anthropic", sk.text);
+    if (sk.stopReason === "max_tokens")
       throw new PlanValidationError(
-        `Skeleton failed validation: ${r.error.message.slice(0, 300)}`,
+        `Skeleton hit max_tokens (${SKELETON_MAX_TOKENS})`,
         sk.text,
       );
-    skeleton = r.data;
-  } catch (e) {
-    if (e instanceof PlanValidationError) throw e;
-    throw new PlanValidationError(
-      `Skeleton JSON parse failed: ${e instanceof Error ? e.message : String(e)}`,
-      sk.text,
-    );
+    try {
+      const parsed = JSON.parse(stripMarkdownFence(sk.text));
+      const r = PlanSkeletonSchema.safeParse(parsed);
+      if (!r.success)
+        throw new PlanValidationError(
+          `Skeleton failed validation: ${r.error.message.slice(0, 300)}`,
+          sk.text,
+        );
+      skeleton = r.data;
+    } catch (e) {
+      if (e instanceof PlanValidationError) throw e;
+      throw new PlanValidationError(
+        `Skeleton JSON parse failed: ${e instanceof Error ? e.message : String(e)}`,
+        sk.text,
+      );
+    }
+  } else {
+    // Pure gap-fill aligned to the family menu — no dishes to invent.
+    skeleton = {
+      members: [],
+      methodology_notes_ar: existingPlan?.methodology_notes_ar,
+      safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
+    };
   }
   const skeletonById = new Map(skeleton.members.map((m) => [m.member_id, m]));
 
@@ -347,27 +384,62 @@ export async function generateMealPlan(params: {
     dayNameByIndex.set(di, khaleejiDayName(weekStart, di));
   }
 
-  // Align new members to the family's existing dishes (same dish each day) —
-  // unless this is an independent per-member regen, where the member gets fresh
-  // dishes of their own.
+  // Concrete missing-day lists, now that the day grid is known. Carried days are
+  // never in this list, so they're never regenerated.
+  const missingByMember = new Map<string, number[]>();
+  for (const b of beneficiaries) {
+    const carried = carriedDays.get(b.member_id)!;
+    missingByMember.set(
+      b.member_id,
+      dayIndices.filter((di) => !carried.has(di)),
+    );
+  }
+
+  // Align members to the family's existing dishes (same dish each day) — unless
+  // this is an independent per-member regen, where the member gets fresh dishes.
+  // workingSkeleton is the UNION of members with any missing day: targets come
+  // from the prior plan for existing members (skeleton for new), per-day dishes
+  // from the aligned family grid first, then the member's own skeleton day.
   const aligned = familyDishGrid.size > 0 && !independentRegen;
   const workingSkeleton: PlanSkeleton = {
     ...skeleton,
-    members: skeleton.members.map((sm) => ({
-      ...sm,
-      days: dayIndices.map((di) => ({
-        day_index: di,
-        day_name_ar: dayNameByIndex.get(di)!,
-        meals: aligned
-          ? (familyDishGrid.get(di) ??
-            sm.days.find((d) => d.day_index === di)?.meals ??
-            [])
-          : (sm.days.find((d) => d.day_index === di)?.meals ?? []),
-      })),
-    })),
+    members: beneficiaries
+      .filter((b) => missingByMember.get(b.member_id)!.length > 0)
+      .map((b) => {
+        const prior = priorById.get(b.member_id);
+        const skM = skeletonById.get(b.member_id);
+        const targets = prior
+          ? {
+              primary_goal: prior.primary_goal,
+              daily_calories_target: prior.daily_calories_target,
+              macros_target: prior.macros_target,
+            }
+          : {
+              primary_goal: skM?.primary_goal,
+              daily_calories_target: skM?.daily_calories_target ?? 0,
+              macros_target: skM?.macros_target ?? {
+                protein_g: 0,
+                carbs_g: 0,
+                fat_g: 0,
+              },
+            };
+        return {
+          member_id: b.member_id,
+          ...targets,
+          days: dayIndices.map((di) => ({
+            day_index: di,
+            day_name_ar: dayNameByIndex.get(di)!,
+            meals: aligned
+              ? (familyDishGrid.get(di) ??
+                skM?.days.find((d) => d.day_index === di)?.meals ??
+                [])
+              : (skM?.days.find((d) => d.day_index === di)?.meals ?? []),
+          })),
+        };
+      }),
   };
 
-  // ── Assembly: seed complete members, shell the rest ──
+  // ── Assembly: seed each member's carried days verbatim, shell missing days ──
   const daysByMember = new Map<string, Map<number, Day>>();
   const targetsById = new Map<
     string,
@@ -379,37 +451,60 @@ export async function generateMealPlan(params: {
   >();
   for (const b of beneficiaries) {
     const dmap = new Map<number, Day>();
-    const seededMember = seeded.get(b.member_id);
-    if (seededMember) {
-      for (const d of seededMember.days) dmap.set(d.day_index, d);
-      targetsById.set(b.member_id, {
-        primary_goal: seededMember.primary_goal,
-        daily_calories_target: seededMember.daily_calories_target,
-        macros_target: seededMember.macros_target,
+    for (const [di, day] of carriedDays.get(b.member_id)!) dmap.set(di, day);
+    for (const di of missingByMember.get(b.member_id)!)
+      dmap.set(di, {
+        day_index: di,
+        day_name_ar: dayNameByIndex.get(di)!,
+        meals: [],
+        day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
       });
-    } else {
-      for (const di of dayIndices)
-        dmap.set(di, {
-          day_index: di,
-          day_name_ar: dayNameByIndex.get(di)!,
-          meals: [],
-          day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-        });
-      const skM = skeletonById.get(b.member_id);
-      targetsById.set(b.member_id, {
-        primary_goal: skM?.primary_goal,
-        daily_calories_target: skM?.daily_calories_target ?? 0,
-        macros_target: skM?.macros_target ?? {
-          protein_g: 0,
-          carbs_g: 0,
-          fat_g: 0,
-        },
-      });
-    }
     daysByMember.set(b.member_id, dmap);
+    const prior = priorById.get(b.member_id);
+    const skM = skeletonById.get(b.member_id);
+    targetsById.set(
+      b.member_id,
+      prior
+        ? {
+            primary_goal: prior.primary_goal,
+            daily_calories_target: prior.daily_calories_target,
+            macros_target: prior.macros_target,
+          }
+        : {
+            primary_goal: skM?.primary_goal,
+            daily_calories_target: skM?.daily_calories_target ?? 0,
+            macros_target: skM?.macros_target ?? {
+              protein_g: 0,
+              carbs_g: 0,
+              fat_g: 0,
+            },
+          },
+    );
   }
-  const done = new Set<number>(); // toGenerate days expanded successfully
+  const done = new Set<number>(); // generated days completed successfully
   const failedDays = new Set<number>(); // days dropped after retries exhausted
+
+  // Generate starting from TODAY so the day the user is viewing fills first, then
+  // forward (wrapping earlier days to the end). Order only — day_index unchanged.
+  const startMs = Date.parse(`${weekStart}T00:00:00Z`);
+  const todayMs = Date.parse(`${riyadhTodayISO()}T00:00:00Z`);
+  const todayIndex =
+    Number.isNaN(startMs) || Number.isNaN(todayMs)
+      ? -1
+      : Math.round((todayMs - startMs) / 86_400_000);
+  const startPos = dayIndices.indexOf(todayIndex);
+  const generationOrder =
+    startPos > 0
+      ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
+      : dayIndices; // today is day 0, or outside the week → keep ascending
+  // Only days some member is missing get an API call; days everyone already has
+  // are skipped entirely. genDayCount drives the `generating` flag/progress so it
+  // reflects real work and flips off when the last gap settles (carried days show
+  // ready from the first emit).
+  const daysToGenerate = generationOrder.filter((di) =>
+    beneficiaries.some((b) => missingByMember.get(b.member_id)!.includes(di)),
+  );
+  const genDayCount = daysToGenerate.length;
 
   const snapshot = (generating: boolean): MealPlan => ({
     week_start_date: weekStart,
@@ -438,37 +533,34 @@ export async function generateMealPlan(params: {
   let progressTail: Promise<void> = Promise.resolve();
   const emit = () => {
     if (!onProgress) return;
-    const snap = snapshot(done.size < totalDays);
+    const snap = snapshot(done.size < genDayCount);
     const readyDays = done.size;
     progressTail = progressTail.then(() =>
-      Promise.resolve(onProgress(snap, { readyDays, totalDays })).catch((e) =>
-        console.error("[plan-generate] onProgress failed", e),
-      ),
+      Promise.resolve(
+        onProgress(snap, { readyDays, totalDays: genDayCount }),
+      ).catch((e) => console.error("[plan-generate] onProgress failed", e)),
     );
   };
 
   // Open the plan immediately: existing members complete, new members loading.
   emit();
 
-  // Generate starting from TODAY so the day the user is viewing fills first, then
-  // forward (wrapping earlier days to the end). Order only — day_index unchanged.
-  const startMs = Date.parse(`${weekStart}T00:00:00Z`);
-  const todayMs = Date.parse(`${riyadhTodayISO()}T00:00:00Z`);
-  const todayIndex =
-    Number.isNaN(startMs) || Number.isNaN(todayMs)
-      ? -1
-      : Math.round((todayMs - startMs) / 86_400_000);
-  const startPos = dayIndices.indexOf(todayIndex);
-  const generationOrder =
-    startPos > 0
-      ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
-      : dayIndices; // today is day 0, or outside the week → keep ascending
-
-  // ── Phase 2: expand each day sequentially (toGenerate members only) ──
-  await mapWithConcurrency(generationOrder, DAY_CONCURRENCY, async (dayIndex) => {
+  // ── Phase 2: expand each missing day; per day, only the members missing it ──
+  await mapWithConcurrency(daysToGenerate, DAY_CONCURRENCY, async (dayIndex) => {
+    const dayMemberIds = new Set(
+      beneficiaries
+        .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
+        .map((b) => b.member_id),
+    );
+    const daySkeleton: PlanSkeleton = {
+      ...workingSkeleton,
+      members: workingSkeleton.members.filter((m) =>
+        dayMemberIds.has(m.member_id),
+      ),
+    };
     const prompt = buildDayPrompt(
       context,
-      workingSkeleton,
+      daySkeleton,
       dayIndex,
       dayNameByIndex.get(dayIndex),
     );
@@ -497,7 +589,7 @@ export async function generateMealPlan(params: {
             res.text,
           );
         const slice = r.data;
-        for (const sm of workingSkeleton.members) {
+        for (const sm of daySkeleton.members) {
           const sliceMember = slice.members.find(
             (m) => m.member_id === sm.member_id,
           );
@@ -540,9 +632,12 @@ export async function generateMealPlan(params: {
 
   await progressTail;
 
-  // Fatal only if there were no carried-over members AND nothing generated.
-  if (done.size === 0 && seeded.size === 0) {
-    throw new PlanValidationError(`All ${totalDays} day generations failed`);
+  // Fatal only if nothing was carried over AND nothing generated.
+  const nothingCarried = beneficiaries.every(
+    (b) => carriedDays.get(b.member_id)!.size === 0,
+  );
+  if (done.size === 0 && nothingCarried) {
+    throw new PlanValidationError(`All ${genDayCount} day generations failed`);
   }
 
   // ── Final assembled MealPlan ──
@@ -553,23 +648,29 @@ export async function generateMealPlan(params: {
     );
   const plan: MealPlan = result.data;
 
-  // Carry-over invariant (log-only tripwire): a carried-over member's meals must
-  // be byte-identical to the prior plan — adding/editing one member must never
-  // alter the others. Seeded days are placed verbatim and never touched by the
-  // generation loop, so this should never fire; if it ever does, a regression
-  // started rewriting existing members. Warn, never throw.
-  const daysFingerprint = (days: Day[]) =>
-    JSON.stringify([...days].sort((a, b) => a.day_index - b.day_index));
-  for (const [memberId, original] of seeded) {
+  // Carry-over invariant (log-only tripwire): each member's CARRIED days must be
+  // byte-identical to the prior plan — adding a member or filling one member's
+  // gap must never rewrite another member's finished days. Carried cells are
+  // placed verbatim and never touched by the generation loop, so this should
+  // never fire; if it ever does, a regression started rewriting finished days.
+  const dayFingerprint = (d: Day) => JSON.stringify(d);
+  for (const [memberId, carried] of carriedDays) {
+    if (carried.size === 0) continue;
     const out = plan.members.find((m) => m.member_id === memberId);
-    if (!out || daysFingerprint(out.days) !== daysFingerprint(original.days)) {
-      console.warn("[plan-generate] carry-over invariant violated", { memberId });
+    for (const [di, original] of carried) {
+      const outDay = out?.days.find((d) => d.day_index === di);
+      if (!outDay || dayFingerprint(outDay) !== dayFingerprint(original)) {
+        console.warn("[plan-generate] carry-over invariant violated", {
+          memberId,
+          dayIndex: di,
+        });
+      }
     }
   }
 
-  // Non-fatal numeric guards (skip seeded members — already validated).
+  // Non-fatal numeric guards (skip existing members — targets already validated).
   for (const memberPlan of plan.members) {
-    if (seeded.has(memberPlan.member_id)) continue;
+    if (priorById.has(memberPlan.member_id)) continue;
     const isChild = isChildById.get(memberPlan.member_id) ?? false;
     if (!isChild && memberPlan.daily_calories_target < 1400) {
       console.warn(
