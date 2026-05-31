@@ -53,6 +53,9 @@ export interface PlanStrings {
   generating: string;
   translating: string;
   preparing_title: string;
+  // Honest per-day process lines, cycled while a day generates (one atomic call,
+  // so these describe the real work — not fake per-meal completion).
+  preparing_steps: string[];
   day_queued: string;
   no_meals: string;
   empty_plan: string;
@@ -95,6 +98,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "هذا اليوم لسه نجهّزه… بيظهر خلال لحظات",
     translating: "نجهّز الوصفات بلغتك… تظهر خلال لحظات",
     preparing_title: "نجهّز خطتك",
+    preparing_steps: [
+      "نحسب سعرات هذا اليوم",
+      "نختار وصفات تناسب ذوقك",
+      "نوازن البروتين والنشويات والدهون",
+      "نجهّز خطوات التحضير",
+    ],
     day_queued: "بنجهّز هذا اليوم بالترتيب — بعد الأيام اللي قبله",
     no_meals: "ما عندك وجبات لهذا اليوم",
     empty_plan: "الخطة فارغة. حاولي إعادة الإنشاء.",
@@ -130,6 +139,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "Still preparing this day… coming shortly",
     translating: "Preparing the recipes in your language… ready shortly",
     preparing_title: "Preparing your plan",
+    preparing_steps: [
+      "Calculating today's calories",
+      "Choosing recipes that fit your taste",
+      "Balancing protein, carbs, and fat",
+      "Writing the prep steps",
+    ],
     day_queued: "This day is queued — it comes after the earlier days",
     no_meals: "No meals for this day",
     empty_plan: "The plan is empty. Try regenerating.",
@@ -165,6 +180,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "Inihahanda pa ang araw na ito…",
     translating: "Inihahanda ang mga recipe sa iyong wika… handa na sa ilang sandali",
     preparing_title: "Inihahanda ang iyong plano",
+    preparing_steps: [
+      "Kinakalkula ang calories ng araw na ito",
+      "Pumipili ng recipe na bagay sa panlasa mo",
+      "Binabalanse ang protina, karbohidrat, at taba",
+      "Inihahanda ang mga hakbang sa pagluluto",
+    ],
     day_queued: "Nakapila ang araw na ito — kasunod ng mga naunang araw",
     no_meals: "Walang pagkain sa araw na ito",
     empty_plan: "Walang laman ang plano.",
@@ -200,6 +221,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "Masih menyiapkan hari ini…",
     translating: "Menyiapkan resep dalam bahasa Anda… segera siap",
     preparing_title: "Menyiapkan rencana Anda",
+    preparing_steps: [
+      "Menghitung kalori hari ini",
+      "Memilih resep sesuai selera Anda",
+      "Menyeimbangkan protein, karbohidrat, dan lemak",
+      "Menyiapkan langkah memasak",
+    ],
     day_queued: "Hari ini dalam antrean — setelah hari-hari sebelumnya",
     no_meals: "Tidak ada makanan untuk hari ini",
     empty_plan: "Rencana kosong.",
@@ -235,6 +262,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "এই দিনটি এখনও প্রস্তুত হচ্ছে…",
     translating: "আপনার ভাষায় রেসিপি প্রস্তুত হচ্ছে… শীঘ্রই দেখা যাবে",
     preparing_title: "আপনার পরিকল্পনা প্রস্তুত হচ্ছে",
+    preparing_steps: [
+      "আজকের ক্যালোরি হিসাব করা হচ্ছে",
+      "আপনার পছন্দ অনুযায়ী রেসিপি বাছাই করা হচ্ছে",
+      "প্রোটিন, কার্ব ও ফ্যাট ভারসাম্য করা হচ্ছে",
+      "রান্নার ধাপ প্রস্তুত করা হচ্ছে",
+    ],
     day_queued: "এই দিনটি সারিতে আছে — আগের দিনগুলোর পরে",
     no_meals: "এই দিনের জন্য কোনো খাবার নেই",
     empty_plan: "পরিকল্পনা খালি।",
@@ -270,6 +303,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "ይህ ቀን አሁንም በዝግጅት ላይ ነው…",
     translating: "የምግብ አዘገጃጀቶቹ በቋንቋዎ እየተዘጋጁ ነው… በቅርቡ ይታያል",
     preparing_title: "ዕቅድዎን እያዘጋጀን ነው",
+    preparing_steps: [
+      "የዛሬውን ካሎሪ እያሰላን ነው",
+      "ለጣዕምዎ የሚስማሙ የምግብ አዘገጃጀቶችን እንመርጣለን",
+      "ፕሮቲን፣ ካርቦሃይድሬትና ስብ እናመዛዝናለን",
+      "የማብሰያ ደረጃዎችን እናዘጋጃለን",
+    ],
     day_queued: "ይህ ቀን በተራ ላይ ነው — ካለፉት ቀናት በኋላ",
     no_meals: "ለዚህ ቀን ምግብ የለም",
     empty_plan: "ዕቅዱ ባዶ ነው።",
@@ -305,6 +344,12 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "یہ دن ابھی تیار ہو رہا ہے…",
     translating: "ترکیبیں آپ کی زبان میں تیار ہو رہی ہیں… تھوڑی دیر میں ظاہر ہوں گی",
     preparing_title: "آپ کا پلان تیار ہو رہا ہے",
+    preparing_steps: [
+      "آج کی کیلوریز کا حساب لگایا جا رہا ہے",
+      "آپ کے ذوق کے مطابق ترکیبیں منتخب کی جا رہی ہیں",
+      "پروٹین، کاربوہائیڈریٹ اور چکنائی میں توازن",
+      "پکانے کے مراحل تیار کیے جا رہے ہیں",
+    ],
     day_queued: "یہ دن قطار میں ہے — پچھلے دنوں کے بعد",
     no_meals: "اس دن کے لیے کوئی کھانا نہیں",
     empty_plan: "پلان خالی ہے۔",

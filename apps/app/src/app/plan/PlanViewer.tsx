@@ -120,6 +120,16 @@ export function PlanViewer({
     const t = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(t);
   }, [generating]);
+
+  // Cycle honest per-day process lines (~3s) while generating so the loader reads
+  // as active. A day is one atomic AI call, so these describe the real work —
+  // not fake per-meal completion. Text-only change (no motion).
+  const [stepTick, setStepTick] = useState(0);
+  useEffect(() => {
+    if (!generating) return;
+    const id = setInterval(() => setStepTick((s) => s + 1), 3000);
+    return () => clearInterval(id);
+  }, [generating]);
   // The plan row hasn't been written in a while but is still flagged generating
   // → treat the active "preparing" day as failed so the retry box appears,
   // instead of spinning until the server-side dead-man's switch (15 min).
@@ -460,7 +470,10 @@ export function PlanViewer({
                 className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
                 aria-hidden="true"
               />
-              <p className="text-brand-ink-muted text-sm">{t.generating}</p>
+              <p className="text-brand-ink-muted text-sm">
+                {t.preparing_steps[stepTick % t.preparing_steps.length] ??
+                  t.generating}
+              </p>
             </div>
           ) : generating && !preparingStalled ? (
             <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
