@@ -261,6 +261,26 @@ export async function triggerPlanTranslation(params: {
     // Stale 'started' (bg worker hard-killed) → nothing is writing; fall through.
   }
 
+  // Skip if a translation INTO THIS LOCALE is already actively in progress: some
+  // meals already carry this locale (a pass has started writing) AND the row was
+  // updated very recently (progressive per-day writes are still landing). The
+  // maid view re-triggers on a throttled cadence to self-heal a stuck last day;
+  // this stops those re-triggers from stacking concurrent background functions.
+  // A genuinely-stuck pass goes quiet (updated_at stops advancing) → re-dispatch
+  // is allowed and translateMealPlan idempotently fills only the missing day(s).
+  // The first trigger is never blocked (no meals carry the locale yet).
+  const TRANSLATE_INFLIGHT_SEC = 25;
+  const someTranslated = plan.members.some((m) =>
+    m.days.some((d) =>
+      d.meals.some((meal) => meal.prep_steps_translated_locale === locale),
+    ),
+  );
+  const lastWriteMs = Date.parse(latest.updated_at);
+  const writeAgeSec = Number.isNaN(lastWriteMs)
+    ? Infinity
+    : (Date.now() - lastWriteMs) / 1000;
+  if (someTranslated && writeAgeSec < TRANSLATE_INFLIGHT_SEC) return;
+
   // Development: run inline.
   if (process.env.NODE_ENV === "development") {
     try {

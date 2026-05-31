@@ -41,12 +41,29 @@ export function HousekeeperPlanView({
   const info = getLocaleInfo(locale);
   const t = getPlanStrings(locale);
 
-  // Fire the translation request exactly once per mount, even across re-renders.
-  const requested = useRef(false);
+  // Kick off translation while it's still needed and keep nudging it on a
+  // throttled cadence until the freshly-translated plan_data lands. A single day
+  // can fail (non-fatal in the engine) or the background function can be cut off
+  // before the last day — leaving that day untranslated and the banner spinning
+  // forever with no recovery. translateMealPlan is idempotent (skips already-done
+  // meals) and triggerPlanTranslation skips while a pass is actively writing, so
+  // each re-trigger cheaply fills only the missing day(s). Bounded so a
+  // deterministically-failing day can't spawn background functions forever.
+  const attemptsRef = useRef(0);
   useEffect(() => {
-    if (!needsTranslation || requested.current) return;
-    requested.current = true;
-    void requestHousekeeperTranslation();
+    if (!needsTranslation) {
+      attemptsRef.current = 0; // reset for any future gap (e.g. plan re-edited)
+      return;
+    }
+    const MAX_ATTEMPTS = 5;
+    const fire = () => {
+      if (attemptsRef.current >= MAX_ATTEMPTS) return;
+      attemptsRef.current += 1;
+      void requestHousekeeperTranslation();
+    };
+    fire();
+    const id = setInterval(fire, 30_000);
+    return () => clearInterval(id);
   }, [needsTranslation]);
 
   // While the plan is preparing OR translations are missing, poll the server
