@@ -160,6 +160,36 @@ export function PlanViewer({
     return -1;
   }, [generating, activeMember, plan.week_start_date]);
 
+  // Real generation progress for the active member: days with meals vs total
+  // expected. Days are generated atomically (a whole day lands at once), so
+  // day-granularity is the truthful unit — drives the progress strip + current
+  // day name so the wait reads as active, not stalled.
+  const genProgress = useMemo(() => {
+    const total = plan.days_total ?? activeMember?.days.length ?? 7;
+    const ready = activeMember
+      ? activeMember.days.filter((d) => d.meals.length > 0).length
+      : 0;
+    const pct = total > 0 ? Math.min(100, Math.round((100 * ready) / total)) : 0;
+    const dayName =
+      currentPreparingIndex >= 0
+        ? translated
+          ? getLocalizedDayNameFromWeekStart(
+              plan.week_start_date,
+              currentPreparingIndex,
+              locale ?? "ar",
+            )
+          : dayNameFromWeekStart(plan.week_start_date, currentPreparingIndex)
+        : "";
+    return { ready, total, pct, dayName };
+  }, [
+    activeMember,
+    plan.days_total,
+    plan.week_start_date,
+    currentPreparingIndex,
+    translated,
+    locale,
+  ]);
+
   if (!activeMember) {
     return (
       <div className="text-center py-12">
@@ -298,6 +328,41 @@ export function PlanViewer({
           </p>
         </div>
       </div>
+
+      {/* Generation progress — real "day N of M" while the plan streams in */}
+      {generating && !preparingStalled && (
+        <div className="bg-white rounded-2xl border border-brand-ink/5 px-4 py-3.5 space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-brand-ink font-bold text-sm leading-relaxed">
+              <Loader2
+                className="size-4 animate-spin motion-reduce:animate-none text-brand-purple-900 flex-shrink-0"
+                aria-hidden="true"
+              />
+              <span>{t.preparing_title}</span>
+              {genProgress.dayName && (
+                <span className="text-brand-purple-900">· {genProgress.dayName}</span>
+              )}
+            </p>
+            <span className="flex-shrink-0 text-brand-ink-muted text-xs font-bold tabular-nums">
+              {genProgress.ready}/{genProgress.total}
+            </span>
+          </div>
+          <div
+            className="h-1.5 bg-brand-surface rounded-full overflow-hidden"
+            role="progressbar"
+            aria-busy="true"
+            aria-label={t.preparing_title}
+            aria-valuenow={genProgress.ready}
+            aria-valuemin={0}
+            aria-valuemax={genProgress.total}
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow transition-[width] duration-700 ease-out"
+              style={{ width: `${Math.max(6, genProgress.pct)}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Day tabs */}
       <div className="grid grid-cols-7 gap-1.5">

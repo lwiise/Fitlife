@@ -12,6 +12,15 @@ const LONG_RUNNING_MS = 90_000;
 // fallback. Kept inside the background function's 15-min budget.
 const TIMEOUT_MS = 780_000;
 
+// Rotating reassurance copy (this phase has no real per-day signal yet, so these
+// are presentational — they cycle to convey active work during a short wait).
+const GENERATING_STEPS = [
+  "نحسب احتياجك من السعرات",
+  "نختار وصفات تناسب ذوق عائلتك",
+  "نوازن البروتين والنشويات والدهون",
+  "نرتّب وجباتك على أيام الأسبوع السبعة",
+];
+
 export function PlanGeneratingState({
   planId,
   name,
@@ -22,6 +31,7 @@ export function PlanGeneratingState({
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
+  const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +47,9 @@ export function PlanGeneratingState({
         Math.min(95, Math.round(100 * (1 - Math.exp(-elapsed / 45000)))),
       );
       setProgress(pct);
+      // Advance the reassurance copy every ~4s off the same timer (no extra
+      // interval to clean up).
+      setStepIndex(Math.floor(elapsed / 4000) % GENERATING_STEPS.length);
     }, 1000);
 
     const poll = setInterval(async () => {
@@ -128,6 +141,12 @@ export function PlanGeneratingState({
           style={{ width: `${progress}%` }}
         />
       </div>
+      <p
+        className="mt-3 text-brand-purple-900 text-xs font-bold leading-relaxed"
+        aria-hidden="true"
+      >
+        {GENERATING_STEPS[stepIndex]}…
+      </p>
     </div>
   );
 }
