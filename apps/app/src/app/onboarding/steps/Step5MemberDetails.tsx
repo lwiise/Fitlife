@@ -123,8 +123,6 @@ export function Step5MemberDetails({
     );
   }
 
-  let childCounter = -1;
-
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <header>
@@ -140,7 +138,13 @@ export function Step5MemberDetails({
         {fields.map((field, idx) => {
           const role = field.role;
           const isChild = role === "son" || role === "daughter";
-          if (isChild) childCounter += 1;
+          // Child ordinal = count of son/daughter members before this one (pure;
+          // replaces an outer counter mutated during render).
+          const childIdx = isChild
+            ? fields.slice(0, idx).filter(
+                (f) => f.role === "son" || f.role === "daughter",
+              ).length
+            : 0;
 
           return (
             <div
@@ -148,7 +152,7 @@ export function Step5MemberDetails({
               className="bg-white rounded-2xl border border-brand-ink/10 p-5 space-y-3"
             >
               <h3 className="font-bold text-brand-ink text-lg">
-                {memberHeadline(role, idx, childCounter)}
+                {memberHeadline(role, idx, childIdx)}
               </h3>
 
               {isChild && (
