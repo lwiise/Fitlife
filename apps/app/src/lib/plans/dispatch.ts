@@ -98,12 +98,11 @@ export async function triggerPlanGeneration(params: {
     // never ran) → reclassify so the guard can't deadlock 'busy' forever.
     await supabase
       .from("plan_generations")
-      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
       .update({
         status: "failed",
         error_message: "stale generation reclassified",
         completed_at: new Date().toISOString(),
-      })
+      } as never)
       .eq("id", live.id);
   }
 
@@ -211,8 +210,7 @@ export async function triggerPlanGeneration(params: {
       err instanceof Error ? err.message : "failed to start generation";
     await supabase
       .from("meal_plans")
-      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-      .update({ status: "failed", error_message: errorMessage })
+      .update({ status: "failed", error_message: errorMessage } as never)
       .eq("id", mealPlanId);
     return { ok: false, kind: "dispatch" };
   }

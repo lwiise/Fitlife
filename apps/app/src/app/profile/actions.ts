@@ -41,8 +41,7 @@ export async function saveMomPersonalInfo(
 
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .update({ ...parsed.data, updated_at: new Date().toISOString() })
+    .update({ ...parsed.data, updated_at: new Date().toISOString() } as never)
     .eq("id", user.id);
 
   if (error) {
@@ -123,7 +122,6 @@ export async function saveMomHealthInfo(
 
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
     .update({
       activity_level: data.activity_level,
       primary_goal: primaryGoal,
@@ -138,7 +136,7 @@ export async function saveMomHealthInfo(
       medical_conditions: conditions,
       consulted_doctor: data.consulted_doctor,
       updated_at: new Date().toISOString(),
-    })
+    } as never)
     .eq("id", user.id);
 
   if (error) {
@@ -180,7 +178,6 @@ export async function saveMomFamilyPreferences(
 
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
     .update({
       cuisine_preference: data.cuisine_preference,
       family_dietary_restrictions: ["halal", ...dietary],
@@ -188,7 +185,7 @@ export async function saveMomFamilyPreferences(
       cooking_methods: data.cooking_methods,
       meal_out_frequency: data.meal_out_frequency,
       updated_at: new Date().toISOString(),
-    })
+    } as never)
     .eq("id", user.id);
 
   if (error) {
@@ -222,11 +219,10 @@ export async function saveHousekeeperLanguage(
 
   const { error } = await supabase
     .from("family_members")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
     .update({
       preferred_language: parsed.data.preferred_language,
       updated_at: new Date().toISOString(),
-    })
+    } as never)
     .eq("id", parsed.data.housekeeper_id)
     .eq("user_id", user.id);
 

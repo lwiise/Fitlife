@@ -56,8 +56,7 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
 
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .update(updates)
+    .update(updates as never)
     .eq("id", user.id);
 
   if (error) {
@@ -115,8 +114,7 @@ export async function saveFamilyMembers(
     }));
     const { error: insertError } = await supabase
       .from("family_members")
-      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-      .insert(rows);
+      .insert(rows as never);
 
     if (insertError) {
       Sentry.captureException(insertError, {
@@ -150,8 +148,7 @@ export async function completeOnboarding(
 
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .update({ onboarding_completed_at: new Date().toISOString() })
+    .update({ onboarding_completed_at: new Date().toISOString() } as never)
     .eq("id", user.id);
 
   if (error) {
@@ -193,7 +190,6 @@ export async function saveFamilyWidePreferences(
 
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
     .update({
       cuisine_preference: input.cuisine_preference,
       family_dietary_restrictions: input.family_dietary_restrictions,
@@ -201,7 +197,7 @@ export async function saveFamilyWidePreferences(
       cooking_methods: input.cooking_methods,
       meal_out_frequency: input.meal_out_frequency,
       family_wide_completed_at: new Date().toISOString(),
-    })
+    } as never)
     .eq("id", user.id);
 
   if (error) {
@@ -268,7 +264,6 @@ export async function saveMomProfile(
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
     .update({
       display_name: input.display_name,
       birth_year: input.birth_year,
@@ -289,7 +284,7 @@ export async function saveMomProfile(
       consulted_doctor: input.consulted_doctor,
       mom_profile_completed_at: now,
       onboarding_completed_at: now,
-    })
+    } as never)
     .eq("id", user.id);
 
   if (error) {
@@ -320,8 +315,7 @@ export async function finalizeOnboarding(): Promise<void> {
 
   await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .update({ onboarding_completed_at: new Date().toISOString() })
+    .update({ onboarding_completed_at: new Date().toISOString() } as never)
     .eq("id", user.id);
 
   revalidatePath("/dashboard");
@@ -560,8 +554,7 @@ export async function addFamilyMember(
 
   const { error: insertError } = await supabase
     .from("family_members")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .insert(row);
+    .insert(row as never);
   if (insertError) {
     Sentry.captureException(insertError, {
       tags: { area: "family", step: "addFamilyMember.insert", userId: user.id },
@@ -580,8 +573,7 @@ export async function addFamilyMember(
   const order = Array.isArray(additionOrder) ? (additionOrder as string[]) : [];
   await supabase
     .from("profiles")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .update({ member_addition_order: [...order, memberId] })
+    .update({ member_addition_order: [...order, memberId] } as never)
     .eq("id", user.id);
 
   revalidatePath("/family");
@@ -640,8 +632,7 @@ export async function addHousekeeper(input: {
     };
     const { error } = await supabase
       .from("family_members")
-      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-      .update(updateRow)
+      .update(updateRow as never)
       .eq("id", existingId)
       .eq("user_id", user.id);
     if (error) {
@@ -663,8 +654,7 @@ export async function addHousekeeper(input: {
     };
     const { error } = await supabase
       .from("family_members")
-      // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-      .insert(insertRow);
+      .insert(insertRow as never);
     if (error) {
       Sentry.captureException(error, {
         tags: { area: "family", step: "addHousekeeper.insert", userId: user.id },
@@ -751,8 +741,7 @@ export async function updateFamilyMember(
   const row = buildMemberRow(input, user.id);
   const { error } = await supabase
     .from("family_members")
-    // @ts-expect-error postgrest-js generic resolves to `never`; runtime is fine.
-    .update(row)
+    .update(row as never)
     .eq("id", memberId)
     .eq("user_id", user.id);
   if (error) {
