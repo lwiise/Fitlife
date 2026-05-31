@@ -1,0 +1,34 @@
+# Fit Life gitleaks config.
+# Extends the built-in ruleset (so all default secret detectors still run) and
+# adds rules for our own secret formats. Anchored to the variable/header name so
+# they catch a *hardcoded* value without flagging every base64 blob in the repo.
+title = "Fit Life secret scan"
+
+[extend]
+useDefault = true
+
+# NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — a STABLE base64-encoded 32-byte key.
+# base64(32 bytes) = 43 base64 chars + one "=" pad. We only flag it when it's
+# assigned to the env var name with an inline literal (committing the real value),
+# never the empty placeholder in env.example.txt.
+[[rules]]
+id = "fitlife-server-actions-encryption-key"
+description = "Hardcoded NEXT_SERVER_ACTIONS_ENCRYPTION_KEY (base64 32-byte value)"
+regex = '''(?i)NEXT_SERVER_ACTIONS_ENCRYPTION_KEY['"]?\s*[:=]\s*['"]?([A-Za-z0-9+/]{43}=)(?:['"]|\s|$)'''
+keywords = ["next_server_actions_encryption_key"]
+
+# x-internal-secret — the internal header the app sends to the Netlify background
+# function; its value is the Supabase service-role key (a JWT). Flag the header
+# carrying an inline JWT or long token literal. The real code passes a function
+# call (getSupabaseServiceRoleKey()), which has no literal and won't match.
+[[rules]]
+id = "fitlife-x-internal-secret"
+description = "Hardcoded x-internal-secret value (service-role JWT / long token)"
+regex = '''(?i)x-internal-secret['"]?\s*[:=]\s*['"](eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9+/_-]{40,}={0,2})['"]'''
+keywords = ["x-internal-secret"]
+
+# The env template documents variable NAMES with empty values on purpose — never
+# a finding source. (Belt-and-suspenders; the rules above already require a value.)
+[allowlist]
+description = "Repo-wide allowlist"
+paths = ['''apps/app/env\.example\.txt''']
