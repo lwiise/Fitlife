@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
@@ -60,28 +61,28 @@ export default async function LoginPage({
 
         <p className="text-center mt-6 text-brand-ink-muted/60 text-xs leading-relaxed">
           بإنشاء حساب، أنتِ توافقين على{" "}
-          <a
+          <Link
             href="/terms"
             className="text-brand-purple-900 underline underline-offset-4 hover:text-brand-purple-700 transition-colors"
           >
             شروط الاستخدام
-          </a>{" "}
+          </Link>{" "}
           و{" "}
-          <a
+          <Link
             href="/privacy"
             className="text-brand-purple-900 underline underline-offset-4 hover:text-brand-purple-700 transition-colors"
           >
             سياسة الخصوصية
-          </a>
+          </Link>
         </p>
 
         <p className="text-center mt-4">
-          <a
+          <Link
             href="/"
             className="inline-block text-brand-ink-muted text-sm hover:text-brand-purple-900 transition-colors"
           >
             ← الرجوع للصفحة الرئيسية
-          </a>
+          </Link>
         </p>
       </div>
     </main>

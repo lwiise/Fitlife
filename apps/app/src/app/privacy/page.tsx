@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { PRIVACY_MD } from "./content";
@@ -12,19 +13,19 @@ export default function PrivacyPage() {
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
         <div className="container-app py-4 flex items-center justify-between">
-          <a
+          <Link
             href="/"
             aria-label="فت لايف — الرئيسية"
             className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
             <Logo className="h-9 w-auto" />
-          </a>
-          <a
+          </Link>
+          <Link
             href="/auth/login"
             className="inline-flex items-center min-h-11 px-4 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
             تسجيل الدخول
-          </a>
+          </Link>
         </div>
       </header>
 

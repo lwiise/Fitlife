@@ -95,6 +95,7 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial sync from Embla external store; subscribes to its events below
     onSelect(api)
     api.on("reInit", onSelect)
     api.on("select", onSelect)

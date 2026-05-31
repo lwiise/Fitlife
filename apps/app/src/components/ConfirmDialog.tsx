@@ -38,6 +38,7 @@ export function ConfirmDialog({
   const confirmRef = useRef<HTMLButtonElement>(null);
   const reduceMotion = useReducedMotion();
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mount flag to gate createPortal (SSR-safe); runs once
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {

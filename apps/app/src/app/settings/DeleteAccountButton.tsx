@@ -14,6 +14,7 @@ export function DeleteAccountButton({ userEmail }: { userEmail: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const reduceMotion = useReducedMotion();
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mount flag to gate createPortal (SSR-safe); runs once
   useEffect(() => setMounted(true), []);
 
   const matches = typed.trim().toLowerCase() === userEmail.trim().toLowerCase();

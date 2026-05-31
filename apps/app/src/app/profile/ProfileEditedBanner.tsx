@@ -22,6 +22,7 @@ export function ProfileEditedBanner() {
 
     if (editedParam === "health" || editedParam === "family") {
       sessionStorage.setItem(STORAGE_KEY, String(Date.now()));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs UI from URL params with sessionStorage/replaceState side effects; params stable, no loop
       setShowNudge(true);
       setSaved(true);
     } else if (savedParam === "1") {

@@ -17,7 +17,14 @@ const eslintConfig = defineConfig([
       "react/no-unescaped-entities": "off",
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    // Vendored third-party component (Aceternity-style 3D card) — not linted; do not edit upstream code to satisfy our rules.
+    "src/marketing/components/ui/3d-card.tsx",
+  ]),
 ]);
 
 export default eslintConfig;

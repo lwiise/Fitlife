@@ -28,6 +28,7 @@ export function TodaysMealsClient({
   const [dayIndex, setDayIndex] = useState<number | null>(null);
   useEffect(() => {
     if (!weekStartDate) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot Riyadh-date compute after mount, keyed on stable prop; no loop
       setDayIndex(0);
       return;
     }

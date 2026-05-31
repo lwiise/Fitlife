@@ -15,6 +15,7 @@ export function AddFamilyBanner() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only sessionStorage read; runs once ([] deps), no render loop
     if (sessionStorage.getItem(KEY) !== "1") setVisible(true);
   }, []);
 

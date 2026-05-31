@@ -22,7 +22,6 @@ const TOTAL_STEPS = 8;
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function OnboardingWizard({
   initialProfile: _initialProfile,
   tierLimit,
