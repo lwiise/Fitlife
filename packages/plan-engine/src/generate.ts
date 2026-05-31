@@ -535,7 +535,11 @@ export async function generateMealPlan(params: {
   let progressTail: Promise<void> = Promise.resolve();
   const emit = () => {
     if (!onProgress) return;
-    const snap = snapshot(done.size < genDayCount);
+    // `generating` stays true only while days are still UNATTEMPTED. A failed day
+    // counts as attempted (it lands in failedDays, never `done`), so without it a
+    // single failure would strand `done.size < genDayCount` → the loader spins
+    // forever even though every day has been tried. Count done + failed.
+    const snap = snapshot(done.size + failedDays.size < genDayCount);
     const readyDays = done.size;
     progressTail = progressTail.then(() =>
       Promise.resolve(

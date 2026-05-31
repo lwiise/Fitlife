@@ -54,7 +54,8 @@ export const DAY_MAX_TOKENS = 12000;
 export const DAY_CONCURRENCY = 1;
 
 // Translation (maid/housekeeper) is a separate pass over already-generated meals.
-// Days are fully independent here (no family-grid alignment), so parallelizing is
-// safe — 429/overload is covered by the per-day retry/backoff. This cuts the
-// maid's wall-clock ~3× vs. the sequential generation cadence.
-export const TRANSLATE_CONCURRENCY = 3;
+// Strictly sequential (one day at a time, today-first): day 1's recipes fully
+// translate and appear, THEN day 2, etc. — never several days landing at once.
+// (Parallelizing was faster overall but made the recipes pop in unpredictable
+// batches, which read as broken; sequential is the intended UX.)
+export const TRANSLATE_CONCURRENCY = 1;

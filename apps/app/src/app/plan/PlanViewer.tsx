@@ -101,9 +101,16 @@ export function PlanViewer({
   // the next render stops the interval.
   useEffect(() => {
     if (!generating) return;
+    // Belt-and-suspenders: even if the `generating` flag were stranded true,
+    // stop polling once every member's every day actually has meals — the plan
+    // is complete, so there is nothing left to pull in.
+    const allContentComplete = plan.members.every(
+      (m) => m.days.length > 0 && m.days.every((d) => d.meals.length > 0),
+    );
+    if (allContentComplete) return;
     const t = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(t);
-  }, [generating, router]);
+  }, [generating, plan.members, router]);
 
   // Ticking clock so `preparingStalled` re-evaluates without a server round-trip:
   // if the worker died, updatedAt stops advancing and no refresh changes props.
@@ -329,8 +336,10 @@ export function PlanViewer({
         </div>
       </div>
 
-      {/* Generation progress — real "day N of M" while the plan streams in */}
-      {generating && !preparingStalled && (
+      {/* Generation progress — real "day N of M" while the plan streams in.
+          Hidden once the viewed member is complete (ready === total) so a full
+          bar never sits there spinning. */}
+      {generating && !preparingStalled && genProgress.ready < genProgress.total && (
         <div className="bg-white rounded-2xl border border-brand-ink/5 px-4 py-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-brand-ink font-bold text-sm leading-relaxed">
