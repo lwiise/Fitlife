@@ -57,6 +57,7 @@ export type Database = {
           height_cm: number | null
           high_risk_pregnancy: boolean | null
           id: string
+          meal_mode: string
           medical_conditions: string[] | null
           member_type: string
           months_postpartum: number | null
@@ -84,6 +85,7 @@ export type Database = {
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
+          meal_mode?: string
           medical_conditions?: string[] | null
           member_type?: string
           months_postpartum?: number | null
@@ -111,6 +113,7 @@ export type Database = {
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
+          meal_mode?: string
           medical_conditions?: string[] | null
           member_type?: string
           months_postpartum?: number | null

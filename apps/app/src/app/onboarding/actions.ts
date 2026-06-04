@@ -347,16 +347,18 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
   const [profileRes, latest, membersRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("onboarding_completed_at")
+      .select("onboarding_completed_at, member_addition_order")
       .eq("id", user.id)
-      .returns<{ onboarding_completed_at: string | null }[]>()
+      .returns<
+        { onboarding_completed_at: string | null; member_addition_order: unknown }[]
+      >()
       .maybeSingle(),
     getLatestPlan(user.id),
     supabase
       .from("family_members")
-      .select("id, role")
+      .select("id, role, display_order")
       .eq("user_id", user.id)
-      .returns<{ id: string; role: string }[]>(),
+      .returns<{ id: string; role: string; display_order: number }[]>(),
   ]);
 
   if (!profileRes.data?.onboarding_completed_at) return { fired: false };
@@ -375,7 +377,24 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
   );
   if (pending.length === 0) return { fired: false };
 
-  const gen = await runFamilyGeneration(supabase, user.id);
+  // Strictly one at a time, in add order: generate ONLY the first pending
+  // member. The drain re-fires for the next once this one completes (so members
+  // never load two-at-once and existing members are never restarted).
+  const additionOrder = Array.isArray(profileRes.data?.member_addition_order)
+    ? (profileRes.data.member_addition_order as string[])
+    : [];
+  const orderIndex = (id: string) => {
+    const i = additionOrder.indexOf(id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const next = [...pending].sort(
+    (a, b) =>
+      orderIndex(a.id) - orderIndex(b.id) || a.display_order - b.display_order,
+  )[0]!;
+
+  const gen = await runFamilyGeneration(supabase, user.id, {
+    onlyMemberId: next.id,
+  });
   return { fired: gen.ok };
 }
 
@@ -396,7 +415,7 @@ const PLAN_BUSY_MESSAGE =
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  opts: { regenerateMemberId?: string; fullRegen?: boolean } = {},
+  opts: { regenerateMemberId?: string; onlyMemberId?: string; fullRegen?: boolean } = {},
 ): Promise<FamilyGenResult> {
   const result = await triggerPlanGeneration({
     supabase,
@@ -408,6 +427,7 @@ async function runFamilyGeneration(
     // e.g. adding a housekeeper, which requires translating all recipes.
     carryOver: !opts.fullRegen,
     regenerateMemberId: opts.regenerateMemberId,
+    onlyMemberId: opts.onlyMemberId,
   });
 
   if (result.ok) return { ok: true, plan_generation_id: result.mealPlanId };
@@ -461,6 +481,8 @@ export interface FamilyMemberInput {
   conditions: string[];
   other_condition?: string;
   consulted_doctor: boolean;
+  // Shared family meals (default) vs the member's own independent dishes.
+  meal_mode?: "shared" | "independent";
   // child
   school_meal_handling?: string | null;
   picky_eater?: boolean;
@@ -508,6 +530,7 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     activity_level: input.activity_level ?? null,
     primary_goal: primaryGoal,
     preferred_language: input.preferred_language ?? "ar",
+    meal_mode: input.meal_mode ?? "shared",
     medical_conditions: conditions,
     allergies: input.allergies,
     dislikes: input.dislikes,
@@ -577,7 +600,12 @@ export async function addFamilyMember(
     .eq("id", user.id);
 
   revalidatePath("/family");
-  const gen = await runFamilyGeneration(supabase, user.id);
+  // Generate ONLY the just-added member (others carried over). If other members
+  // are still pending, they stay deferred and the drain handles them one at a
+  // time afterward — never two members generating at once.
+  const gen = await runFamilyGeneration(supabase, user.id, {
+    onlyMemberId: memberId,
+  });
   if (gen.ok)
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")
@@ -760,6 +788,7 @@ export async function updateFamilyMember(
     Number(before.weight_kg) !== Number(input.weight_kg ?? before.weight_kg) ||
     before.primary_goal !== row.primary_goal ||
     before.member_type !== row.member_type ||
+    before.meal_mode !== row.meal_mode ||
     JSON.stringify(before.medical_conditions ?? []) !==
       JSON.stringify(row.medical_conditions);
 

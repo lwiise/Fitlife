@@ -50,8 +50,12 @@ export async function triggerPlanGeneration(params: {
   // generate only the new/changed member. Manual "new plan" leaves these off.
   carryOver?: boolean;
   regenerateMemberId?: string;
+  // One-at-a-time add: generate ONLY this member this run; carry everyone else
+  // over verbatim (other pending members generate later, one at a time).
+  onlyMemberId?: string;
   // Per-member "new plan": the regenerated member gets fresh independent dishes
-  // (not aligned to the family's shared dish grid).
+  // (not aligned to the family's shared dish grid). When omitted, it's derived
+  // from the target member's meal_mode ('independent' → fresh dishes).
   independentRegen?: boolean;
   // Manual regeneration: the user's "what's wrong / what to improve" feedback,
   // layered into the generation prompt (methodology/cookbook still take precedence).
@@ -63,6 +67,7 @@ export async function triggerPlanGeneration(params: {
     bypassRateLimit = false,
     carryOver = false,
     regenerateMemberId,
+    onlyMemberId,
     independentRegen,
     feedback,
   } = params;
@@ -139,6 +144,27 @@ export async function triggerPlanGeneration(params: {
     }
   }
 
+  // Per-member meal_mode → independentRegen (explicit param wins). For a single
+  // member run (add via onlyMemberId, edit via regenerateMemberId), 'independent'
+  // gives fresh dishes; 'shared' aligns to the family dish grid.
+  const targetMemberId = onlyMemberId ?? regenerateMemberId;
+  const targetMode = targetMemberId
+    ? context.family_members.find((m) => m.id === targetMemberId)?.meal_mode
+    : undefined;
+  const effIndependentRegen =
+    independentRegen ?? (targetMode === "independent" ? true : undefined);
+
+  // One-at-a-time add: carry the existing plan's members + generate ONLY the
+  // target; exclude other pending members so they generate in later runs. (The
+  // bg fn applies the same filter off the payload.)
+  if (onlyMemberId && existingPlan) {
+    const keep = new Set(existingPlan.members.map((m) => m.member_id));
+    keep.add(onlyMemberId);
+    context.family_members = context.family_members.filter((m) =>
+      keep.has(m.id),
+    );
+  }
+
   let mealPlanId: string;
   try {
     mealPlanId = await createPlanRows(supabase, userId);
@@ -159,7 +185,7 @@ export async function triggerPlanGeneration(params: {
         mealPlanId,
         context,
         existingPlan,
-        independentRegen,
+        independentRegen: effIndependentRegen,
       });
       return { ok: true, mealPlanId, status: "ready" };
     } catch (err) {
@@ -190,7 +216,14 @@ export async function triggerPlanGeneration(params: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
         },
-        body: JSON.stringify({ userId, mealPlanId, existingPlan, feedback, independentRegen }),
+        body: JSON.stringify({
+          userId,
+          mealPlanId,
+          existingPlan,
+          feedback,
+          independentRegen: effIndependentRegen,
+          onlyMemberId,
+        }),
       },
     );
     if (!res.ok && res.status !== 202) {

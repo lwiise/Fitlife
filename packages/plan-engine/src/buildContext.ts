@@ -72,6 +72,8 @@ export interface PlanPromptContextMember {
   consulted_doctor: boolean;
   is_child: boolean;
   preferred_language: string;
+  // 'shared' = eats the family's shared meals (default); 'independent' = own dishes.
+  meal_mode: "shared" | "independent";
 }
 
 export interface PlanPromptContextFamilyWide {
@@ -260,6 +262,7 @@ export async function buildPlanContext(
         consulted_doctor: m.consulted_doctor === true,
         is_child: memberType === "child" || (age != null && age < 18),
         preferred_language: m.preferred_language as string,
+        meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
       };
     },
   );

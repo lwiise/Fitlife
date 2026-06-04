@@ -233,6 +233,7 @@ async function buildContextViaFetch(
       consulted_doctor: m.consulted_doctor === true,
       is_child: memberType === "child" || (age != null && age < 18),
       preferred_language: m.preferred_language as string,
+      meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
     };
   });
 
@@ -302,6 +303,8 @@ export default async (req: Request): Promise<Response> => {
     locale?: LocaleCode;
     feedback?: string;
     independentRegen?: boolean;
+    // One-at-a-time add: generate ONLY this member; carry everyone else over.
+    onlyMemberId?: string;
   };
   try {
     body = await req.json();
@@ -370,6 +373,17 @@ export default async (req: Request): Promise<Response> => {
   try {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
     if (body.feedback) context.user_feedback = body.feedback;
+
+    // One-at-a-time add: restrict this run to the existing plan's members plus
+    // the single target, so other pending members are NOT generated here (they
+    // generate later, one at a time). Mirrors triggerPlanGeneration's filter.
+    if (body.onlyMemberId && existingPlan) {
+      const keep = new Set(existingPlan.members.map((m) => m.member_id));
+      keep.add(body.onlyMemberId);
+      context.family_members = context.family_members.filter((m) =>
+        keep.has(m.id),
+      );
+    }
 
     const { plan, usage, missingDays } = await generateMealPlan({
       anthropicApiKey: anthropicKey,

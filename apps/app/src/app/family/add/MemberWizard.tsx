@@ -226,6 +226,9 @@ export function MemberWizard({
   const [monthsPP, setMonthsPP] = useState(initial?.months_postpartum?.toString() ?? "");
   const [feedingMode, setFeedingMode] = useState("");
   const [consultedDoctor, setConsultedDoctor] = useState(!!initial?.consulted_doctor);
+  const [mealMode, setMealMode] = useState<"shared" | "independent">(
+    initial?.meal_mode ?? "shared",
+  );
 
   const toggleCondition = (slug: string) =>
     setConditions((s) => (s.includes(slug) ? s.filter((c) => c !== slug) : [...s, slug]));
@@ -236,14 +239,14 @@ export function MemberWizard({
       case "adult":
         // Husband is male by default — no gender question.
         return role === "dad"
-          ? ["identity", "physical", "activity", "goal", "allergies", "medical"]
-          : ["identity", "sex", "physical", "activity", "goal", "allergies", "medical"];
+          ? ["identity", "physical", "activity", "goal", "allergies", "mealMode", "medical"]
+          : ["identity", "sex", "physical", "activity", "goal", "allergies", "mealMode", "medical"];
       case "child":
-        return ["identity", "sex", "physical", "childActivity", "school", "picky", "allergies", "chronic"];
+        return ["identity", "sex", "physical", "childActivity", "school", "picky", "allergies", "mealMode", "chronic"];
       case "pregnant":
-        return ["identity", "physical", "trimester", "highRisk", "pregConditions", "allergies", "nausea"];
+        return ["identity", "physical", "trimester", "highRisk", "pregConditions", "allergies", "mealMode", "nausea"];
       case "lactating":
-        return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "supplements"];
+        return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "mealMode", "supplements"];
     }
   }, [type, role]);
 
@@ -292,6 +295,7 @@ export function MemberWizard({
           : conditions,
     other_condition: otherCondition.trim() || undefined,
     consulted_doctor: doctorNeeded ? consultedDoctor : false,
+    meal_mode: mealMode,
     school_meal_handling: type === "child" ? schoolMeal || null : null,
     picky_eater: type === "child" ? pickyEater : false,
     trimester: type === "pregnant" ? trimester : null,
@@ -699,6 +703,36 @@ export function MemberWizard({
                 </header>
                 <ChipInput value={allergies} onChange={setAllergies} disabled={isPending} placeholder="مثلاً: مكسرات، روبيان" />
                 <PrimaryButton onClick={advanceOrSubmit} isPending={isPending && key !== "allergies"}>{nextLabel}</PrimaryButton>
+              </>
+            )}
+
+            {key === "mealMode" && (
+              <>
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    نمط الوجبات
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    وجبات مشتركة مع العائلة، أو خطة مستقلة لهذا الفرد؟
+                  </p>
+                </header>
+                <div className="grid gap-2">
+                  <OptionButton
+                    full
+                    active={mealMode === "shared"}
+                    onClick={() => setMealMode("shared")}
+                  >
+                    وجبات مشتركة مع العائلة
+                  </OptionButton>
+                  <OptionButton
+                    full
+                    active={mealMode === "independent"}
+                    onClick={() => setMealMode("independent")}
+                  >
+                    خطة مستقلة لهذا الفرد
+                  </OptionButton>
+                </div>
+                <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
               </>
             )}
 

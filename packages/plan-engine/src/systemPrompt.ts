@@ -487,6 +487,7 @@ function buildRoster(
                 consulted_doctor: false,
                 is_child: false,
                 preferred_language: "ar",
+                meal_mode: "shared",
               },
             );
       return `- member_id="${b.member_id}" — ${desc}`;

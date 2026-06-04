@@ -41,6 +41,21 @@ export default async function PlanPage({
   const pendingMembers = familyMembers.filter(
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
+  // Order by add order so the banner shows the member being prepared NOW vs the
+  // rest still queued (the drain generates them one at a time, in this order).
+  const addOrder = Array.isArray(profile?.member_addition_order)
+    ? (profile.member_addition_order as string[])
+    : [];
+  const orderedPending = [...pendingMembers].sort(
+    (a, b) =>
+      (addOrder.indexOf(a.id) === -1 ? Infinity : addOrder.indexOf(a.id)) -
+      (addOrder.indexOf(b.id) === -1 ? Infinity : addOrder.indexOf(b.id)),
+  );
+  const firstPendingName = orderedPending[0]?.name ?? "";
+  const restPendingNames = orderedPending
+    .slice(1)
+    .map((m) => m.name)
+    .join("، ");
   const shouldDrain =
     isOnboarded &&
     latest?.status === "ready" &&
@@ -108,13 +123,11 @@ export default async function PlanPage({
           >
             {isGenerating
               ? `أضفنا ${queuedNames} — ${
-                  pendingMembers.length > 1 ? "نجهّز خططهم" : "نجهّز خطته"
+                  orderedPending.length > 1 ? "نجهّز خططهم" : "نجهّز الخطة"
                 } بعد انتهاء الخطة الحالية`
-              : `أضفنا ${queuedNames} — ${
-                  pendingMembers.length > 1
-                    ? "نجهّز خططهم الآن"
-                    : "نجهّز خطته الآن"
-                }`}
+              : restPendingNames
+                ? `نجهّز خطة ${firstPendingName} الآن · التالي: ${restPendingNames}`
+                : `نجهّز خطة ${firstPendingName} الآن`}
           </div>
         )}
 

@@ -1,32 +1,37 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { drainDeferredMembers } from "@/app/onboarding/actions";
 
 /**
  * Mounted on the post-onboarding read when the page sees a ready plan with
- * pending beneficiaries. Once the current generation is done it dispatches the
- * deferred member's generation, then keeps refreshing (every 2s) so the newly
- * dispatched member's "preparing" plan surfaces with no dead gap — handing
- * straight into PlanViewer's own poll once that member's shell lands. The parent
- * unmounts this (clearing the poll) the moment the pending member joins the plan.
+ * pending beneficiaries. Drains them STRICTLY ONE AT A TIME, in add order:
+ * whenever no generation is in flight it dispatches the next pending member
+ * (drainDeferredMembers picks the first by add order), then refreshes so that
+ * member's "preparing" plan surfaces. When that member's run completes
+ * (generating flips false again) it dispatches the next — never two at once.
+ * The server busy-guard de-dupes overlapping attempts; the parent unmounts this
+ * (clearing the poll) once no pending members remain.
  */
 export function DeferredMemberDrain({ generating = false }: { generating?: boolean }) {
   const router = useRouter();
-  const ran = useRef(false);
   useEffect(() => {
-    // Dispatch the drain once the in-flight generation is done — firing mid-run
-    // just hits the server busy guard. The ref keeps it to one call per mount;
-    // the server guard de-dupes anyway.
-    if (!generating && !ran.current) {
-      ran.current = true;
-      drainDeferredMembers().catch(() => {});
-    }
-    // Tight refresh so both the current run finishing AND the freshly-dispatched
-    // member's row surface fast (no full reload → no white flash).
-    const id = setInterval(() => router.refresh(), 2000);
-    return () => clearInterval(id);
+    let active = true;
+    const attempt = () => {
+      if (!active) return;
+      // Only dispatch while idle — mid-run the server busy-guard rejects anyway.
+      if (!generating) void drainDeferredMembers().catch(() => {});
+      router.refresh();
+    };
+    // Kick immediately if idle, then keep a tight cadence so each member hands
+    // straight into the next with no dead gap.
+    if (!generating) void drainDeferredMembers().catch(() => {});
+    const id = setInterval(attempt, 2500);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, [generating, router]);
   return null;
 }
