@@ -6,7 +6,9 @@
       "Bash(dir C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\\\\src\\\\lib *)",
       "Bash(cd /d \"C:\\\\Users\\\\Lenovo\\\\Projects\\\\Fitlife\")",
       "Bash(Get-ChildItem -Path public -Filter \"family-*\" -ErrorAction SilentlyContinue)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(git --no-pager log --oneline -4 main)",
+      "Bash(git rev-list *)"
     ]
   }
 }
