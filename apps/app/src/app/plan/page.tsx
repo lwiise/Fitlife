@@ -96,13 +96,25 @@ export default async function PlanPage({
           <PlanOnboardingBanner planReady={planReady} />
         </Suspense>
 
-        {isGenerating && pendingMembers.length > 0 && (
+        {/* Keep a continuous "preparing" indicator for queued members — while the
+            current plan generates AND through the hand-off window after it
+            finishes (until the new member's own shell lands) — so there is no
+            blank gap before the next member shows as loading. */}
+        {pendingMembers.length > 0 && (isGenerating || planReady) && (
           <div
             role="status"
             aria-live="polite"
             className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-3 mb-6 text-brand-ink text-sm font-medium leading-relaxed"
           >
-            تمت إضافة {queuedNames} — سيُنشأ بعد اكتمال الخطة الحالية
+            {isGenerating
+              ? `أضفنا ${queuedNames} — ${
+                  pendingMembers.length > 1 ? "نجهّز خططهم" : "نجهّز خطته"
+                } بعد انتهاء الخطة الحالية`
+              : `أضفنا ${queuedNames} — ${
+                  pendingMembers.length > 1
+                    ? "نجهّز خططهم الآن"
+                    : "نجهّز خطته الآن"
+                }`}
           </div>
         )}
 
