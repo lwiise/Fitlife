@@ -71,6 +71,7 @@ export interface PlanStrings {
   substitutions: string;
   switch_to_arabic: string;
   print: string;
+  back_to_dashboard: string;
   arabic_names_note: string;
   day_failed: string;
   allergy_title: string;
@@ -119,6 +120,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "بدائل وتعديلات",
     switch_to_arabic: "العرض بالعربية",
     print: "طباعة",
+    back_to_dashboard: "العودة للوحة التحكم",
     arabic_names_note: "الأسماء بالعربية",
     day_failed: "تعذّر تجهيز هذا اليوم. جرّبي إعادة الإنشاء.",
     allergy_title: "⚠ حساسية — لا تقدّمي هذه الأصناف",
@@ -160,6 +162,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "Substitutions",
     switch_to_arabic: "Arabic view",
     print: "Print",
+    back_to_dashboard: "Back to dashboard",
     arabic_names_note: "Names in Arabic",
     day_failed: "This day couldn't be prepared. Try regenerating.",
     allergy_title: "⚠ Allergies — do not serve these",
@@ -201,6 +204,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "Mga kapalit",
     switch_to_arabic: "Arabic view",
     print: "I-print",
+    back_to_dashboard: "Bumalik sa dashboard",
     arabic_names_note: "Mga pangalan sa Arabic",
     day_failed: "Hindi naihanda ang araw na ito. Subukang i-regenerate.",
     allergy_title: "⚠ Allergy — huwag ihain ang mga ito",
@@ -242,6 +246,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "Pengganti",
     switch_to_arabic: "Tampilan Arab",
     print: "Cetak",
+    back_to_dashboard: "Kembali ke dasbor",
     arabic_names_note: "Nama dalam bahasa Arab",
     day_failed: "Hari ini gagal disiapkan. Coba buat ulang.",
     allergy_title: "⚠ Alergi — jangan sajikan ini",
@@ -283,6 +288,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "বিকল্প",
     switch_to_arabic: "আরবি ভিউ",
     print: "প্রিন্ট",
+    back_to_dashboard: "ড্যাশবোর্ডে ফিরুন",
     arabic_names_note: "নাম আরবিতে",
     day_failed: "এই দিনটি প্রস্তুত করা যায়নি। আবার তৈরি করার চেষ্টা করুন।",
     allergy_title: "⚠ অ্যালার্জি — এগুলো পরিবেশন করবেন না",
@@ -324,6 +330,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "ምትኮች",
     switch_to_arabic: "የአረብኛ እይታ",
     print: "አትም",
+    back_to_dashboard: "ወደ ዳሽቦርድ ተመለስ",
     arabic_names_note: "ስሞች በአረብኛ",
     day_failed: "ይህ ቀን ሊዘጋጅ አልቻለም። እንደገና ለማመንጨት ይሞክሩ።",
     allergy_title: "⚠ አለርጂ — እነዚህን አታቅርቡ",
@@ -365,6 +372,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     substitutions: "متبادل",
     switch_to_arabic: "عربی منظر",
     print: "پرنٹ",
+    back_to_dashboard: "ڈیش بورڈ پر واپس",
     arabic_names_note: "نام عربی میں",
     day_failed: "یہ دن تیار نہیں ہو سکا۔ دوبارہ بنانے کی کوشش کریں۔",
     allergy_title: "⚠ الرجی — یہ چیزیں پیش نہ کریں",

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Printer, Languages, Loader2 } from "lucide-react";
+import { LayoutDashboard, Loader2 } from "lucide-react";
 import type { MealPlan, LocaleCode } from "@fitlife/plan-engine";
 import { Logo } from "@/components/Logo";
 import { getLocaleInfo, getPlanStrings } from "@/lib/plans/locales";
@@ -85,20 +85,12 @@ export function HousekeeperPlanView({
               {info.native_name}
             </span>
             <Link
-              href="/plan"
-              className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-full text-brand-ink-muted hover:text-brand-ink hover:bg-brand-surface text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-            >
-              <Languages className="size-4" aria-hidden="true" />
-              {t.switch_to_arabic}
-            </Link>
-            <button
-              type="button"
-              onClick={() => window.print()}
+              href="/dashboard"
               className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             >
-              <Printer className="size-4" aria-hidden="true" />
-              {t.print}
-            </button>
+              <LayoutDashboard className="size-4" aria-hidden="true" />
+              {t.back_to_dashboard}
+            </Link>
           </div>
         </div>
       </header>
