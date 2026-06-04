@@ -1,22 +1,26 @@
 "use server";
 import "server-only";
 
-import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import * as Sentry from "@sentry/nextjs";
-import { MealPlanSchema } from "@fitlife/plan-engine";
+import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { riyadhTodayISO, dayNameFromWeekStart } from "@/lib/plans/dayMapping";
+import { dayNameFromWeekStart } from "@/lib/plans/dayMapping";
 
 export type RestoreResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Restore a past plan: copy its meals into a NEW current plan, re-anchored to
- * today (same meals, current week). No AI cost. Auth + ownership checked; the
- * INSERT uses the service-role client because RLS forbids user inserts.
+ * Per-member restore: copy ONLY `memberId`'s meals from a past plan into the
+ * CURRENT plan's slot for that member, re-anchored to the current plan's week.
+ * Every other member's current plan is left untouched — members are independent
+ * (a shared meal may end up with mixed-origin portions, which is acceptable).
+ * No AI cost — a merge via the admin client (RLS blocks user writes).
  */
-export async function restorePlan(planId: string): Promise<RestoreResult> {
+export async function restorePlan(
+  planId: string,
+  memberId: string,
+): Promise<RestoreResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,45 +28,83 @@ export async function restorePlan(planId: string): Promise<RestoreResult> {
   if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
 
   const admin = createAdminClient();
-  const { data: source } = await admin
+
+  // Source = the past plan being restored from.
+  const { data: sourceRow } = await admin
     .from("meal_plans")
-    .select("plan_data, status, ai_model")
+    .select("plan_data, status")
     .eq("id", planId)
     .eq("user_id", user.id)
     .maybeSingle();
-
-  const row = source as
-    | { plan_data: unknown; status: string; ai_model: string | null }
-    | null;
-  if (!row || row.status !== "ready") {
+  const source = sourceRow as { plan_data: unknown; status: string } | null;
+  if (!source || source.status !== "ready") {
     return { ok: false, error: "الخطة غير موجودة" };
   }
+  const sourceParsed = MealPlanSchema.safeParse(source.plan_data);
+  if (!sourceParsed.success) {
+    return { ok: false, error: "تعذّر استعادة هذه الخطة" };
+  }
+  const sourceMember = sourceParsed.data.members.find(
+    (m) => m.member_id === memberId,
+  );
+  if (!sourceMember) {
+    return { ok: false, error: "هذا الفرد غير موجود في هذه الخطة" };
+  }
 
-  const parsed = MealPlanSchema.safeParse(row.plan_data);
-  if (!parsed.success) return { ok: false, error: "تعذّر استعادة هذه الخطة" };
+  // Current plan = newest non-archived row. We merge into it in place so only
+  // this member's slot changes.
+  const { data: currentRow } = await admin
+    .from("meal_plans")
+    .select("id, plan_data, status")
+    .eq("user_id", user.id)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const current = currentRow as
+    | { id: string; plan_data: unknown; status: string }
+    | null;
+  const currentParsed = current
+    ? MealPlanSchema.safeParse(current.plan_data)
+    : null;
+  if (!current || current.status !== "ready" || !currentParsed?.success) {
+    return { ok: false, error: "ما فيه خطة حالية لاستعادة الفرد فيها" };
+  }
+  if (current.id === planId) {
+    return { ok: false, error: "هذي خطة الفرد الحالية بالفعل" };
+  }
 
-  // Re-anchor to today: same meals/targets, current week dates + day names.
-  const today = riyadhTodayISO();
-  const reAnchored = {
-    ...parsed.data,
-    week_start_date: today,
-    members: parsed.data.members.map((m) => ({
-      ...m,
-      days: m.days.map((d) => ({
-        ...d,
-        day_name_ar: dayNameFromWeekStart(today, d.day_index),
-      })),
+  // Re-anchor the restored member's day names to the CURRENT plan's week so this
+  // member lines up with the rest of the family; meals + targets come from the
+  // source plan unchanged.
+  const weekStart = currentParsed.data.week_start_date;
+  const restoredMember = {
+    ...sourceMember,
+    days: sourceMember.days.map((d) => ({
+      ...d,
+      day_name_ar: dayNameFromWeekStart(weekStart, d.day_index),
     })),
   };
 
-  const { error } = await admin.from("meal_plans").insert({
-    id: randomUUID(),
-    user_id: user.id,
-    status: "ready",
-    plan_data: reAnchored,
-    generated_at: new Date().toISOString(),
-    ai_model: row.ai_model ?? null,
-  });
+  const exists = currentParsed.data.members.some(
+    (m) => m.member_id === memberId,
+  );
+  const mergedMembers = exists
+    ? currentParsed.data.members.map((m) =>
+        m.member_id === memberId ? restoredMember : m,
+      )
+    : [...currentParsed.data.members, restoredMember];
+
+  const mergedPlan: MealPlan = {
+    ...currentParsed.data,
+    members: mergedMembers,
+  };
+
+  const { error } = await admin
+    .from("meal_plans")
+    .update({ plan_data: mergedPlan, updated_at: new Date().toISOString() })
+    .eq("id", current.id)
+    .eq("user_id", user.id);
 
   if (error) {
     Sentry.captureException(error, {
@@ -72,18 +114,22 @@ export async function restorePlan(planId: string): Promise<RestoreResult> {
   }
 
   revalidatePath("/plan");
+  revalidatePath("/plan/history");
   return { ok: true };
 }
 
 export type DeleteResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Delete a plan the user no longer needs (soft-delete → status "archived").
- * Hidden everywhere: history lists only "ready" plans, and getLatestPlan skips
- * archived (so deleting the current plan falls back to the next). Avoids
- * orphaning plan_generations audit rows. Admin client (RLS blocks user writes).
+ * Per-member de-list: hide this plan from member `memberId`'s Previous Plans
+ * view only — other members keep their access, and the active plan is
+ * unaffected. Tracked in plan_data.hidden_for_member_ids (no row archived, so we
+ * never destroy another member's history). Admin client (RLS blocks user writes).
  */
-export async function deletePlan(planId: string): Promise<DeleteResult> {
+export async function deletePlan(
+  planId: string,
+  memberId: string,
+): Promise<DeleteResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -91,9 +137,29 @@ export async function deletePlan(planId: string): Promise<DeleteResult> {
   if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
 
   const admin = createAdminClient();
+  const { data: row } = await admin
+    .from("meal_plans")
+    .select("plan_data")
+    .eq("id", planId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const parsed = row
+    ? MealPlanSchema.safeParse((row as { plan_data: unknown }).plan_data)
+    : null;
+  if (!parsed?.success) {
+    return { ok: false, error: "الخطة غير موجودة" };
+  }
+
+  const hidden = new Set(parsed.data.hidden_for_member_ids ?? []);
+  hidden.add(memberId);
+  const nextPlan: MealPlan = {
+    ...parsed.data,
+    hidden_for_member_ids: [...hidden],
+  };
+
   const { error } = await admin
     .from("meal_plans")
-    .update({ status: "archived", updated_at: new Date().toISOString() })
+    .update({ plan_data: nextPlan, updated_at: new Date().toISOString() })
     .eq("id", planId)
     .eq("user_id", user.id);
 
@@ -105,7 +171,5 @@ export async function deletePlan(planId: string): Promise<DeleteResult> {
   }
 
   revalidatePath("/plan/history");
-  revalidatePath("/plan");
-  revalidatePath("/dashboard");
   return { ok: true };
 }

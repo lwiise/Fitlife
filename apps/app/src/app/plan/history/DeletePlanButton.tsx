@@ -8,9 +8,11 @@ import { deletePlan } from "./actions";
 
 export function DeletePlanButton({
   planId,
+  memberId,
   className = "",
 }: {
   planId: string;
+  memberId: string;
   className?: string;
 }) {
   const router = useRouter();
@@ -21,7 +23,7 @@ export function DeletePlanButton({
   function handleConfirm() {
     setError(null);
     startTransition(async () => {
-      const result = await deletePlan(planId);
+      const result = await deletePlan(planId, memberId);
       if (result.ok) {
         setOpen(false);
         router.refresh();

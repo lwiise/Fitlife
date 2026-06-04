@@ -134,6 +134,10 @@ export const MealPlanSchema = z.object({
   // knows which day tabs are still pending. Both absent on older plans (=done).
   days_total: z.number().int().optional(),
   generating: z.boolean().optional(),
+  // Per-member history de-list: member_ids for whom this plan is hidden from
+  // their Previous Plans view. Does NOT affect other members' access or the
+  // active plan. Absent on older plans.
+  hidden_for_member_ids: z.array(z.string()).optional(),
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 

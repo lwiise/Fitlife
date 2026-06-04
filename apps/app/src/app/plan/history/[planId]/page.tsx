@@ -55,7 +55,9 @@ export default async function HistoryPlanViewPage({
             <ChevronRight className="size-4" aria-hidden="true" />
             كل الخطط
           </Link>
-          {!result.isCurrent && <RestorePlanButton planId={result.id} />}
+          {!result.isCurrent && member && (
+            <RestorePlanButton planId={result.id} memberId={member} />
+          )}
         </div>
 
         <PlanViewer

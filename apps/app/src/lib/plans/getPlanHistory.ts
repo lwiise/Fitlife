@@ -11,6 +11,8 @@ export interface PlanHistoryItem {
   memberCount: number;
   memberIds: string[];
   memberNames: string[];
+  // member_ids for whom this plan has been de-listed (per-member delete).
+  hiddenForMemberIds: string[];
   isCurrent: boolean;
 }
 
@@ -51,6 +53,7 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
       memberCount: parsed.data.members.length,
       memberIds: parsed.data.members.map((m) => m.member_id),
       memberNames: parsed.data.members.map((m) => m.member_name_ar),
+      hiddenForMemberIds: parsed.data.hidden_for_member_ids ?? [],
       isCurrent: false,
     });
   }

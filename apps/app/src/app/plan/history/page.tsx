@@ -58,6 +58,9 @@ export default async function PlanHistoryPage({
   const memberNameById = new Map<string, string>();
   for (const item of history) {
     item.memberIds.forEach((id, i) => {
+      // A member only appears once they have at least one plan NOT de-listed
+      // for them — a fully de-listed member shows nothing (no dropdown entry).
+      if (item.hiddenForMemberIds.includes(id)) return;
       if (!memberNameById.has(id)) {
         memberNameById.set(id, item.memberNames[i] ?? id);
         memberOrder.push(id);
@@ -72,7 +75,11 @@ export default async function PlanHistoryPage({
 
   const selected =
     member && memberNameById.has(member) ? member : (members[0]?.id ?? "");
-  const filtered = history.filter((item) => item.memberIds.includes(selected));
+  const filtered = history.filter(
+    (item) =>
+      item.memberIds.includes(selected) &&
+      !item.hiddenForMemberIds.includes(selected),
+  );
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -146,12 +153,11 @@ export default async function PlanHistoryPage({
                         </span>
                       )}
                     </div>
-                    <p className="text-brand-ink-muted text-xs mt-1 leading-relaxed">
-                      {item.memberCount} أفراد
-                      {item.generatedAt
-                        ? ` • أُنشئت ${DATE_FMT.format(new Date(item.generatedAt))}`
-                        : ""}
-                    </p>
+                    {item.generatedAt && (
+                      <p className="text-brand-ink-muted text-xs mt-1 leading-relaxed">
+                        أُنشئت {DATE_FMT.format(new Date(item.generatedAt))}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -163,8 +169,10 @@ export default async function PlanHistoryPage({
                     عرض
                     <ChevronLeft className="size-4" aria-hidden="true" />
                   </Link>
-                  {!isCurrentForMember && <RestorePlanButton planId={item.id} />}
-                  <DeletePlanButton planId={item.id} />
+                  {!isCurrentForMember && (
+                    <RestorePlanButton planId={item.id} memberId={selected} />
+                  )}
+                  <DeletePlanButton planId={item.id} memberId={selected} />
                 </div>
               </div>
                   );

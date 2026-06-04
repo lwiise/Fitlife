@@ -8,9 +8,11 @@ import { restorePlan } from "./actions";
 
 export function RestorePlanButton({
   planId,
+  memberId,
   className = "",
 }: {
   planId: string;
+  memberId: string;
   className?: string;
 }) {
   const router = useRouter();
@@ -21,7 +23,7 @@ export function RestorePlanButton({
   function handleConfirm() {
     setError(null);
     startTransition(async () => {
-      const result = await restorePlan(planId);
+      const result = await restorePlan(planId, memberId);
       if (result.ok) {
         setOpen(false);
         router.push("/plan");
