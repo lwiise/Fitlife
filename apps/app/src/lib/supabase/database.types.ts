@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          id: string
+          user_id: string
+          model: string | null
+          tokens_in: number | null
+          tokens_out: number | null
+          cost_usd: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          model?: string | null
+          tokens_in?: number | null
+          tokens_out?: number | null
+          cost_usd?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          model?: string | null
+          tokens_in?: number | null
+          tokens_out?: number | null
+          cost_usd?: number | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       family_members: {
         Row: {
           activity_level: string | null

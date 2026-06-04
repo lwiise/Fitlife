@@ -25,6 +25,14 @@ export async function streamAnthropic(params: {
   // cost for it after the first. Optional; plain string if omitted.
   systemStatic?: string;
   userMessage?: string;
+  // Multi-turn conversation (chat). When provided, used as the request `messages`
+  // verbatim; otherwise a single user turn is built from `userMessage`. Existing
+  // (generation) callers omit this and are unaffected.
+  messages?: Array<{ role: "user" | "assistant"; content: string }>;
+  // Called with each text delta as it streams in, so a caller can forward tokens
+  // live (e.g. the chat route piping to the client). Generation callers omit it
+  // and just use the buffered `text` returned at the end.
+  onText?: (delta: string) => void;
   // Hard wall-clock cap for the whole request — connect AND streaming body. A
   // stalled SSE body (no more pings, half-open socket) would otherwise block
   // reader.read() forever, hanging the day loop and never flipping generating
@@ -38,8 +46,15 @@ export async function streamAnthropic(params: {
     systemPrompt,
     systemStatic,
     userMessage = "أنشئي الخطة الآن.",
+    messages,
+    onText,
     timeoutMs = 240_000,
   } = params;
+
+  const requestMessages =
+    messages && messages.length > 0
+      ? messages
+      : [{ role: "user" as const, content: userMessage }];
 
   const system = systemStatic
     ? [
@@ -68,7 +83,7 @@ export async function streamAnthropic(params: {
           model,
           max_tokens: maxTokens,
           system,
-          messages: [{ role: "user", content: userMessage }],
+          messages: requestMessages,
           stream: true,
         }),
         signal: controller.signal,
@@ -134,7 +149,11 @@ export async function streamAnthropic(params: {
             }
             case "content_block_delta": {
               const delta = evt.delta as { type?: string; text?: string };
-              if (delta?.type === "text_delta") text += delta.text ?? "";
+              if (delta?.type === "text_delta") {
+                const chunk = delta.text ?? "";
+                text += chunk;
+                if (chunk) onText?.(chunk);
+              }
               break;
             }
             case "message_delta": {

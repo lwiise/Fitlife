@@ -135,3 +135,21 @@ export async function canViewExistingPlans(userId: string): Promise<boolean> {
   // Only fully purged accounts (no subscription row) cannot view.
   return true;
 }
+
+/**
+ * Access check for the read-only advisor chat: requires an active subscription
+ * or a valid trial — same bar as plan generation. Deliberately does NOT apply
+ * the person-count or weekly plan rate-limit (those gate plan GENERATION, not a
+ * read-only chat). The chat's own per-user daily message cap is enforced at the
+ * route. Returns the same shape as the other gates so the UI can reuse messaging.
+ */
+export async function hasAdvisorAccess(userId: string): Promise<AccessResult> {
+  const sub = await getCurrentSubscription(userId);
+  if (!sub) return { allowed: false, reason: "subscription_inactive" };
+  if (!isSubscriptionActive(sub)) {
+    if (sub.status === "past_due") return { allowed: false, reason: "past_due" };
+    if (sub.status === "trialing") return { allowed: false, reason: "trial_expired" };
+    return { allowed: false, reason: "subscription_inactive" };
+  }
+  return { allowed: true };
+}

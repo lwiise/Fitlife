@@ -321,19 +321,32 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Housekeeper recipes — directly above today's meals. */}
-        {showHousekeeperLink && (
-          <Link
-            href="/plan/housekeeper"
-            className="inline-flex items-center justify-center gap-2 min-h-11 px-5 mt-10 mb-4 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-          >
-            <ChefHat className="size-4" aria-hidden="true" />
-            وصفات الطبخ بلغة الخدامة
-          </Link>
+        {/* Quick entry links (advisor + optional cook view) — above today's meals. */}
+        {(onboardingDone || showHousekeeperLink) && (
+          <div className="flex flex-wrap gap-2 mt-10 mb-4">
+            {onboardingDone && (
+              <Link
+                href="/chat"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                <Sparkles className="size-4" aria-hidden="true" />
+                اسألي المستشارة
+              </Link>
+            )}
+            {showHousekeeperLink && (
+              <Link
+                href="/plan/housekeeper"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                <ChefHat className="size-4" aria-hidden="true" />
+                وصفات الطبخ بلغة الخدامة
+              </Link>
+            )}
+          </div>
         )}
 
         {/* What am I cooking today? */}
-        <div className={`mb-10 ${showHousekeeperLink ? "" : "mt-10"}`}>
+        <div className={`mb-10 ${onboardingDone || showHousekeeperLink ? "" : "mt-10"}`}>
           {user && <TodaysMeals userId={user.id} isOnboarded={onboardingDone} />}
         </div>
 
