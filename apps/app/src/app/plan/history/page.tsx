@@ -80,6 +80,16 @@ export default async function PlanHistoryPage({
       item.memberIds.includes(selected) &&
       !item.hiddenForMemberIds.includes(selected),
   );
+  // Hide phantom carry-overs: an older row whose slice for THIS member is
+  // identical to the member's current (newest) plan carries no new information
+  // (it was created by generating for someone else). Keep the current always;
+  // show an older row only when the member's meals actually differ.
+  const currentHash = filtered[0]?.membersHash[selected];
+  const deduped = currentHash
+    ? filtered.filter(
+        (item, idx) => idx === 0 || item.membersHash[selected] !== currentHash,
+      )
+    : filtered;
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -125,13 +135,13 @@ export default async function PlanHistoryPage({
               <MemberHistorySelect members={members} selected={selected} />
             )}
 
-            {filtered.length === 0 ? (
+            {deduped.length === 0 ? (
               <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
                 <p className="font-bold text-brand-ink">ما عنده خطط سابقة</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {filtered.map((item, idx) => {
+                {deduped.map((item, idx) => {
                   const isCurrentForMember = idx === 0;
                   return (
               <div

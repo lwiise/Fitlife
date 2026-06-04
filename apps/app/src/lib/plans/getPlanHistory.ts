@@ -13,6 +13,10 @@ export interface PlanHistoryItem {
   memberNames: string[];
   // member_ids for whom this plan has been de-listed (per-member delete).
   hiddenForMemberIds: string[];
+  // member_id → stable hash of THAT member's slice of plan_data, so the
+  // per-member view can hide carry-over rows identical to the member's current
+  // plan (a "phantom old plan" created by generating for someone else).
+  membersHash: Record<string, string>;
   isCurrent: boolean;
 }
 
@@ -54,6 +58,9 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
       memberIds: parsed.data.members.map((m) => m.member_id),
       memberNames: parsed.data.members.map((m) => m.member_name_ar),
       hiddenForMemberIds: parsed.data.hidden_for_member_ids ?? [],
+      membersHash: Object.fromEntries(
+        parsed.data.members.map((m) => [m.member_id, JSON.stringify(m)]),
+      ),
       isCurrent: false,
     });
   }
