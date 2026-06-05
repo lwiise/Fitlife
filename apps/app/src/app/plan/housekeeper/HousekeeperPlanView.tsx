@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Loader2 } from "lucide-react";
+import { Clock, LayoutDashboard, Loader2 } from "lucide-react";
 import type { MealPlan, LocaleCode } from "@fitlife/plan-engine";
 import { Logo } from "@/components/Logo";
 import { getLocaleInfo, getPlanStrings } from "@/lib/plans/locales";
@@ -97,7 +97,20 @@ export function HousekeeperPlanView({
 
       <div className="container-app py-6 md:py-10 space-y-4">
         <AllergyBackstop entries={allergyEntries} locale={locale} />
-        {(needsTranslation || preparing) && (
+        {preparing ? (
+          // Family plans still generating (incl. members queued) — translation is
+          // gated until they finish, so DON'T imply it's loading. Just inform her
+          // it'll start once the plans are ready; the poll flips this when done.
+          <div
+            role="status"
+            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
+          >
+            <Clock className="size-4 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
+            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
+              {t.awaiting_family}
+            </p>
+          </div>
+        ) : needsTranslation ? (
           <div
             role="status"
             className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
@@ -110,7 +123,7 @@ export function HousekeeperPlanView({
               {t.translating}
             </p>
           </div>
-        )}
+        ) : null}
         {!preparing && plan && (
           <PlanViewer plan={plan} planId={planId} readOnly locale={locale} />
         )}
