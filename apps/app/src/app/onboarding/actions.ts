@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
-import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
+import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS, type MealPlan } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import type { Database } from "@/lib/supabase/database.types";
@@ -371,12 +371,38 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
   )
     return { fired: false };
 
-  // Finish an INCOMPLETE in-plan member before starting a new one — one member
-  // fully, then the next. A member is incomplete if it has fewer ready (mealed)
-  // days than the plan's day count (a day failed after in-run retries). Capped by
-  // gen_attempts so a deterministically-failing day can't loop forever: past the
-  // cap it's left "failed — regenerate" and the drain advances to the next member.
-  const plan = latest.plan_data;
+  const additionOrder = Array.isArray(profileRes.data?.member_addition_order)
+    ? (profileRes.data.member_addition_order as string[])
+    : [];
+  const nextId = pickNextMemberId({
+    plan: latest.plan_data,
+    members: membersRes.data ?? [],
+    additionOrder,
+  });
+  if (!nextId) return { fired: false };
+
+  const gen = await runFamilyGeneration(supabase, user.id, {
+    onlyMemberId: nextId,
+  });
+  return { fired: gen.ok };
+}
+
+/**
+ * The single member a generation run should target next, in STRICT order — shared
+ * by the deferred drain and addFamilyMember so adds never jump the queue:
+ *  1. an in-plan member still missing a mealed day (a day that failed after in-run
+ *     retries), under the retry cap → finish it before starting anyone new;
+ *  2. else the first ABSENT pending member by member_addition_order (then
+ *     display_order);
+ *  3. else null (nothing to do).
+ * Pure: callers pass the already-loaded plan + members + order.
+ */
+function pickNextMemberId(params: {
+  plan: MealPlan;
+  members: { id: string; role: string; display_order: number }[];
+  additionOrder: string[];
+}): string | null {
+  const { plan, members, additionOrder } = params;
   const daysTotal = plan.days_total ?? 7;
   const genAttempts = plan.gen_attempts ?? {};
   const incomplete = plan.members.find(
@@ -384,38 +410,22 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
       m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
       (genAttempts[m.member_id] ?? 0) < MEMBER_GEN_MAX_ATTEMPTS,
   );
-  if (incomplete) {
-    const gen = await runFamilyGeneration(supabase, user.id, {
-      onlyMemberId: incomplete.member_id,
-    });
-    return { fired: gen.ok };
-  }
+  if (incomplete) return incomplete.member_id;
 
-  const planMemberIds = latest.member_ids ?? [];
-  const pending = (membersRes.data ?? []).filter(
+  const planMemberIds = plan.members.map((m) => m.member_id);
+  const pending = members.filter(
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
-  if (pending.length === 0) return { fired: false };
+  if (pending.length === 0) return null;
 
-  // Strictly one at a time, in add order: generate ONLY the first pending
-  // member. The drain re-fires for the next once this one completes (so members
-  // never load two-at-once and existing members are never restarted).
-  const additionOrder = Array.isArray(profileRes.data?.member_addition_order)
-    ? (profileRes.data.member_addition_order as string[])
-    : [];
   const orderIndex = (id: string) => {
     const i = additionOrder.indexOf(id);
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
   };
-  const next = [...pending].sort(
+  return [...pending].sort(
     (a, b) =>
       orderIndex(a.id) - orderIndex(b.id) || a.display_order - b.display_order,
-  )[0]!;
-
-  const gen = await runFamilyGeneration(supabase, user.id, {
-    onlyMemberId: next.id,
-  });
-  return { fired: gen.ok };
+  )[0]!.id;
 }
 
 /**
@@ -620,11 +630,34 @@ export async function addFamilyMember(
     .eq("id", user.id);
 
   revalidatePath("/family");
-  // Generate ONLY the just-added member (others carried over). If other members
-  // are still pending, they stay deferred and the drain handles them one at a
-  // time afterward — never two members generating at once.
+  // Generate the NEXT member in order — NOT necessarily the just-added one. If an
+  // earlier-added member is still pending (or an in-plan member is incomplete), it
+  // goes first; the just-added member then waits its turn in the drain. This keeps
+  // strict add order even when adds arrive while nothing is generating (otherwise
+  // the latest add would jump ahead of an earlier still-pending member). Others
+  // are carried over; never two members generating at once.
+  const updatedOrder = [...order, memberId];
+  let target = memberId;
+  const latest = await getLatestPlan(user.id);
+  if (
+    latest?.status === "ready" &&
+    latest.plan_data &&
+    planHasContent(latest.plan_data)
+  ) {
+    const { data: famRows } = await supabase
+      .from("family_members")
+      .select("id, role, display_order")
+      .eq("user_id", user.id)
+      .returns<{ id: string; role: string; display_order: number }[]>();
+    target =
+      pickNextMemberId({
+        plan: latest.plan_data,
+        members: famRows ?? [],
+        additionOrder: updatedOrder,
+      }) ?? memberId;
+  }
   const gen = await runFamilyGeneration(supabase, user.id, {
-    onlyMemberId: memberId,
+    onlyMemberId: target,
   });
   if (gen.ok)
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
