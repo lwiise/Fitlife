@@ -53,6 +53,7 @@ export interface PlanStrings {
   generating: string;
   translating: string;
   awaiting_family: string;
+  translation_queued: string;
   preparing_title: string;
   // Honest per-day process lines, cycled while a day generates (one atomic call,
   // so these describe the real work — not fake per-meal completion).
@@ -100,6 +101,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "هذا اليوم لسه نجهّزه… بيظهر خلال لحظات",
     translating: "نجهّز الوصفات بلغتك… تظهر خلال لحظات",
     awaiting_family: "خطط العائلة قيد الإعداد — ستظهر وصفاتك بلغتك فور اكتمالها",
+    translation_queued: "وصفاتك في الطابور — نترجم من قبلك أولاً",
     preparing_title: "نجهّز خطتك",
     preparing_steps: [
       "نحسب سعرات هذا اليوم",
@@ -143,6 +145,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "Still preparing this day… coming shortly",
     translating: "Preparing the recipes in your language… ready shortly",
     awaiting_family: "The family's plans are still being prepared. Translation into your language will begin once they're ready.",
+    translation_queued: "Queued — the earlier members are being translated first",
     preparing_title: "Preparing your plan",
     preparing_steps: [
       "Calculating today's calories",
@@ -186,6 +189,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "Inihahanda pa ang araw na ito…",
     translating: "Inihahanda ang mga recipe sa iyong wika… handa na sa ilang sandali",
     awaiting_family: "Inihahanda pa ang mga plano ng pamilya. Magsisimula ang pagsasalin sa iyong wika kapag handa na ang mga ito.",
+    translation_queued: "Naka-queue — isinasalin muna ang mga naunang miyembro",
     preparing_title: "Inihahanda ang iyong plano",
     preparing_steps: [
       "Kinakalkula ang calories ng araw na ito",
@@ -229,6 +233,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "Masih menyiapkan hari ini…",
     translating: "Menyiapkan resep dalam bahasa Anda… segera siap",
     awaiting_family: "Rencana keluarga masih disiapkan. Penerjemahan ke bahasa Anda akan dimulai setelah semuanya siap.",
+    translation_queued: "Dalam antrean — anggota sebelumnya diterjemahkan lebih dulu",
     preparing_title: "Menyiapkan rencana Anda",
     preparing_steps: [
       "Menghitung kalori hari ini",
@@ -272,6 +277,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "এই দিনটি এখনও প্রস্তুত হচ্ছে…",
     translating: "আপনার ভাষায় রেসিপি প্রস্তুত হচ্ছে… শীঘ্রই দেখা যাবে",
     awaiting_family: "পরিবারের পরিকল্পনা এখনও প্রস্তুত হচ্ছে। সব প্রস্তুত হলে আপনার ভাষায় অনুবাদ শুরু হবে।",
+    translation_queued: "অপেক্ষমাণ — আগের সদস্যদের আগে অনুবাদ করা হচ্ছে",
     preparing_title: "আপনার পরিকল্পনা প্রস্তুত হচ্ছে",
     preparing_steps: [
       "আজকের ক্যালোরি হিসাব করা হচ্ছে",
@@ -315,6 +321,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "ይህ ቀን አሁንም በዝግጅት ላይ ነው…",
     translating: "የምግብ አዘገጃጀቶቹ በቋንቋዎ እየተዘጋጁ ነው… በቅርቡ ይታያል",
     awaiting_family: "የቤተሰቡ ዕቅዶች አሁንም በዝግጅት ላይ ናቸው። ሲጠናቀቁ ወደ ቋንቋዎ መተርጎም ይጀምራል።",
+    translation_queued: "በመጠባበቅ ላይ — የቀደሙት ግለሰቦች መጀመሪያ ይተረጎማሉ",
     preparing_title: "ዕቅድዎን እያዘጋጀን ነው",
     preparing_steps: [
       "የዛሬውን ካሎሪ እያሰላን ነው",
@@ -358,6 +365,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     generating: "یہ دن ابھی تیار ہو رہا ہے…",
     translating: "ترکیبیں آپ کی زبان میں تیار ہو رہی ہیں… تھوڑی دیر میں ظاہر ہوں گی",
     awaiting_family: "خاندان کے منصوبے ابھی تیار ہو رہے ہیں۔ مکمل ہونے پر آپ کی زبان میں ترجمہ شروع ہوگا۔",
+    translation_queued: "قطار میں — پہلے کے افراد کا ترجمہ پہلے ہو رہا ہے",
     preparing_title: "آپ کا پلان تیار ہو رہا ہے",
     preparing_steps: [
       "آج کی کیلوریز کا حساب لگایا جا رہا ہے",

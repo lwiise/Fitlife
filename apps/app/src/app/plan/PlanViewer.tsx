@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, UserPlus, History, ChefHat, AlertTriangle } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
@@ -171,6 +171,32 @@ export function PlanViewer({
     (plan.generating_member_id == null ||
       activeMember?.member_id === plan.generating_member_id);
 
+  // Maid (translated) view: translation runs strictly one member at a time, in
+  // plan.members order (mom first). Infer the member being translated NOW = the
+  // first member, in order, still missing a translation on a mealed day. Members
+  // before it are done; members after it are queued. So the maid sees mom resolve
+  // fully, then member 2, then member 3 — and a queued member shows a calm
+  // "waiting" state instead of a spinner that reads as random/simultaneous.
+  const dayNeedsTranslation = (day?: MemberPlan["days"][number]) =>
+    !!day && day.meals.length > 0 && !isDayTranslated(day);
+  const isMemberTranslated = (m: MemberPlan) =>
+    m.days.every((d) => d.meals.length === 0 || isDayTranslated(d));
+  const currentTranslatingIndex = translated
+    ? plan.members.findIndex((m) => !isMemberTranslated(m))
+    : -1;
+  const memberTranslationStatus = (
+    m: MemberPlan,
+  ): "done" | "translating" | "queued" => {
+    if (!translated || currentTranslatingIndex === -1) return "done";
+    const idx = plan.members.findIndex((x) => x.member_id === m.member_id);
+    if (idx < currentTranslatingIndex) return "done";
+    if (idx === currentTranslatingIndex) return "translating";
+    return "queued";
+  };
+  const activeMemberTranslation = activeMember
+    ? memberTranslationStatus(activeMember)
+    : "done";
+
   // Day generation runs today-first, one at a time (mirrors the engine). Compute
   // the same order so the UI shows ONE day "preparing" while the rest wait —
   // instead of every tab spinning at once (which reads as random).
@@ -285,6 +311,7 @@ export function PlanViewer({
           {plan.members.map((m) => {
             const isActive = m.member_id === activeMemberId;
             const isMom = m.member_id === "mom";
+            const transStatus = memberTranslationStatus(m);
             return (
               <button
                 key={m.member_id}
@@ -301,6 +328,18 @@ export function PlanViewer({
                   <span className="text-brand-pink me-1">{t.you} ·</span>
                 )}
                 {memberLabel(m)}
+                {translated && transStatus === "translating" && (
+                  <Loader2
+                    className="inline-block ms-1.5 size-3 animate-spin motion-reduce:animate-none align-[-1px] text-brand-purple-900"
+                    aria-hidden="true"
+                  />
+                )}
+                {translated && transStatus === "queued" && (
+                  <Clock
+                    className="inline-block ms-1.5 size-3 align-[-1px] opacity-40"
+                    aria-hidden="true"
+                  />
+                )}
                 {isActive && (
                   <motion.span
                     layoutId="member-tab-underline"
@@ -402,7 +441,9 @@ export function PlanViewer({
           const isActive = i === activeDayIndex;
           const pending =
             (memberIsGenerating && i === currentPreparingIndex) ||
-            (translated && !isDayTranslated(day));
+            (translated &&
+              activeMemberTranslation === "translating" &&
+              dayNeedsTranslation(day));
           return (
             <button
               key={i}
@@ -459,7 +500,15 @@ export function PlanViewer({
           transition={{ duration: 0.2 }}
           className="space-y-3"
         >
-          {translated && activeDay && !isDayTranslated(activeDay) ? (
+          {translated && activeMemberTranslation === "queued" ? (
+            // This member's turn hasn't come yet — translation runs one member at
+            // a time, in order. Show a calm waiting state, not a spinner (which
+            // read as "loading randomly").
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Clock className="size-6 text-brand-purple-900 opacity-60" aria-hidden="true" />
+              <p className="text-brand-ink-muted text-sm">{t.translation_queued}</p>
+            </div>
+          ) : translated && activeMemberTranslation === "translating" && dayNeedsTranslation(activeDay) ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <Loader2
                 className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
