@@ -390,6 +390,7 @@ export default async (req: Request): Promise<Response> => {
       context,
       existingPlan: existingPlan ?? null,
       independentRegen: body.independentRegen,
+      onlyMemberId: body.onlyMemberId,
       // Persist progressively + flip "ready" on the first emit (the shell), so
       // the plan opens showing all days as loading and they fill in 1→7.
       onProgress: async (snapshot) => {

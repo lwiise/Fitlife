@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
-import { planHasContent } from "@fitlife/plan-engine";
+import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import type { Database } from "@/lib/supabase/database.types";
@@ -370,6 +370,26 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
     !planHasContent(latest.plan_data)
   )
     return { fired: false };
+
+  // Finish an INCOMPLETE in-plan member before starting a new one — one member
+  // fully, then the next. A member is incomplete if it has fewer ready (mealed)
+  // days than the plan's day count (a day failed after in-run retries). Capped by
+  // gen_attempts so a deterministically-failing day can't loop forever: past the
+  // cap it's left "failed — regenerate" and the drain advances to the next member.
+  const plan = latest.plan_data;
+  const daysTotal = plan.days_total ?? 7;
+  const genAttempts = plan.gen_attempts ?? {};
+  const incomplete = plan.members.find(
+    (m) =>
+      m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
+      (genAttempts[m.member_id] ?? 0) < MEMBER_GEN_MAX_ATTEMPTS,
+  );
+  if (incomplete) {
+    const gen = await runFamilyGeneration(supabase, user.id, {
+      onlyMemberId: incomplete.member_id,
+    });
+    return { fired: gen.ok };
+  }
 
   const planMemberIds = latest.member_ids ?? [];
   const pending = (membersRes.data ?? []).filter(

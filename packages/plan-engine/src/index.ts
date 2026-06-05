@@ -53,6 +53,7 @@ export {
   PLAN_MAX_TOKENS,
   PRICING_USD_PER_MTOK_BY_MODEL,
   pricingForModel,
+  MEMBER_GEN_MAX_ATTEMPTS,
 } from "./constants";
 
 export * from "./errors";

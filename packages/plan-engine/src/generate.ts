@@ -168,6 +168,12 @@ export async function generateMealPlan(params: {
   // dishes instead of being aligned to the family's existing dish grid. Used by
   // the per-member "new plan" button; left off for add/edit (which stay aligned).
   independentRegen?: boolean;
+  // One-at-a-time member add/complete: generate ONLY this member's missing days,
+  // carrying every other member verbatim (incl. any empty/failed days, which are
+  // shelled but never re-touched). When omitted, every incomplete member is
+  // generated (initial plan). Also stamped into plan_data.generating_member_id so
+  // the UI scopes its loading spinners to the member actually being filled.
+  onlyMemberId?: string;
   // Called (serialized) after each day completes with the plan-so-far.
   onProgress?: (
     snapshot: MealPlan,
@@ -179,7 +185,8 @@ export async function generateMealPlan(params: {
   // Day indices that were expected but dropped after retries (partial plan).
   missingDays: number[];
 }> {
-  const { anthropicApiKey, context, existingPlan, independentRegen, onProgress } = params;
+  const { anthropicApiKey, context, existingPlan, independentRegen, onlyMemberId, onProgress } =
+    params;
   let totalIn = 0;
   let totalOut = 0;
 
@@ -252,7 +259,12 @@ export async function generateMealPlan(params: {
     existingPlan != null &&
     familyDayIndices.length > 0 &&
     familyDayIndices.every((di) => carriedDays.get(b.member_id)!.has(di));
-  const membersToGenerate = beneficiaries.filter((b) => !isComplete(b));
+  // When a run targets ONE member (one-at-a-time add/complete), generate only it;
+  // every other member is carried verbatim — including any empty/failed days,
+  // which a later member's run must never re-touch (UI shows them "failed").
+  const membersToGenerate = beneficiaries.filter(
+    (b) => !isComplete(b) && (!onlyMemberId || b.member_id === onlyMemberId),
+  );
 
   // ── Fast path: every member complete → return the prior plan untouched ──
   if (existingPlan && membersToGenerate.length === 0) {
@@ -404,7 +416,7 @@ export async function generateMealPlan(params: {
   const aligned = familyDishGrid.size > 0 && !independentRegen;
   const workingSkeleton: PlanSkeleton = {
     ...skeleton,
-    members: beneficiaries
+    members: membersToGenerate
       .filter((b) => missingByMember.get(b.member_id)!.length > 0)
       .map((b) => {
         const prior = priorById.get(b.member_id);
@@ -503,7 +515,7 @@ export async function generateMealPlan(params: {
   // reflects real work and flips off when the last gap settles (carried days show
   // ready from the first emit).
   const daysToGenerate = generationOrder.filter((di) =>
-    beneficiaries.some((b) => missingByMember.get(b.member_id)!.includes(di)),
+    membersToGenerate.some((b) => missingByMember.get(b.member_id)!.includes(di)),
   );
   const genDayCount = daysToGenerate.length;
 
@@ -528,6 +540,18 @@ export async function generateMealPlan(params: {
       skeleton.safety_disclaimer_ar ?? existingPlan?.safety_disclaimer_ar,
     days_total: totalDays,
     generating,
+    // While generating a single targeted member, tell the UI who — so its
+    // spinners scope to that member and a different member's empty/failed day
+    // doesn't render as "loading". Cleared on the final (generating=false) plan.
+    generating_member_id: generating && onlyMemberId ? onlyMemberId : undefined,
+    // Carry the prior attempt counts; bump the targeted member by one (the drain
+    // uses this to cap completion-retries on a member that can't finish a day).
+    gen_attempts: onlyMemberId
+      ? {
+          ...(existingPlan?.gen_attempts ?? {}),
+          [onlyMemberId]: (existingPlan?.gen_attempts?.[onlyMemberId] ?? 0) + 1,
+        }
+      : existingPlan?.gen_attempts,
   });
 
   // Serialize onProgress writes.
@@ -553,7 +577,7 @@ export async function generateMealPlan(params: {
   // ── Phase 2: expand each missing day; per day, only the members missing it ──
   await mapWithConcurrency(daysToGenerate, DAY_CONCURRENCY, async (dayIndex) => {
     const dayMemberIds = new Set(
-      beneficiaries
+      membersToGenerate
         .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
         .map((b) => b.member_id),
     );
@@ -765,8 +789,10 @@ export async function runMealPlanGeneration(params: {
   context: PlanPromptContext;
   existingPlan?: MealPlan | null;
   independentRegen?: boolean;
+  onlyMemberId?: string;
 }): Promise<GenerateResult> {
-  const { supabase, anthropicApiKey, mealPlanId, context, existingPlan, independentRegen } = params;
+  const { supabase, anthropicApiKey, mealPlanId, context, existingPlan, independentRegen, onlyMemberId } =
+    params;
   const startMs = Date.now();
 
   let plan: MealPlan;
@@ -778,6 +804,7 @@ export async function runMealPlanGeneration(params: {
       context,
       existingPlan,
       independentRegen,
+      onlyMemberId,
       // Persist progressively; flip "ready" on the first emit (the shell) so the
       // plan opens showing all days loading and they fill in 1→7.
       onProgress: async (snapshot) => {

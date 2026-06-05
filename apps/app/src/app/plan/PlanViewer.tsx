@@ -162,11 +162,20 @@ export function PlanViewer({
 
   const isSolo = plan.members.length === 1;
 
+  // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
+  // Scope all loading UI to that member so a different member's empty/failed day
+  // never shows a spinner — it falls through to the "failed — regenerate" box.
+  // No id stamped (initial plan / older data) → fall back to the global flag.
+  const memberIsGenerating =
+    generating &&
+    (plan.generating_member_id == null ||
+      activeMember?.member_id === plan.generating_member_id);
+
   // Day generation runs today-first, one at a time (mirrors the engine). Compute
   // the same order so the UI shows ONE day "preparing" while the rest wait —
   // instead of every tab spinning at once (which reads as random).
   const currentPreparingIndex = useMemo(() => {
-    if (!generating || !activeMember) return -1;
+    if (!memberIsGenerating || !activeMember) return -1;
     const start = dayIndexFromWeekStart(plan.week_start_date);
     const today = start >= 0 && start <= 6 ? start : 0;
     const order = Array.from({ length: 7 }, (_, k) => (today + k) % 7);
@@ -175,7 +184,7 @@ export function PlanViewer({
       if (!day || day.meals.length === 0) return di;
     }
     return -1;
-  }, [generating, activeMember, plan.week_start_date]);
+  }, [memberIsGenerating, activeMember, plan.week_start_date]);
 
   // Real generation progress for the active member: days with meals vs total
   // expected. Days are generated atomically (a whole day lands at once), so
@@ -349,7 +358,7 @@ export function PlanViewer({
       {/* Generation progress — real "day N of M" while the plan streams in.
           Hidden once the viewed member is complete (ready === total) so a full
           bar never sits there spinning. */}
-      {generating && !preparingStalled && genProgress.ready < genProgress.total && (
+      {memberIsGenerating && !preparingStalled && genProgress.ready < genProgress.total && (
         <div className="bg-white rounded-2xl border border-brand-ink/5 px-4 py-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-brand-ink font-bold text-sm leading-relaxed">
@@ -392,7 +401,7 @@ export function PlanViewer({
             : day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
           const isActive = i === activeDayIndex;
           const pending =
-            (generating && i === currentPreparingIndex) ||
+            (memberIsGenerating && i === currentPreparingIndex) ||
             (translated && !isDayTranslated(day));
           return (
             <button
@@ -462,7 +471,7 @@ export function PlanViewer({
             activeDay.meals.map((meal, i) => (
               <MealCard key={i} meal={meal} memberNames={memberNames} locale={locale} />
             ))
-          ) : generating &&
+          ) : memberIsGenerating &&
             !preparingStalled &&
             activeDayIndex === currentPreparingIndex ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
@@ -475,7 +484,7 @@ export function PlanViewer({
                   t.generating}
               </p>
             </div>
-          ) : generating && !preparingStalled ? (
+          ) : memberIsGenerating && !preparingStalled ? (
             <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
               {t.day_queued}
             </div>

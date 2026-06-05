@@ -134,6 +134,15 @@ export const MealPlanSchema = z.object({
   // knows which day tabs are still pending. Both absent on older plans (=done).
   days_total: z.number().int().optional(),
   generating: z.boolean().optional(),
+  // While generating, the single member this run is filling in (one-at-a-time
+  // adds). The UI scopes its loading spinners to this member so a different
+  // member's empty/failed day never renders as "loading". Undefined when not
+  // generating, on the final plan, or on an initial multi-member run.
+  generating_member_id: z.string().optional(),
+  // Per-member count of generation runs that TARGETED that member, so the drain
+  // can cap completion-retries (a deterministically-failing day shows "failed"
+  // and the drain advances instead of looping). Absent on older plans.
+  gen_attempts: z.record(z.string(), z.number()).optional(),
   // Per-member history de-list: member_ids for whom this plan is hidden from
   // their Previous Plans view. Does NOT affect other members' access or the
   // active plan. Absent on older plans.

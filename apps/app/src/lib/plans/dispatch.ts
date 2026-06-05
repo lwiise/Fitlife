@@ -186,6 +186,7 @@ export async function triggerPlanGeneration(params: {
         context,
         existingPlan,
         independentRegen: effIndependentRegen,
+        onlyMemberId,
       });
       return { ok: true, mealPlanId, status: "ready" };
     } catch (err) {

@@ -4,7 +4,7 @@ import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
-import { planHasContent } from "@fitlife/plan-engine";
+import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -56,12 +56,22 @@ export default async function PlanPage({
     .slice(1)
     .map((m) => m.name)
     .join("، ");
+  // An in-plan member with a failed/missing day (fewer mealed days than the plan's
+  // day count) that's still under the retry cap — the drain re-targets it to
+  // completion before starting the next member, so keep the drain mounted for it.
+  const daysTotal = latest?.plan_data?.days_total ?? 7;
+  const genAttempts = latest?.plan_data?.gen_attempts ?? {};
+  const hasIncompleteMember = !!latest?.plan_data?.members.some(
+    (m) =>
+      m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
+      (genAttempts[m.member_id] ?? 0) < MEMBER_GEN_MAX_ATTEMPTS,
+  );
   const shouldDrain =
     isOnboarded &&
     latest?.status === "ready" &&
     !!latest.plan_data &&
     planHasContent(latest.plan_data) &&
-    pendingMembers.length > 0;
+    (pendingMembers.length > 0 || hasIncompleteMember);
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =
