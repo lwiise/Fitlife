@@ -4,6 +4,7 @@ import {
   SKELETON_MAX_TOKENS,
   DAY_MAX_TOKENS,
   DAY_CONCURRENCY,
+  MEMBER_GEN_MAX_ATTEMPTS,
 } from "./constants";
 import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
@@ -869,19 +870,25 @@ export async function runMealPlanGeneration(params: {
           d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
         ),
       );
-    // Only translate on the LAST member's run — see the bg fn for the full
-    // rationale. Skip while any non-housekeeper member is still pending generation
-    // so this run's 'started' lock releases fast and the drain isn't blocked.
+    // Only translate once the WHOLE family is fully generated — every member, day
+    // 1 → last day. Skip while any member is absent OR still has an unfilled day
+    // (under the retry cap); the drain finishes them first and a later run
+    // translates the complete plan. (Also keeps this run's 'started' lock from
+    // being held through translation while members are still pending.)
     const { data: memberRows } = await supabase
       .from("family_members")
       .select("id, role")
       .eq("user_id", context.mom.id)
       .returns<{ id: string; role: string }[]>();
-    const planIds = new Set(plan.members.map((m) => m.member_id));
-    const pendingMembers = (memberRows ?? []).some(
-      (m) => m.role !== "housekeeper" && !planIds.has(m.id),
-    );
-    if (endLocale && needsTranslate && !pendingMembers) {
+    const familyMemberIds = (memberRows ?? [])
+      .filter((m) => m.role !== "housekeeper")
+      .map((m) => m.id);
+    const stillGenerating = hasPendingGeneration({
+      plan,
+      familyMemberIds,
+      maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
+    });
+    if (endLocale && needsTranslate && !stillGenerating) {
       const { plan: translated, usage: tUsage } = await translateMealPlan({
         anthropicApiKey,
         plan,
@@ -959,6 +966,35 @@ export async function runMealPlanGeneration(params: {
       duration_ms: durationMs,
     },
   };
+}
+
+/**
+ * True when the plan still has generation work left — the gate for maid
+ * translation (every trigger) + the maid "preparing" state, so translation only
+ * starts once EVERY member is fully generated (day 1 → last day). Mirrors the
+ * drain's pickNextMemberId so translation-readiness == generation fully drained:
+ *  - any in-plan member missing a mealed day AND still under the retry cap, OR
+ *  - any expected (non-housekeeper) family member not yet in the plan.
+ * Capped-failed days are excluded (they never improve) so a permanently-stuck day
+ * can't block translation forever — it surfaces as "failed", consistent with the
+ * generation cap.
+ */
+export function hasPendingGeneration(params: {
+  plan: MealPlan;
+  familyMemberIds: string[];
+  maxAttempts: number;
+}): boolean {
+  const { plan, familyMemberIds, maxAttempts } = params;
+  const daysTotal = plan.days_total ?? 7;
+  const genAttempts = plan.gen_attempts ?? {};
+  const anyIncomplete = plan.members.some(
+    (m) =>
+      m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
+      (genAttempts[m.member_id] ?? 0) < maxAttempts,
+  );
+  if (anyIncomplete) return true;
+  const inPlan = new Set(plan.members.map((m) => m.member_id));
+  return familyMemberIds.some((id) => !inPlan.has(id));
 }
 
 // ─── Translation pass (housekeeper) ──────────────────────────────────────

@@ -12,6 +12,7 @@ export {
   generateMealPlan,
   translateMealPlan,
   runMealPlanTranslation,
+  hasPendingGeneration,
 } from "./generate";
 export type { GenerateResult } from "./generate";
 

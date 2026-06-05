@@ -8,7 +8,12 @@
 // parallel calls, system prompt, schema) stays the single source of truth in
 // @fitlife/plan-engine; the relative path lets esbuild inline it.
 
-import { generateMealPlan, translateMealPlan } from "../../../../packages/plan-engine/src/generate";
+import {
+  generateMealPlan,
+  translateMealPlan,
+  hasPendingGeneration,
+} from "../../../../packages/plan-engine/src/generate";
+import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 import { LOCALE_CODES } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
@@ -433,23 +438,26 @@ export default async (req: Request): Promise<Response> => {
             d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
           ),
         );
-      // Only translate on the LAST member's run. Added members generate one-at-a-
-      // time via the drain; translating here (under the still-live 'started' lock)
-      // on an intermediate run holds the lock through the whole — now slow, member-
-      // sequential — family translation, blocking the next member's run (busy guard)
-      // and the maid re-trigger. Skip while any non-housekeeper member is still
-      // pending; the final run (none pending) translates the full family once.
+      // Only translate once the WHOLE family is fully generated — every member,
+      // day 1 → last day. Skip while any member is absent OR still has an unfilled
+      // day (under the retry cap): the drain finishes them one at a time and a
+      // later run translates the complete plan. Translating earlier would localize
+      // a partial plan (and hold this run's 'started' lock through translation).
       const memberRows = await sbSelectMany(
         supabaseUrl,
         expected,
         "family_members",
         `user_id=eq.${userId}&select=id,role`,
       );
-      const planIds = new Set(plan.members.map((m) => m.member_id));
-      const pendingMembers = memberRows.some(
-        (m) => m.role !== "housekeeper" && !planIds.has(m.id as string),
-      );
-      if (endLocale && needsTranslate && !pendingMembers) {
+      const familyMemberIds = memberRows
+        .filter((m) => m.role !== "housekeeper")
+        .map((m) => m.id as string);
+      const stillGenerating = hasPendingGeneration({
+        plan,
+        familyMemberIds,
+        maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
+      });
+      if (endLocale && needsTranslate && !stillGenerating) {
         const { plan: translated, usage: tUsage } = await translateMealPlan({
           anthropicApiKey: anthropicKey,
           plan,
