@@ -4,7 +4,6 @@ import {
   SKELETON_MAX_TOKENS,
   DAY_MAX_TOKENS,
   DAY_CONCURRENCY,
-  TRANSLATE_CONCURRENCY,
 } from "./constants";
 import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
@@ -978,143 +977,161 @@ export async function translateMealPlan(params: {
       ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
       : dayIndices;
 
-  await mapWithConcurrency(order, TRANSLATE_CONCURRENCY, async (dayIndex) => {
-    const refs: Meal[] = [];
-    for (const m of members) {
-      const day = m.days.find((d) => d.day_index === dayIndex);
-      if (!day) continue;
-      for (const meal of day.meals) {
-        const alreadyDone =
-          meal.prep_steps_translated_locale === locale &&
-          !!meal.prep_steps_translated?.length;
-        if (!alreadyDone) refs.push(meal);
-      }
-    }
-    if (refs.length === 0) return;
-
-    const items = refs.map((meal, i) => ({
-      i,
-      recipe_name_ar: meal.recipe_name_ar,
-      ingredient_names: meal.ingredients.map((g) => g.name_ar),
-      prep_steps_ar: meal.prep_steps_ar,
-    }));
-
-    let attempt = 0;
-    for (;;) {
-      try {
-        const res = await streamAnthropic({
-          apiKey: anthropicApiKey,
-          model: PLAN_MODEL,
-          maxTokens: DAY_MAX_TOKENS,
-          systemPrompt: buildTranslatePrompt(items, locale),
-          userMessage: "ترجمي الآن.",
-        });
-        totalIn += res.tokensIn;
-        totalOut += res.tokensOut;
-        if (res.stopReason === "max_tokens")
-          throw new PlanValidationError(
-            `Translate day ${dayIndex} hit max_tokens`,
-            res.text,
-          );
-        const parsed = TranslateOutSchema.safeParse(
-          JSON.parse(stripMarkdownFence(res.text)),
-        );
-        if (!parsed.success)
-          throw new PlanValidationError(
-            `Translate day ${dayIndex} failed validation: ${parsed.error.message.slice(0, 200)}`,
-            res.text,
-          );
-        for (const out of parsed.data) {
-          const meal = refs[out.i];
-          if (!meal) continue;
-          meal.recipe_name_translated = out.recipe_name;
-          meal.prep_steps_translated = out.steps;
-          meal.prep_steps_translated_locale = locale;
-          meal.ingredients_translated = meal.ingredients.map((g, k) => ({
-            ...g,
-            name_ar: out.ingredient_names[k] ?? g.name_ar,
-          }));
-        }
-        // Emit a full snapshot so the caller can persist progressively. `members`
-        // is the shared working array, so this includes every day done so far →
-        // writes are last-write-wins safe even when days finish concurrently.
-        // Non-fatal: a failed persist must not abort the translation pass.
+  // Translate strictly ONE MEMBER AT A TIME: finish a member's name + all their
+  // days before starting the next. Never batch two members into one call and
+  // never run two members concurrently — the maid sees one member's full week
+  // resolve, then the next. (Day-outer batching used to mix every member's meals
+  // into a single per-day call; this is the deliberate member-sequential trade.)
+  for (const member of members) {
+    // (a) Member name → locale (its own small call). Folding it into the member's
+    // block means the member is *fully* localized before the next one begins.
+    if (member.member_name_translated_locale !== locale) {
+      let nameAttempt = 0;
+      for (;;) {
         try {
-          await onDayTranslated?.({ ...plan, members });
-        } catch (persistErr) {
-          console.warn(
-            "[translateMealPlan] day",
-            dayIndex,
-            "progressive persist failed:",
-            persistErr instanceof Error ? persistErr.message : String(persistErr),
+          const res = await streamAnthropic({
+            apiKey: anthropicApiKey,
+            model: PLAN_MODEL,
+            maxTokens: DAY_MAX_TOKENS,
+            systemPrompt: buildNameTranslatePrompt(
+              [{ i: 0, name_ar: member.member_name_ar }],
+              locale,
+            ),
+            userMessage: "ترجمي الآن.",
+          });
+          totalIn += res.tokensIn;
+          totalOut += res.tokensOut;
+          if (res.stopReason === "max_tokens")
+            throw new PlanValidationError("Name translate hit max_tokens", res.text);
+          const parsed = NameTranslateOutSchema.safeParse(
+            JSON.parse(stripMarkdownFence(res.text)),
           );
+          if (!parsed.success)
+            throw new PlanValidationError(
+              `Name translate failed validation: ${parsed.error.message.slice(0, 200)}`,
+              res.text,
+            );
+          const out = parsed.data[0];
+          if (out) {
+            member.member_name_translated = out.name;
+            member.member_name_translated_locale = locale;
+          }
+          break;
+        } catch (err) {
+          if (isRetryable(err) && nameAttempt < MAX_RETRIES) {
+            nameAttempt++;
+            await sleep(backoffMs(nameAttempt));
+            continue;
+          }
+          // Non-fatal: maid view falls back to the Arabic name.
+          console.warn(
+            "[translateMealPlan] name translation failed for",
+            member.member_id,
+            err instanceof Error ? err.message : String(err),
+          );
+          break;
         }
-        return;
-      } catch (err) {
-        if (isRetryable(err) && attempt < MAX_RETRIES) {
-          attempt++;
-          await sleep(backoffMs(attempt));
-          continue;
-        }
-        // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
+      }
+      // Persist the name immediately so it shows even before this member's meals.
+      try {
+        await onDayTranslated?.({ ...plan, members });
+      } catch (persistErr) {
         console.warn(
-          "[translateMealPlan] day",
-          dayIndex,
-          "translation failed:",
-          err instanceof Error ? err.message : String(err),
+          "[translateMealPlan] name progressive persist failed:",
+          persistErr instanceof Error ? persistErr.message : String(persistErr),
         );
-        return;
       }
     }
-  });
 
-  // ── Transliterate member names into the locale (one call, non-fatal) ──
-  const nameTodo = members.filter(
-    (m) => m.member_name_translated_locale !== locale,
-  );
-  if (nameTodo.length > 0) {
-    const items = nameTodo.map((m, i) => ({ i, name_ar: m.member_name_ar }));
-    let attempt = 0;
-    for (;;) {
-      try {
-        const res = await streamAnthropic({
-          apiKey: anthropicApiKey,
-          model: PLAN_MODEL,
-          maxTokens: DAY_MAX_TOKENS,
-          systemPrompt: buildNameTranslatePrompt(items, locale),
-          userMessage: "ترجمي الآن.",
-        });
-        totalIn += res.tokensIn;
-        totalOut += res.tokensOut;
-        if (res.stopReason === "max_tokens")
-          throw new PlanValidationError("Name translate hit max_tokens", res.text);
-        const parsed = NameTranslateOutSchema.safeParse(
-          JSON.parse(stripMarkdownFence(res.text)),
-        );
-        if (!parsed.success)
-          throw new PlanValidationError(
-            `Name translate failed validation: ${parsed.error.message.slice(0, 200)}`,
-            res.text,
+    // (b) This member's days, today-first, fully sequential.
+    for (const dayIndex of order) {
+      const day = member.days.find((d) => d.day_index === dayIndex);
+      if (!day) continue;
+      const refs: Meal[] = day.meals.filter(
+        (meal) =>
+          !(
+            meal.prep_steps_translated_locale === locale &&
+            !!meal.prep_steps_translated?.length
+          ),
+      );
+      if (refs.length === 0) continue;
+
+      const items = refs.map((meal, i) => ({
+        i,
+        recipe_name_ar: meal.recipe_name_ar,
+        ingredient_names: meal.ingredients.map((g) => g.name_ar),
+        prep_steps_ar: meal.prep_steps_ar,
+      }));
+
+      let attempt = 0;
+      for (;;) {
+        try {
+          const res = await streamAnthropic({
+            apiKey: anthropicApiKey,
+            model: PLAN_MODEL,
+            maxTokens: DAY_MAX_TOKENS,
+            systemPrompt: buildTranslatePrompt(items, locale),
+            userMessage: "ترجمي الآن.",
+          });
+          totalIn += res.tokensIn;
+          totalOut += res.tokensOut;
+          if (res.stopReason === "max_tokens")
+            throw new PlanValidationError(
+              `Translate ${member.member_id} day ${dayIndex} hit max_tokens`,
+              res.text,
+            );
+          const parsed = TranslateOutSchema.safeParse(
+            JSON.parse(stripMarkdownFence(res.text)),
           );
-        for (const out of parsed.data) {
-          const member = nameTodo[out.i];
-          if (!member) continue;
-          member.member_name_translated = out.name;
-          member.member_name_translated_locale = locale;
+          if (!parsed.success)
+            throw new PlanValidationError(
+              `Translate ${member.member_id} day ${dayIndex} failed validation: ${parsed.error.message.slice(0, 200)}`,
+              res.text,
+            );
+          for (const out of parsed.data) {
+            const meal = refs[out.i];
+            if (!meal) continue;
+            meal.recipe_name_translated = out.recipe_name;
+            meal.prep_steps_translated = out.steps;
+            meal.prep_steps_translated_locale = locale;
+            meal.ingredients_translated = meal.ingredients.map((g, k) => ({
+              ...g,
+              name_ar: out.ingredient_names[k] ?? g.name_ar,
+            }));
+          }
+          // Progressive snapshot: this member's day landed. `members` is the
+          // shared working array, so the snapshot carries all prior progress.
+          // Non-fatal: a failed persist must not abort the translation pass.
+          try {
+            await onDayTranslated?.({ ...plan, members });
+          } catch (persistErr) {
+            console.warn(
+              "[translateMealPlan]",
+              member.member_id,
+              "day",
+              dayIndex,
+              "progressive persist failed:",
+              persistErr instanceof Error ? persistErr.message : String(persistErr),
+            );
+          }
+          break;
+        } catch (err) {
+          if (isRetryable(err) && attempt < MAX_RETRIES) {
+            attempt++;
+            await sleep(backoffMs(attempt));
+            continue;
+          }
+          // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
+          console.warn(
+            "[translateMealPlan]",
+            member.member_id,
+            "day",
+            dayIndex,
+            "translation failed:",
+            err instanceof Error ? err.message : String(err),
+          );
+          break;
         }
-        break;
-      } catch (err) {
-        if (isRetryable(err) && attempt < MAX_RETRIES) {
-          attempt++;
-          await sleep(backoffMs(attempt));
-          continue;
-        }
-        // Non-fatal: maid view falls back to the Arabic name.
-        console.warn(
-          "[translateMealPlan] name translation failed:",
-          err instanceof Error ? err.message : String(err),
-        );
-        break;
       }
     }
   }
