@@ -294,6 +294,27 @@ export async function triggerPlanTranslation(params: {
     // Stale 'started' (bg worker hard-killed) → nothing is writing; fall through.
   }
 
+  // Don't translate while members are still queued to be generated. Added members
+  // generate one-at-a-time via the drain; between drain runs there's no live
+  // 'started' row and the plan is 'ready' with content — but it's MISSING the
+  // still-pending member(s). Translating now would localize a partial plan, then
+  // the next drain run regenerates and re-translates. Each generation run
+  // self-translates the WHOLE plan at its end (re-reading the housekeeper fresh,
+  // see generate-plan-background.mts), so once the LAST pending member's run
+  // finishes it lands fully translated on its own — a no-op here is correct.
+  const { data: memberRows } = await supabase
+    .from("family_members")
+    .select("id, role")
+    .eq("user_id", userId)
+    .returns<{ id: string; role: string }[]>();
+  if (memberRows) {
+    const inPlan = new Set(plan.members.map((m) => m.member_id));
+    const hasPending = memberRows.some(
+      (m) => m.role !== "housekeeper" && !inPlan.has(m.id),
+    );
+    if (hasPending) return;
+  }
+
   // Skip if a translation INTO THIS LOCALE is already actively in progress: some
   // meals already carry this locale (a pass has started writing) AND the row was
   // updated very recently (progressive per-day writes are still landing). The
