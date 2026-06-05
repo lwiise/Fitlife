@@ -842,7 +842,19 @@ export async function runMealPlanGeneration(params: {
           d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
         ),
       );
-    if (endLocale && needsTranslate) {
+    // Only translate on the LAST member's run — see the bg fn for the full
+    // rationale. Skip while any non-housekeeper member is still pending generation
+    // so this run's 'started' lock releases fast and the drain isn't blocked.
+    const { data: memberRows } = await supabase
+      .from("family_members")
+      .select("id, role")
+      .eq("user_id", context.mom.id)
+      .returns<{ id: string; role: string }[]>();
+    const planIds = new Set(plan.members.map((m) => m.member_id));
+    const pendingMembers = (memberRows ?? []).some(
+      (m) => m.role !== "housekeeper" && !planIds.has(m.id),
+    );
+    if (endLocale && needsTranslate && !pendingMembers) {
       const { plan: translated, usage: tUsage } = await translateMealPlan({
         anthropicApiKey,
         plan,

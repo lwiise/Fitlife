@@ -432,7 +432,23 @@ export default async (req: Request): Promise<Response> => {
             d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
           ),
         );
-      if (endLocale && needsTranslate) {
+      // Only translate on the LAST member's run. Added members generate one-at-a-
+      // time via the drain; translating here (under the still-live 'started' lock)
+      // on an intermediate run holds the lock through the whole — now slow, member-
+      // sequential — family translation, blocking the next member's run (busy guard)
+      // and the maid re-trigger. Skip while any non-housekeeper member is still
+      // pending; the final run (none pending) translates the full family once.
+      const memberRows = await sbSelectMany(
+        supabaseUrl,
+        expected,
+        "family_members",
+        `user_id=eq.${userId}&select=id,role`,
+      );
+      const planIds = new Set(plan.members.map((m) => m.member_id));
+      const pendingMembers = memberRows.some(
+        (m) => m.role !== "housekeeper" && !planIds.has(m.id as string),
+      );
+      if (endLocale && needsTranslate && !pendingMembers) {
         const { plan: translated, usage: tUsage } = await translateMealPlan({
           anthropicApiKey: anthropicKey,
           plan,
