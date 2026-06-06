@@ -1,9 +1,11 @@
 import { Suspense } from "react";
+import { Users } from "lucide-react";
 import {
   getCurrentUserLatestPlan,
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
+import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
@@ -41,6 +43,12 @@ export default async function PlanPage({
   const pendingMembers = familyMembers.filter(
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
+  // Deferred members the tier can't cover → don't auto-drain or show "preparing"
+  // (it never completes); show an upgrade nudge instead. (profiles.id = user id.)
+  const pendingBlocked =
+    pendingMembers.length > 0 && profile
+      ? !(await canGenerateForFamilyChange(profile.id)).allowed
+      : false;
   // Order by add order so the banner shows the member being prepared NOW vs the
   // rest still queued (the drain generates them one at a time, in this order).
   const addOrder = Array.isArray(profile?.member_addition_order)
@@ -71,6 +79,7 @@ export default async function PlanPage({
     latest?.status === "ready" &&
     !!latest.plan_data &&
     planHasContent(latest.plan_data) &&
+    !pendingBlocked &&
     (pendingMembers.length > 0 || hasIncompleteMember);
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
@@ -125,7 +134,7 @@ export default async function PlanPage({
             current plan generates AND through the hand-off window after it
             finishes (until the new member's own shell lands) — so there is no
             blank gap before the next member shows as loading. */}
-        {pendingMembers.length > 0 && (isGenerating || planReady) && (
+        {pendingMembers.length > 0 && !pendingBlocked && (isGenerating || planReady) && (
           <div
             role="status"
             aria-live="polite"
@@ -138,6 +147,29 @@ export default async function PlanPage({
               : restPendingNames
                 ? `نجهّز خطة ${firstPendingName} الآن · التالي: ${restPendingNames}`
                 : `نجهّز خطة ${firstPendingName} الآن`}
+          </div>
+        )}
+
+        {pendingBlocked && (
+          <div className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-4 mb-6">
+            <div className="flex items-start gap-3">
+              <Users
+                className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900"
+                aria-hidden="true"
+              />
+              <div className="flex-1">
+                <p className="text-brand-ink text-sm font-medium leading-relaxed">
+                  جهّزنا خطتك. أضفتِ {queuedNames}، لكن باقتك الحالية ما تكفي — رقّي
+                  باقتك عشان نجهّز خططهم.
+                </p>
+                <a
+                  href="/pricing"
+                  className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
+                >
+                  عرض الباقات
+                </a>
+              </div>
+            </div>
           </div>
         )}
 

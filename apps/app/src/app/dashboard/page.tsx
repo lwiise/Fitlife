@@ -142,7 +142,7 @@ export default async function DashboardPage() {
 
         {showAddFamily && <AddFamilyBanner />}
 
-        {onboardingDone && needsFamilyPlan && (
+        {onboardingDone && needsFamilyPlan && !pendingBlocked && (
           <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
         )}
 

@@ -77,7 +77,23 @@ export async function triggerPlanGeneration(params: {
   const access = bypassRateLimit
     ? await canGenerateForFamilyChange(userId)
     : await canGenerateNewPlan(userId);
-  if (!access.allowed) return { ok: false, kind: "access", access };
+  // On a full-family run, exceeding the tier's people limit doesn't block: we
+  // generate up to the limit (mom + as many members as fit) and defer the rest,
+  // which the dashboard then nudges to upgrade for. Single-member runs (add/edit)
+  // and other denials (inactive/past_due/trial) still block.
+  const isFullRun = !onlyMemberId && !regenerateMemberId;
+  let capMaxPeople: number | null = null;
+  if (!access.allowed) {
+    if (
+      isFullRun &&
+      access.reason === "person_count_exceeded" &&
+      access.details?.max_people != null
+    ) {
+      capMaxPeople = access.details.max_people;
+    } else {
+      return { ok: false, kind: "access", access };
+    }
+  }
 
   // Don't start a new generation while one is still running. A second run can't
   // carry the in-progress plan over (its members aren't complete yet), so it
@@ -167,6 +183,25 @@ export async function triggerPlanGeneration(params: {
     );
   }
 
+  // Tier can't cover the whole family → cap this run to the limit: keep mom (always
+  // beneficiary #1) + the first (max-1) other beneficiaries by display order; keep
+  // housekeepers (they cook, they aren't beneficiaries). The dropped members stay in
+  // family_members but out of this plan → the dashboard offers an upgrade for them.
+  // limitMemberIds is passed to the prod background fn (it rebuilds context from DB).
+  let limitMemberIds: string[] | undefined;
+  if (capMaxPeople != null) {
+    const beneficiaries = context.family_members.filter(
+      (m) => m.role !== "housekeeper",
+    );
+    const keep = new Set(
+      beneficiaries.slice(0, Math.max(0, capMaxPeople - 1)).map((m) => m.id),
+    );
+    context.family_members = context.family_members.filter(
+      (m) => m.role === "housekeeper" || keep.has(m.id),
+    );
+    limitMemberIds = [...keep];
+  }
+
   let mealPlanId: string;
   try {
     mealPlanId = await createPlanRows(supabase, userId);
@@ -226,6 +261,7 @@ export async function triggerPlanGeneration(params: {
           feedback,
           independentRegen: effIndependentRegen,
           onlyMemberId,
+          limitMemberIds,
         }),
       },
     );

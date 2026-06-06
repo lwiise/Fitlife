@@ -310,6 +310,9 @@ export default async (req: Request): Promise<Response> => {
     independentRegen?: boolean;
     // One-at-a-time add: generate ONLY this member; carry everyone else over.
     onlyMemberId?: string;
+    // Tier cap: when the family exceeds the plan limit, the allow-list of non-mom
+    // beneficiary ids to generate this run (mom is always included). Others defer.
+    limitMemberIds?: string[];
   };
   try {
     body = await req.json();
@@ -390,6 +393,15 @@ export default async (req: Request): Promise<Response> => {
       );
     }
 
+    // Tier cap (full run): restrict to mom + the allow-listed beneficiaries; keep
+    // housekeepers (they cook, aren't beneficiaries). Mirrors triggerPlanGeneration.
+    if (body.limitMemberIds && !body.onlyMemberId) {
+      const keep = new Set(body.limitMemberIds);
+      context.family_members = context.family_members.filter(
+        (m) => m.role === "housekeeper" || keep.has(m.id),
+      );
+    }
+
     const { plan, usage, missingDays } = await generateMealPlan({
       anthropicApiKey: anthropicKey,
       context,
@@ -449,9 +461,16 @@ export default async (req: Request): Promise<Response> => {
         "family_members",
         `user_id=eq.${userId}&select=id,role`,
       );
-      const familyMemberIds = memberRows
+      let familyMemberIds = memberRows
         .filter((m) => m.role !== "housekeeper")
         .map((m) => m.id as string);
+      // Tier-capped run: only mom + the allow-listed members are in this plan, so
+      // gate translation on THAT set — otherwise the deferred (tier-blocked) members
+      // would keep it "still generating" forever and the maid never gets translated.
+      if (body.limitMemberIds) {
+        const keep = new Set(body.limitMemberIds);
+        familyMemberIds = familyMemberIds.filter((id) => keep.has(id));
+      }
       const stillGenerating = hasPendingGeneration({
         plan,
         familyMemberIds,
