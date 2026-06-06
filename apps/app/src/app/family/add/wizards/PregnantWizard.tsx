@@ -6,6 +6,7 @@ export function PregnantWizard(props: {
   role: string;
   editMemberId?: string;
   initial?: MemberWizardInitial;
+  onboarding?: boolean;
 }) {
   return <MemberWizard type="pregnant" {...props} />;
 }

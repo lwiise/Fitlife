@@ -6,6 +6,7 @@ export function AdultWizard(props: {
   role: string;
   editMemberId?: string;
   initial?: MemberWizardInitial;
+  onboarding?: boolean;
 }) {
   return <MemberWizard type="adult" {...props} />;
 }

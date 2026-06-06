@@ -192,11 +192,15 @@ export function MemberWizard({
   role,
   editMemberId,
   initial,
+  onboarding = false,
 }: {
   type: MemberType;
   role: string;
   editMemberId?: string;
   initial?: MemberWizardInitial;
+  // During the onboarding add-a-member loop: generation is deferred (added members
+  // are only saved), so on success return to the loop's pop-up instead of /plan.
+  onboarding?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -325,6 +329,12 @@ export function MemberWizard({
           return;
         }
         setError(result.error);
+        return;
+      }
+      // Onboarding loop: the member was saved (generation deferred to the end), so
+      // return to the add-another-member pop-up rather than the plan.
+      if (onboarding) {
+        router.push("/onboarding/members");
         return;
       }
       // No regeneration happened (e.g. cosmetic edit) → go straight to the plan.

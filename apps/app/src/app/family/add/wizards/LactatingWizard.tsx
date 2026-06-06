@@ -6,6 +6,7 @@ export function LactatingWizard(props: {
   role: string;
   editMemberId?: string;
   initial?: MemberWizardInitial;
+  onboarding?: boolean;
 }) {
   return <MemberWizard type="lactating" {...props} />;
 }

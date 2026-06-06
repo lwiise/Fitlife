@@ -228,7 +228,7 @@ export interface MomProfileInput {
 }
 
 type GenerateActionResult =
-  | { ok: true; plan_generation_id: string }
+  | { ok: true; plan_generation_id: string | null }
   | { ok: false; error: string };
 
 /**
@@ -283,7 +283,6 @@ export async function saveMomProfile(
       months_postpartum: isLactating ? (input.months_postpartum ?? null) : null,
       consulted_doctor: input.consulted_doctor,
       mom_profile_completed_at: now,
-      onboarding_completed_at: now,
     } as never)
     .eq("id", user.id);
 
@@ -294,15 +293,37 @@ export async function saveMomProfile(
     return { ok: false, error: error.message };
   }
 
+  // Do NOT generate or mark onboarding complete here. The mom wizard now hands off
+  // to the add-a-member loop (/onboarding/members); generation for the WHOLE family
+  // (mom + everyone she adds) runs once at the end via finishOnboardingAndGenerate.
   revalidatePath("/dashboard");
-  const gen = await runFamilyGeneration(supabase, user.id);
-  if (gen.ok) return { ok: true, plan_generation_id: gen.plan_generation_id };
-  if (gen.kind === "busy") return { ok: false, error: PLAN_BUSY_MESSAGE };
-  // A lone mom can't exceed any tier; treat upgrade as a generic error fallback.
-  return {
-    ok: false,
-    error: gen.kind === "upgrade" ? "باقتك لا تكفي. جددي باقتك للمتابعة" : gen.error,
-  };
+  return { ok: true, plan_generation_id: null };
+}
+
+/**
+ * End of the onboarding add-a-member loop: mark onboarding complete and generate
+ * the WHOLE family at once (mom + every member added in the loop), then go to the
+ * plan. No onlyMemberId → the initial run generates everyone together, so shared
+ * meals are grouped across the full roster from the first run.
+ */
+export async function finishOnboardingAndGenerate(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error("Not authenticated");
+
+  await supabase
+    .from("profiles")
+    .update({ onboarding_completed_at: new Date().toISOString() } as never)
+    .eq("id", user.id);
+
+  revalidatePath("/dashboard");
+  // Fire-and-forget: the run streams in the background; /plan shows the generating
+  // state. Non-fatal on busy/error — /plan surfaces the status either way.
+  await runFamilyGeneration(supabase, user.id);
+  redirect("/plan");
 }
 
 export async function finalizeOnboarding(): Promise<void> {
@@ -438,9 +459,6 @@ type FamilyGenResult =
   | { ok: false; kind: "upgrade"; current: number; max: number }
   | { ok: false; kind: "busy" }
   | { ok: false; kind: "error"; error: string };
-
-const PLAN_BUSY_MESSAGE =
-  "خطتك لسه قيد التجهيز. انتظري لين تخلص ثم حاولي مرة ثانية";
 
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -618,25 +636,36 @@ export async function addFamilyMember(
   // Append to member_addition_order (best-effort; not load-bearing).
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("member_addition_order")
+    .select("member_addition_order, onboarding_completed_at")
     .eq("id", user.id)
     .single();
-  const additionOrder = (profileRow as { member_addition_order: unknown } | null)
-    ?.member_addition_order;
+  const typedProfile = profileRow as
+    | { member_addition_order: unknown; onboarding_completed_at: string | null }
+    | null;
+  const additionOrder = typedProfile?.member_addition_order;
   const order = Array.isArray(additionOrder) ? (additionOrder as string[]) : [];
+  const updatedOrder = [...order, memberId];
   await supabase
     .from("profiles")
-    .update({ member_addition_order: [...order, memberId] } as never)
+    .update({ member_addition_order: updatedOrder } as never)
     .eq("id", user.id);
 
   revalidatePath("/family");
+
+  // Onboarding add-a-member loop (onboarding not finalized yet): just SAVE the
+  // member — no generation. The whole family is generated once at the end of the
+  // loop via finishOnboardingAndGenerate. (There's no plan to carry over yet
+  // anyway.) Post-onboarding adds (below) generate incrementally.
+  if (!typedProfile?.onboarding_completed_at) {
+    return { ok: true, member_id: memberId, plan_generation_id: null };
+  }
+
   // Generate the NEXT member in order — NOT necessarily the just-added one. If an
   // earlier-added member is still pending (or an in-plan member is incomplete), it
   // goes first; the just-added member then waits its turn in the drain. This keeps
   // strict add order even when adds arrive while nothing is generating (otherwise
   // the latest add would jump ahead of an earlier still-pending member). Others
   // are carried over; never two members generating at once.
-  const updatedOrder = [...order, memberId];
   let target = memberId;
   const latest = await getLatestPlan(user.id);
   if (

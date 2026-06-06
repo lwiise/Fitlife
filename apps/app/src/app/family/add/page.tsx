@@ -18,17 +18,21 @@ export default async function AddMemberPage({
   // Mom must have finished her profile before adding family.
   if (!profile.mom_profile_completed_at) redirect("/onboarding");
 
+  // Onboarding add-a-member loop (plan not generated yet): adds are deferred and
+  // the wizard returns to the pop-up at /onboarding/members instead of /plan.
+  const onboarding = !profile.onboarding_completed_at;
+
   switch (type) {
     case "husband":
-      return <AdultWizard role="dad" />;
+      return <AdultWizard role="dad" onboarding={onboarding} />;
     case "adult":
-      return <AdultWizard role="other_adult" />;
+      return <AdultWizard role="other_adult" onboarding={onboarding} />;
     case "child":
-      return <ChildWizard role="son" />;
+      return <ChildWizard role="son" onboarding={onboarding} />;
     case "preg":
-      return <PregLactSwitch />;
+      return <PregLactSwitch onboarding={onboarding} />;
     case "housekeeper":
-      return <HousekeeperForm />;
+      return <HousekeeperForm onboarding={onboarding} />;
     default:
       redirect("/family");
   }

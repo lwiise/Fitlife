@@ -6,6 +6,7 @@ export function ChildWizard(props: {
   role: string;
   editMemberId?: string;
   initial?: MemberWizardInitial;
+  onboarding?: boolean;
 }) {
   return <MemberWizard type="child" {...props} />;
 }

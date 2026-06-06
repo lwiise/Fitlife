@@ -6,7 +6,7 @@ import { Loader2, ChevronRight } from "lucide-react";
 import { addHousekeeper } from "@/app/onboarding/actions";
 import { LOCALE_CODES_ORDERED, LOCALE_INFO } from "@/lib/plans/locales";
 
-export function HousekeeperForm() {
+export function HousekeeperForm({ onboarding = false }: { onboarding?: boolean }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +18,12 @@ export function HousekeeperForm() {
     startTransition(async () => {
       const result = await addHousekeeper({ name: name.trim(), preferred_language: lang });
       if (!result.ok) return setError(result.error);
+      // Onboarding loop: return to the add-another-member pop-up (her translation
+      // runs after the family is generated at the end of the loop).
+      if (onboarding) {
+        router.push("/onboarding/members");
+        return;
+      }
       router.push(lang === "ar" ? "/plan" : "/plan/housekeeper");
     });
   };

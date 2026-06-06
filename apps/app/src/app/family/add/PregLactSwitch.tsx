@@ -5,11 +5,13 @@ import { PregnantWizard } from "./wizards/PregnantWizard";
 import { LactatingWizard } from "./wizards/LactatingWizard";
 
 /** The "امرأة حامل/مرضعة" picker leads here — choose which, then run the wizard. */
-export function PregLactSwitch() {
+export function PregLactSwitch({ onboarding = false }: { onboarding?: boolean }) {
   const [choice, setChoice] = useState<"pregnant" | "lactating" | null>(null);
 
-  if (choice === "pregnant") return <PregnantWizard role="other_adult" />;
-  if (choice === "lactating") return <LactatingWizard role="other_adult" />;
+  if (choice === "pregnant")
+    return <PregnantWizard role="other_adult" onboarding={onboarding} />;
+  if (choice === "lactating")
+    return <LactatingWizard role="other_adult" onboarding={onboarding} />;
 
   return (
     <main className="min-h-screen bg-brand-surface">

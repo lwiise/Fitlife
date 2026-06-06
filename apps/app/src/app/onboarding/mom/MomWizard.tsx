@@ -152,7 +152,7 @@ export function MomWizard() {
         setError(result.error);
         return;
       }
-      router.push("/plan?onboarding=mom-first");
+      router.push("/onboarding/members");
     });
   };
 
