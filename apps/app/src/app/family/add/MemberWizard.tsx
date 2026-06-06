@@ -185,6 +185,14 @@ const TYPE_TITLES: Record<MemberType, string> = {
   lactating: "إضافة فرد (مرضعة)",
 };
 
+// Singular noun per type, for the "X من N" counter when adding several at once.
+const TYPE_NOUNS: Record<MemberType, string> = {
+  adult: "البالغ",
+  child: "الطفل",
+  pregnant: "الحامل",
+  lactating: "المرضعة",
+};
+
 export type MemberWizardInitial = Partial<FamilyMemberInput>;
 
 export function MemberWizard({
@@ -193,6 +201,7 @@ export function MemberWizard({
   editMemberId,
   initial,
   onboarding = false,
+  count = 1,
 }: {
   type: MemberType;
   role: string;
@@ -201,6 +210,9 @@ export function MemberWizard({
   // During the onboarding add-a-member loop: generation is deferred (added members
   // are only saved), so on success return to the loop's pop-up instead of /plan.
   onboarding?: boolean;
+  // How many members of this type to collect in sequence (1 = single). Only used
+  // when adding (never editing); each is saved before the next begins.
+  count?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -208,6 +220,8 @@ export function MemberWizard({
   const [step, setStep] = useState(0);
   const [polling, setPolling] = useState(false);
   const [upgrade, setUpgrade] = useState<{ current: number; max: number } | null>(null);
+  // 0-based position in a multi-member batch (e.g. "الطفل ٢ من ٣").
+  const [memberIndex, setMemberIndex] = useState(0);
 
   const [name, setName] = useState(initial?.name ?? "");
   const [birthYear, setBirthYear] = useState(initial?.birth_year?.toString() ?? "");
@@ -307,6 +321,33 @@ export function MemberWizard({
     months_postpartum: type === "lactating" ? (monthsPP ? Number(monthsPP) : null) : null,
   });
 
+  // Clear the form for the next member in a multi-member batch (add-mode only, so
+  // every field returns to its blank default — mirrors the useState initializers).
+  const resetForNext = () => {
+    setName("");
+    setBirthYear("");
+    setSex(role === "dad" ? "male" : type === "adult" ? "" : "female");
+    setHeightCm("");
+    setWeightKg("");
+    setActivity("");
+    setUserGoal("");
+    setAllergies([]);
+    setConditions([]);
+    setOtherCondition("");
+    setSchoolMeal("");
+    setPickyEater(false);
+    setTrimester(null);
+    setHighRisk(null);
+    setMonthsPP("");
+    setFeedingMode("");
+    setConsultedDoctor(false);
+    setMealMode("shared");
+    setError(null);
+    setStep(0);
+    setMemberIndex((i) => i + 1);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+  };
+
   const submit = () => {
     const input = assemble();
     if (!input.name || input.name.length < 2) return setError("اكتبي الاسم");
@@ -329,6 +370,12 @@ export function MemberWizard({
           return;
         }
         setError(result.error);
+        return;
+      }
+      // Adding several of this type: this one is saved, keep collecting the next
+      // before doing any navigation. (count only applies to add, never edit.)
+      if (memberIndex + 1 < count) {
+        resetForNext();
         return;
       }
       // Onboarding loop: the member was saved (generation deferred to the end), so
@@ -370,8 +417,12 @@ export function MemberWizard({
   };
 
   const isLastBeforeDoctor = step === baseSteps.length - 1;
+  // More members of this type still to collect → the final action continues to
+  // the next one rather than finishing.
+  const moreToCome = memberIndex + 1 < count;
+  const finalLabel = moreToCome ? "التالي" : "أنشئي الخطة";
   const nextLabel =
-    isLastBeforeDoctor && !doctorNeeded ? "أنشئي الخطة" : "التالي";
+    isLastBeforeDoctor && !doctorNeeded ? finalLabel : "التالي";
 
   if (upgrade) {
     return (
@@ -423,8 +474,15 @@ export function MemberWizard({
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
         <div className="container-app py-4">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="font-bold text-base text-brand-ink">{TYPE_TITLES[type]}</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="font-bold text-base text-brand-ink truncate">{TYPE_TITLES[type]}</h1>
+              {count > 1 && (
+                <span className="flex-shrink-0 rounded-full bg-brand-lavender/40 text-brand-purple-900 text-xs font-bold px-2.5 py-1 tabular-nums">
+                  {TYPE_NOUNS[type]} {memberIndex + 1} من {count}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
               <BackToDashboard />
               <span className="text-brand-ink-muted text-xs font-medium tabular-nums">
                 {step + 1} / {total}
@@ -836,7 +894,7 @@ export function MemberWizard({
                   onClick={() => (consultedDoctor ? submit() : setError("لازم تأكدي على استشارة الطبيب أولاً"))}
                   isPending={isPending}
                 >
-                  أنشئي الخطة
+                  {finalLabel}
                 </PrimaryButton>
               </>
             )}

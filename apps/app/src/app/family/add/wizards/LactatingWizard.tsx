@@ -7,6 +7,7 @@ export function LactatingWizard(props: {
   editMemberId?: string;
   initial?: MemberWizardInitial;
   onboarding?: boolean;
+  count?: number;
 }) {
   return <MemberWizard type="lactating" {...props} />;
 }

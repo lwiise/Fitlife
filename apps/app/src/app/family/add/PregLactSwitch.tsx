@@ -4,14 +4,24 @@ import { useState } from "react";
 import { PregnantWizard } from "./wizards/PregnantWizard";
 import { LactatingWizard } from "./wizards/LactatingWizard";
 
-/** The "امرأة حامل/مرضعة" picker leads here — choose which, then run the wizard. */
-export function PregLactSwitch({ onboarding = false }: { onboarding?: boolean }) {
+/**
+ * The "امرأة حامل/مرضعة" picker leads here — choose which, then run the wizard.
+ * The choice applies to the whole batch of `count`: to mix one pregnant and one
+ * lactating, add them in two passes (the pop-up repeats) with count 1 each.
+ */
+export function PregLactSwitch({
+  onboarding = false,
+  count = 1,
+}: {
+  onboarding?: boolean;
+  count?: number;
+}) {
   const [choice, setChoice] = useState<"pregnant" | "lactating" | null>(null);
 
   if (choice === "pregnant")
-    return <PregnantWizard role="other_adult" onboarding={onboarding} />;
+    return <PregnantWizard role="other_adult" onboarding={onboarding} count={count} />;
   if (choice === "lactating")
-    return <LactatingWizard role="other_adult" onboarding={onboarding} />;
+    return <LactatingWizard role="other_adult" onboarding={onboarding} count={count} />;
 
   return (
     <main className="min-h-screen bg-brand-surface">
