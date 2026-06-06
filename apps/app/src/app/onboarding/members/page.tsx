@@ -5,15 +5,15 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { Logo } from "@/components/Logo";
-import { AddAnotherMemberModal } from "./AddAnotherMemberModal";
+import { OnboardingFamilyBuilder } from "./OnboardingFamilyBuilder";
 
 export const metadata = { title: "عائلتك" };
 
 /**
- * Onboarding add-a-member loop. Reached after mom finishes her profile (before the
- * plan is generated). Shows the roster behind a repeating "add another member?"
- * pop-up; each add returns here (pop-up shows again), and "create my plan"
- * finalizes onboarding and generates the whole family at once.
+ * Onboarding family builder. Reached after mom finishes her profile (before the plan
+ * is generated). Shows the roster behind a composition selector (OnboardingFamilyBuilder):
+ * she picks who's in the household, a single CTA walks her through each member's
+ * details in order, and the end finalizes onboarding and generates everyone at once.
  */
 export default async function OnboardingMembersPage() {
   const profile = await getCurrentUserProfile();
@@ -73,7 +73,7 @@ export default async function OnboardingMembersPage() {
         </div>
       </div>
 
-      <AddAnotherMemberModal />
+      <OnboardingFamilyBuilder />
     </main>
   );
 }

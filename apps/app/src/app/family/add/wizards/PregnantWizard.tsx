@@ -8,6 +8,7 @@ export function PregnantWizard(props: {
   initial?: MemberWizardInitial;
   onboarding?: boolean;
   count?: number;
+  onComplete?: () => void;
 }) {
   return <MemberWizard type="pregnant" {...props} />;
 }

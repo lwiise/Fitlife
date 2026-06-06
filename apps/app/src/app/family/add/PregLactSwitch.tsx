@@ -12,16 +12,32 @@ import { LactatingWizard } from "./wizards/LactatingWizard";
 export function PregLactSwitch({
   onboarding = false,
   count = 1,
+  onComplete,
 }: {
   onboarding?: boolean;
   count?: number;
+  onComplete?: () => void;
 }) {
   const [choice, setChoice] = useState<"pregnant" | "lactating" | null>(null);
 
   if (choice === "pregnant")
-    return <PregnantWizard role="other_adult" onboarding={onboarding} count={count} />;
+    return (
+      <PregnantWizard
+        role="other_adult"
+        onboarding={onboarding}
+        count={count}
+        onComplete={onComplete}
+      />
+    );
   if (choice === "lactating")
-    return <LactatingWizard role="other_adult" onboarding={onboarding} count={count} />;
+    return (
+      <LactatingWizard
+        role="other_adult"
+        onboarding={onboarding}
+        count={count}
+        onComplete={onComplete}
+      />
+    );
 
   return (
     <main className="min-h-screen bg-brand-surface">

@@ -8,6 +8,7 @@ export function AdultWizard(props: {
   initial?: MemberWizardInitial;
   onboarding?: boolean;
   count?: number;
+  onComplete?: () => void;
 }) {
   return <MemberWizard type="adult" {...props} />;
 }

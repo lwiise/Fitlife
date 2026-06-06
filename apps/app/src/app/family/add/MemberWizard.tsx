@@ -202,6 +202,8 @@ export function MemberWizard({
   initial,
   onboarding = false,
   count = 1,
+  onComplete,
+  terminalLabel,
 }: {
   type: MemberType;
   role: string;
@@ -213,6 +215,12 @@ export function MemberWizard({
   // How many members of this type to collect in sequence (1 = single). Only used
   // when adding (never editing); each is saved before the next begins.
   count?: number;
+  // When provided (the onboarding family builder), called after all `count` members
+  // are saved instead of navigating — lets a parent drive a longer sequence.
+  onComplete?: () => void;
+  // Label for the very last member's submit button (default "أنشئي الخطة"). The
+  // family builder passes "التالي" when more member types still follow.
+  terminalLabel?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -378,6 +386,12 @@ export function MemberWizard({
         resetForNext();
         return;
       }
+      // Driven by a parent sequence (onboarding family builder) → hand control back
+      // instead of navigating, so it can move on to the next member type.
+      if (onComplete) {
+        onComplete();
+        return;
+      }
       // Onboarding loop: the member was saved (generation deferred to the end), so
       // return to the add-another-member pop-up rather than the plan.
       if (onboarding) {
@@ -420,7 +434,7 @@ export function MemberWizard({
   // More members of this type still to collect → the final action continues to
   // the next one rather than finishing.
   const moreToCome = memberIndex + 1 < count;
-  const finalLabel = moreToCome ? "التالي" : "أنشئي الخطة";
+  const finalLabel = moreToCome ? "التالي" : (terminalLabel ?? "أنشئي الخطة");
   const nextLabel =
     isLastBeforeDoctor && !doctorNeeded ? finalLabel : "التالي";
 

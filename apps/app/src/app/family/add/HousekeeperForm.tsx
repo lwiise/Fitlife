@@ -6,7 +6,15 @@ import { Loader2, ChevronRight } from "lucide-react";
 import { addHousekeeper } from "@/app/onboarding/actions";
 import { LOCALE_CODES_ORDERED, LOCALE_INFO } from "@/lib/plans/locales";
 
-export function HousekeeperForm({ onboarding = false }: { onboarding?: boolean }) {
+export function HousekeeperForm({
+  onboarding = false,
+  onComplete,
+}: {
+  onboarding?: boolean;
+  // When provided (the onboarding family builder), called after the maid is saved
+  // instead of navigating — lets the parent finish the sequence and generate.
+  onComplete?: () => void;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +26,11 @@ export function HousekeeperForm({ onboarding = false }: { onboarding?: boolean }
     startTransition(async () => {
       const result = await addHousekeeper({ name: name.trim(), preferred_language: lang });
       if (!result.ok) return setError(result.error);
+      // Driven by a parent sequence (onboarding family builder) → hand control back.
+      if (onComplete) {
+        onComplete();
+        return;
+      }
       // Onboarding loop: return to the add-another-member pop-up (her translation
       // runs after the family is generated at the end of the loop).
       if (onboarding) {

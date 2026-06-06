@@ -8,6 +8,7 @@ export function LactatingWizard(props: {
   initial?: MemberWizardInitial;
   onboarding?: boolean;
   count?: number;
+  onComplete?: () => void;
 }) {
   return <MemberWizard type="lactating" {...props} />;
 }
