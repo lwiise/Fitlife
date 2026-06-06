@@ -189,13 +189,26 @@ export function OnboardingFamilyBuilder() {
           />
         </div>
 
-        <button
-          type="button"
-          onClick={start}
-          className="w-full flex items-center justify-center gap-2 min-h-11 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-        >
-          {totalSelected > 0 ? "التالي — أكملي بيانات العائلة" : "جاهزة — أنشئي خطتي"}
-        </button>
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={start}
+            className="w-full flex items-center justify-center gap-2 min-h-11 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          >
+            {totalSelected > 0 ? "التالي — أكملي بيانات العائلة" : "جاهزة — أنشئي خطتي"}
+          </button>
+
+          {/* Family is optional — let her skip and add them later from /family. */}
+          {totalSelected > 0 && (
+            <button
+              type="button"
+              onClick={finalize}
+              className="w-full min-h-11 text-center text-brand-ink-muted hover:text-brand-ink text-sm font-bold py-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            >
+              تخطّي الآن — أضيفهم لاحقاً
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
