@@ -46,7 +46,14 @@ export type Ingredient = z.infer<typeof IngredientSchema>;
 // ─── Per-member portion (family-as-unit shared recipes) ──────────────────
 export const PerMemberPortionSchema = z.object({
   member_id: z.string().min(1),
-  ingredients: z.array(IngredientSchema),
+  // This member's share of the cooked batch: weight in grams AND as a percentage
+  // of the total finished batch (the sharers' percentages sum to ~100). This is
+  // how different members hit different targets from the same pot.
+  portion_grams: z.number().optional(),
+  portion_percentage: z.number().optional(),
+  // Optional genuine add-ons/swaps for this member (e.g. an extra healthy-fat
+  // side) — NOT a re-listing of the shared recipe.
+  ingredients: z.array(IngredientSchema).optional(),
   notes_ar: z.string().optional(),
 });
 export type PerMemberPortion = z.infer<typeof PerMemberPortionSchema>;
@@ -72,10 +79,12 @@ export const MealSchema = z.object({
   servings_count: z.number().int().positive().optional(),
   substitutions_ar: z.array(z.string()).optional(),
   notes_ar: z.string().optional(), // storage / make-ahead / allergy warnings
-  // Family-as-unit: when true, top-level `ingredients` is the base recipe and
-  // `per_member_portions` overrides amounts per member. When false/absent, the
-  // meal is individual.
+  // Family-as-unit: when true, top-level `ingredients` is the ONE recipe scaled to
+  // the combined batch, `batch_finished_weight_g` is its total finished weight, and
+  // `per_member_portions` splits that batch per person (grams + %). When
+  // false/absent, the meal is individual.
   shared_recipe: z.boolean().optional(),
+  batch_finished_weight_g: z.number().optional(),
   per_member_portions: z.array(PerMemberPortionSchema).optional(),
 });
 export type Meal = z.infer<typeof MealSchema>;

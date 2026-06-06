@@ -69,6 +69,7 @@ export interface PlanStrings {
   ingredients: string;
   base_recipe: string;
   per_member_portions: string;
+  batch_total: string;
   prep_steps: string;
   substitutions: string;
   switch_to_arabic: string;
@@ -120,6 +121,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "المكونات",
     base_recipe: "الوصفة الأساس",
     per_member_portions: "مقادير كل فرد",
+    batch_total: "إجمالي الطبق",
     prep_steps: "طريقة التحضير",
     substitutions: "بدائل وتعديلات",
     switch_to_arabic: "العرض بالعربية",
@@ -164,6 +166,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "Ingredients",
     base_recipe: "base recipe",
     per_member_portions: "Per-person amounts",
+    batch_total: "Total batch",
     prep_steps: "Steps",
     substitutions: "Substitutions",
     switch_to_arabic: "Arabic view",
@@ -208,6 +211,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "Mga sangkap",
     base_recipe: "batayang recipe",
     per_member_portions: "Dami kada tao",
+    batch_total: "Kabuuang luto",
     prep_steps: "Mga hakbang",
     substitutions: "Mga kapalit",
     switch_to_arabic: "Arabic view",
@@ -252,6 +256,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "Bahan",
     base_recipe: "resep dasar",
     per_member_portions: "Takaran per orang",
+    batch_total: "Total masakan",
     prep_steps: "Langkah",
     substitutions: "Pengganti",
     switch_to_arabic: "Tampilan Arab",
@@ -296,6 +301,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "উপকরণ",
     base_recipe: "মূল রেসিপি",
     per_member_portions: "জনপ্রতি পরিমাণ",
+    batch_total: "মোট রান্না",
     prep_steps: "ধাপ",
     substitutions: "বিকল্প",
     switch_to_arabic: "আরবি ভিউ",
@@ -340,6 +346,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "ግብዓቶች",
     base_recipe: "መሰረታዊ አዘገጃጀት",
     per_member_portions: "ለእያንዳንዱ ሰው መጠን",
+    batch_total: "ጠቅላላ ምግብ",
     prep_steps: "ደረጃዎች",
     substitutions: "ምትኮች",
     switch_to_arabic: "የአረብኛ እይታ",
@@ -384,6 +391,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ingredients: "اجزاء",
     base_recipe: "بنیادی ترکیب",
     per_member_portions: "فی فرد مقدار",
+    batch_total: "کل مقدار",
     prep_steps: "اقدامات",
     substitutions: "متبادل",
     switch_to_arabic: "عربی منظر",

@@ -153,7 +153,13 @@ export function MealCard({
 
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2">
-                  {t.ingredients}{sharedPortions ? ` (${t.base_recipe})` : ""}
+                  {t.ingredients}
+                  {sharedPortions ? ` (${t.base_recipe})` : ""}
+                  {sharedPortions && meal.batch_finished_weight_g != null && (
+                    <span className="ms-2 text-brand-ink-muted text-xs font-normal tabular-nums">
+                      · {t.batch_total} {meal.batch_finished_weight_g} {t.units.g}
+                    </span>
+                  )}
                 </h4>
                 <IngredientList items={ingredients} units={t.units} />
               </section>
@@ -169,11 +175,20 @@ export function MealCard({
                         key={i}
                         className="rounded-xl bg-brand-surface/60 p-3"
                       >
-                        <p className="font-bold text-brand-ink text-xs mb-1.5">
-                          {memberNames?.[portion.member_id] ??
-                            portion.member_id}
+                        <p className="font-bold text-brand-ink text-xs mb-1.5 tabular-nums">
+                          {memberNames?.[portion.member_id] ?? portion.member_id}
+                          {portion.portion_grams != null && (
+                            <span className="ms-1 font-extrabold text-brand-purple-900">
+                              — {portion.portion_grams} {t.units.g}
+                              {portion.portion_percentage != null
+                                ? ` (${portion.portion_percentage}%)`
+                                : ""}
+                            </span>
+                          )}
                         </p>
-                        <IngredientList items={portion.ingredients} units={t.units} />
+                        {portion.ingredients && portion.ingredients.length > 0 && (
+                          <IngredientList items={portion.ingredients} units={t.units} />
+                        )}
                         {!translated && portion.notes_ar && (
                           <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
                             {portion.notes_ar}

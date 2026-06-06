@@ -196,7 +196,28 @@ export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) 
             </Text>
           </View>
 
-          {day.meals.map((meal, mealIdx) => (
+          {day.meals.map((meal, mealIdx) => {
+            // Shared meal: cooked once for the family and split. Show the family
+            // label, the total finished batch weight, and THIS member's share.
+            const myPortion = meal.shared_recipe
+              ? meal.per_member_portions?.find(
+                  (p) => p.member_id === memberPlan.member_id,
+                )
+              : undefined;
+            const sharedBits: string[] = [];
+            if (meal.shared_recipe) {
+              if (meal.batch_finished_weight_g != null)
+                sharedBits.push(`إجمالي الكمية ${meal.batch_finished_weight_g} جم`);
+              if (myPortion?.portion_grams != null)
+                sharedBits.push(
+                  `حصتك ${myPortion.portion_grams} جم${
+                    myPortion.portion_percentage != null
+                      ? ` (${myPortion.portion_percentage}%)`
+                      : ""
+                  }`,
+                );
+            }
+            return (
             <View key={mealIdx} style={styles.meal} wrap={false}>
               <View style={styles.mealHeader}>
                 <View>
@@ -212,6 +233,11 @@ export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) 
                 {meal.macros.protein_g} بروتين · {meal.macros.carbs_g} كارب ·{" "}
                 {meal.macros.fat_g} دهون (جم)
               </Text>
+              {meal.shared_recipe && (
+                <Text style={styles.macros}>
+                  وصفة العائلة{sharedBits.length ? ` · ${sharedBits.join(" · ")}` : ""}
+                </Text>
+              )}
 
               <Text style={styles.sectionLabel}>المكونات</Text>
               {meal.ingredients.map((ing, i) => (
@@ -230,7 +256,8 @@ export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) 
                 </Text>
               ))}
             </View>
-          ))}
+            );
+          })}
 
           <Footer pageNum={dayIdx + 2} total={totalPages} />
         </Page>
