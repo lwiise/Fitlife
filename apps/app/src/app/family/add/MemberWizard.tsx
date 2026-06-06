@@ -489,7 +489,9 @@ export function MemberWizard({
         <div className="container-app py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 min-w-0">
-              <h1 className="font-bold text-base text-brand-ink truncate">{TYPE_TITLES[type]}</h1>
+              <h1 className="font-bold text-base text-brand-ink truncate">
+                {role === "dad" ? "إضافة الزوج" : TYPE_TITLES[type]}
+              </h1>
               {count > 1 && (
                 <span className="flex-shrink-0 rounded-full bg-brand-lavender/40 text-brand-purple-900 text-xs font-bold px-2.5 py-1 tabular-nums">
                   {TYPE_NOUNS[type]} {memberIndex + 1} من {count}
