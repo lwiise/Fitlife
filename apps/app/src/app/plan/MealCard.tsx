@@ -11,7 +11,7 @@ import { formatNameList } from "@/lib/plans/formatNames";
 const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   breakfast: { bg: "bg-brand-yellow/25", text: "text-brand-ink" },
   lunch: { bg: "bg-brand-purple-900/10", text: "text-brand-purple-900" },
-  dinner: { bg: "bg-brand-pink-light", text: "text-brand-pink" },
+  dinner: { bg: "bg-brand-pink-light", text: "text-brand-ink" },
   snack: { bg: "bg-brand-lavender/40", text: "text-brand-purple-900" },
 };
 
