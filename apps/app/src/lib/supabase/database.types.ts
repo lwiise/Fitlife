@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          id: string
+          admin_user_id: string | null
+          subscriber_id: string | null
+          action: string
+          detail: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_user_id?: string | null
+          subscriber_id?: string | null
+          action: string
+          detail?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_user_id?: string | null
+          subscriber_id?: string | null
+          action?: string
+          detail?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      admin_users: {
+        Row: {
+          user_id: string
+          role: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          role?: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          role?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           id: string

@@ -1,0 +1,63 @@
+import type { ReactNode } from "react";
+import type { Trend } from "@/lib/admin/period";
+import type { AdminLocale } from "@/lib/admin/format";
+import { TrendPill } from "./TrendPill";
+
+type Accent = "purple" | "pink" | "yellow" | "emerald" | "ink";
+
+const SPINE: Record<Accent, string> = {
+  purple: "bg-brand-purple-900",
+  pink: "bg-brand-pink",
+  yellow: "bg-brand-yellow",
+  emerald: "bg-brand-emerald",
+  ink: "bg-brand-ink-muted",
+};
+
+/**
+ * One KPI in the strip — a white "ledger" tile with a start-edge accent spine,
+ * an uppercase micro-label, a large tabular figure, and an optional secondary
+ * hint + polarity-aware trend pill.
+ */
+export function KpiCard({
+  label,
+  value,
+  hint,
+  trend,
+  polarity = "positive",
+  accent = "purple",
+  locale,
+}: {
+  label: string;
+  value: string;
+  hint?: ReactNode;
+  trend?: Trend;
+  polarity?: "positive" | "negative";
+  accent?: Accent;
+  locale: AdminLocale;
+}) {
+  return (
+    <div className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 ps-5">
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 start-0 w-[3px] ${SPINE[accent]}`}
+      />
+      <p className="text-xs font-semibold uppercase text-brand-ink-muted">
+        {label}
+      </p>
+      <div className="flex items-end justify-between gap-2">
+        <span
+          dir="ltr"
+          className="text-2xl font-extrabold leading-none tabular-nums text-brand-ink"
+        >
+          {value}
+        </span>
+        {trend ? (
+          <TrendPill trend={trend} polarity={polarity} locale={locale} />
+        ) : null}
+      </div>
+      {hint ? (
+        <p className="text-xs leading-snug text-brand-ink-muted">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
