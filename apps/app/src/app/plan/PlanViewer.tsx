@@ -518,7 +518,13 @@ export function PlanViewer({
             </div>
           ) : activeDay && activeDay.meals.length > 0 ? (
             activeDay.meals.map((meal, i) => (
-              <MealCard key={i} meal={meal} memberNames={memberNames} locale={locale} />
+              <MealCard
+                key={i}
+                meal={meal}
+                memberNames={memberNames}
+                locale={locale}
+                currentMemberId={activeMember.member_id}
+              />
             ))
           ) : memberIsGenerating &&
             !preparingStalled &&

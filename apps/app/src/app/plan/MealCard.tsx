@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Users } from "lucide-react";
 import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
@@ -53,11 +53,15 @@ export function MealCard({
   meal,
   memberNames,
   locale,
+  currentMemberId,
 }: {
   meal: Meal;
   memberNames?: Record<string, string>;
   // When set to a non-Arabic locale, render translated fields + localized chrome.
   locale?: LocaleCode;
+  // The member whose plan is currently open — used to highlight their portion in
+  // a shared (family) recipe so "what you take" is obvious. Optional.
+  currentMemberId?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const slotStyle = SLOT_STYLE[meal.slot];
@@ -89,14 +93,23 @@ export function MealCard({
     meal.shared_recipe && meal.per_member_portions?.length
       ? meal.per_member_portions
       : null;
+  // A shared meal gets a distinct, lavender-accented treatment so it reads as one
+  // dish cooked for several people — not just another individual recipe.
+  const isShared = !!meal.shared_recipe;
 
   return (
-    <article className="bg-white rounded-2xl border border-brand-ink/5 overflow-hidden">
+    <article
+      className={`rounded-2xl overflow-hidden ${
+        isShared
+          ? "bg-brand-lavender/10 border border-brand-lavender/50 border-s-4 border-s-brand-purple-900/70"
+          : "bg-white border border-brand-ink/5"
+      }`}
+    >
       <button
         type="button"
         onClick={() => setExpanded((s) => !s)}
         aria-expanded={expanded}
-        className="w-full text-start px-5 py-4 hover:bg-brand-ink/[0.02] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-[3.5rem]"
+        className="w-full text-start px-5 py-4 hover:bg-brand-ink/[0.03] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-[3.5rem]"
       >
         <div className="flex items-start gap-3">
           <span
@@ -105,14 +118,20 @@ export function MealCard({
             {slotLabel}
           </span>
           <div className="flex-1 min-w-0">
+            {isShared && (
+              <span className="inline-flex items-center gap-1 mb-1 px-2 py-0.5 rounded-full bg-brand-lavender/50 text-brand-purple-900 text-[11px] font-bold">
+                <Users className="size-3" aria-hidden="true" />
+                {t.family_recipe}
+              </span>
+            )}
             <h3 className="font-bold text-brand-ink text-base leading-snug">
               {recipeName}
-              {meal.shared_recipe && (
-                <span className="ms-2 inline-block align-middle text-[10px] font-bold text-brand-purple-900 bg-brand-lavender/40 rounded-full px-2 py-0.5">
-                  {t.family_recipe}
-                </span>
-              )}
             </h3>
+            {isShared && (
+              <p className="mt-0.5 text-brand-purple-900/80 text-xs leading-relaxed">
+                {t.shared_meal_tagline}
+              </p>
+            )}
             <p className="mt-1 text-brand-ink-muted text-xs leading-relaxed tabular-nums">
               {meal.macros.protein_g} {t.protein} · {meal.macros.carbs_g} {t.carbs} ·{" "}
               {meal.macros.fat_g} {t.fat} ({t.grams})
@@ -152,12 +171,14 @@ export function MealCard({
               )}
 
               <section>
-                <h4 className="font-bold text-brand-ink text-sm mb-2">
-                  {t.ingredients}
-                  {sharedPortions ? ` (${t.base_recipe})` : ""}
+                <h4 className="font-bold text-brand-ink text-sm mb-2 flex items-center gap-2 flex-wrap">
+                  <span>
+                    {t.ingredients}
+                    {sharedPortions ? ` (${t.base_recipe})` : ""}
+                  </span>
                   {sharedPortions && meal.batch_finished_weight_g != null && (
-                    <span className="ms-2 text-brand-ink-muted text-xs font-normal tabular-nums">
-                      · {t.batch_total} {meal.batch_finished_weight_g} {t.units.g}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-purple-900/10 text-brand-purple-900 text-[11px] font-bold tabular-nums">
+                      {t.batch_total} {meal.batch_finished_weight_g} {t.units.g}
                     </span>
                   )}
                 </h4>
@@ -169,34 +190,52 @@ export function MealCard({
                   <h4 className="font-bold text-brand-ink text-sm mb-2">
                     {t.per_member_portions}
                   </h4>
-                  <div className="space-y-3">
-                    {sharedPortions.map((portion, i) => (
-                      <div
-                        key={i}
-                        className="rounded-xl bg-brand-surface/60 p-3"
-                      >
-                        <p className="font-bold text-brand-ink text-xs mb-1.5 tabular-nums">
-                          {memberNames?.[portion.member_id] ?? portion.member_id}
-                          {portion.portion_grams != null && (
-                            <span className="ms-1 font-extrabold text-brand-purple-900">
-                              — {portion.portion_grams} {t.units.g}
-                              {portion.portion_percentage != null
-                                ? ` (${portion.portion_percentage}%)`
-                                : ""}
-                            </span>
+                  <ul className="space-y-2">
+                    {sharedPortions.map((portion, i) => {
+                      const isCurrent =
+                        currentMemberId != null &&
+                        portion.member_id === currentMemberId;
+                      return (
+                        <li
+                          key={i}
+                          className={`rounded-xl p-3 ${
+                            isCurrent
+                              ? "bg-brand-lavender/40 ring-1 ring-brand-purple-900/30"
+                              : "bg-brand-surface/60"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-bold text-brand-ink text-xs min-w-0 truncate">
+                              {memberNames?.[portion.member_id] ?? portion.member_id}
+                              {isCurrent && (
+                                <span className="ms-1.5 text-brand-purple-900 font-extrabold">
+                                  {t.your_portion}
+                                </span>
+                              )}
+                            </p>
+                            {portion.portion_grams != null && (
+                              <span className="flex-shrink-0 font-extrabold text-brand-purple-900 text-sm tabular-nums whitespace-nowrap">
+                                {portion.portion_grams} {t.units.g}
+                                {portion.portion_percentage != null
+                                  ? ` · ${portion.portion_percentage}%`
+                                  : ""}
+                              </span>
+                            )}
+                          </div>
+                          {portion.ingredients && portion.ingredients.length > 0 && (
+                            <div className="mt-2">
+                              <IngredientList items={portion.ingredients} units={t.units} />
+                            </div>
                           )}
-                        </p>
-                        {portion.ingredients && portion.ingredients.length > 0 && (
-                          <IngredientList items={portion.ingredients} units={t.units} />
-                        )}
-                        {!translated && portion.notes_ar && (
-                          <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
-                            {portion.notes_ar}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                          {!translated && portion.notes_ar && (
+                            <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                              {portion.notes_ar}
+                            </p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </section>
               )}
 

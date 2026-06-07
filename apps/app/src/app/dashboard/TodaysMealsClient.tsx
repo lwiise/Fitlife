@@ -121,7 +121,12 @@ export function TodaysMealsClient({
 
             <div className="space-y-3 ps-2 border-s-2 border-brand-lavender/40">
               {day!.meals.map((meal, i) => (
-                <MealCard key={i} meal={meal} memberNames={memberNames} />
+                <MealCard
+                  key={i}
+                  meal={meal}
+                  memberNames={memberNames}
+                  currentMemberId={member.member_id}
+                />
               ))}
             </div>
           </section>
