@@ -110,7 +110,7 @@ export function MealCard({
       className={`rounded-2xl overflow-hidden ${
         isShared
           ? "bg-brand-lavender/10 border border-brand-lavender/50 border-s-4 border-s-brand-purple-900/70"
-          : "bg-white border border-brand-ink/5"
+          : "bg-brand-surface-elevated border border-brand-ink/5"
       }`}
     >
       <button
