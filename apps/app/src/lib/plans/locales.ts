@@ -66,6 +66,7 @@ export interface PlanStrings {
   min_abbr: string;
   servings_unit: string;
   family_recipe: string;
+  shared_meal_with: string;
   shared_meal_tagline: string;
   your_portion: string;
   ingredients: string;
@@ -120,6 +121,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "د",
     servings_unit: "حصص",
     family_recipe: "وصفة العائلة",
+    shared_meal_with: "وجبة مشتركة",
     shared_meal_tagline: "تُطبخ مرة واحدة وتُقسَّم على المشاركين",
     your_portion: "حصتك",
     ingredients: "المكونات",
@@ -167,6 +169,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "min",
     servings_unit: "servings",
     family_recipe: "Family recipe",
+    shared_meal_with: "Shared meal",
     shared_meal_tagline: "Cooked once, split between everyone",
     your_portion: "Your portion",
     ingredients: "Ingredients",
@@ -214,6 +217,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "min",
     servings_unit: "servings",
     family_recipe: "Recipe ng pamilya",
+    shared_meal_with: "Pinagsasaluhang pagkain",
     shared_meal_tagline: "Niluluto nang isang beses, hinahati sa lahat",
     your_portion: "Bahagi mo",
     ingredients: "Mga sangkap",
@@ -261,6 +265,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "mnt",
     servings_unit: "porsi",
     family_recipe: "Resep keluarga",
+    shared_meal_with: "Makanan bersama",
     shared_meal_tagline: "Dimasak sekali, dibagi untuk semua",
     your_portion: "Porsi Anda",
     ingredients: "Bahan",
@@ -308,6 +313,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "মিনিট",
     servings_unit: "পরিবেশন",
     family_recipe: "পরিবারের রেসিপি",
+    shared_meal_with: "ভাগ করা খাবার",
     shared_meal_tagline: "একবার রান্না, সবার মধ্যে ভাগ",
     your_portion: "আপনার ভাগ",
     ingredients: "উপকরণ",
@@ -355,6 +361,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "ደቂቃ",
     servings_unit: "ድርሻ",
     family_recipe: "የቤተሰብ የምግብ አዘገጃጀት",
+    shared_meal_with: "የጋራ ምግብ",
     shared_meal_tagline: "አንድ ጊዜ ይበስላል፣ ለሁሉም ይከፋፈላል",
     your_portion: "የእርስዎ ድርሻ",
     ingredients: "ግብዓቶች",
@@ -402,6 +409,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     min_abbr: "منٹ",
     servings_unit: "سرونگ",
     family_recipe: "خاندانی ترکیب",
+    shared_meal_with: "مشترکہ کھانا",
     shared_meal_tagline: "ایک بار پکائی جاتی ہے، سب میں تقسیم",
     your_portion: "آپ کا حصہ",
     ingredients: "اجزاء",

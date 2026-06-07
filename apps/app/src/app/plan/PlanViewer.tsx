@@ -292,6 +292,7 @@ export function PlanViewer({
             <DownloadPDFButton
               memberPlan={activeMember}
               planMetadata={{ week_start_date: plan.week_start_date }}
+              memberNames={memberNames}
             />
           )}
           {!readOnly && (

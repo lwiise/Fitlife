@@ -153,6 +153,34 @@ function sumDayTotal(meals: Meal[]) {
 }
 
 /**
+ * Guard the model's shared-meal output so a meal is only ever rendered as "shared"
+ * when it genuinely is. Drops portions for unknown members; downgrades a meal flagged
+ * `shared_recipe` that lacks a real ≥2-person split to an individual recipe (strips the
+ * shared fields); and strips sharing entirely on solo plans. Mutates `meals` in place.
+ */
+function sanitizeSharedMeals(
+  meals: Meal[],
+  beneficiaryIds: Set<string>,
+  solo: boolean,
+): void {
+  for (const meal of meals) {
+    if (!meal.shared_recipe) continue;
+    const portions = solo
+      ? []
+      : (meal.per_member_portions ?? []).filter((p) =>
+          beneficiaryIds.has(p.member_id),
+        );
+    if (portions.length < 2) {
+      meal.shared_recipe = false;
+      delete meal.batch_finished_weight_g;
+      delete meal.per_member_portions;
+    } else {
+      meal.per_member_portions = portions;
+    }
+  }
+}
+
+/**
  * Generate the family plan day-by-day (sequential, all days shown as "loading").
  * INCREMENTAL: members already complete in `existingPlan` are carried over
  * verbatim; only new/incomplete members are generated, and they're aligned to
@@ -196,6 +224,7 @@ export async function generateMealPlan(params: {
   const weekStart = existingPlan?.week_start_date ?? riyadhTodayISO();
 
   const beneficiaries = getBeneficiaries(context);
+  const beneficiaryIds = new Set(beneficiaries.map((b) => b.member_id));
   const nameById = new Map(
     beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
   );
@@ -624,6 +653,9 @@ export async function generateMealPlan(params: {
             (m) => m.member_id === sm.member_id,
           );
           const meals = sliceMember?.meals ?? [];
+          // Only keep a meal "shared" when it has a real ≥2-person split among actual
+          // beneficiaries — never force-share, and never on a solo plan.
+          sanitizeSharedMeals(meals, beneficiaryIds, beneficiaries.length === 1);
           // Stamp the translation locale in code (don't trust the model to echo it).
           if (context.housekeeper_locale) {
             for (const meal of meals) {

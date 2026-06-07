@@ -9,6 +9,7 @@ import {
   Font,
 } from "@react-pdf/renderer";
 import type { MemberPlan } from "@fitlife/plan-engine";
+import { formatNameList } from "@/lib/plans/formatNames";
 
 // Tajawal Arabic font from Google's font mirror. .ttf is required by @react-pdf.
 Font.register({
@@ -113,6 +114,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   step: { fontSize: 10, marginBottom: 3, color: INK, lineHeight: 1.5 },
+  portionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    fontSize: 10,
+    marginBottom: 2,
+    color: INK,
+  },
+  portionPct: { color: PURPLE, fontWeight: 700 },
   // Footer
   footer: {
     position: "absolute",
@@ -131,6 +140,8 @@ const styles = StyleSheet.create({
 export interface MemberPlanPDFProps {
   memberPlan: MemberPlan;
   planMetadata: { week_start_date: string };
+  // member_id → display name, for labelling who a shared meal is split between.
+  memberNames?: Record<string, string>;
 }
 
 function Footer({ pageNum, total }: { pageNum: number; total: number }) {
@@ -144,7 +155,11 @@ function Footer({ pageNum, total }: { pageNum: number; total: number }) {
   );
 }
 
-export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) {
+export function MemberPlanPDF({
+  memberPlan,
+  planMetadata,
+  memberNames,
+}: MemberPlanPDFProps) {
   const totalPages = 1 + memberPlan.days.length;
 
   return (
@@ -199,23 +214,18 @@ export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) 
           {day.meals.map((meal, mealIdx) => {
             // Shared meal: cooked once for the family and split. Show the family
             // label, the total finished batch weight, and THIS member's share.
-            const myPortion = meal.shared_recipe
-              ? meal.per_member_portions?.find(
-                  (p) => p.member_id === memberPlan.member_id,
-                )
-              : undefined;
+            const sharedSplit =
+              meal.shared_recipe && meal.per_member_portions?.length
+                ? meal.per_member_portions
+                : null;
             const sharedBits: string[] = [];
-            if (meal.shared_recipe) {
+            let participants = "";
+            if (sharedSplit) {
+              participants = formatNameList(
+                sharedSplit.map((p) => memberNames?.[p.member_id] ?? p.member_id),
+              );
               if (meal.batch_finished_weight_g != null)
                 sharedBits.push(`إجمالي الكمية ${meal.batch_finished_weight_g} جم`);
-              if (myPortion?.portion_grams != null)
-                sharedBits.push(
-                  `حصتك ${myPortion.portion_grams} جم${
-                    myPortion.portion_percentage != null
-                      ? ` (${myPortion.portion_percentage}%)`
-                      : ""
-                  }`,
-                );
             }
             return (
             <View key={mealIdx} style={styles.meal} wrap={false}>
@@ -235,7 +245,8 @@ export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) 
               </Text>
               {meal.shared_recipe && (
                 <Text style={styles.macros}>
-                  وصفة العائلة{sharedBits.length ? ` · ${sharedBits.join(" · ")}` : ""}
+                  وجبة مشتركة{participants ? `: ${participants}` : ""}
+                  {sharedBits.length ? ` · ${sharedBits.join(" · ")}` : ""}
                 </Text>
               )}
 
@@ -255,6 +266,27 @@ export function MemberPlanPDF({ memberPlan, planMetadata }: MemberPlanPDFProps) 
                   {i + 1}. {step}
                 </Text>
               ))}
+
+              {sharedSplit && (
+                <>
+                  <Text style={styles.sectionLabel}>توزيع الحصص</Text>
+                  {sharedSplit.map((portion, i) => (
+                    <View key={i} style={styles.portionRow}>
+                      <Text>
+                        {memberNames?.[portion.member_id] ?? portion.member_id}
+                      </Text>
+                      {portion.portion_grams != null && (
+                        <Text style={styles.portionPct}>
+                          {portion.portion_grams} جم
+                          {portion.portion_percentage != null
+                            ? ` (${portion.portion_percentage}%)`
+                            : ""}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </>
+              )}
             </View>
             );
           })}

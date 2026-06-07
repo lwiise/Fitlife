@@ -6,6 +6,7 @@ import { ChevronDown, Users } from "lucide-react";
 import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
+import { formatNameList } from "@/lib/plans/formatNames";
 
 const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   breakfast: { bg: "bg-brand-yellow/25", text: "text-brand-ink" },
@@ -96,6 +97,13 @@ export function MealCard({
   // A shared meal gets a distinct, lavender-accented treatment so it reads as one
   // dish cooked for several people — not just another individual recipe.
   const isShared = !!meal.shared_recipe;
+  // Who this meal is split between — named so the cook knows exactly who shares it.
+  const participantNames = sharedPortions
+    ? formatNameList(
+        sharedPortions.map((p) => memberNames?.[p.member_id] ?? p.member_id),
+        locale ?? "ar",
+      )
+    : "";
 
   return (
     <article
@@ -119,19 +127,17 @@ export function MealCard({
           </span>
           <div className="flex-1 min-w-0">
             {isShared && (
-              <span className="inline-flex items-center gap-1 mb-1 px-2 py-0.5 rounded-full bg-brand-lavender/50 text-brand-purple-900 text-[11px] font-bold">
-                <Users className="size-3" aria-hidden="true" />
-                {t.family_recipe}
-              </span>
+              <p className="flex items-start gap-1 mb-1 text-brand-purple-900 text-xs font-bold leading-relaxed">
+                <Users className="size-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <span>
+                  {t.shared_meal_with}
+                  {participantNames ? `: ${participantNames}` : ""}
+                </span>
+              </p>
             )}
             <h3 className="font-bold text-brand-ink text-base leading-snug">
               {recipeName}
             </h3>
-            {isShared && (
-              <p className="mt-0.5 text-brand-purple-900/80 text-xs leading-relaxed">
-                {t.shared_meal_tagline}
-              </p>
-            )}
             <p className="mt-1 text-brand-ink-muted text-xs leading-relaxed tabular-nums">
               {meal.macros.protein_g} {t.protein} · {meal.macros.carbs_g} {t.carbs} ·{" "}
               {meal.macros.fat_g} {t.fat} ({t.grams})
@@ -183,6 +189,22 @@ export function MealCard({
                   )}
                 </h4>
                 <IngredientList items={ingredients} units={t.units} />
+              </section>
+
+              <section>
+                <h4 className="font-bold text-brand-ink text-sm mb-2">
+                  {t.prep_steps}
+                </h4>
+                <ol className="space-y-2 list-decimal list-inside marker:text-brand-purple-900 marker:font-bold">
+                  {steps.map((step, i) => (
+                    <li
+                      key={i}
+                      className="text-brand-ink text-sm leading-relaxed"
+                    >
+                      {step}
+                    </li>
+                  ))}
+                </ol>
               </section>
 
               {sharedPortions && (
@@ -238,22 +260,6 @@ export function MealCard({
                   </ul>
                 </section>
               )}
-
-              <section>
-                <h4 className="font-bold text-brand-ink text-sm mb-2">
-                  {t.prep_steps}
-                </h4>
-                <ol className="space-y-2 list-decimal list-inside marker:text-brand-purple-900 marker:font-bold">
-                  {steps.map((step, i) => (
-                    <li
-                      key={i}
-                      className="text-brand-ink text-sm leading-relaxed"
-                    >
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-              </section>
 
               {/* Substitutions + notes have no translated source → Arabic-only view. */}
               {!translated && meal.substitutions_ar && meal.substitutions_ar.length > 0 && (

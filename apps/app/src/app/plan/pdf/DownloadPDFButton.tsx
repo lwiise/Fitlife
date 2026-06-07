@@ -7,6 +7,8 @@ import type { MemberPlan } from "@fitlife/plan-engine";
 export interface DownloadPDFButtonProps {
   memberPlan: MemberPlan;
   planMetadata: { week_start_date: string };
+  // member_id → display name, for labelling who a shared meal is split between.
+  memberNames?: Record<string, string>;
 }
 
 function safeFilename(s: string): string {
@@ -16,6 +18,7 @@ function safeFilename(s: string): string {
 export function DownloadPDFButton({
   memberPlan,
   planMetadata,
+  memberNames,
 }: DownloadPDFButtonProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 
@@ -33,7 +36,11 @@ export function DownloadPDFButton({
       ]);
 
       const blob = await pdf(
-        <MemberPlanPDF memberPlan={memberPlan} planMetadata={planMetadata} />,
+        <MemberPlanPDF
+          memberPlan={memberPlan}
+          planMetadata={planMetadata}
+          memberNames={memberNames}
+        />,
       ).toBlob();
 
       const filename = `fitlife-plan-${safeFilename(memberPlan.member_name_ar)}-${planMetadata.week_start_date}.pdf`;
