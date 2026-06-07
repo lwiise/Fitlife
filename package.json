@@ -11,6 +11,7 @@
     "build:web": "turbo run build --filter=@fitlife/web",
     "build:app": "turbo run build --filter=@fitlife/app",
     "lint": "turbo run lint",
+    "test": "turbo run test",
     "type-check": "turbo run type-check",
     "clean": "turbo run clean"
   },
