@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ChevronDown, Users } from "lucide-react";
 import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
@@ -65,6 +65,7 @@ export function MealCard({
   currentMemberId?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const reduceMotion = useReducedMotion();
   const slotStyle = SLOT_STYLE[meal.slot];
 
   const translated = !!locale && locale !== "ar";
@@ -151,7 +152,7 @@ export function MealCard({
           </div>
           <motion.span
             animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2 }}
             className="flex-shrink-0 mt-1"
             aria-hidden="true"
           >
@@ -166,7 +167,7 @@ export function MealCard({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2 }}
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 pt-1 border-t border-brand-ink/5 space-y-4">
