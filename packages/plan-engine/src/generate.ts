@@ -25,6 +25,9 @@ import {
   type PlanSkeleton,
   type Meal,
   type Day,
+  type DaySlice,
+  type Ingredient,
+  type PerMemberPortion,
   type LocaleCode,
 } from "./schema";
 import { PlanValidationError, AnthropicCallError } from "./errors";
@@ -152,30 +155,177 @@ function sumDayTotal(meals: Meal[]) {
   };
 }
 
+// ── Deterministic shared-meal assembly ──────────────────────────────────────
+// The model returns each member's OWN single-portion recipe for a dish. We do NOT
+// trust it to sum a batch or compute the split — both are derived here in code, so
+// shared meals are always correct (totals = sum of portions, % = each portion's
+// weight share). Members who were assigned the same dish (same skeleton
+// recipe_name_ar in the same slot) form a shared group; everyone else stays
+// individual. This is why "only share when it makes sense" holds: the skeleton only
+// gives two members the same dish name when the dish actually fits both.
+
+const GRAMS_PER_UNIT: Partial<Record<Ingredient["unit"], number>> = {
+  g: 1,
+  kg: 1000,
+  ml: 1,
+  l: 1000,
+};
+
+/** Approximate edible weight of one portion from its weighable ingredients. */
+function portionWeightG(ings: Ingredient[]): number {
+  let g = 0;
+  for (const ing of ings) {
+    const factor = GRAMS_PER_UNIT[ing.unit];
+    if (factor != null) g += ing.amount * factor;
+  }
+  return g;
+}
+
+/** Sum per-person ingredient lists into one batch (matched by Arabic name + unit). */
+function sumIngredients(lists: Ingredient[][]): Ingredient[] {
+  const byKey = new Map<string, Ingredient>();
+  const order: string[] = [];
+  for (const list of lists) {
+    for (const ing of list) {
+      const key = `${ing.name_ar.trim()}|${ing.unit}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, { ...ing });
+        order.push(key);
+      } else {
+        existing.amount = Math.round((existing.amount + ing.amount) * 10) / 10;
+        if (existing.amount_min != null && ing.amount_min != null)
+          existing.amount_min =
+            Math.round((existing.amount_min + ing.amount_min) * 10) / 10;
+        if (existing.amount_max != null && ing.amount_max != null)
+          existing.amount_max =
+            Math.round((existing.amount_max + ing.amount_max) * 10) / 10;
+      }
+    }
+  }
+  return order.map((k) => byKey.get(k)!);
+}
+
 /**
- * Guard the model's shared-meal output so a meal is only ever rendered as "shared"
- * when it genuinely is. Drops portions for unknown members; downgrades a meal flagged
- * `shared_recipe` that lacks a real ≥2-person split to an individual recipe (strips the
- * shared fields); and strips sharing entirely on solo plans. Mutates `meals` in place.
+ * Turn each day-slice into correct shared meals, deterministically. Mutates `slice`.
+ * For every (slot, dish) group of ≥2 members: sets one batch recipe (summed
+ * ingredients + group prep steps) on each participant, plus a per-member split
+ * (grams + %), while keeping each member's own calories/macros. Singletons are left
+ * individual (any model-set shared fields are cleared). Exported for unit testing.
  */
-function sanitizeSharedMeals(
-  meals: Meal[],
-  beneficiaryIds: Set<string>,
-  solo: boolean,
+export function assembleSharedMeals(
+  slice: DaySlice,
+  daySkeleton: PlanSkeleton,
+  dayIndex: number,
 ): void {
-  for (const meal of meals) {
-    if (!meal.shared_recipe) continue;
-    const portions = solo
-      ? []
-      : (meal.per_member_portions ?? []).filter((p) =>
-          beneficiaryIds.has(p.member_id),
-        );
-    if (portions.length < 2) {
+  // Authoritative "who shares what": the skeleton's dish name per (member, slot).
+  const skelName = new Map<string, string>();
+  for (const sm of daySkeleton.members) {
+    const day = sm.days.find((d) => d.day_index === dayIndex);
+    for (const m of day?.meals ?? [])
+      skelName.set(`${sm.member_id}|${m.slot}`, m.recipe_name_ar.trim());
+  }
+
+  type Entry = { member_id: string; meal: Meal };
+  const groups = new Map<string, Entry[]>();
+  for (const member of slice.members) {
+    for (const meal of member.meals) {
+      // Recompute shared fields from scratch — never trust the model's version.
       meal.shared_recipe = false;
       delete meal.batch_finished_weight_g;
       delete meal.per_member_portions;
+      const name =
+        skelName.get(`${member.member_id}|${meal.slot}`) ??
+        meal.recipe_name_ar.trim();
+      const key = `${meal.slot}|${name}`;
+      const arr = groups.get(key);
+      if (arr) arr.push({ member_id: member.member_id, meal });
+      else groups.set(key, [{ member_id: member.member_id, meal }]);
+    }
+  }
+
+  for (const entries of groups.values()) {
+    if (entries.length < 2) continue; // eaten by one person → individual
+
+    const batch = sumIngredients(entries.map((e) => e.meal.ingredients));
+    const weights = entries.map((e) => ({
+      id: e.member_id,
+      g: portionWeightG(e.meal.ingredients),
+      cal: e.meal.calories || 0,
+    }));
+    const totalG = weights.reduce((s, w) => s + w.g, 0);
+    const totalCal = weights.reduce((s, w) => s + w.cal, 0);
+
+    let portions: PerMemberPortion[];
+    let batchWeight: number | undefined;
+    if (totalG > 0) {
+      batchWeight = Math.round(totalG);
+      portions = weights.map((w) => ({
+        member_id: w.id,
+        portion_grams: Math.round(w.g),
+        portion_percentage: Math.round((w.g / totalG) * 100),
+      }));
+    } else if (totalCal > 0) {
+      // No weighable ingredients (e.g. pieces/cups only) → split by calorie share.
+      portions = weights.map((w) => ({
+        member_id: w.id,
+        portion_percentage: Math.round((w.cal / totalCal) * 100),
+      }));
     } else {
-      meal.per_member_portions = portions;
+      const pct = Math.round(100 / entries.length);
+      portions = weights.map((w) => ({ member_id: w.id, portion_percentage: pct }));
+    }
+
+    // Canonical recipe text = the largest portion (most complete ingredient list).
+    const canonical = entries.reduce((a, b) =>
+      portionWeightG(b.meal.ingredients) >= portionWeightG(a.meal.ingredients)
+        ? b
+        : a,
+    ).meal;
+
+    // Rebuild translated ingredients for the batch from canonical's name map, so the
+    // housekeeper view shows batch amounts with translated names (when present).
+    let batchTranslated: Ingredient[] | undefined;
+    if (
+      canonical.ingredients_translated &&
+      canonical.ingredients_translated.length === canonical.ingredients.length
+    ) {
+      const transByName = new Map<string, Ingredient>();
+      canonical.ingredients.forEach((ing, i) =>
+        transByName.set(ing.name_ar.trim(), canonical.ingredients_translated![i]!),
+      );
+      batchTranslated = batch.map((ing) => {
+        const t = transByName.get(ing.name_ar.trim());
+        return t
+          ? {
+              ...t,
+              amount: ing.amount,
+              amount_min: ing.amount_min,
+              amount_max: ing.amount_max,
+              unit: ing.unit,
+            }
+          : { ...ing };
+      });
+    }
+
+    for (const e of entries) {
+      e.meal.shared_recipe = true;
+      e.meal.recipe_name_ar = canonical.recipe_name_ar;
+      e.meal.ingredients = batch.map((i) => ({ ...i }));
+      e.meal.prep_steps_ar = [...canonical.prep_steps_ar];
+      if (batchWeight != null) e.meal.batch_finished_weight_g = batchWeight;
+      e.meal.per_member_portions = portions.map((p) => ({ ...p }));
+      // Amount-independent translated fields come from the canonical recipe.
+      if (canonical.recipe_name_translated)
+        e.meal.recipe_name_translated = canonical.recipe_name_translated;
+      if (canonical.prep_steps_translated)
+        e.meal.prep_steps_translated = [...canonical.prep_steps_translated];
+      if (canonical.prep_steps_translated_locale)
+        e.meal.prep_steps_translated_locale = canonical.prep_steps_translated_locale;
+      if (batchTranslated)
+        e.meal.ingredients_translated = batchTranslated.map((i) => ({ ...i }));
+      else delete e.meal.ingredients_translated;
+      // Each member keeps their OWN calories/macros (their portion's nutrition).
     }
   }
 }
@@ -224,7 +374,6 @@ export async function generateMealPlan(params: {
   const weekStart = existingPlan?.week_start_date ?? riyadhTodayISO();
 
   const beneficiaries = getBeneficiaries(context);
-  const beneficiaryIds = new Set(beneficiaries.map((b) => b.member_id));
   const nameById = new Map(
     beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
   );
@@ -648,14 +797,15 @@ export async function generateMealPlan(params: {
             res.text,
           );
         const slice = r.data;
+        // Build correct shared meals deterministically across all members in this
+        // slice (sum portions → batch, derive the split) — not trusting the model.
+        // Solo plans have one member per group, so nothing is shared.
+        if (beneficiaries.length > 1) assembleSharedMeals(slice, daySkeleton, dayIndex);
         for (const sm of daySkeleton.members) {
           const sliceMember = slice.members.find(
             (m) => m.member_id === sm.member_id,
           );
           const meals = sliceMember?.meals ?? [];
-          // Only keep a meal "shared" when it has a real ≥2-person split among actual
-          // beneficiaries — never force-share, and never on a solo plan.
-          sanitizeSharedMeals(meals, beneficiaryIds, beneficiaries.length === 1);
           // Stamp the translation locale in code (don't trust the model to echo it).
           if (context.housekeeper_locale) {
             for (const meal of meals) {
