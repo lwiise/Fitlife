@@ -21,6 +21,9 @@
     "lint": {
       "outputs": []
     },
+    "test": {
+      "outputs": []
+    },
     "type-check": {
       "outputs": [],
       "dependsOn": ["^build"]
