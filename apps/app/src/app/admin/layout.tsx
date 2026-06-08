@@ -1,15 +1,15 @@
-import { requireAdmin } from "@/lib/admin/auth";
 import { getAdminLocale } from "@/lib/admin/locale";
 
 /**
- * Outer gate for the entire /admin subtree (defense-in-depth layer 1).
- * `requireAdmin()` resolves the session user and checks admin_users via the
- * service-role client; non-admins get notFound() → 404. Every admin route
- * handler / server action repeats the check (layer 2) — never rely on this
- * layout alone.
+ * Admin subtree shell: resolves the admin language and flips direction (RTL for
+ * ar, LTR for en) for everything under /admin.
+ *
+ * The gate lives in each page/server action via requireAdmin() (which redirects
+ * non-admins to /admin/login) — NOT here, because the public /admin/login page
+ * renders inside this layout and must stay reachable when logged out.
  *
  * force-dynamic: admin views are per-request, auth-gated, and always live —
- * they must never be statically cached or prerendered.
+ * never statically cached or prerendered.
  */
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,6 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Gate (defense-in-depth layer 1), then resolve the admin language so the
-  // whole subtree flips direction (RTL for ar, LTR for en) at the layout level.
-  await requireAdmin();
   const locale = await getAdminLocale();
   const dir = locale === "ar" ? "rtl" : "ltr";
 

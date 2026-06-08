@@ -13,6 +13,34 @@ type Entry = Record<AdminLocale, string>;
 
 const STRINGS = {
   app_title: { ar: "لوحة تحكم Fit Life", en: "Fit Life Admin" },
+  // ── Admin auth (login screen) ──
+  admin_login_title: { ar: "تسجيل دخول المشرف", en: "Admin sign in" },
+  admin_login_subtitle: {
+    ar: "هذه المنطقة مخصصة للمشرفين.",
+    en: "This area is for administrators.",
+  },
+  field_password: { ar: "كلمة المرور", en: "Password" },
+  action_sign_in: { ar: "دخول", en: "Sign in" },
+  signing_in: { ar: "جارٍ الدخول…", en: "Signing in…" },
+  login_error_credentials: {
+    ar: "الإيميل أو كلمة المرور غير صحيحة.",
+    en: "Incorrect email or password.",
+  },
+  login_error_unconfirmed: {
+    ar: "لازم تأكدين إيميلك أولاً.",
+    en: "Confirm your email first.",
+  },
+  login_error_generic: {
+    ar: "حصل خطأ. حاولي مرة ثانية.",
+    en: "Something went wrong. Try again.",
+  },
+  no_access_title: { ar: "لا صلاحية وصول", en: "No admin access" },
+  no_access_body: {
+    ar: "هذا الحساب لا يملك صلاحية الوصول إلى لوحة الإدارة.",
+    en: "This account doesn’t have admin access.",
+  },
+  action_sign_out: { ar: "تسجيل الخروج", en: "Sign out" },
+
   nav_label: { ar: "التنقل", en: "Navigation" },
   nav_overview: { ar: "نظرة عامة", en: "Overview" },
   nav_insights: { ar: "التحليلات", en: "Insights" },

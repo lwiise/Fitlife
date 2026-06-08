@@ -1,8 +1,11 @@
 import "server-only";
 
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminDb } from "@/lib/admin/db";
+
+/** Where non-admins are sent. The login page is the one public /admin route. */
+export const ADMIN_LOGIN_PATH = "/admin/login";
 
 /**
  * Back-office access control.
@@ -58,12 +61,13 @@ export async function getAdminContext(): Promise<AdminContext | null> {
 }
 
 /**
- * Gate an admin RSC page / layout / server action. Renders a 404 (not 403) for
- * anyone who is not an admin, so the existence of /admin is never revealed.
- * Returns the admin context for admins.
+ * Gate an admin RSC page / server action. Redirects anyone who is not an admin
+ * (logged out or a normal user) to the admin login screen; the login page then
+ * shows the sign-in form or a "no access" state. Returns the admin context for
+ * admins. Call from every admin entry point (defense in depth).
  */
 export async function requireAdmin(): Promise<AdminContext> {
   const ctx = await getAdminContext();
-  if (!ctx) notFound();
+  if (!ctx) redirect(ADMIN_LOGIN_PATH);
   return ctx;
 }
