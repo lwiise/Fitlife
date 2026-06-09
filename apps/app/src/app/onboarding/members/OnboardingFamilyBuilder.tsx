@@ -15,7 +15,7 @@ import {
 import { MemberWizard } from "@/app/family/add/MemberWizard";
 import { PregLactSwitch } from "@/app/family/add/PregLactSwitch";
 import { HousekeeperForm } from "@/app/family/add/HousekeeperForm";
-import { finishOnboardingAndGenerate } from "@/app/onboarding/actions";
+import { finishOnboardingToSubscription } from "@/app/onboarding/actions";
 
 const MAX = 8;
 
@@ -53,7 +53,7 @@ export function OnboardingFamilyBuilder() {
 
   const finalize = () => {
     setPhase("finalizing");
-    startTransition(() => finishOnboardingAndGenerate());
+    startTransition(() => finishOnboardingToSubscription());
   };
 
   const start = () => {
@@ -84,8 +84,8 @@ export function OnboardingFamilyBuilder() {
           className="size-8 animate-spin motion-reduce:animate-none text-brand-purple-900"
           aria-hidden="true"
         />
-        <p className="text-brand-ink font-bold text-lg">نجهّز خطة عائلتك…</p>
-        <p className="text-brand-ink-muted text-sm">قد تاخذ دقيقة</p>
+        <p className="text-brand-ink font-bold text-lg">نكمل الإعداد…</p>
+        <p className="text-brand-ink-muted text-sm">لحظة من فضلك</p>
       </div>
     );
   }

@@ -155,8 +155,8 @@ export default async function DashboardPage() {
               />
               <div className="flex-1">
                 <p className="text-brand-ink text-sm font-medium leading-relaxed">
-                  أضفتِ {pendingNamesText}، لكن باقتك الحالية ما تكفي. رقّي باقتك
-                  عشان نجهّز خططهم.
+                  خطط باقي أفراد العائلة ({pendingNamesText}) متاحة مع الاشتراك.
+                  اشتركي ونجهّز خططهم دفعة واحدة مع وجبات العائلة المنسقة.
                 </p>
                 <Link
                   href="/pricing"

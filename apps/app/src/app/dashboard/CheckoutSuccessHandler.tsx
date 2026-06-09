@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
+import { syncFamilyPlanAfterSubscribe } from "@/app/onboarding/actions";
 
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS = 30_000;
@@ -43,7 +44,12 @@ export function CheckoutSuccessHandler() {
         if (body.status === "active") {
           clearInterval(interval);
           setStage("active");
-          router.replace("/dashboard");
+          // Subscription is live → generate the whole family together (shared
+          // meals synced). If it kicks off, watch it on /plan; else go home.
+          const { triggered } = await syncFamilyPlanAfterSubscribe().catch(
+            () => ({ triggered: false }),
+          );
+          router.replace(triggered ? "/plan" : "/dashboard");
         }
       } catch {
         // network blip — keep polling

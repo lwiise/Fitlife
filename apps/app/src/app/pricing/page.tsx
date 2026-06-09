@@ -4,6 +4,7 @@ import { LogoutButton } from "../dashboard/LogoutButton";
 import { PricingToggle } from "./PricingToggle";
 import { TierCard } from "./TierCard";
 import { PreselectionScroll } from "./PreselectionScroll";
+import { SkipSubscriptionButton } from "./SkipSubscriptionButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
 
@@ -17,10 +18,11 @@ const TIER_ORDER = ["starter", "pro", "family", "premium"] as const;
 export default async function PricingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cadence?: string; tier?: string }>;
+  searchParams: Promise<{ cadence?: string; tier?: string; from?: string }>;
 }) {
   const params = await searchParams;
   const cadence: Cadence = params.cadence === "annual" ? "annual" : "monthly";
+  const fromOnboarding = params.from === "onboarding";
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -46,7 +48,9 @@ export default async function PricingPage({
             اختاري الخطة المناسبة لعائلتك
           </h1>
           <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
-            ابدئي بفترة تجريبية مجانية لمدة 7 أيام. ألغي في أي وقت.
+            {fromOnboarding
+              ? "اشتركي عشان نجهّز خطط كل أفراد العائلة بوجبات منسقة. أو أكملي بخطتك أنتِ فقط الآن."
+              : "ابدئي بفترة تجريبية مجانية لمدة 7 أيام. ألغي في أي وقت."}
           </p>
         </div>
 
@@ -65,6 +69,8 @@ export default async function PricingPage({
             />
           ))}
         </div>
+
+        {fromOnboarding && <SkipSubscriptionButton />}
 
         <p className="text-center mt-10 text-brand-ink-muted text-xs leading-relaxed">
           الأسعار بالريال السعودي. الفوترة سنوية تُحتسب مرة واحدة.

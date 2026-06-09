@@ -159,8 +159,8 @@ export default async function PlanPage({
               />
               <div className="flex-1">
                 <p className="text-brand-ink text-sm font-medium leading-relaxed">
-                  جهّزنا خطتك. أضفتِ {queuedNames}، لكن باقتك الحالية ما تكفي — رقّي
-                  باقتك عشان نجهّز خططهم.
+                  جهّزنا خطتك. خطط {queuedNames} متاحة مع الاشتراك — اشتركي
+                  ونجهّزها دفعة واحدة مع وجبات العائلة المنسقة.
                 </p>
                 <a
                   href="/pricing"

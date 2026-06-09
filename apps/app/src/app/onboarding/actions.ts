@@ -7,6 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
+import {
+  getCurrentSubscription,
+  isSubscriptionActive,
+  getTierLimit,
+} from "@/lib/subscription/state";
+import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS, type MealPlan } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
@@ -295,18 +301,22 @@ export async function saveMomProfile(
 
   // Do NOT generate or mark onboarding complete here. The mom wizard now hands off
   // to the add-a-member loop (/onboarding/members); generation for the WHOLE family
-  // (mom + everyone she adds) runs once at the end via finishOnboardingAndGenerate.
+  // (mom + everyone she adds) runs after the subscription screen — either the
+  // whole family on subscribe (webhook) or mom-only via generateSoloAndContinue.
   revalidatePath("/dashboard");
   return { ok: true, plan_generation_id: null };
 }
 
 /**
- * End of the onboarding add-a-member loop: mark onboarding complete and generate
- * the WHOLE family at once (mom + every member added in the loop), then go to the
- * plan. No onlyMemberId → the initial run generates everyone together, so shared
- * meals are grouped across the full roster from the first run.
+ * End of the onboarding add-a-member loop: mark onboarding complete and send the
+ * user to the subscription screen. NO plan is generated here — the choice there
+ * decides what gets generated:
+ *   • subscribe → the LemonSqueezy webhook generates the WHOLE family together on
+ *     activation (so shared meals group across the full roster), or
+ *   • "continue with just my plan" → generateSoloAndContinue() makes the primary
+ *     user's plan only.
  */
-export async function finishOnboardingAndGenerate(): Promise<void> {
+export async function finishOnboardingToSubscription(): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -320,10 +330,83 @@ export async function finishOnboardingAndGenerate(): Promise<void> {
     .eq("id", user.id);
 
   revalidatePath("/dashboard");
-  // Fire-and-forget: the run streams in the background; /plan shows the generating
-  // state. Non-fatal on busy/error — /plan surfaces the status either way.
+  redirect("/pricing?from=onboarding");
+}
+
+/**
+ * "Continue with just my plan" from the post-onboarding subscription screen. Runs a
+ * normal family generation; on the free trial's starter tier (max 1 person) it caps
+ * to the primary user (mom) and defers the rest behind the subscription notice.
+ * Subscribing later regenerates the whole family together (see the LemonSqueezy
+ * webhook). Onboarding is already completed by finishOnboardingToSubscription.
+ */
+export async function generateSoloAndContinue(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error("Not authenticated");
+
+  // Full run → tier cap (trial starter = 1) yields a mom-only plan; any extra
+  // members defer until a covering subscription unlocks the whole-family regen.
   await runFamilyGeneration(supabase, user.id);
   redirect("/plan");
+}
+
+/**
+ * Whole-family (re)generation when a PAID subscription now covers more
+ * beneficiaries than the current plan contains — the synchronized path that keeps
+ * shared meals grouped across everyone (carryOver:false). Idempotent: a no-op when
+ * the plan already covers the tier's capacity, mid-generation, or for trial-only
+ * rows. Called right after checkout activates (CheckoutSuccessHandler). Returns
+ * whether a run was started so the caller can route to /plan.
+ */
+export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { triggered: false };
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("onboarding_completed_at")
+    .eq("id", user.id)
+    .returns<{ onboarding_completed_at: string | null }[]>()
+    .maybeSingle();
+  if (!prof?.onboarding_completed_at) return { triggered: false };
+
+  const sub = await getCurrentSubscription(user.id);
+  // Only a PAID active subscription unlocks the family — trial rows (no LS id)
+  // never auto-generate beyond the explicit mom-only path.
+  if (!sub || !isSubscriptionActive(sub) || !sub.lemonsqueezy_subscription_id) {
+    return { triggered: false };
+  }
+
+  const latest = await getLatestPlan(user.id);
+  if (latest?.in_progress) return { triggered: false }; // already generating
+
+  const { count } = await supabase
+    .from("family_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .neq("role", "housekeeper");
+  const beneficiaryCount = (count ?? 0) + 1; // + mom
+
+  if (
+    !shouldRegenerateFamilyOnActivation({
+      isPaidActive: true,
+      planMemberCount: latest?.member_count ?? 0,
+      beneficiaryCount,
+      tierMaxPeople: getTierLimit(sub.tier),
+    })
+  ) {
+    return { triggered: false };
+  }
+
+  const gen = await runFamilyGeneration(supabase, user.id, { fullRegen: true });
+  return { triggered: gen.ok };
 }
 
 export async function finalizeOnboarding(): Promise<void> {
@@ -402,9 +485,15 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
   });
   if (!nextId) return { fired: false };
 
-  const gen = await runFamilyGeneration(supabase, user.id, {
-    onlyMemberId: nextId,
-  });
+  // An ABSENT pending member (e.g. one a new subscription just unlocked) must be
+  // generated WITH the rest of the family in a single pass so shared meals group
+  // across everyone — the incremental one-at-a-time path can't merge a new member
+  // into the others' existing shared meals. An already-in-plan member that's only
+  // missing a failed day is finished alone (no shared-meal impact).
+  const inPlan = latest.plan_data.members.some((m) => m.member_id === nextId);
+  const gen = inPlan
+    ? await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId })
+    : await runFamilyGeneration(supabase, user.id, { fullRegen: true });
   return { fired: gen.ok };
 }
 
