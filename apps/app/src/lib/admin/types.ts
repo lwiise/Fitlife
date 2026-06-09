@@ -5,8 +5,9 @@
 
 import type { MrrBreakdown } from "./revenue";
 import type { Trend } from "./period";
+import type { GrossMargin } from "./margin";
 
-export type { MrrBreakdown, Trend };
+export type { MrrBreakdown, Trend, GrossMargin };
 
 /** One row in the subscriber table — minimized, ops-relevant fields only. */
 export interface SubscriberRow {
@@ -57,6 +58,26 @@ export interface Kpis {
   aiSpendPctOfRevenue: number | null;
   /** Avg beneficiaries per account. */
   avgHousehold: number;
+
+  // ── Founder KPIs (v2) ──
+  /** Net revenue retention % (snapshot approximation). */
+  nrr: number | null;
+  nrrTrend: Trend;
+  /** Average revenue per active user, monthly SAR. */
+  arpuSar: number | null;
+  /** Estimated gross margin (labeled "est." — uses assumed fees/infra). */
+  grossMargin: GrossMargin;
+  /** Net new MRR this period (new − churned), SAR. Approximate. */
+  mrrNetSar: number;
+  mrrNewSar: number;
+  mrrChurnedSar: number;
+  /** MRR of expiring trials + past-due (feeds the action queue). */
+  revenueAtRiskSar: number;
+  revenueAtRiskCount: number;
+  /** In-window sparkline series (decorative). */
+  signupsSeries: number[];
+  plansSeries: number[];
+  aiSpendSeries: number[];
 }
 
 export interface SubscriberListParams {

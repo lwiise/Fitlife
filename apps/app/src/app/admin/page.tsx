@@ -2,6 +2,7 @@ import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import {
+  buildOverviewActionQueue,
   buildSubscriberRows,
   computeKpis,
   filterSortPaginate,
@@ -14,6 +15,7 @@ import type { AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
 import { AdminTopBar } from "./_components/AdminTopBar";
 import { KpiStrip } from "./_components/KpiStrip";
+import { ActionQueue } from "./_components/ActionQueue";
 import { FilterBar } from "./_components/FilterBar";
 import { SubscriberTable } from "./_components/SubscriberTable";
 import { Pagination } from "./_components/Pagination";
@@ -46,6 +48,7 @@ export default async function AdminOverviewPage({
   const dataset = await loadAdminDataset();
   const kpis = computeKpis(dataset, getPeriodPair(periodDays));
   const rows = buildSubscriberRows(dataset);
+  const actionItems = buildOverviewActionQueue(dataset);
 
   const sort = SORT_KEYS.includes(params.sort as SubscriberSortKey)
     ? (params.sort as SubscriberSortKey)
@@ -110,6 +113,8 @@ export default async function AdminOverviewPage({
                 {t("truncated_warning", locale)}
               </p>
             ) : null}
+
+            <ActionQueue items={actionItems} locale={locale} />
 
             <section className="space-y-3" aria-labelledby="admin-subscribers-heading">
               <div className="flex flex-wrap items-center justify-between gap-3">

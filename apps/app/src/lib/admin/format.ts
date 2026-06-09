@@ -33,6 +33,25 @@ export function fmtSar(n: number, locale: AdminLocale): string {
   }).format(n);
 }
 
+/** Compact SAR (e.g. "1.2K ر.س") for tight tiles and chart axes. */
+export function fmtSarCompact(n: number, locale: AdminLocale): string {
+  return new Intl.NumberFormat(TAG[locale], {
+    style: "currency",
+    currency: "SAR",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
+}
+
+/** Percent with no fraction digits (cohort cells, gauges). "—" if null. */
+export function fmtPctInt(n: number | null | undefined, locale: AdminLocale): string {
+  if (n == null) return "—";
+  return new Intl.NumberFormat(TAG[locale], {
+    style: "percent",
+    maximumFractionDigits: 0,
+  }).format(n / 100);
+}
+
 export function fmtPct(n: number | null | undefined, locale: AdminLocale): string {
   if (n == null) return "—";
   return new Intl.NumberFormat(TAG[locale], {

@@ -6,6 +6,7 @@
  * rewrite is needed then.
  */
 
+import { SUPPORTED_LANGUAGES } from "@fitlife/config";
 import type { AdminLocale } from "./format";
 export type { AdminLocale };
 
@@ -240,6 +241,129 @@ const STRINGS = {
     ar: "بعض الإحصاءات قد تكون غير مكتملة (تم بلوغ حد التحميل).",
     en: "Some figures may be incomplete (load ceiling reached).",
   },
+
+  // ── v2: founder-question sections ──
+  section_growth: { ar: "هل ننمو؟", en: "Are we growing?" },
+  section_retention: { ar: "هل نحافظ على العملاء؟", en: "Are we keeping customers?" },
+  section_conversion: { ar: "هل نحوّل؟", en: "Are we converting?" },
+  section_economics: { ar: "كم نربح من كل عميل؟", en: "Are we earning per customer?" },
+  section_product: { ar: "هل المنتج يؤدي دوره؟", en: "Is the product delivering?" },
+  section_action_queue: { ar: "ماذا نفعل الآن؟", en: "What to act on now" },
+
+  // ── v2: hero / KPI additions ──
+  kpi_nrr: { ar: "صافي الاحتفاظ بالإيراد", en: "Net revenue retention" },
+  kpi_arpu: { ar: "الإيراد لكل مستخدم", en: "ARPU" },
+  kpi_gross_margin: { ar: "هامش الربح الإجمالي", en: "Gross margin" },
+  kpi_net_new_mrr: { ar: "صافي الإيراد الجديد", en: "Net new MRR" },
+  kpi_revenue_at_risk: { ar: "إيراد معرّض للخطر", en: "Revenue at risk" },
+  mrr_new: { ar: "جديد", en: "New" },
+  mrr_churned: { ar: "ملغى", en: "Churned" },
+  mrr_net: { ar: "الصافي", en: "Net" },
+  per_active_user: { ar: "لكل مستخدم نشط", en: "per active user" },
+  est_label: { ar: "تقديري", en: "est." },
+  net_revenue_churn: { ar: "صافي إلغاء الإيراد", en: "Net revenue churn" },
+  gross_churn: { ar: "نسبة الإلغاء", en: "Gross churn" },
+
+  // ── v2: chart titles ──
+  chart_mrr_movement: { ar: "حركة الإيراد الشهري", en: "MRR movement" },
+  chart_churn: { ar: "نسبة الإلغاء عبر الزمن", en: "Churn over time" },
+  chart_cohort: { ar: "احتفاظ الأفواج", en: "Cohort retention" },
+  chart_revenue_by_tier: { ar: "الإيراد حسب الباقة", en: "Revenue by tier" },
+  chart_success_rate: { ar: "نسبة نجاح الإنشاء", en: "Generation success rate" },
+  chart_failures_by_cause: { ar: "الإخفاقات حسب السبب", en: "Failures by cause" },
+  chart_locale_users: { ar: "لغات المستخدمات", en: "User languages" },
+  chart_locale_cooks: { ar: "لغات الطباخة", en: "Cook languages" },
+  chart_engagement: { ar: "التفاعل النشِط", en: "Active engagement" },
+  chart_plan_freshness: { ar: "حداثة الخطط", en: "Plan freshness" },
+
+  // ── v2: conversion section ──
+  conv_activation: { ar: "نسبة التفعيل", en: "Activation rate" },
+  conv_activation_hint: {
+    ar: "أكملوا الإعداد وأنشأوا أول خطة",
+    en: "Completed onboarding and generated a first plan",
+  },
+  conv_trials_expiring: { ar: "تجارب تنتهي قريبًا", en: "Trials expiring soon" },
+  trials_next_7: { ar: "خلال ٧ أيام", en: "Next 7 days" },
+  trials_next_14: { ar: "خلال ١٤ يوم", en: "Next 14 days" },
+  col_trial_ends: { ar: "تنتهي التجربة", en: "Trial ends" },
+  col_days_left: { ar: "المتبقي", en: "Days left" },
+  col_plan_yn: { ar: "خطة؟", en: "Plan?" },
+  col_mrr: { ar: "الإيراد", en: "MRR" },
+  col_renewal_short: { ar: "التجديد", en: "Renews" },
+  days_unit: { ar: "يوم", en: "d" },
+
+  // ── v2: retention section ──
+  ret_quiet_paying: { ar: "حسابات مدفوعة هادئة قرب التجديد", en: "Quiet paying accounts near renewal" },
+  cohort_month: { ar: "شهر التسجيل", en: "Signup month" },
+  cohort_size: { ar: "الحجم", en: "Size" },
+  cohort_age: { ar: "أشهر منذ التسجيل", en: "Months since signup" },
+
+  // ── v2: economics section ──
+  econ_assumptions: { ar: "الافتراضات", en: "Assumptions" },
+  assume_ls_fee: { ar: "رسوم LemonSqueezy", en: "LemonSqueezy fee" },
+  assume_infra: { ar: "البنية التحتية لكل مستخدم/شهر", en: "Infra per user / mo" },
+  econ_revenue: { ar: "الإيراد", en: "Revenue" },
+  econ_gross_profit: { ar: "الربح الإجمالي", en: "Gross profit" },
+  econ_ai_cost: { ar: "تكلفة الذكاء", en: "AI cost" },
+  econ_infra: { ar: "البنية التحتية", en: "Infra" },
+  econ_fees: { ar: "الرسوم", en: "Fees" },
+  potential_label: { ar: "محتمل (تجارب)", en: "Potential (trials)" },
+  at_risk_label: { ar: "متعثّر (دفع متأخر)", en: "At risk (past-due)" },
+  ltv_cac_placeholder: {
+    ar: "LTV‏:‏CAC ووقت الاسترداد — يحتاج بيانات إنفاق الاستحواذ.",
+    en: "LTV:CAC & payback — needs acquisition spend data.",
+  },
+
+  // ── v2: product / engagement ──
+  engagement_7d: { ar: "نشط خلال ٧ أيام", en: "Active in 7 days" },
+  engagement_30d: { ar: "نشط خلال ٣٠ يوم", en: "Active in 30 days" },
+  freshness_hint: { ar: "أسر نشطة بخطة حديثة", en: "Active households with a recent plan" },
+
+  // ── v2: action queue ──
+  aq_trial_expiring: { ar: "تجربة تنتهي", en: "Trial expiring" },
+  aq_past_due: { ar: "دفع متأخر", en: "Past due" },
+  aq_quiet_high_value: { ar: "حساب مدفوع هادئ", en: "Quiet paying account" },
+  aq_systemic_failures: { ar: "إخفاقات منهجية", en: "Systemic failures" },
+  aq_empty: { ar: "لا شيء يحتاج تدخلًا الآن", en: "Nothing needs attention right now" },
+  severity_high: { ar: "عاجل", en: "High" },
+  severity_medium: { ar: "متوسط", en: "Medium" },
+  severity_low: { ar: "منخفض", en: "Low" },
+
+  // ── v2: failure causes ──
+  failure_max_tokens: { ar: "حجم كبير / تجاوز التوكنز", en: "Too large / max tokens" },
+  failure_timeout: { ar: "انتهاء المهلة", en: "Timeout" },
+  failure_rate_limit: { ar: "تجاوز حد المعدل", en: "Rate limit" },
+  failure_validation: { ar: "تحقّق غير صالح", en: "Validation" },
+  failure_api_error: { ar: "خطأ في الواجهة", en: "API error" },
+  failure_unknown: { ar: "غير معروف", en: "Unknown" },
+
+  // ── v2: approximation / state notes ──
+  approx_snapshot: {
+    ar: "تقريبي من اللقطة الحالية — لا يتوفر سجل حالات.",
+    en: "Approximate — from the current snapshot (no status-history table).",
+  },
+  approx_no_expansion: {
+    ar: "بدون سجل ترقية/تخفيض الباقات، لا يُحتسب التوسّع أو الانكماش.",
+    en: "No upgrade/downgrade history — expansion/contraction aren’t counted.",
+  },
+  approx_cohort: {
+    ar: "مثلّث لقطة حالية وليس احتفاظًا تاريخيًا — يتحسّن مع تراكم البيانات.",
+    en: "Current-snapshot triangle, not historical retention — sharpens as history accrues.",
+  },
+  approx_freshness: {
+    ar: "تقريبي — لا نحمّل محتوى الخطة كاملًا.",
+    en: "Approximate — full plan content isn’t loaded.",
+  },
+  approx_nrr: {
+    ar: "تقريبي — يساوي ١٠٠٪ ناقص صافي إلغاء الإيراد.",
+    en: "Approximate — equals 100% minus net revenue churn.",
+  },
+  est_note: {
+    ar: "أرقام تقديرية بافتراضات رسوم وبنية تحتية.",
+    en: "Estimated using assumed fees and infra.",
+  },
+  chart_empty: { ar: "لا توجد بيانات بعد", en: "No data yet" },
+  chart_error: { ar: "تعذّر عرض الرسم", en: "Couldn’t render this chart" },
 } as const satisfies Record<string, Entry>;
 
 export type AdminStringKey = keyof typeof STRINGS;
@@ -333,4 +457,46 @@ const GEN_STATUS: Record<string, AdminStringKey> = {
 export function genStatusLabel(status: string, locale: AdminLocale): string {
   const key = GEN_STATUS[status];
   return key ? t(key, locale) : status;
+}
+
+const FAILURE_KEY: Record<string, AdminStringKey> = {
+  max_tokens: "failure_max_tokens",
+  timeout: "failure_timeout",
+  rate_limit: "failure_rate_limit",
+  validation: "failure_validation",
+  api_error: "failure_api_error",
+  unknown: "failure_unknown",
+};
+export function failureCauseLabel(cause: string, locale: AdminLocale): string {
+  const key = FAILURE_KEY[cause];
+  return key ? t(key, locale) : cause;
+}
+
+const ACTION_KIND_KEY: Record<string, AdminStringKey> = {
+  trial_expiring: "aq_trial_expiring",
+  past_due: "aq_past_due",
+  quiet_high_value: "aq_quiet_high_value",
+  systemic_failures: "aq_systemic_failures",
+};
+export function actionQueueKindLabel(kind: string, locale: AdminLocale): string {
+  const key = ACTION_KIND_KEY[kind];
+  return key ? t(key, locale) : kind;
+}
+
+const SEVERITY_KEY: Record<string, AdminStringKey> = {
+  high: "severity_high",
+  medium: "severity_medium",
+  low: "severity_low",
+};
+export function severityLabel(severity: string, locale: AdminLocale): string {
+  const key = SEVERITY_KEY[severity];
+  return key ? t(key, locale) : severity;
+}
+
+const LANG_NAME = new Map<string, string>(
+  SUPPORTED_LANGUAGES.map((l) => [l.code, l.name]),
+);
+/** Native language name for a locale code (e.g. "العربية", "Tagalog"). */
+export function localeName(code: string): string {
+  return LANG_NAME.get(code) ?? code;
 }

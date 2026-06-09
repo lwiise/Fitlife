@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Trend } from "@/lib/admin/period";
 import type { AdminLocale } from "@/lib/admin/format";
 import { TrendPill } from "./TrendPill";
+import { Sparkline } from "./Sparkline";
 
 type Accent = "purple" | "pink" | "yellow" | "emerald" | "ink";
 
@@ -11,6 +12,14 @@ const SPINE: Record<Accent, string> = {
   yellow: "bg-brand-yellow",
   emerald: "bg-brand-emerald",
   ink: "bg-brand-ink-muted",
+};
+
+const SPARK: Record<Accent, string> = {
+  purple: "text-brand-purple-900",
+  pink: "text-brand-pink",
+  yellow: "text-brand-warm-orange",
+  emerald: "text-brand-emerald",
+  ink: "text-brand-ink-muted",
 };
 
 /**
@@ -25,6 +34,7 @@ export function KpiCard({
   trend,
   polarity = "positive",
   accent = "purple",
+  sparkline,
   locale,
 }: {
   label: string;
@@ -33,6 +43,8 @@ export function KpiCard({
   trend?: Trend;
   polarity?: "positive" | "negative";
   accent?: Accent;
+  /** Optional in-window series for a decorative trend sparkline. */
+  sparkline?: number[];
   locale: AdminLocale;
 }) {
   return (
@@ -55,6 +67,9 @@ export function KpiCard({
           <TrendPill trend={trend} polarity={polarity} locale={locale} />
         ) : null}
       </div>
+      {sparkline && sparkline.length >= 2 ? (
+        <Sparkline points={sparkline} className={SPARK[accent]} />
+      ) : null}
       {hint ? (
         <p className="text-xs leading-snug text-brand-ink-muted">{hint}</p>
       ) : null}

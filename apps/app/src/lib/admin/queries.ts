@@ -3,7 +3,25 @@ import "server-only";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
 import { computeMrr } from "@/lib/admin/revenue";
-import { getPeriodPair, inRange, trend, type PeriodPair } from "@/lib/admin/period";
+import {
+  bucketSeries,
+  getPeriodPair,
+  inRange,
+  trend,
+  type PeriodPair,
+} from "@/lib/admin/period";
+import {
+  computeArpu,
+  computeNrr,
+  computeQuietPayingWatchlist,
+  computeRevenueAtRisk,
+  computeTrialWatchlist,
+  lastActivityByUser,
+} from "@/lib/admin/metrics";
+import { mrrMovementForRange } from "@/lib/admin/cohorts";
+import { computeGrossMargin } from "@/lib/admin/margin";
+import { computeFailureBuckets } from "@/lib/admin/failures";
+import { buildActionQueue, type ActionItem } from "@/lib/admin/actionQueue";
 import type {
   Kpi,
   Kpis,
@@ -94,6 +112,8 @@ interface GenLite {
   cost_usd: number | null;
   created_at: string;
   status: string;
+  error_message: string | null;
+  failure_reason: string | null;
 }
 interface ChatLite {
   user_id: string;
@@ -183,7 +203,7 @@ export async function loadAdminDataset(): Promise<AdminDataset> {
         (f, t) =>
           db
             .from("plan_generations")
-            .select("user_id, cost_usd, created_at, status")
+            .select("user_id, cost_usd, created_at, status, error_message, failure_reason")
             .range(f, t),
         "plan_generations",
         onTruncate,
@@ -378,6 +398,36 @@ export function computeKpis(
         ) / 10
       : 0;
 
+  // ── Unit economics + retention (founder KPIs) ──
+  const activeSubs = subs.filter((s) => s.status === "active");
+  // Monthly-cadence subs bear the LemonSqueezy fixed per-transaction fee.
+  const activeMonthlyCount = activeSubs.filter((s) => s.cadence !== "annual").length;
+  const grossMargin = computeGrossMargin({
+    mrrUsd: mrr.mrrUsd,
+    activeCount: totalActive,
+    activeMonthlyCount,
+    aiCostUsd: aiCurrent,
+  });
+  const arpu = computeArpu(mrr, totalActive);
+  const nrr = computeNrr(subs, period);
+  const movement = mrrMovementForRange(subs, period.current);
+  const atRisk = computeRevenueAtRisk(subs, period.current.end);
+
+  // Sparkline series across the current window (decorative trend texture).
+  const signupsSeries = bucketSeries(ds.profiles, period.current, 10, (p) => p.created_at);
+  const plansSeries = bucketSeries(ds.plans, period.current, 10, (p) => p.created_at);
+  const costEvents = [
+    ...ds.generations.map((g) => ({ created_at: g.created_at, cost_usd: g.cost_usd })),
+    ...ds.chats.map((c) => ({ created_at: c.created_at, cost_usd: c.cost_usd })),
+  ];
+  const aiSpendSeries = bucketSeries(
+    costEvents,
+    period.current,
+    10,
+    (e) => e.created_at,
+    (e) => e.cost_usd ?? 0,
+  );
+
   return {
     subscriberCount: ds.profiles.length,
     totalActive,
@@ -391,7 +441,59 @@ export function computeKpis(
     aiSpendUsd,
     aiSpendPctOfRevenue,
     avgHousehold,
+    nrr: nrr.value,
+    nrrTrend: nrr.trend,
+    arpuSar: arpu.arpuSar,
+    grossMargin,
+    mrrNetSar: movement.netSar,
+    mrrNewSar: movement.newSar,
+    mrrChurnedSar: movement.churnedSar,
+    revenueAtRiskSar: atRisk.totalSar,
+    revenueAtRiskCount: atRisk.count,
+    signupsSeries,
+    plansSeries,
+    aiSpendSeries,
   };
+}
+
+/**
+ * Assemble the overview Action Queue from the already-loaded dataset — trials
+ * expiring ≤7d, past-due, quiet high-value near renewal, and systemic failure
+ * buckets. Reuses the single overview load (no extra fetch).
+ */
+export function buildOverviewActionQueue(
+  ds: AdminDataset,
+  now: Date = new Date(),
+): ActionItem[] {
+  const subByUser = subscriptionByUser(ds);
+  const currentSubs = [...subByUser.values()];
+  const nameByUser = new Map<string, string | null>(
+    ds.profiles.map((p) => [p.id, p.display_name]),
+  );
+  const usersWithPlan = new Set(ds.plans.map((p) => p.user_id));
+  const lastActivity = lastActivityByUser(ds.chats, ds.plans);
+
+  const trials = computeTrialWatchlist({
+    currentSubs,
+    nameByUser,
+    emailByUser: ds.emailByUser,
+    usersWithPlan,
+    now,
+    horizonDays: 7,
+  });
+  const pastDue = currentSubs
+    .filter((s) => s.status === "past_due")
+    .map((s) => ({ userId: s.user_id, name: nameByUser.get(s.user_id) ?? null }));
+  const quiet = computeQuietPayingWatchlist({
+    currentSubs,
+    nameByUser,
+    emailByUser: ds.emailByUser,
+    lastActivity,
+    now,
+  });
+  const failureBuckets = computeFailureBuckets(ds.generations);
+
+  return buildActionQueue({ trials, pastDue, quiet, failureBuckets });
 }
 
 // ---------------------------------------------------------------------------

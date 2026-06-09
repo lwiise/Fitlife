@@ -51,3 +51,63 @@ export function trend(current: number, prior: number): Trend {
   const pct = Math.round(((current - prior) / Math.abs(prior)) * 1000) / 10;
   return { pct, direction: current > prior ? "up" : "down" };
 }
+
+// ── Month bucketing (shared by trends, cohorts, MRR movement) ─────────────────
+// Lives here (a pure, server-free module) so cohorts.ts / insights.ts can reuse
+// it without dragging in `server-only`.
+
+/** One value at a month boundary — the unit of every monthly trend series. */
+export interface MonthPoint {
+  /** ISO timestamp of the first day of the month (UTC). */
+  monthStart: string;
+  value: number;
+}
+
+/** UTC year-month key, e.g. "2026-06". */
+export function monthKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** The trailing `n` months ending in `now`'s month, oldest first. */
+export function lastMonths(
+  n: number,
+  now: Date,
+): Array<{ key: string; monthStart: string }> {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const out: Array<{ key: string; monthStart: string }> = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - i, 1));
+    out.push({ key: monthKey(d), monthStart: d.toISOString() });
+  }
+  return out;
+}
+
+/**
+ * Bucket timestamped items into `buckets` equal slices across a range — the
+ * cheap per-KPI series behind a sparkline. Counts items by default; pass
+ * `getValue` to sum a quantity instead (e.g. AI cost). Returns a fixed-length
+ * number[] (length === buckets), zero-filled where there's no data.
+ */
+export function bucketSeries<T>(
+  items: T[],
+  range: DateRange,
+  buckets: number,
+  getIso: (t: T) => string | null | undefined,
+  getValue?: (t: T) => number,
+): number[] {
+  const n = Math.max(1, buckets);
+  const out = new Array<number>(n).fill(0);
+  const startMs = range.start.getTime();
+  const span = range.end.getTime() - startMs;
+  if (span <= 0) return out;
+  for (const it of items) {
+    const iso = getIso(it);
+    if (!iso) continue;
+    const t = new Date(iso).getTime();
+    if (t < startMs || t >= range.end.getTime()) continue;
+    const idx = Math.min(n - 1, Math.floor(((t - startMs) / span) * n));
+    out[idx] = (out[idx] ?? 0) + (getValue ? getValue(it) : 1);
+  }
+  return out;
+}
