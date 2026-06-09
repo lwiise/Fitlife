@@ -207,6 +207,37 @@ function sumIngredients(lists: Ingredient[][]): Ingredient[] {
 }
 
 /**
+ * Canonicalize an Arabic dish name for GROUPING ONLY (the displayed name stays the
+ * original). The skeleton model is asked to reuse the same recipe_name_ar for members
+ * who share a dish, but it does not emit byte-identical Arabic — cosmetic variation
+ * (leading "ال", alef/ya/ta-marbuta forms, harakat, tatweel, zero-width/bidi marks,
+ * whitespace) would otherwise split one shared dish into per-member singletons. Folding
+ * those here makes the merge robust without affecting what the user sees. Conservative:
+ * it only erases orthography, never lexical content, so genuinely different dishes (with
+ * different consonant skeletons) never collide.
+ */
+export function normalizeDishKey(name: string): string {
+  let s = name
+    .normalize("NFC")
+    // strip diacritics (Mn: harakat, superscript alef, madda/hamza), zero-width/bidi
+    // format chars (Cf), and tatweel (Lm) — none distinguish two real dishes.
+    .replace(/[\p{Mn}\p{Cf}\p{Lm}]/gu, "")
+    // alef variants (0623/0625/0622/0671) -> bare alef (0627)
+    .replace(/[أإآٱ]/g, "ا")
+    // alef-maqsura (0649) -> ya (064A)
+    .replace(/ى/g, "ي")
+    // ta-marbuta (0629) -> ha (0647)
+    .replace(/ة/g, "ه")
+    // collapse whitespace
+    .replace(/\s+/g, " ")
+    .trim();
+  // Strip a single LEADING definite article (alef+lam = "ال"), keeping a
+  // meaningful stem (>=3 chars). Leading-only (not per-word) to bound over-merge risk.
+  if (s.startsWith("ال") && s.length - 2 >= 3) s = s.slice(2);
+  return s;
+}
+
+/**
  * Turn each day-slice into correct shared meals, deterministically. Mutates `slice`.
  * For every (slot, dish) group of ≥2 members: sets one batch recipe (summed
  * ingredients + group prep steps) on each participant, plus a per-member split
@@ -223,7 +254,7 @@ export function assembleSharedMeals(
   for (const sm of daySkeleton.members) {
     const day = sm.days.find((d) => d.day_index === dayIndex);
     for (const m of day?.meals ?? [])
-      skelName.set(`${sm.member_id}|${m.slot}`, m.recipe_name_ar.trim());
+      skelName.set(`${sm.member_id}|${m.slot}`, normalizeDishKey(m.recipe_name_ar));
   }
 
   type Entry = { member_id: string; meal: Meal };
@@ -236,7 +267,7 @@ export function assembleSharedMeals(
       delete meal.per_member_portions;
       const name =
         skelName.get(`${member.member_id}|${meal.slot}`) ??
-        meal.recipe_name_ar.trim();
+        normalizeDishKey(meal.recipe_name_ar);
       const key = `${meal.slot}|${name}`;
       const arr = groups.get(key);
       if (arr) arr.push({ member_id: member.member_id, meal });
@@ -800,6 +831,10 @@ export async function generateMealPlan(params: {
         // Build correct shared meals deterministically across all members in this
         // slice (sum portions → batch, derive the split) — not trusting the model.
         // Solo plans have one member per group, so nothing is shared.
+        // NOTE: a member's meal_mode='independent' is honored only via the prompt
+        // (the model gives them a differently-named dish). This merge has no access to
+        // meal_mode, so it groups purely by (slot, normalized dish name) — if the model
+        // still emits an identical name for an independent member they would be merged.
         if (beneficiaries.length > 1) assembleSharedMeals(slice, daySkeleton, dayIndex);
         for (const sm of daySkeleton.members) {
           const sliceMember = slice.members.find(
