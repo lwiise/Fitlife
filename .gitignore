@@ -52,3 +52,8 @@ next-env.d.ts
 # Supabase CLI workspace (auto-created at repo root by `npx supabase ...`)
 # Our migrations live in apps/app/supabase/ which stays tracked.
 /supabase/
+
+# Claude Code worktrees — local working copies with their own .git, never the repo's.
+# If committed they become submodule gitlinks with no .gitmodules url and break the
+# Netlify build's submodule checkout.
+.claude/worktrees/
