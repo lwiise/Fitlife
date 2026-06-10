@@ -387,6 +387,29 @@ const STRINGS = {
   kpi_active_users: { ar: "المستخدمون النشطون", en: "Active users" },
   per_account: { ar: "لكل حساب", en: "per account" },
   per_beneficiary: { ar: "لكل مستفيد", en: "per beneficiary" },
+
+  // ── Overview: Kajabi-style chart controls ──
+  range_24h: { ar: "آخر ٢٤ ساعة", en: "Last 24h" },
+  range_7d: { ar: "آخر ٧ أيام", en: "Last 7 days" },
+  interval_label: { ar: "التقسيم الزمني", en: "Group by" },
+  interval_hour: { ar: "ساعة", en: "Hour" },
+  interval_day: { ar: "يوم", en: "Day" },
+  interval_week: { ar: "أسبوع", en: "Week" },
+  interval_month: { ar: "شهر", en: "Month" },
+  compare_label: { ar: "المقارنة", en: "Compare" },
+  compare_prior: { ar: "الفترة السابقة", en: "Previous period" },
+  compare_off: { ar: "بدون مقارنة", en: "No comparison" },
+  legend_current: { ar: "الحالية", en: "Current" },
+  legend_previous: { ar: "السابقة", en: "Previous" },
+  delta_label: { ar: "التغيّر", en: "Change" },
+  customize_metrics: { ar: "تخصيص المؤشرات", en: "Customize metrics" },
+  currency_label: { ar: "ر.س", en: "SAR" },
+
+  // ── Overview: metric labels ──
+  metric_gross_revenue: { ar: "إجمالي الإيراد", en: "Gross revenue" },
+  metric_active_subs: { ar: "المشتركون النشطون", en: "Active subscribers" },
+  metric_trials: { ar: "التجارب", en: "Trials" },
+  metric_churned: { ar: "الإلغاءات", en: "Churned" },
 } as const satisfies Record<string, Entry>;
 
 export type AdminStringKey = keyof typeof STRINGS;
@@ -501,4 +524,28 @@ const LANG_NAME = new Map<string, string>(
 /** Native language name for a locale code (e.g. "العربية", "Tagalog"). */
 export function localeName(code: string): string {
   return LANG_NAME.get(code) ?? code;
+}
+
+const METRIC_KEY: Record<string, AdminStringKey> = {
+  gross_revenue: "metric_gross_revenue",
+  mrr: "kpi_mrr",
+  active_subs: "metric_active_subs",
+  new_signups: "kpi_new_signups",
+  trials: "metric_trials",
+  churned: "metric_churned",
+};
+export function metricLabel(metric: string, locale: AdminLocale): string {
+  const key = METRIC_KEY[metric];
+  return key ? t(key, locale) : metric;
+}
+
+const INTERVAL_KEY: Record<string, AdminStringKey> = {
+  hour: "interval_hour",
+  day: "interval_day",
+  week: "interval_week",
+  month: "interval_month",
+};
+export function intervalLabel(interval: string, locale: AdminLocale): string {
+  const key = INTERVAL_KEY[interval];
+  return key ? t(key, locale) : interval;
 }

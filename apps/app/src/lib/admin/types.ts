@@ -6,8 +6,15 @@
 import type { MrrBreakdown } from "./revenue";
 import type { Trend } from "./period";
 import type { GrossMargin } from "./margin";
+import type {
+  Granularity,
+  MetricKey,
+  MetricView,
+  RangePreset,
+} from "./timeseries";
 
 export type { MrrBreakdown, Trend, GrossMargin };
+export type { Granularity, MetricKey, MetricView, RangePreset };
 
 /** One row in the subscriber table — minimized, ops-relevant fields only. */
 export interface SubscriberRow {
@@ -34,14 +41,11 @@ export interface SubscriberRow {
   onboardingComplete: boolean;
 }
 
-export type OverviewMetric = "revenue" | "subs";
-export type RangePreset = "week" | "month" | "custom";
-export type Granularity = "day" | "week" | "month";
-
 /**
- * The Overview top section: a Revenue/Subscriptions time-series stacked by tier
- * plus an AI-cost strip, all scoped to the selected range. The time-series is a
- * snapshot reconstruction (see lib/admin/timeseries.ts) → `approximated: true`.
+ * The Overview top section: a Kajabi-style spline chart (selected metric +
+ * comparison line) with switchable metric tabs, plus an AI-cost strip — all
+ * scoped to the selected range. Every series is a snapshot reconstruction (see
+ * lib/admin/timeseries.ts) → `approximated: true`. The AI-cost strip is exact.
  */
 export interface OverviewView {
   /** Total accounts in the system (for empty-state detection + per-account AI). */
@@ -49,21 +53,26 @@ export interface OverviewView {
   /** Active (paid) subscriptions — excludes trialing. */
   totalActive: number;
 
-  metric: OverviewMetric;
+  // ── Chart selection ──
+  selectedMetric: MetricKey;
+  /** The (≤4) metric tabs, in display order. */
+  shownMetrics: MetricKey[];
+  /** Computed views for the shown tabs + the selected metric. */
+  metrics: MetricView[];
+
+  // ── Range / interval ──
   preset: RangePreset;
-  granularity: Granularity;
+  interval: Granularity;
+  comparisonOn: boolean;
   rangeStartIso: string;
   rangeEndIso: string;
+  priorStartIso: string;
+  priorEndIso: string;
   /** `YYYY-MM-DD` defaults for the custom-range date inputs. */
   fromValue: string;
   toValue: string;
-
-  // ── Chart series (one value per bucket) ──
+  /** One ISO anchor per current-range bucket (x-axis). */
   bucketIsos: string[];
-  /** Tiers present, canonical order; keys into the two maps + colour map. */
-  tiers: string[];
-  revenueByTier: Record<string, number[]>;
-  countByTier: Record<string, number[]>;
 
   // ── AI-cost strip (exact, scoped to the range) ──
   aiCostUsd: number;
@@ -73,7 +82,7 @@ export interface OverviewView {
   aiPctOfRevenue: number | null;
   beneficiaryTotal: number;
 
-  /** The time-series is reconstructed from the snapshot (labeled in the UI). */
+  /** Series are reconstructed from the snapshot (labeled in the UI). */
   approximated: true;
 }
 
