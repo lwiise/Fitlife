@@ -6,7 +6,7 @@ import {
   STABLE_CONDITIONS,
 } from "@/lib/plans/medicalConditions";
 import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
+import { BackButton } from "@/components/BackButton";
 import { asStringArray } from "../labels";
 import { HealthEditForm } from "./HealthEditForm";
 
@@ -47,7 +47,7 @@ export default async function HealthEditPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackToDashboard />
+          <BackButton />
         </div>
       </header>
 

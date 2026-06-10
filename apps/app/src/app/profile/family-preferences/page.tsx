@@ -5,7 +5,7 @@ import {
 } from "@/lib/supabase/queries";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
+import { BackButton } from "@/components/BackButton";
 import { asStringArray } from "../labels";
 import { FamilyPreferencesEditForm } from "./FamilyPreferencesEditForm";
 
@@ -38,7 +38,7 @@ export default async function FamilyPreferencesEditPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackToDashboard />
+          <BackButton />
         </div>
       </header>
 

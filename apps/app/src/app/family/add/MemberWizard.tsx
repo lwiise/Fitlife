@@ -312,7 +312,9 @@ export function MemberWizard({
     activity_level: type === "child" ? activity || null : activity || null,
     user_goal: type === "adult" ? (userGoal as UserGoal) : undefined,
     allergies,
-    dislikes: [],
+    // No per-member dislikes UI in this wizard, but preserve any existing ones on
+    // edit instead of wiping them (the edit route passes initial.dislikes).
+    dislikes: initial?.dislikes ?? [],
     conditions:
       type === "child"
         ? []
