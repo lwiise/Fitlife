@@ -4,27 +4,16 @@ import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
 import { computeMrr } from "@/lib/admin/revenue";
 import {
-  bucketSeries,
-  getPeriodPair,
-  inRange,
-  trend,
-  type PeriodPair,
-} from "@/lib/admin/period";
-import {
-  computeArpu,
-  computeNrr,
-  computeQuietPayingWatchlist,
-  computeRevenueAtRisk,
-  computeTrialWatchlist,
-  lastActivityByUser,
-} from "@/lib/admin/metrics";
-import { mrrMovementForRange } from "@/lib/admin/cohorts";
-import { computeGrossMargin } from "@/lib/admin/margin";
-import { computeFailureBuckets } from "@/lib/admin/failures";
-import { buildActionQueue, type ActionItem } from "@/lib/admin/actionQueue";
+  computeAiCostInRange,
+  computeBeneficiaryTotal,
+  computeTierTimeSeries,
+  makeBuckets,
+  resolveRange,
+  toYmd,
+} from "@/lib/admin/timeseries";
 import type {
-  Kpi,
-  Kpis,
+  OverviewMetric,
+  OverviewView,
   SubscriberListParams,
   SubscriberListResult,
   SubscriberRow,
@@ -314,186 +303,71 @@ export function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
   });
 }
 
-function kpi(current: number, prior: number): Kpi {
-  return { value: current, prior, trend: trend(current, prior) };
-}
-
-export function computeKpis(
-  ds: AdminDataset,
-  period: PeriodPair = getPeriodPair(),
-): Kpis {
-  const subByUser = subscriptionByUser(ds);
-  const subs = [...subByUser.values()];
-
-  const totalActive = subs.filter((s) => s.status === "active").length;
-  const totalTrialing = subs.filter((s) => s.status === "trialing").length;
-
-  const mrr = computeMrr(
-    subs.filter((s) => s.status === "active").map((s) => ({ tier: s.tier, cadence: s.cadence })),
-  );
-
-  // New signups (accounts created in window).
-  const newSignups = kpi(
-    ds.profiles.filter((p) => inRange(p.created_at, period.current)).length,
-    ds.profiles.filter((p) => inRange(p.created_at, period.prior)).length,
-  );
-
-  // Lifetime trial→paid conversion (snapshot approximation): of every sub that
-  // ever started a trial, the fraction currently active.
-  const everTrialed = subs.filter((s) => s.trial_started_at != null);
-  const converted = everTrialed.filter((s) => s.status === "active").length;
-  const trialConversionPct =
-    everTrialed.length > 0
-      ? Math.round((converted / everTrialed.length) * 1000) / 10
-      : null;
-
-  // Churn: subs moved to cancelled/expired in the window (by updated_at).
-  const churnIn = (range: typeof period.current) =>
-    subs.filter(
-      (s) =>
-        (s.status === "cancelled" || s.status === "expired") &&
-        inRange(s.updated_at, range),
-    ).length;
-  const churn = kpi(churnIn(period.current), churnIn(period.prior));
-  const churnRatePct =
-    totalActive + churn.value > 0
-      ? Math.round((churn.value / (totalActive + churn.value)) * 1000) / 10
-      : null;
-
-  // Plans generated in window.
-  const plansGenerated = kpi(
-    ds.plans.filter((p) => inRange(p.created_at, period.current)).length,
-    ds.plans.filter((p) => inRange(p.created_at, period.prior)).length,
-  );
-
-  // AI spend (USD) in window = plan generations + chat.
-  const spendIn = (range: typeof period.current) =>
-    ds.generations
-      .filter((g) => inRange(g.created_at, range))
-      .reduce((s, g) => s + (g.cost_usd ?? 0), 0) +
-    ds.chats
-      .filter((c) => inRange(c.created_at, range))
-      .reduce((s, c) => s + (c.cost_usd ?? 0), 0);
-  const aiCurrent = Math.round(spendIn(period.current) * 100) / 100;
-  const aiPrior = Math.round(spendIn(period.prior) * 100) / 100;
-  const aiSpendUsd = kpi(aiCurrent, aiPrior);
-
-  // AI as % of revenue: period ≈ a month, so compare to MRR (USD).
-  const aiSpendPctOfRevenue =
-    mrr.mrrUsd > 0 ? Math.round((aiCurrent / mrr.mrrUsd) * 1000) / 10 : null;
-
-  // Avg beneficiaries per account.
-  const membersByUser = groupBy(ds.members, (m) => m.user_id);
-  const beneficiariesPerAccount = ds.profiles.map(
-    (p) =>
-      1 +
-      (membersByUser.get(p.id) ?? []).filter((m) => m.role !== "housekeeper").length,
-  );
-  const avgHousehold =
-    beneficiariesPerAccount.length > 0
-      ? Math.round(
-          (beneficiariesPerAccount.reduce((a, b) => a + b, 0) /
-            beneficiariesPerAccount.length) *
-            10,
-        ) / 10
-      : 0;
-
-  // ── Unit economics + retention (founder KPIs) ──
-  const activeSubs = subs.filter((s) => s.status === "active");
-  // Monthly-cadence subs bear the LemonSqueezy fixed per-transaction fee.
-  const activeMonthlyCount = activeSubs.filter((s) => s.cadence !== "annual").length;
-  const grossMargin = computeGrossMargin({
-    mrrUsd: mrr.mrrUsd,
-    activeCount: totalActive,
-    activeMonthlyCount,
-    aiCostUsd: aiCurrent,
-  });
-  const arpu = computeArpu(mrr, totalActive);
-  const nrr = computeNrr(subs, period);
-  const movement = mrrMovementForRange(subs, period.current);
-  const atRisk = computeRevenueAtRisk(subs, period.current.end);
-
-  // Sparkline series across the current window (decorative trend texture).
-  const signupsSeries = bucketSeries(ds.profiles, period.current, 10, (p) => p.created_at);
-  const plansSeries = bucketSeries(ds.plans, period.current, 10, (p) => p.created_at);
-  const costEvents = [
-    ...ds.generations.map((g) => ({ created_at: g.created_at, cost_usd: g.cost_usd })),
-    ...ds.chats.map((c) => ({ created_at: c.created_at, cost_usd: c.cost_usd })),
-  ];
-  const aiSpendSeries = bucketSeries(
-    costEvents,
-    period.current,
-    10,
-    (e) => e.created_at,
-    (e) => e.cost_usd ?? 0,
-  );
-
-  return {
-    subscriberCount: ds.profiles.length,
-    totalActive,
-    totalTrialing,
-    mrr,
-    newSignups,
-    trialConversionPct,
-    churn,
-    churnRatePct,
-    plansGenerated,
-    aiSpendUsd,
-    aiSpendPctOfRevenue,
-    avgHousehold,
-    nrr: nrr.value,
-    nrrTrend: nrr.trend,
-    arpuSar: arpu.arpuSar,
-    grossMargin,
-    mrrNetSar: movement.netSar,
-    mrrNewSar: movement.newSar,
-    mrrChurnedSar: movement.churnedSar,
-    revenueAtRiskSar: atRisk.totalSar,
-    revenueAtRiskCount: atRisk.count,
-    signupsSeries,
-    plansSeries,
-    aiSpendSeries,
-  };
-}
+const DAY_MS = 86_400_000;
 
 /**
- * Assemble the overview Action Queue from the already-loaded dataset — trials
- * expiring ≤7d, past-due, quiet high-value near renewal, and systemic failure
- * buckets. Reuses the single overview load (no extra fetch).
+ * Build the Overview top section: a Revenue/Subscriptions time-series stacked by
+ * tier plus an AI-cost strip, scoped to the URL-selected range. The series is a
+ * snapshot reconstruction (see lib/admin/timeseries.ts) so `approximated: true`;
+ * the AI-cost figures are exact. Reuses the single overview dataset load.
  */
-export function buildOverviewActionQueue(
+export function buildOverviewView(
   ds: AdminDataset,
+  params: { metric?: string; range?: string; from?: string; to?: string },
   now: Date = new Date(),
-): ActionItem[] {
-  const subByUser = subscriptionByUser(ds);
-  const currentSubs = [...subByUser.values()];
-  const nameByUser = new Map<string, string | null>(
-    ds.profiles.map((p) => [p.id, p.display_name]),
+): OverviewView {
+  const subs = [...subscriptionByUser(ds).values()];
+  const metric: OverviewMetric = params.metric === "subs" ? "subs" : "revenue";
+
+  const { range, preset, granularity } = resolveRange(params, now);
+  const buckets = makeBuckets(range, granularity);
+  const { tiers, revenueByTier, countByTier } = computeTierTimeSeries(subs, buckets);
+
+  const totalActive = subs.filter((s) => s.status === "active").length;
+  const subscriberCount = ds.profiles.length;
+  const beneficiaryTotal = computeBeneficiaryTotal(subscriberCount, ds.members);
+
+  const aiCostUsd = computeAiCostInRange(ds.generations, ds.chats, range);
+
+  // "% of revenue": MRR(USD) prorated to the range length (est.).
+  const mrr = computeMrr(
+    subs
+      .filter((s) => s.status === "active")
+      .map((s) => ({ tier: s.tier, cadence: s.cadence })),
   );
-  const usersWithPlan = new Set(ds.plans.map((p) => p.user_id));
-  const lastActivity = lastActivityByUser(ds.chats, ds.plans);
+  const rangeDays = Math.max(1, (range.end.getTime() - range.start.getTime()) / DAY_MS);
+  const revenueInRangeUsd = mrr.mrrUsd * (rangeDays / 30);
+  const aiPctOfRevenue =
+    revenueInRangeUsd > 0
+      ? Math.round((aiCostUsd / revenueInRangeUsd) * 1000) / 10
+      : null;
+  const aiCostPerAccountUsd =
+    subscriberCount > 0 ? Math.round((aiCostUsd / subscriberCount) * 10000) / 10000 : null;
+  const aiCostPerMemberUsd =
+    beneficiaryTotal > 0 ? Math.round((aiCostUsd / beneficiaryTotal) * 10000) / 10000 : null;
 
-  const trials = computeTrialWatchlist({
-    currentSubs,
-    nameByUser,
-    emailByUser: ds.emailByUser,
-    usersWithPlan,
-    now,
-    horizonDays: 7,
-  });
-  const pastDue = currentSubs
-    .filter((s) => s.status === "past_due")
-    .map((s) => ({ userId: s.user_id, name: nameByUser.get(s.user_id) ?? null }));
-  const quiet = computeQuietPayingWatchlist({
-    currentSubs,
-    nameByUser,
-    emailByUser: ds.emailByUser,
-    lastActivity,
-    now,
-  });
-  const failureBuckets = computeFailureBuckets(ds.generations);
-
-  return buildActionQueue({ trials, pastDue, quiet, failureBuckets });
+  return {
+    subscriberCount,
+    totalActive,
+    metric,
+    preset,
+    granularity,
+    rangeStartIso: range.start.toISOString(),
+    rangeEndIso: range.end.toISOString(),
+    fromValue: toYmd(range.start),
+    // The range end is exclusive; the date input shows the last included day.
+    toValue: toYmd(new Date(range.end.getTime() - 1)),
+    bucketIsos: buckets.map((b) => b.iso),
+    tiers,
+    revenueByTier,
+    countByTier,
+    aiCostUsd,
+    aiCostPerAccountUsd,
+    aiCostPerMemberUsd,
+    aiPctOfRevenue,
+    beneficiaryTotal,
+    approximated: true,
+  };
 }
 
 // ---------------------------------------------------------------------------

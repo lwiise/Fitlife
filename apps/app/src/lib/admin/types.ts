@@ -34,50 +34,47 @@ export interface SubscriberRow {
   onboardingComplete: boolean;
 }
 
-export interface Kpi {
-  value: number;
-  prior: number;
-  trend: Trend;
-}
+export type OverviewMetric = "revenue" | "subs";
+export type RangePreset = "week" | "month" | "custom";
+export type Granularity = "day" | "week" | "month";
 
-export interface Kpis {
-  /** Total accounts in the system (for empty-state detection). */
+/**
+ * The Overview top section: a Revenue/Subscriptions time-series stacked by tier
+ * plus an AI-cost strip, all scoped to the selected range. The time-series is a
+ * snapshot reconstruction (see lib/admin/timeseries.ts) → `approximated: true`.
+ */
+export interface OverviewView {
+  /** Total accounts in the system (for empty-state detection + per-account AI). */
   subscriberCount: number;
+  /** Active (paid) subscriptions — excludes trialing. */
   totalActive: number;
-  totalTrialing: number;
-  mrr: MrrBreakdown;
-  newSignups: Kpi;
-  /** Lifetime trial→paid conversion (snapshot approximation). */
-  trialConversionPct: number | null;
-  churn: Kpi;
-  churnRatePct: number | null;
-  plansGenerated: Kpi;
-  /** AI spend in USD this period (plan generations + chat). */
-  aiSpendUsd: Kpi;
-  /** AI spend as % of monthly revenue (margin signal). */
-  aiSpendPctOfRevenue: number | null;
-  /** Avg beneficiaries per account. */
-  avgHousehold: number;
 
-  // ── Founder KPIs (v2) ──
-  /** Net revenue retention % (snapshot approximation). */
-  nrr: number | null;
-  nrrTrend: Trend;
-  /** Average revenue per active user, monthly SAR. */
-  arpuSar: number | null;
-  /** Estimated gross margin (labeled "est." — uses assumed fees/infra). */
-  grossMargin: GrossMargin;
-  /** Net new MRR this period (new − churned), SAR. Approximate. */
-  mrrNetSar: number;
-  mrrNewSar: number;
-  mrrChurnedSar: number;
-  /** MRR of expiring trials + past-due (feeds the action queue). */
-  revenueAtRiskSar: number;
-  revenueAtRiskCount: number;
-  /** In-window sparkline series (decorative). */
-  signupsSeries: number[];
-  plansSeries: number[];
-  aiSpendSeries: number[];
+  metric: OverviewMetric;
+  preset: RangePreset;
+  granularity: Granularity;
+  rangeStartIso: string;
+  rangeEndIso: string;
+  /** `YYYY-MM-DD` defaults for the custom-range date inputs. */
+  fromValue: string;
+  toValue: string;
+
+  // ── Chart series (one value per bucket) ──
+  bucketIsos: string[];
+  /** Tiers present, canonical order; keys into the two maps + colour map. */
+  tiers: string[];
+  revenueByTier: Record<string, number[]>;
+  countByTier: Record<string, number[]>;
+
+  // ── AI-cost strip (exact, scoped to the range) ──
+  aiCostUsd: number;
+  aiCostPerAccountUsd: number | null;
+  aiCostPerMemberUsd: number | null;
+  /** AI cost ÷ range-prorated revenue (est.). */
+  aiPctOfRevenue: number | null;
+  beneficiaryTotal: number;
+
+  /** The time-series is reconstructed from the snapshot (labeled in the UI). */
+  approximated: true;
 }
 
 export interface SubscriberListParams {
