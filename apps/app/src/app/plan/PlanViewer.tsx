@@ -17,6 +17,7 @@ import {
   getLocalizedDayNameFromWeekStart,
 } from "@/lib/plans/dayMapping";
 import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
+import { orderDayMeals } from "@/lib/plans/mealOrder";
 
 // A day stuck "preparing" this long with no new write means the worker died —
 // far longer than a healthy day stream (~1-2 min), far shorter than the 15-min
@@ -147,6 +148,17 @@ export function PlanViewer({
     if (!activeMember) return undefined;
     return activeMember.days.find((d) => d.day_index === activeDayIndex);
   }, [activeMember, activeDayIndex]);
+
+  // Canonical daily order (breakfast → morning snack → lunch → evening snack →
+  // dinner). Passing every member's meals for this day keeps a SHARED meal in the
+  // same position for everyone who shares it.
+  const orderedMeals = useMemo(() => {
+    if (!activeDay) return [];
+    const familyDay = plan.members.map(
+      (m) => m.days.find((d) => d.day_index === activeDayIndex)?.meals ?? [],
+    );
+    return orderDayMeals(activeDay.meals, familyDay);
+  }, [activeDay, plan.members, activeDayIndex]);
 
   const memberLabel = (m: MemberPlan) =>
     translated ? (m.member_name_translated ?? m.member_name_ar) : m.member_name_ar;
@@ -518,7 +530,7 @@ export function PlanViewer({
               <p className="text-brand-ink-muted text-sm">{t.translating}</p>
             </div>
           ) : activeDay && activeDay.meals.length > 0 ? (
-            activeDay.meals.map((meal, i) => (
+            orderedMeals.map((meal, i) => (
               <MealCard
                 key={i}
                 meal={meal}

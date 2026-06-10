@@ -388,6 +388,12 @@ function buildSharedGroup(
   return entries.map((e) => {
     const out: Meal = {
       ...e.meal,
+      // One shared dish reads with ONE slot + label for everyone who shares it
+      // (the model may emit e.g. "سناك الصباح" for one member, "سناك المساء" for
+      // another). slot already matches (grouping keys on it); canonicalize the
+      // display label too. Order across members is enforced separately at render.
+      slot: canonical.slot,
+      slot_name_ar: canonical.slot_name_ar,
       recipe_name_ar: canonical.recipe_name_ar,
       ingredients: batch.map((i) => ({ ...i })),
       prep_steps_ar: [...canonical.prep_steps_ar],

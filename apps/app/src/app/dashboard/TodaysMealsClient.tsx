@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, ChevronLeft } from "lucide-react";
 import type { MemberPlan } from "@fitlife/plan-engine";
 import { dayIndexFromWeekStart } from "@/lib/plans/dayMapping";
+import { orderDayMeals } from "@/lib/plans/mealOrder";
 import { MealCard } from "@/app/plan/MealCard";
 
 /**
@@ -90,6 +91,12 @@ export function TodaysMealsClient({
     );
   }
 
+  // Every member's meals for today → a shared meal sorts to the same position for
+  // everyone who shares it (matches the full-plan view).
+  const familyDay = members.map(
+    (m) => m.days.find((d) => d.day_index === dayIndex)?.meals ?? [],
+  );
+
   return (
     <div className="space-y-6">
       {sections.map(({ member, day }) => {
@@ -120,7 +127,7 @@ export function TodaysMealsClient({
             </div>
 
             <div className="space-y-3 ps-2 border-s-2 border-brand-lavender/40">
-              {day!.meals.map((meal, i) => (
+              {orderDayMeals(day!.meals, familyDay).map((meal, i) => (
                 <MealCard
                   key={i}
                   meal={meal}

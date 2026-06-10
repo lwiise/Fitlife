@@ -10,6 +10,7 @@ import {
 } from "@react-pdf/renderer";
 import type { MemberPlan } from "@fitlife/plan-engine";
 import { formatNameList } from "@/lib/plans/formatNames";
+import { orderDayMeals } from "@/lib/plans/mealOrder";
 
 // Tajawal Arabic font from Google's font mirror. .ttf is required by @react-pdf.
 Font.register({
@@ -211,7 +212,7 @@ export function MemberPlanPDF({
             </Text>
           </View>
 
-          {day.meals.map((meal, mealIdx) => {
+          {orderDayMeals(day.meals).map((meal, mealIdx) => {
             // Shared meal: cooked once for the family and split. Show the family
             // label, the total finished batch weight, and THIS member's share.
             const sharedSplit =

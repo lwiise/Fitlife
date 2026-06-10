@@ -358,3 +358,35 @@ describe("resyncSharedMeals — editing one member re-syncs the others", () => {
     expect(momLunch.own_portion).toBeDefined();
   });
 });
+
+describe("resyncSharedMeals — shared slot label", () => {
+  it("unifies slot_name_ar across the shared group (canonical = largest portion)", () => {
+    const snack = (id: string, slotName: string, eggs: number, cal: number) => ({
+      member_id: id,
+      fresh: true,
+      meals: [
+        {
+          slot: "snack" as const,
+          slot_name_ar: slotName,
+          recipe_name_ar: "بيض مسلوق",
+          ingredients: [ing("بيض", eggs)],
+          prep_steps_ar: ["اسلقي البيض"],
+          calories: cal,
+          macros: { protein_g: 10, carbs_g: 5, fat_g: 5 },
+        },
+      ],
+    });
+    // The model emitted DIFFERENT slot labels for the same shared snack; dad has the
+    // larger portion → his label is canonical and applies to both.
+    const out = resyncSharedMeals([
+      snack("mom", "سناك الصباح", 60, 100),
+      snack("dad", "سناك المساء", 120, 200),
+    ]);
+    const momSnack = out.get("mom")![0]!;
+    const dadSnack = out.get("dad")![0]!;
+    expect(momSnack.shared_recipe).toBe(true);
+    expect(dadSnack.shared_recipe).toBe(true);
+    expect(momSnack.slot_name_ar).toBe(dadSnack.slot_name_ar); // unified
+    expect(momSnack.slot_name_ar).toBe("سناك المساء"); // canonical = larger portion (dad)
+  });
+});
