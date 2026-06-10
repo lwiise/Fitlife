@@ -89,6 +89,23 @@ export function fmtDate(iso: string | null | undefined, locale: AdminLocale): st
   }).format(new Date(iso));
 }
 
+/**
+ * X-axis label for a time-series bucket. Month buckets show the short month;
+ * day/week buckets show day + short month. Localized digits/month names.
+ */
+export function fmtBucketLabel(
+  iso: string | null | undefined,
+  granularity: "day" | "week" | "month",
+  locale: AdminLocale,
+): string {
+  if (!iso) return "—";
+  const opts: Intl.DateTimeFormatOptions =
+    granularity === "month"
+      ? { month: "short" }
+      : { day: "numeric", month: "short" };
+  return new Intl.DateTimeFormat(TAG[locale], opts).format(new Date(iso));
+}
+
 const REL_DIVISORS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ["year", 1000 * 60 * 60 * 24 * 365],
   ["month", 1000 * 60 * 60 * 24 * 30],
