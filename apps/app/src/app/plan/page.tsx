@@ -87,9 +87,18 @@ export default async function PlanPage({
     housekeeper && housekeeper.preferred_language !== "ar"
       ? housekeeper.preferred_language
       : undefined;
-  // Who we're generating for: the just-added member (from the redirect param),
-  // otherwise the account owner. Never framed as "the family".
-  const generatingFor = member || profile?.display_name || null;
+  // Who we're generating for: prefer the plan's own targeted member (stamped on
+  // single-member add/regenerate/edit) so the loader names the right person even when
+  // the URL has no ?member (the regenerate button refreshes without it). The
+  // add-member redirect's ?member (a name) and the account owner are fallbacks.
+  // Never framed as "the family".
+  const genId = latest?.plan_data?.generating_member_id;
+  const genName = genId
+    ? genId === "mom"
+      ? (profile?.display_name ?? null)
+      : (familyMembers.find((m) => m.id === genId)?.name ?? null)
+    : null;
+  const generatingFor = genName ?? member ?? profile?.display_name ?? null;
 
   // A member added mid-run is saved + queued (the drain generates them once the
   // current run finishes) — reassure rather than show a "wait" error.

@@ -609,6 +609,17 @@ export async function generateMealPlan(params: {
     (b) => !isComplete(b) && (!onlyMemberId || b.member_id === onlyMemberId),
   );
 
+  // The single member this run is filling: an explicit onlyMemberId (one-at-a-time
+  // add), OR — for a per-member edit/regenerate — the lone incremental member being
+  // regenerated (the others are carried). Stamped into plan_data.generating_member_id
+  // so the loading screen names the right person and the per-member spinners scope to
+  // them. Undefined on an initial full-family run (every member generates).
+  const targetedMemberId =
+    onlyMemberId ??
+    (existingPlan && membersToGenerate.length === 1
+      ? membersToGenerate[0]!.member_id
+      : undefined);
+
   // ── Fast path: every member complete → return the prior plan untouched ──
   if (existingPlan && membersToGenerate.length === 0) {
     const members = beneficiaries.map((b) => {
@@ -626,6 +637,45 @@ export async function generateMealPlan(params: {
     if (onProgress)
       await Promise.resolve(onProgress(plan, { readyDays: 0, totalDays: 0 }));
     return { plan, usage: { input_tokens: 0, output_tokens: 0, cost_usd: 0 }, missingDays: [] };
+  }
+
+  // ── Pre-dissolve carried shares w.r.t. the member(s) being regenerated ──
+  // A carried member's prior shared meals still list the member we're about to
+  // regenerate. Until that member's NEW day lands — and on any day that fails — the
+  // OTHER members must not keep showing the stale share. Re-sync each carried family
+  // day with the regenerated members passed as empty `fresh` inputs: they contribute
+  // no meals, so they're dropped from any carried batch that referenced them (the
+  // remaining members' own portions re-form the batch, or it dissolves to individual).
+  // Groups that don't reference a regenerated member pass through byte-identical.
+  // Successful days then re-form genuine shares in the generation loop below.
+  if (existingPlan && beneficiaries.length > 1 && familyDayIndices.length > 0) {
+    const regenIds = membersToGenerate.map((b) => b.member_id);
+    for (const di of familyDayIndices) {
+      const inputs: MemberDayMeals[] = [];
+      for (const b of beneficiaries) {
+        const day = carriedDays.get(b.member_id)!.get(di);
+        if (day && day.meals.length > 0)
+          inputs.push({ member_id: b.member_id, meals: day.meals, fresh: false });
+      }
+      if (!inputs.some((i) => !i.fresh)) continue; // no carried meals this day
+      for (const id of regenIds)
+        if (!inputs.some((i) => i.member_id === id))
+          inputs.push({ member_id: id, meals: [], fresh: true });
+      const resynced = resyncSharedMeals(inputs);
+      for (const b of beneficiaries) {
+        const day = carriedDays.get(b.member_id)!.get(di);
+        if (!day || day.meals.length === 0) continue;
+        const newMeals = resynced.get(b.member_id);
+        if (!newMeals) continue;
+        const changed =
+          newMeals.length !== day.meals.length ||
+          newMeals.some((m, i) => m !== day.meals[i]);
+        if (changed)
+          carriedDays
+            .get(b.member_id)!
+            .set(di, { ...day, meals: newMeals, day_total: sumDayTotal(newMeals) });
+      }
+    }
   }
 
   // Incremental add/edit: open the plan IMMEDIATELY (before the skeleton call)
@@ -660,6 +710,9 @@ export async function generateMealPlan(params: {
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
       days_total: familyDayIndices.length,
       generating: true,
+      // Name the targeted member from the very first emit so the loading screen
+      // shows the right person while the skeleton runs (matches snapshot() below).
+      generating_member_id: targetedMemberId,
     };
     await Promise.resolve(
       onProgress(preShell, { readyDays: 0, totalDays: familyDayIndices.length }),
@@ -883,10 +936,11 @@ export async function generateMealPlan(params: {
       skeleton.safety_disclaimer_ar ?? existingPlan?.safety_disclaimer_ar,
     days_total: totalDays,
     generating,
-    // While generating a single targeted member, tell the UI who — so its
-    // spinners scope to that member and a different member's empty/failed day
-    // doesn't render as "loading". Cleared on the final (generating=false) plan.
-    generating_member_id: generating && onlyMemberId ? onlyMemberId : undefined,
+    // While generating a single targeted member, tell the UI who — so the loading
+    // screen names them and its spinners scope to that member (a different member's
+    // empty/failed day doesn't render as "loading"). Covers adds (onlyMemberId) AND
+    // per-member edit/regenerate (targetedMemberId). Cleared on the final plan.
+    generating_member_id: generating && targetedMemberId ? targetedMemberId : undefined,
     // Carry the prior attempt counts; bump the targeted member by one (the drain
     // uses this to cap completion-retries on a member that can't finish a day).
     gen_attempts: onlyMemberId

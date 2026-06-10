@@ -466,4 +466,89 @@ describe("generateMealPlan — shared-meal re-sync on member edit", () => {
     expect(childLunch.shared_recipe).toBe(true);
     expect(childLunch.own_portion!.ingredients.find((i) => i.name_ar === "دجاج")!.amount).toBe(200);
   });
+
+  it("stamps generating_member_id on the regenerated member (and not on an initial full run)", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      sharedStreamReturns(systemPrompt),
+    );
+    const context = makeContext({ extraMember: true }); // mom + member-2
+
+    // Single-member regenerate: member-2 removed from the prior plan → only it fills.
+    const existing = makeSharedExistingPlan();
+    const existingWithoutChild: MealPlan = {
+      ...existing,
+      members: existing.members.filter((m) => m.member_id !== "member-2"),
+    };
+    const regenSnaps: MealPlan[] = [];
+    await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context,
+      existingPlan: existingWithoutChild,
+      onProgress: (snap) => {
+        regenSnaps.push(snap);
+      },
+    });
+    const genSnaps = regenSnaps.filter((s) => s.generating);
+    expect(genSnaps.length).toBeGreaterThan(0);
+    // Every "still generating" emit names the member we're regenerating — so the
+    // loading screen never shows the account owner / another member.
+    expect(genSnaps.every((s) => s.generating_member_id === "member-2")).toBe(true);
+
+    // Initial full-family run (no prior plan): not a single targeted member → unset.
+    const initSnaps: MealPlan[] = [];
+    await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context,
+      onProgress: (snap) => {
+        initSnaps.push(snap);
+      },
+    });
+    expect(
+      initSnaps.filter((s) => s.generating).every((s) => !s.generating_member_id),
+    ).toBe(true);
+  });
+
+  it("dissolves a carried member's stale share on a day the regenerated member FAILS", async () => {
+    // Day 1 generation fails; days 0 + 2 succeed. mom shared 'كبسة' with member-2 on
+    // every day in the prior plan.
+    mockedStream.mockImplementation(async ({ systemPrompt }) => {
+      const dayMatch = systemPrompt.match(/day_index=(\d+)/);
+      if (dayMatch && Number(dayMatch[1]) === 1) throw new Error("forced day-1 failure");
+      return sharedStreamReturns(systemPrompt);
+    });
+    const context = makeContext({ extraMember: true });
+    const existing = makeSharedExistingPlan();
+    const existingWithoutChild: MealPlan = {
+      ...existing,
+      members: existing.members.filter((m) => m.member_id !== "member-2"),
+    };
+
+    const { plan, missingDays } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context,
+      existingPlan: existingWithoutChild,
+    });
+    expect(missingDays).toContain(1);
+
+    const momDay = (di: number) =>
+      plan.members
+        .find((m) => m.member_id === "mom")!
+        .days.find((d) => d.day_index === di)!
+        .meals.find((m) => m.slot === "lunch")!;
+
+    // FAILED day: mom must NOT still show a share with member-2 (who has no meal here).
+    // It dissolves to her own single portion (80g), not the stale 200g batch.
+    const failedLunch = momDay(1);
+    expect(failedLunch.shared_recipe).toBeFalsy();
+    expect(failedLunch.per_member_portions).toBeUndefined();
+    expect(failedLunch.ingredients.find((i) => i.name_ar === "دجاج")!.amount).toBe(80);
+
+    // SUCCESSFUL day: the share re-forms with member-2's freshly generated portion.
+    const okLunch = momDay(0);
+    expect(okLunch.shared_recipe).toBe(true);
+    expect(okLunch.per_member_portions!.map((p) => p.member_id).sort()).toEqual([
+      "member-2",
+      "mom",
+    ]);
+  });
 });
