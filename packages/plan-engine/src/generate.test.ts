@@ -13,7 +13,7 @@ vi.mock("./anthropic", async () => {
 });
 
 import { streamAnthropic } from "./anthropic";
-import { generateMealPlan } from "./generate";
+import { generateMealPlan, resyncSharedMeals } from "./generate";
 import type { PlanPromptContext } from "./buildContext";
 import type { MealPlan, Day, Meal, DaySlice, PlanSkeleton } from "./schema";
 import { MealPlanSchema, DaySliceSchema, PlanSkeletonSchema } from "./schema";
@@ -304,5 +304,166 @@ describe("generateMealPlan — incremental carry-over", () => {
       const ids = [...prompt.matchAll(/member_id="([^"]+)"/g)].map((m) => m[1]);
       expect(ids).not.toContain("mom");
     }
+  });
+});
+
+// ── Shared-meal re-sync through the full day loop ───────────────────────────
+// The mock makes every member's lunch the SAME dish "كبسة" so they form one shared
+// batch — letting us verify that editing one member re-syncs the carried member's
+// batch (Issue 3), not just carry over the stale one.
+function sharedStreamReturns(systemPrompt: string): {
+  text: string;
+  tokensIn: number;
+  tokensOut: number;
+  stopReason: null;
+} {
+  const ids = [...systemPrompt.matchAll(/member_id="([^"]+)"/g)].map((m) => m[1]!);
+  const dayMatch = systemPrompt.match(/day_index=(\d+)/);
+  // The edited member's regenerated portion is bigger than its carried one (دجاج 200).
+  const lunchMeal = (recipe: string): Meal => ({
+    slot: "lunch",
+    slot_name_ar: "غداء",
+    recipe_name_ar: recipe,
+    ingredients: [{ name_ar: "دجاج", amount: 200, unit: "g" }],
+    prep_steps_ar: ["جهّزي الكبسة"],
+    calories: 700,
+    macros: { protein_g: 40, carbs_g: 60, fat_g: 20 },
+  });
+  let text: string;
+  if (!dayMatch) {
+    const skeleton: PlanSkeleton = {
+      members: ids.map((id) => ({
+        member_id: id,
+        member_name_ar: id,
+        primary_goal: "fat_loss",
+        daily_calories_target: 1600,
+        macros_target: { protein_g: 100, carbs_g: 140, fat_g: 55 },
+        days: DAY_INDICES.map((di) => ({
+          day_index: di,
+          day_name_ar: `اليوم ${di + 1}`,
+          meals: [{ slot: "lunch", slot_name_ar: "غداء", recipe_name_ar: "كبسة" }],
+        })),
+      })),
+      methodology_notes_ar: "ملاحظات",
+      safety_disclaimer_ar: "تنبيه",
+    };
+    PlanSkeletonSchema.parse(skeleton);
+    text = JSON.stringify(skeleton);
+  } else {
+    const slice: DaySlice = {
+      day_index: Number(dayMatch[1]),
+      members: ids.map((id) => ({ member_id: id, meals: [lunchMeal("كبسة")] })),
+    };
+    DaySliceSchema.parse(slice);
+    text = JSON.stringify(slice);
+  }
+  return { text, tokensIn: 10, tokensOut: 20, stopReason: null };
+}
+
+/** mom + member-2 share "كبسة" each day, assembled (with own_portion) — a prior plan. */
+function makeSharedExistingPlan(): MealPlan {
+  const sumDay = (meals: Meal[]) => ({
+    calories: Math.round(meals.reduce((s, m) => s + m.calories, 0)),
+    protein_g: Math.round(meals.reduce((s, m) => s + m.macros.protein_g, 0)),
+    carbs_g: Math.round(meals.reduce((s, m) => s + m.macros.carbs_g, 0)),
+    fat_g: Math.round(meals.reduce((s, m) => s + m.macros.fat_g, 0)),
+  });
+  const portion = (id: string, chicken: number, cal: number): Meal => ({
+    slot: "lunch",
+    slot_name_ar: "غداء",
+    recipe_name_ar: "كبسة",
+    ingredients: [{ name_ar: "دجاج", amount: chicken, unit: "g" }],
+    prep_steps_ar: ["جهّزي الكبسة"],
+    calories: cal,
+    macros: { protein_g: 30, carbs_g: 40, fat_g: 10 },
+  });
+  const momDays: Day[] = [];
+  const childDays: Day[] = [];
+  for (const di of DAY_INDICES) {
+    const out = resyncSharedMeals([
+      { member_id: "mom", fresh: true, meals: [portion("mom", 80, 500)] },
+      { member_id: "member-2", fresh: true, meals: [portion("member-2", 120, 600)] },
+    ]);
+    const mm = out.get("mom")!;
+    const cm = out.get("member-2")!;
+    momDays.push({ day_index: di, day_name_ar: `اليوم ${di + 1}`, meals: mm, day_total: sumDay(mm) });
+    childDays.push({ day_index: di, day_name_ar: `اليوم ${di + 1}`, meals: cm, day_total: sumDay(cm) });
+  }
+  return MealPlanSchema.parse({
+    week_start_date: "2026-06-06",
+    members: [
+      {
+        member_id: "mom",
+        member_name_ar: "أم محمد",
+        primary_goal: "fat_loss",
+        daily_calories_target: 1800,
+        macros_target: { protein_g: 120, carbs_g: 150, fat_g: 60 },
+        days: momDays,
+      },
+      {
+        member_id: "member-2",
+        member_name_ar: "سارة",
+        daily_calories_target: 1400,
+        macros_target: { protein_g: 80, carbs_g: 120, fat_g: 45 },
+        days: childDays,
+      },
+    ],
+    methodology_notes_ar: "ملاحظات",
+    safety_disclaimer_ar: "تنبيه",
+    days_total: DAY_INDICES.length,
+    generating: false,
+  });
+}
+
+describe("generateMealPlan — shared-meal re-sync on member edit", () => {
+  it("editing one member updates the carried member's shared batch + leaves their own portion intact", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      sharedStreamReturns(systemPrompt),
+    );
+
+    const context = makeContext({ extraMember: true }); // mom + member-2
+    const existing = makeSharedExistingPlan();
+    // dispatch removes the edited member from the prior plan before regenerating it.
+    const existingWithoutChild: MealPlan = {
+      ...existing,
+      members: existing.members.filter((m) => m.member_id !== "member-2"),
+    };
+
+    // Sanity: the prior plan's mom batch is mom(80) + child(120) = 200g دجاج.
+    const priorMomLunch = existing.members
+      .find((m) => m.member_id === "mom")!
+      .days[0]!.meals.find((m) => m.slot === "lunch")!;
+    expect(priorMomLunch.ingredients.find((i) => i.name_ar === "دجاج")!.amount).toBe(200);
+
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context,
+      existingPlan: existingWithoutChild,
+    });
+
+    const momLunch = plan.members
+      .find((m) => m.member_id === "mom")!
+      .days.find((d) => d.day_index === 0)!
+      .meals.find((m) => m.slot === "lunch")!;
+
+    // Re-synced: the carried mom's batch now reflects the edited member's NEW portion
+    // (mom 80 + member-2 200 = 280g), and both members are in the split.
+    expect(momLunch.shared_recipe).toBe(true);
+    expect(momLunch.ingredients.find((i) => i.name_ar === "دجاج")!.amount).toBe(280);
+    expect(momLunch.per_member_portions!.map((p) => p.member_id).sort()).toEqual([
+      "member-2",
+      "mom",
+    ]);
+    // Mom's OWN portion + calories are untouched — only the shared batch view moved.
+    expect(momLunch.own_portion!.ingredients.find((i) => i.name_ar === "دجاج")!.amount).toBe(80);
+    expect(momLunch.calories).toBe(500);
+
+    // The edited member got the (bigger) fresh portion and is in the same batch.
+    const childLunch = plan.members
+      .find((m) => m.member_id === "member-2")!
+      .days.find((d) => d.day_index === 0)!
+      .meals.find((m) => m.slot === "lunch")!;
+    expect(childLunch.shared_recipe).toBe(true);
+    expect(childLunch.own_portion!.ingredients.find((i) => i.name_ar === "دجاج")!.amount).toBe(200);
   });
 });

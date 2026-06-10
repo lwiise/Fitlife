@@ -25,7 +25,6 @@ import {
   type PlanSkeleton,
   type Meal,
   type Day,
-  type DaySlice,
   type Ingredient,
   type PerMemberPortion,
   type LocaleCode,
@@ -155,14 +154,19 @@ function sumDayTotal(meals: Meal[]) {
   };
 }
 
-// ── Deterministic shared-meal assembly ──────────────────────────────────────
+// ── Deterministic shared-meal assembly + re-sync ────────────────────────────
 // The model returns each member's OWN single-portion recipe for a dish. We do NOT
 // trust it to sum a batch or compute the split — both are derived here in code, so
 // shared meals are always correct (totals = sum of portions, % = each portion's
-// weight share). Members who were assigned the same dish (same skeleton
-// recipe_name_ar in the same slot) form a shared group; everyone else stays
-// individual. This is why "only share when it makes sense" holds: the skeleton only
-// gives two members the same dish name when the dish actually fits both.
+// weight share). Members who emit the SAME dish (same normalized recipe_name_ar in
+// the same slot) form a shared group; everyone else stays individual. Grouping on
+// the EMITTED name (not a forced skeleton name) is what lets a member whose profile
+// needs a different dish break out: the model gives them a differently-named dish
+// and they're left individual — "share only when it actually fits".
+//
+// Each participant's own single portion is retained on the shared meal (own_portion)
+// so the batch can be RE-DERIVED when one member is later edited, WITHOUT touching
+// the others' recipes — only the batch totals/split and group membership update.
 
 const GRAMS_PER_UNIT: Partial<Record<Ingredient["unit"], number>> = {
   g: 1,
@@ -237,128 +241,257 @@ export function normalizeDishKey(name: string): string {
   return s;
 }
 
+/** Every beneficiary's meals for ONE day, fed to resyncSharedMeals. */
+export interface MemberDayMeals {
+  member_id: string;
+  meals: Meal[];
+  // True if these meals were just (re)generated this run (raw single portions);
+  // false for members carried over verbatim from the prior plan.
+  fresh: boolean;
+}
+
 /**
- * Turn each day-slice into correct shared meals, deterministically. Mutates `slice`.
- * For every (slot, dish) group of ≥2 members: sets one batch recipe (summed
- * ingredients + group prep steps) on each participant, plus a per-member split
- * (grams + %), while keeping each member's own calories/macros. Singletons are left
- * individual (any model-set shared fields are cleared). Exported for unit testing.
+ * Strip a meal down to an individual recipe (no shared/batch fields). When the meal
+ * carries an own_portion (it was a shared participant), restore that single portion
+ * as the recipe; otherwise it is already its own portion and is returned unchanged
+ * (same reference — keeps a carried individual meal byte-identical). Batch
+ * translations are dropped on dissolution so the housekeeper pass re-translates the
+ * now-individual recipe.
  */
-export function assembleSharedMeals(
-  slice: DaySlice,
-  daySkeleton: PlanSkeleton,
-  dayIndex: number,
-): void {
-  // Authoritative "who shares what": the skeleton's dish name per (member, slot).
-  const skelName = new Map<string, string>();
-  for (const sm of daySkeleton.members) {
-    const day = sm.days.find((d) => d.day_index === dayIndex);
-    for (const m of day?.meals ?? [])
-      skelName.set(`${sm.member_id}|${m.slot}`, normalizeDishKey(m.recipe_name_ar));
-  }
+function toIndividualMeal(meal: Meal): Meal {
+  const own = meal.own_portion;
+  const hadShared =
+    meal.shared_recipe === true ||
+    meal.batch_finished_weight_g != null ||
+    meal.per_member_portions != null ||
+    own != null;
+  if (!hadShared) return meal;
+  const out: Meal = {
+    ...meal,
+    recipe_name_ar: own?.recipe_name_ar ?? meal.recipe_name_ar,
+    ingredients: own ? own.ingredients.map((i) => ({ ...i })) : meal.ingredients,
+    prep_steps_ar: own ? [...own.prep_steps_ar] : meal.prep_steps_ar,
+  };
+  delete out.shared_recipe;
+  delete out.batch_finished_weight_g;
+  delete out.per_member_portions;
+  delete out.own_portion;
+  delete out.ingredients_translated;
+  delete out.recipe_name_translated;
+  delete out.prep_steps_translated;
+  delete out.prep_steps_translated_locale;
+  return out;
+}
 
-  type Entry = { member_id: string; meal: Meal };
-  const groups = new Map<string, Entry[]>();
-  for (const member of slice.members) {
-    for (const meal of member.meals) {
-      // Recompute shared fields from scratch — never trust the model's version.
-      meal.shared_recipe = false;
-      delete meal.batch_finished_weight_g;
-      delete meal.per_member_portions;
-      const name =
-        skelName.get(`${member.member_id}|${meal.slot}`) ??
-        normalizeDishKey(meal.recipe_name_ar);
-      const key = `${meal.slot}|${name}`;
-      const arr = groups.get(key);
-      if (arr) arr.push({ member_id: member.member_id, meal });
-      else groups.set(key, [{ member_id: member.member_id, meal }]);
-    }
-  }
+/**
+ * This member's OWN single portion as a standalone individual meal — the input to
+ * (re)assembly for a CARRIED meal. Individual carried meals are their own portion;
+ * shared carried meals carry it in own_portion. Legacy carried shared meals (made
+ * before own_portion existed) are approximated by scaling the batch by the member's
+ * share — only hit once, on the first re-sync of an old plan; correct thereafter.
+ */
+function ownPortionMeal(meal: Meal, memberId: string): Meal {
+  if (meal.shared_recipe !== true || meal.own_portion) return toIndividualMeal(meal);
+  const p = (meal.per_member_portions ?? []).find((pp) => pp.member_id === memberId);
+  const n = meal.per_member_portions?.length || 1;
+  const frac = p?.portion_percentage != null ? p.portion_percentage / 100 : 1 / n;
+  const scale = (v: number) => Math.round(v * frac * 10) / 10;
+  const out: Meal = {
+    ...meal,
+    ingredients: meal.ingredients.map((i) => ({
+      ...i,
+      amount: scale(i.amount),
+      ...(i.amount_min != null ? { amount_min: scale(i.amount_min) } : {}),
+      ...(i.amount_max != null ? { amount_max: scale(i.amount_max) } : {}),
+    })),
+  };
+  delete out.shared_recipe;
+  delete out.batch_finished_weight_g;
+  delete out.per_member_portions;
+  delete out.own_portion;
+  delete out.ingredients_translated;
+  delete out.recipe_name_translated;
+  delete out.prep_steps_translated;
+  delete out.prep_steps_translated_locale;
+  return out;
+}
 
-  for (const entries of groups.values()) {
-    if (entries.length < 2) continue; // eaten by one person → individual
+/**
+ * Build one shared batch from a group of ≥2 OWN-portion meals: summed ingredients,
+ * the weight/calorie split, and the largest portion as the canonical recipe text.
+ * Each member keeps its own calories/macros and stores its own_portion for the next
+ * re-sync. Returns the assembled shared meal per entry (input order).
+ */
+function buildSharedGroup(
+  entries: { member_id: string; meal: Meal }[],
+): Meal[] {
+  const batch = sumIngredients(entries.map((e) => e.meal.ingredients));
+  const weights = entries.map((e) => ({
+    id: e.member_id,
+    g: portionWeightG(e.meal.ingredients),
+    cal: e.meal.calories || 0,
+  }));
+  const totalG = weights.reduce((s, w) => s + w.g, 0);
+  const totalCal = weights.reduce((s, w) => s + w.cal, 0);
 
-    const batch = sumIngredients(entries.map((e) => e.meal.ingredients));
-    const weights = entries.map((e) => ({
-      id: e.member_id,
-      g: portionWeightG(e.meal.ingredients),
-      cal: e.meal.calories || 0,
+  let portions: PerMemberPortion[];
+  let batchWeight: number | undefined;
+  if (totalG > 0) {
+    batchWeight = Math.round(totalG);
+    portions = weights.map((w) => ({
+      member_id: w.id,
+      portion_grams: Math.round(w.g),
+      portion_percentage: Math.round((w.g / totalG) * 100),
     }));
-    const totalG = weights.reduce((s, w) => s + w.g, 0);
-    const totalCal = weights.reduce((s, w) => s + w.cal, 0);
+  } else if (totalCal > 0) {
+    // No weighable ingredients (e.g. pieces/cups only) → split by calorie share.
+    portions = weights.map((w) => ({
+      member_id: w.id,
+      portion_percentage: Math.round((w.cal / totalCal) * 100),
+    }));
+  } else {
+    const pct = Math.round(100 / entries.length);
+    portions = weights.map((w) => ({ member_id: w.id, portion_percentage: pct }));
+  }
 
-    let portions: PerMemberPortion[];
-    let batchWeight: number | undefined;
-    if (totalG > 0) {
-      batchWeight = Math.round(totalG);
-      portions = weights.map((w) => ({
-        member_id: w.id,
-        portion_grams: Math.round(w.g),
-        portion_percentage: Math.round((w.g / totalG) * 100),
-      }));
-    } else if (totalCal > 0) {
-      // No weighable ingredients (e.g. pieces/cups only) → split by calorie share.
-      portions = weights.map((w) => ({
-        member_id: w.id,
-        portion_percentage: Math.round((w.cal / totalCal) * 100),
-      }));
-    } else {
-      const pct = Math.round(100 / entries.length);
-      portions = weights.map((w) => ({ member_id: w.id, portion_percentage: pct }));
-    }
+  // Canonical recipe text = the largest portion (most complete ingredient list).
+  const canonical = entries.reduce((a, b) =>
+    portionWeightG(b.meal.ingredients) >= portionWeightG(a.meal.ingredients) ? b : a,
+  ).meal;
 
-    // Canonical recipe text = the largest portion (most complete ingredient list).
-    const canonical = entries.reduce((a, b) =>
-      portionWeightG(b.meal.ingredients) >= portionWeightG(a.meal.ingredients)
-        ? b
-        : a,
-    ).meal;
+  // Rebuild translated batch ingredients from canonical's name map (when the
+  // canonical own portion carries translations). Recomputed groups usually start
+  // untranslated — the housekeeper pass fills the gaps after generation.
+  let batchTranslated: Ingredient[] | undefined;
+  if (
+    canonical.ingredients_translated &&
+    canonical.ingredients_translated.length === canonical.ingredients.length
+  ) {
+    const transByName = new Map<string, Ingredient>();
+    canonical.ingredients.forEach((ing, i) =>
+      transByName.set(ing.name_ar.trim(), canonical.ingredients_translated![i]!),
+    );
+    batchTranslated = batch.map((ing) => {
+      const t = transByName.get(ing.name_ar.trim());
+      return t
+        ? {
+            ...t,
+            amount: ing.amount,
+            amount_min: ing.amount_min,
+            amount_max: ing.amount_max,
+            unit: ing.unit,
+          }
+        : { ...ing };
+    });
+  }
 
-    // Rebuild translated ingredients for the batch from canonical's name map, so the
-    // housekeeper view shows batch amounts with translated names (when present).
-    let batchTranslated: Ingredient[] | undefined;
-    if (
-      canonical.ingredients_translated &&
-      canonical.ingredients_translated.length === canonical.ingredients.length
-    ) {
-      const transByName = new Map<string, Ingredient>();
-      canonical.ingredients.forEach((ing, i) =>
-        transByName.set(ing.name_ar.trim(), canonical.ingredients_translated![i]!),
-      );
-      batchTranslated = batch.map((ing) => {
-        const t = transByName.get(ing.name_ar.trim());
-        return t
-          ? {
-              ...t,
-              amount: ing.amount,
-              amount_min: ing.amount_min,
-              amount_max: ing.amount_max,
-              unit: ing.unit,
-            }
-          : { ...ing };
-      });
-    }
+  return entries.map((e) => {
+    const out: Meal = {
+      ...e.meal,
+      recipe_name_ar: canonical.recipe_name_ar,
+      ingredients: batch.map((i) => ({ ...i })),
+      prep_steps_ar: [...canonical.prep_steps_ar],
+      shared_recipe: true,
+      per_member_portions: portions.map((p) => ({ ...p })),
+      // Retain this member's own single portion so the batch can be re-derived
+      // when ONE member is later edited, without regenerating the others.
+      own_portion: {
+        recipe_name_ar: e.meal.recipe_name_ar,
+        ingredients: e.meal.ingredients.map((i) => ({ ...i })),
+        prep_steps_ar: [...e.meal.prep_steps_ar],
+      },
+      // Each member keeps their OWN calories/macros (already on ...e.meal).
+    };
+    if (batchWeight != null) out.batch_finished_weight_g = batchWeight;
+    else delete out.batch_finished_weight_g;
+    if (canonical.recipe_name_translated)
+      out.recipe_name_translated = canonical.recipe_name_translated;
+    else delete out.recipe_name_translated;
+    if (canonical.prep_steps_translated)
+      out.prep_steps_translated = [...canonical.prep_steps_translated];
+    else delete out.prep_steps_translated;
+    if (canonical.prep_steps_translated_locale)
+      out.prep_steps_translated_locale = canonical.prep_steps_translated_locale;
+    else delete out.prep_steps_translated_locale;
+    if (batchTranslated)
+      out.ingredients_translated = batchTranslated.map((i) => ({ ...i }));
+    else delete out.ingredients_translated;
+    return out;
+  });
+}
 
-    for (const e of entries) {
-      e.meal.shared_recipe = true;
-      e.meal.recipe_name_ar = canonical.recipe_name_ar;
-      e.meal.ingredients = batch.map((i) => ({ ...i }));
-      e.meal.prep_steps_ar = [...canonical.prep_steps_ar];
-      if (batchWeight != null) e.meal.batch_finished_weight_g = batchWeight;
-      e.meal.per_member_portions = portions.map((p) => ({ ...p }));
-      // Amount-independent translated fields come from the canonical recipe.
-      if (canonical.recipe_name_translated)
-        e.meal.recipe_name_translated = canonical.recipe_name_translated;
-      if (canonical.prep_steps_translated)
-        e.meal.prep_steps_translated = [...canonical.prep_steps_translated];
-      if (canonical.prep_steps_translated_locale)
-        e.meal.prep_steps_translated_locale = canonical.prep_steps_translated_locale;
-      if (batchTranslated)
-        e.meal.ingredients_translated = batchTranslated.map((i) => ({ ...i }));
-      else delete e.meal.ingredients_translated;
-      // Each member keeps their OWN calories/macros (their portion's nutrition).
+/**
+ * Re-derive ONE day's shared meals across the WHOLE family, deterministically.
+ *
+ * `members` carries every beneficiary's meals for that day. `fresh` members were
+ * just (re)generated (raw single portions); the rest are carried over (possibly
+ * already-assembled) and kept VERBATIM unless a fresh member joins or leaves one of
+ * their shared dishes — so editing one member updates exactly the shared meals they
+ * touch, and nothing else.
+ *
+ * Grouping keys on the EMITTED dish name (normalized), so a member whose profile
+ * needs a different dish simply gets a differently-named dish and is left individual.
+ * Returns the assembled meals per member (input order); unchanged carried meals are
+ * returned by reference so carry-over stays byte-identical. Exported for testing.
+ */
+export function resyncSharedMeals(members: MemberDayMeals[]): Map<string, Meal[]> {
+  const freshSet = new Set(members.filter((m) => m.fresh).map((m) => m.member_id));
+
+  type Entry = { member_id: string; meal: Meal; fresh: boolean };
+  const groups = new Map<string, Entry[]>();
+  const order: string[] = [];
+  for (const m of members) {
+    for (const meal of m.meals) {
+      const key = `${meal.slot}|${normalizeDishKey(meal.recipe_name_ar)}`;
+      let arr = groups.get(key);
+      if (!arr) {
+        arr = [];
+        groups.set(key, arr);
+        order.push(key);
+      }
+      arr.push({ member_id: m.member_id, meal, fresh: m.fresh });
     }
   }
+
+  const resolved = new Map<Meal, Meal>(); // input meal → assembled meal
+  for (const key of order) {
+    const entries = groups.get(key)!;
+    // A group needs recompute when a fresh member is in it, OR a carried member in
+    // it previously shared with a member that's fresh this run (so a fresh member
+    // that LEFT this dish is dropped from the remaining batch). Otherwise it's
+    // untouched by this run and every carried meal is kept exactly as-is.
+    const hasFresh = entries.some((e) => e.fresh);
+    const referencesFresh =
+      !hasFresh &&
+      entries.some(
+        (e) =>
+          e.meal.shared_recipe === true &&
+          (e.meal.per_member_portions ?? []).some((p) => freshSet.has(p.member_id)),
+      );
+    if (!hasFresh && !referencesFresh) {
+      for (const e of entries) resolved.set(e.meal, e.meal);
+      continue;
+    }
+    const own = entries.map((e) => ({
+      member_id: e.member_id,
+      meal: e.fresh ? toIndividualMeal(e.meal) : ownPortionMeal(e.meal, e.member_id),
+    }));
+    if (own.length < 2) {
+      // Eaten by one person now → individual (dissolves a former share).
+      resolved.set(entries[0]!.meal, own[0]!.meal);
+      continue;
+    }
+    const built = buildSharedGroup(own);
+    built.forEach((b, i) => resolved.set(entries[i]!.meal, b));
+  }
+
+  const out = new Map<string, Meal[]>();
+  for (const m of members)
+    out.set(
+      m.member_id,
+      m.meals.map((meal) => resolved.get(meal)!),
+    );
+  return out;
 }
 
 /**
@@ -828,33 +961,74 @@ export async function generateMealPlan(params: {
             res.text,
           );
         const slice = r.data;
-        // Build correct shared meals deterministically across all members in this
-        // slice (sum portions → batch, derive the split) — not trusting the model.
-        // Solo plans have one member per group, so nothing is shared.
-        // NOTE: a member's meal_mode='independent' is honored only via the prompt
-        // (the model gives them a differently-named dish). This merge has no access to
-        // meal_mode, so it groups purely by (slot, normalized dish name) — if the model
-        // still emits an identical name for an independent member they would be merged.
-        if (beneficiaries.length > 1) assembleSharedMeals(slice, daySkeleton, dayIndex);
-        for (const sm of daySkeleton.members) {
-          const sliceMember = slice.members.find(
-            (m) => m.member_id === sm.member_id,
-          );
-          const meals = sliceMember?.meals ?? [];
-          // Stamp the translation locale in code (don't trust the model to echo it).
-          if (context.housekeeper_locale) {
-            for (const meal of meals) {
-              if (meal.prep_steps_translated && meal.prep_steps_translated.length > 0) {
+        // Stamp the translation locale on the freshly-generated meals in code
+        // (don't trust the model to echo it).
+        if (context.housekeeper_locale) {
+          for (const sm of slice.members)
+            for (const meal of sm.meals)
+              if (meal.prep_steps_translated && meal.prep_steps_translated.length > 0)
                 meal.prep_steps_translated_locale = context.housekeeper_locale;
-              }
-            }
+        }
+
+        // Re-sync shared meals across the WHOLE family for this day — not just the
+        // members regenerated now. The fresh members' raw single portions plus every
+        // OTHER beneficiary's carried meals are re-grouped by emitted dish name, so a
+        // shared batch that the edited member joins/leaves is recomputed on the carried
+        // members too (Issue 3), while a member whose profile no longer fits the dish
+        // is left individual (Issue 1). Carried members untouched by this run keep
+        // their meals byte-for-byte. Solo plans (1 beneficiary) never share.
+        const fresh = new Map(
+          slice.members.map((m) => [m.member_id, m.meals] as const),
+        );
+        const dayInputs: MemberDayMeals[] = [];
+        for (const b of beneficiaries) {
+          if (dayMemberIds.has(b.member_id)) {
+            dayInputs.push({
+              member_id: b.member_id,
+              meals: fresh.get(b.member_id) ?? [],
+              fresh: true,
+            });
+          } else {
+            const carried = daysByMember.get(b.member_id)!.get(dayIndex);
+            if (carried && carried.meals.length > 0)
+              dayInputs.push({
+                member_id: b.member_id,
+                meals: carried.meals,
+                fresh: false,
+              });
           }
-          daysByMember.get(sm.member_id)!.set(dayIndex, {
-            day_index: dayIndex,
-            day_name_ar: dayNameByIndex.get(dayIndex) ?? `اليوم ${dayIndex + 1}`,
-            meals,
-            day_total: sumDayTotal(meals),
-          });
+        }
+        const assembled =
+          beneficiaries.length > 1
+            ? resyncSharedMeals(dayInputs)
+            : new Map(dayInputs.map((d) => [d.member_id, d.meals]));
+
+        for (const di of dayInputs) {
+          const meals = assembled.get(di.member_id) ?? di.meals;
+          if (di.fresh) {
+            daysByMember.get(di.member_id)!.set(dayIndex, {
+              day_index: dayIndex,
+              day_name_ar: dayNameByIndex.get(dayIndex) ?? `اليوم ${dayIndex + 1}`,
+              meals,
+              day_total: sumDayTotal(meals),
+            });
+          } else {
+            // Carried member: only rewrite their day when the re-sync actually
+            // changed it (a shared batch they share with the edited member). When
+            // unchanged, keep the carried Day object verbatim (preserves its
+            // day_name_ar + byte-identical content).
+            const carried = daysByMember.get(di.member_id)!.get(dayIndex)!;
+            const changed =
+              meals.length !== carried.meals.length ||
+              meals.some((m, i) => m !== carried.meals[i]);
+            if (changed)
+              daysByMember.get(di.member_id)!.set(dayIndex, {
+                day_index: dayIndex,
+                day_name_ar: carried.day_name_ar,
+                meals,
+                day_total: sumDayTotal(meals),
+              });
+          }
         }
         done.add(dayIndex);
         emit();
@@ -895,18 +1069,28 @@ export async function generateMealPlan(params: {
     );
   const plan: MealPlan = result.data;
 
-  // Carry-over invariant (log-only tripwire): each member's CARRIED days must be
-  // byte-identical to the prior plan — adding a member or filling one member's
-  // gap must never rewrite another member's finished days. Carried cells are
-  // placed verbatim and never touched by the generation loop, so this should
-  // never fire; if it ever does, a regression started rewriting finished days.
-  const dayFingerprint = (d: Day) => JSON.stringify(d);
+  // Carry-over invariant (log-only tripwire): a carried member's OWN dishes must
+  // never change — adding or editing one member may update the shared BATCH a
+  // carried member shares with the edited one (totals/split/membership), but it
+  // must never rewrite which dishes that carried member eats. We therefore compare
+  // each carried day's own-dish fingerprint (slot + normalized own recipe name,
+  // ignoring batch amounts/translations) rather than the whole day. A mismatch
+  // means a regression started rewriting carried members' meals.
+  const ownDishFingerprint = (d: Day) =>
+    JSON.stringify(
+      d.meals
+        .map(
+          (m) =>
+            `${m.slot}|${normalizeDishKey(m.own_portion?.recipe_name_ar ?? m.recipe_name_ar)}`,
+        )
+        .sort(),
+    );
   for (const [memberId, carried] of carriedDays) {
     if (carried.size === 0) continue;
     const out = plan.members.find((m) => m.member_id === memberId);
     for (const [di, original] of carried) {
       const outDay = out?.days.find((d) => d.day_index === di);
-      if (!outDay || dayFingerprint(outDay) !== dayFingerprint(original)) {
+      if (!outDay || ownDishFingerprint(outDay) !== ownDishFingerprint(original)) {
         console.warn("[plan-generate] carry-over invariant violated", {
           memberId,
           dayIndex: di,
