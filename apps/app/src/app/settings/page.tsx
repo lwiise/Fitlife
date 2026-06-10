@@ -4,7 +4,7 @@ import { UserRound, ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
+import { BackButton } from "@/components/BackButton";
 import { AccountInfoCard } from "./AccountInfoCard";
 import { DataSection } from "./DataSection";
 import { LegalSection } from "./LegalSection";
@@ -35,7 +35,7 @@ export default async function SettingsPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackToDashboard />
+          <BackButton />
         </div>
       </header>
 

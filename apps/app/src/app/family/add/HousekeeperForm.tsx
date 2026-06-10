@@ -9,17 +9,22 @@ import { LOCALE_CODES_ORDERED, LOCALE_INFO } from "@/lib/plans/locales";
 export function HousekeeperForm({
   onboarding = false,
   onComplete,
+  initial,
+  editing = false,
 }: {
   onboarding?: boolean;
   // When provided (the onboarding family builder), called after the maid is saved
   // instead of navigating — lets the parent finish the sequence and generate.
   onComplete?: () => void;
+  // Edit mode: prefill the maid's existing name + reading language.
+  initial?: { name?: string; preferred_language?: string };
+  editing?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [lang, setLang] = useState("tl");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [lang, setLang] = useState(initial?.preferred_language ?? "tl");
 
   const submit = () => {
     setError(null);
@@ -37,6 +42,10 @@ export function HousekeeperForm({
         router.push("/onboarding/members");
         return;
       }
+      if (editing) {
+        router.push("/family");
+        return;
+      }
       router.push(lang === "ar" ? "/plan" : "/plan/housekeeper");
     });
   };
@@ -45,7 +54,9 @@ export function HousekeeperForm({
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
         <div className="container-app py-4">
-          <h1 className="font-bold text-base text-brand-ink">إضافة خدامة</h1>
+          <h1 className="font-bold text-base text-brand-ink">
+            {editing ? "تعديل الخدامة" : "إضافة خدامة"}
+          </h1>
         </div>
       </header>
 
@@ -114,7 +125,7 @@ export function HousekeeperForm({
           {isPending && (
             <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           )}
-          {isPending ? "جاري التجهيز…" : "إضافة الخدامة"}
+          {isPending ? "جاري التجهيز…" : editing ? "حفظ التعديلات" : "إضافة الخدامة"}
         </button>
 
         <button

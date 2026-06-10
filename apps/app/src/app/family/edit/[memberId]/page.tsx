@@ -5,7 +5,9 @@ import { AdultWizard } from "../../add/wizards/AdultWizard";
 import { ChildWizard } from "../../add/wizards/ChildWizard";
 import { PregnantWizard } from "../../add/wizards/PregnantWizard";
 import { LactatingWizard } from "../../add/wizards/LactatingWizard";
+import { HousekeeperForm } from "../../add/HousekeeperForm";
 import type { MemberWizardInitial } from "../../add/MemberWizard";
+import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
@@ -35,7 +37,18 @@ export default async function EditMemberPage({
     .single();
   const m = row as FamilyMemberRow | null;
 
-  if (!m || m.role === "housekeeper") redirect("/family");
+  if (!m) redirect("/family");
+
+  // The maid isn't a plan beneficiary — she has only a name + reading language, so
+  // she's edited via the HousekeeperForm (prefilled), not the member wizards.
+  if (m.role === "housekeeper") {
+    return (
+      <HousekeeperForm
+        editing
+        initial={{ name: m.name, preferred_language: m.preferred_language }}
+      />
+    );
+  }
 
   const type = (m.member_type ?? "adult") as
     | "adult"
@@ -60,6 +73,11 @@ export default async function EditMemberPage({
     school_meal_handling: m.school_meal_handling ?? null,
     picky_eater: !!m.picky_eater,
     consulted_doctor: !!m.consulted_doctor,
+    // Pre-select the goal radio from the stored Sara goal (lossy inverse; the real
+    // goal is re-derived from the full form on save) and keep the meal mode, so an
+    // edit doesn't silently reset them.
+    user_goal: m.primary_goal ? mapSaraGoalToUser(m.primary_goal as SaraGoal) : undefined,
+    meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
   };
 
   const common = { role: m.role, editMemberId: memberId, initial };

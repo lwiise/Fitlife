@@ -8,6 +8,7 @@ import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { SettingsLink } from "@/components/SettingsLink";
 import { FamilyMemberCard } from "./FamilyMemberCard";
+import { HousekeeperCard } from "./HousekeeperCard";
 import { AddMemberPicker } from "./AddMemberPicker";
 import { FinalizeButton } from "./FinalizeButton";
 
@@ -19,9 +20,9 @@ export default async function FamilyPage() {
   // Mom must finish her own profile before managing the family.
   if (!profile.mom_profile_completed_at) redirect("/onboarding");
 
-  const members = (await getCurrentUserFamilyMembers()).filter(
-    (m) => m.role !== "housekeeper",
-  );
+  const allMembers = await getCurrentUserFamilyMembers();
+  const members = allMembers.filter((m) => m.role !== "housekeeper");
+  const housekeeper = allMembers.find((m) => m.role === "housekeeper");
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -69,6 +70,14 @@ export default async function FamilyPage() {
               primaryGoal={m.primary_goal}
             />
           ))}
+
+          {housekeeper && (
+            <HousekeeperCard
+              id={housekeeper.id}
+              name={housekeeper.name}
+              preferredLanguage={housekeeper.preferred_language}
+            />
+          )}
         </div>
 
         <AddMemberPicker />

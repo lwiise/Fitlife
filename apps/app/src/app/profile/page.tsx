@@ -5,7 +5,7 @@ import { UserRound, HeartPulse, Utensils, ChevronLeft } from "lucide-react";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { mapSaraGoalToUser } from "@/lib/plans/goalMapping";
 import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
+import { BackButton } from "@/components/BackButton";
 import { SettingsLink } from "@/components/SettingsLink";
 import { ProfileEditedBanner } from "./ProfileEditedBanner";
 import {
@@ -110,7 +110,7 @@ export default async function ProfilePage() {
             <Logo className="h-9 w-auto" />
           </a>
           <div className="flex items-center gap-2">
-            <BackToDashboard />
+            <BackButton />
             <SettingsLink />
           </div>
         </div>

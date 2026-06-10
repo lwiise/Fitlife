@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
+import { BackButton } from "@/components/BackButton";
 import { PersonalEditForm } from "./PersonalEditForm";
 
 export const metadata = {
@@ -24,7 +24,7 @@ export default async function PersonalEditPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackToDashboard />
+          <BackButton />
         </div>
       </header>
 
