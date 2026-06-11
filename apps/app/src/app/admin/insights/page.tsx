@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import { getAdminLocale } from "@/lib/admin/locale";
@@ -12,6 +13,13 @@ import { ProductSection } from "../_components/insights/ProductSection";
 import { flatten, type RawParams } from "../_components/searchParams";
 
 /**
+ * Insights is temporarily hidden from the admin panel. The page (and all its
+ * data/components) is left intact; set this to `false` to bring it back, and
+ * restore the Insights nav tab in AdminTopBar.tsx.
+ */
+const INSIGHTS_HIDDEN: boolean = true;
+
+/**
  * Insights — the founder analytics narrative, top-to-bottom: Growing → Keeping
  * → Converting → Earning → Delivering. The 30/90 toggle drives the KPI deltas
  * (NRR, gross margin window); the trend charts stay monthly (6 months), since
@@ -22,6 +30,10 @@ export default async function InsightsPage({
 }: {
   searchParams: Promise<RawParams>;
 }) {
+  if (INSIGHTS_HIDDEN) {
+    redirect("/admin");
+  }
+
   const admin = await requireAdmin();
   const locale = await getAdminLocale();
 

@@ -44,11 +44,8 @@ export function AdminTopBar({
             label={t("nav_overview", locale)}
             active={activeNav === "overview"}
           />
-          <NavTab
-            href="/admin/insights"
-            label={t("nav_insights", locale)}
-            active={activeNav === "insights"}
-          />
+          {/* Insights is temporarily hidden from the admin panel. To re-enable,
+              restore this tab and flip INSIGHTS_HIDDEN in admin/insights/page.tsx. */}
         </nav>
 
         <div className="ms-auto flex flex-wrap items-center gap-3">
