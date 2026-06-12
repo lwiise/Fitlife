@@ -24,7 +24,7 @@ export default async function PersonalEditPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackButton />
+          <BackButton href="/profile" />
         </div>
       </header>
 

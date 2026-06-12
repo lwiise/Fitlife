@@ -35,7 +35,7 @@ export default async function SettingsPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackButton />
+          <BackButton href="/dashboard" />
         </div>
       </header>
 

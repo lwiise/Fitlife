@@ -110,7 +110,7 @@ export default async function ProfilePage() {
             <Logo className="h-9 w-auto" />
           </a>
           <div className="flex items-center gap-2">
-            <BackButton />
+            <BackButton href="/settings" />
             <SettingsLink />
           </div>
         </div>

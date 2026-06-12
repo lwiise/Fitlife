@@ -1,37 +1,31 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
 /**
- * "Back one step" control for inner pages (settings + the profile edit pages).
- * Uses router.back() so it returns to wherever the user came from; falls back to
- * `fallbackHref` when there's no in-app history (e.g. a direct/bookmarked link).
+ * "Back one step" link for inner pages. Points at the page's logical PARENT (`href`)
+ * so each click walks one level up the hierarchy toward the dashboard — e.g. a
+ * profile edit page → /profile → /settings → /dashboard. Deterministic on purpose:
+ * unlike router.back(), it isn't thrown off by post-save redirects or a fresh/
+ * deep-linked history (where back() would jump straight to the dashboard).
  * ChevronRight is the RTL-correct "back" arrow (points toward the start in Arabic).
  */
 export function BackButton({
-  fallbackHref = "/dashboard",
+  href,
   label = "رجوع",
   className = "",
 }: {
-  fallbackHref?: string;
+  href: string;
   label?: string;
   className?: string;
 }) {
-  const router = useRouter();
-  const onClick = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) router.back();
-    else router.push(fallbackHref);
-  };
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={href}
       aria-label={label}
       className={`inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 sm:px-3 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${className}`}
     >
       <ChevronRight className="size-4" aria-hidden="true" />
       {label}
-    </button>
+    </Link>
   );
 }

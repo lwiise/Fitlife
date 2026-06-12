@@ -47,7 +47,7 @@ export default async function HealthEditPage() {
           >
             <Logo className="h-9 w-auto" />
           </a>
-          <BackButton />
+          <BackButton href="/profile" />
         </div>
       </header>
 
