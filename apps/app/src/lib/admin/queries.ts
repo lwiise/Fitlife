@@ -6,13 +6,16 @@ import { computeMrr } from "@/lib/admin/revenue";
 import {
   computeAiCostInRange,
   computeBeneficiaryTotal,
-  computeTierTimeSeries,
+  computeMetricView,
   makeBuckets,
+  parseMetric,
+  parseMetrics,
+  priorRangeOf,
   resolveRange,
+  shiftBuckets,
   toYmd,
 } from "@/lib/admin/timeseries";
 import type {
-  OverviewMetric,
   OverviewView,
   SubscriberListParams,
   SubscriberListResult,
@@ -306,41 +309,57 @@ export function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
 const DAY_MS = 86_400_000;
 
 /**
- * Build the Overview top section: a Revenue/Subscriptions time-series stacked by
- * tier plus an AI-cost strip, scoped to the URL-selected range. The series is a
- * snapshot reconstruction (see lib/admin/timeseries.ts) so `approximated: true`;
- * the AI-cost figures are exact. Reuses the single overview dataset load.
+ * Build the Overview top section: a Kajabi-style spline chart (selected metric +
+ * comparison line) with switchable metric tabs, plus an AI-cost strip, scoped to
+ * the URL-selected range. All series are snapshot reconstructions (see
+ * lib/admin/timeseries.ts) so `approximated: true`; the AI-cost figures are
+ * exact. Reuses the single overview dataset load.
  */
 export function buildOverviewView(
   ds: AdminDataset,
-  params: { metric?: string; range?: string; from?: string; to?: string },
+  params: {
+    metric?: string;
+    metrics?: string;
+    range?: string;
+    from?: string;
+    to?: string;
+    interval?: string;
+    cmp?: string;
+  },
   now: Date = new Date(),
 ): OverviewView {
   const subs = [...subscriptionByUser(ds).values()];
-  const metric: OverviewMetric = params.metric === "subs" ? "subs" : "revenue";
+  const selectedMetric = parseMetric(params.metric);
+  const shownMetrics = parseMetrics(params.metrics);
+  const comparisonOn = params.cmp !== "off";
 
-  const { range, preset, granularity } = resolveRange(params, now);
-  const buckets = makeBuckets(range, granularity);
-  const { tiers, revenueByTier, countByTier } = computeTierTimeSeries(subs, buckets);
+  const { range, preset, interval } = resolveRange(params, now);
+  const curBuckets = makeBuckets(range, interval);
+  const dur = range.end.getTime() - range.start.getTime();
+  const priorBuckets = shiftBuckets(curBuckets, dur);
+  const priorRange = priorRangeOf(range);
 
+  // Compute views for the shown tabs plus the selected metric (deduped).
+  const profilesLite = ds.profiles.map((p) => ({ created_at: p.created_at }));
+  const toCompute = [...new Set([...shownMetrics, selectedMetric])];
+  const metrics = toCompute.map((m) =>
+    computeMetricView(m, subs, profilesLite, curBuckets, priorBuckets, comparisonOn),
+  );
+
+  // ── AI-cost strip (exact, range-scoped) ──
   const totalActive = subs.filter((s) => s.status === "active").length;
   const subscriberCount = ds.profiles.length;
   const beneficiaryTotal = computeBeneficiaryTotal(subscriberCount, ds.members);
-
   const aiCostUsd = computeAiCostInRange(ds.generations, ds.chats, range);
 
   // "% of revenue": MRR(USD) prorated to the range length (est.).
   const mrr = computeMrr(
-    subs
-      .filter((s) => s.status === "active")
-      .map((s) => ({ tier: s.tier, cadence: s.cadence })),
+    subs.filter((s) => s.status === "active").map((s) => ({ tier: s.tier, cadence: s.cadence })),
   );
-  const rangeDays = Math.max(1, (range.end.getTime() - range.start.getTime()) / DAY_MS);
+  const rangeDays = Math.max(1, dur / DAY_MS);
   const revenueInRangeUsd = mrr.mrrUsd * (rangeDays / 30);
   const aiPctOfRevenue =
-    revenueInRangeUsd > 0
-      ? Math.round((aiCostUsd / revenueInRangeUsd) * 1000) / 10
-      : null;
+    revenueInRangeUsd > 0 ? Math.round((aiCostUsd / revenueInRangeUsd) * 1000) / 10 : null;
   const aiCostPerAccountUsd =
     subscriberCount > 0 ? Math.round((aiCostUsd / subscriberCount) * 10000) / 10000 : null;
   const aiCostPerMemberUsd =
@@ -349,18 +368,20 @@ export function buildOverviewView(
   return {
     subscriberCount,
     totalActive,
-    metric,
+    selectedMetric,
+    shownMetrics,
+    metrics,
     preset,
-    granularity,
+    interval,
+    comparisonOn,
     rangeStartIso: range.start.toISOString(),
     rangeEndIso: range.end.toISOString(),
+    priorStartIso: priorRange.start.toISOString(),
+    priorEndIso: priorRange.end.toISOString(),
     fromValue: toYmd(range.start),
     // The range end is exclusive; the date input shows the last included day.
     toValue: toYmd(new Date(range.end.getTime() - 1)),
-    bucketIsos: buckets.map((b) => b.iso),
-    tiers,
-    revenueByTier,
-    countByTier,
+    bucketIsos: curBuckets.map((b) => b.iso),
     aiCostUsd,
     aiCostPerAccountUsd,
     aiCostPerMemberUsd,

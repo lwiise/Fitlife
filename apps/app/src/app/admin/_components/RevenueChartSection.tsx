@@ -1,25 +1,16 @@
-import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import type { AdminLocale } from "@/lib/admin/format";
 import type { OverviewView } from "@/lib/admin/types";
-import { fmtBucketLabel, fmtNumber, fmtSarCompact } from "@/lib/admin/format";
-import { t, tierLabel } from "@/lib/admin/i18n";
+import { fmtBucketLabel } from "@/lib/admin/format";
+import { t } from "@/lib/admin/i18n";
 import { ChartFrame } from "./ChartFrame";
-import { StackedTimeChart, type StackedSeries } from "./StackedTimeChart";
-import { RevenueChartControls } from "./RevenueChartControls";
+import { SplineLineChart } from "./SplineLineChart";
+import { OverviewChartControls } from "./OverviewChartControls";
+import { MetricTabs } from "./MetricTabs";
 
-/**
- * Tier → segment colour. Fixed across both metrics and all ranges so the legend
- * reads consistently: a deep-purple anchor, brand pink, a mid-violet, and a warm
- * amber. The violet/amber are brand lavender/warm-orange deepened to clear the
- * WCAG 1.4.11 3:1 non-text-contrast bar on the white card (the lighter tokens
- * sat at ~1.8:1 / ~2.3:1); all four stay mutually distinguishable when stacked.
- */
-const TIER_COLORS: Record<string, string> = {
-  starter: "var(--color-brand-purple-900)", // #4e2490 — 10.8:1 on white
-  pro: "var(--color-brand-pink)", // #c5458f — 4.22:1
-  family: "#7c4bbd", // deepened lavender (violet) — ~4.4:1
-  premium: "#b5600a", // deepened warm-orange (amber) — ~5.4:1
-};
+const DAY_MS = 86_400_000;
+function dayBefore(iso: string, locale: AdminLocale): string {
+  return fmtBucketLabel(new Date(new Date(iso).getTime() - DAY_MS).toISOString(), "day", locale);
+}
 
 export function RevenueChartSection({
   view,
@@ -30,60 +21,79 @@ export function RevenueChartSection({
   baseParams: Record<string, string>;
   locale: AdminLocale;
 }) {
-  const isRevenue = view.metric === "revenue";
-  const labels = view.bucketIsos.map((iso) =>
-    fmtBucketLabel(iso, view.granularity, locale),
-  );
+  const selected = view.metrics.find((m) => m.key === view.selectedMetric);
+  const labels = view.bucketIsos.map((iso) => fmtBucketLabel(iso, view.interval, locale));
 
-  const series: StackedSeries[] = view.tiers.map((tier) => {
-    const arName = tier in PRICING_TIERS ? PRICING_TIERS[tier as Tier].name_ar : null;
-    const values = (isRevenue ? view.revenueByTier[tier] : view.countByTier[tier]) ?? [];
-    return {
-      key: tier,
-      label: tierLabel(tier, locale, arName),
-      color: TIER_COLORS[tier] ?? "var(--color-brand-ink-muted)",
-      values,
-    };
-  });
+  const comparison = view.comparisonOn && selected ? selected.comparison : [];
+  const hasData =
+    !!selected &&
+    (selected.current.some((v) => v > 0) || comparison.some((v) => v > 0));
 
-  const formatValue = isRevenue
-    ? (n: number) => fmtSarCompact(n, locale)
-    : (n: number) => fmtNumber(n, locale);
+  const title = t("section_trends", locale);
+  const currentLabel = t("legend_current", locale);
+  const comparisonLabel = t("legend_previous", locale);
 
-  const hasData = series.some((s) => s.values.some((v) => v > 0));
-  const title = t("chart_revenue_subscriptions", locale);
+  // Legend date ranges (inclusive).
+  const currentRange = `${fmtBucketLabel(view.fromValue, "day", locale)} – ${fmtBucketLabel(view.toValue, "day", locale)}`;
+  const comparisonRange = `${fmtBucketLabel(view.priorStartIso, "day", locale)} – ${dayBefore(view.rangeStartIso, locale)}`;
 
   return (
-    <section aria-labelledby="ov-revsub-heading" className="space-y-3">
+    <section aria-labelledby="ov-chart-heading" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="ov-revsub-heading" className="text-lg font-bold text-brand-ink">
+        <h2 id="ov-chart-heading" className="text-lg font-bold text-brand-ink">
           {title}
         </h2>
-        <RevenueChartControls
+        <OverviewChartControls
           locale={locale}
-          metric={view.metric}
           preset={view.preset}
+          interval={view.interval}
+          comparisonOn={view.comparisonOn}
           fromValue={view.fromValue}
           toValue={view.toValue}
           baseParams={baseParams}
         />
       </div>
 
-      <div className="rounded-2xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
+      <div className="space-y-4 rounded-2xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
+        <MetricTabs view={view} baseParams={baseParams} locale={locale} />
+
         <ChartFrame
           ariaLabel={title}
           state={hasData ? "ready" : "empty"}
           note={t("approx_snapshot", locale)}
           locale={locale}
         >
-          <StackedTimeChart
+          <SplineLineChart
             labels={labels}
-            series={series}
+            current={selected?.current ?? []}
+            comparison={comparison}
+            unit={selected?.unit ?? "count"}
             ariaLabel={title}
             timeLabel={t("col_when", locale)}
-            totalLabel={t("col_total", locale)}
-            formatValue={formatValue}
+            currentLabel={currentLabel}
+            comparisonLabel={comparisonLabel}
+            deltaLabel={t("delta_label", locale)}
+            locale={locale}
           />
+
+          {/* Legend: solid = current, dotted = comparison */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-brand-ink-muted">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-0.5 w-6 rounded bg-brand-purple-900" aria-hidden="true" />
+              {currentLabel}
+              <span dir="ltr" className="tabular-nums">{currentRange}</span>
+            </span>
+            {view.comparisonOn ? (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="w-6 border-t-2 border-dotted border-brand-ink-muted"
+                  aria-hidden="true"
+                />
+                {comparisonLabel}
+                <span dir="ltr" className="tabular-nums">{comparisonRange}</span>
+              </span>
+            ) : null}
+          </div>
         </ChartFrame>
       </div>
     </section>

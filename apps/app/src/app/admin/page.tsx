@@ -44,9 +44,12 @@ export default async function AdminOverviewPage({
   const dataset = await loadAdminDataset();
   const overview = buildOverviewView(dataset, {
     metric: params.metric,
+    metrics: params.metrics,
     range: params.range,
     from: params.from,
     to: params.to,
+    interval: params.interval,
+    cmp: params.cmp,
   });
   const rows = buildSubscriberRows(dataset);
 
@@ -77,8 +80,10 @@ export default async function AdminOverviewPage({
         tier: params.tier ?? null,
         status: params.status ?? null,
       },
-      metric: overview.metric,
+      metric: overview.selectedMetric,
       range: overview.preset,
+      interval: overview.interval,
+      cmp: overview.comparisonOn,
       section: "overview_v2",
     },
   });
