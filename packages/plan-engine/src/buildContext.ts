@@ -47,6 +47,8 @@ export interface PlanPromptContextMom {
   months_postpartum: number | null;
   high_risk_pregnancy: boolean;
   consulted_doctor: boolean;
+  // 'shared' = eats the family's shared meals (default); 'independent' = own dishes.
+  meal_mode: "shared" | "independent";
 }
 
 export interface PlanPromptContextMember {
@@ -233,6 +235,7 @@ export async function buildPlanContext(
     months_postpartum: profile.months_postpartum ?? null,
     high_risk_pregnancy: !!profile.high_risk_pregnancy,
     consulted_doctor: profile.consulted_doctor,
+    meal_mode: profile.meal_mode === "independent" ? "independent" : "shared",
   };
 
   const family_members: PlanPromptContextMember[] = (family ?? []).map(

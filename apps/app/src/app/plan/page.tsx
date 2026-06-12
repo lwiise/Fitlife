@@ -87,6 +87,15 @@ export default async function PlanPage({
     housekeeper && housekeeper.preferred_language !== "ar"
       ? housekeeper.preferred_language
       : undefined;
+  // member_id → meal_mode for the shared↔independent toggle. mom's lives on the
+  // profile; everyone else's on their family_members row. Plan member_ids match
+  // family_members.id (mom is the literal "mom").
+  const memberMealModes: Record<string, "shared" | "independent"> = {
+    mom: profile?.meal_mode === "independent" ? "independent" : "shared",
+  };
+  for (const m of familyMembers) {
+    memberMealModes[m.id] = m.meal_mode === "independent" ? "independent" : "shared";
+  }
   // Who we're generating for: prefer the plan's own targeted member (stamped on
   // single-member add/regenerate/edit) so the loader names the right person even when
   // the URL has no ?member (the regenerate button refreshes without it). The
@@ -202,6 +211,7 @@ export default async function PlanPage({
               updatedAt={latest.updated_at}
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
+              memberMealModes={memberMealModes}
             />
           </>
         )}

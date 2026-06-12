@@ -648,7 +648,9 @@ export function buildDayPrompt(
       if (allergies.length) constraints.push(`حساسية (تجنّب تام): ${allergies.join("، ")}`);
       if (dislikes.length) constraints.push(`لا يحب: ${dislikes.join("، ")}`);
       if (conditions.length) constraints.push(`حالات: ${conditions.join("، ")}`);
-      if (ctxMember?.meal_mode === "independent")
+      const mealMode =
+        sm.member_id === "mom" ? context.mom.meal_mode : ctxMember?.meal_mode;
+      if (mealMode === "independent")
         constraints.push("وجبات مستقلة (طبق خاص باسم مختلف)");
 
       const day = sm.days.find((d) => d.day_index === dayIndex);

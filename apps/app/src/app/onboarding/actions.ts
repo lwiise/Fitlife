@@ -978,3 +978,88 @@ export async function updateFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: null };
   return { ok: false, error: gen.error };
 }
+
+/**
+ * Plan-page shared↔independent toggle. Persists the member's meal_mode (mom →
+ * profiles, everyone else → family_members) BEFORE dispatch so the regen derives
+ * the right independentRegen, then regenerates only that member (carry-over) and
+ * lets resyncSharedMeals recompute any co-sharers. No-op if the mode is unchanged.
+ * Settings-driven family change → rate limit bypassed (like updateFamilyMember).
+ */
+export async function setMemberMealMode(
+  memberId: string,
+  mealMode: "shared" | "independent",
+): Promise<AddMemberResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  // Read the current mode and persist the new one. mom's meal_mode lives on
+  // `profiles`; every other member's on `family_members`.
+  if (memberId === "mom") {
+    const { data } = await supabase
+      .from("profiles")
+      .select("meal_mode")
+      .eq("id", user.id)
+      .single();
+    const cur = data as { meal_mode: string | null } | null;
+    if ((cur?.meal_mode ?? "shared") === mealMode)
+      return { ok: true, member_id: memberId, plan_generation_id: null };
+    const { error } = await supabase
+      .from("profiles")
+      .update({ meal_mode: mealMode } as never)
+      .eq("id", user.id);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "family", step: "setMemberMealMode", userId: user.id },
+      });
+      return { ok: false, error: error.message };
+    }
+  } else {
+    const { data } = await supabase
+      .from("family_members")
+      .select("meal_mode")
+      .eq("id", memberId)
+      .eq("user_id", user.id)
+      .single();
+    const cur = data as { meal_mode: string | null } | null;
+    if (!cur) return { ok: false, error: "العضو غير موجود" };
+    if ((cur.meal_mode ?? "shared") === mealMode)
+      return { ok: true, member_id: memberId, plan_generation_id: null };
+    const { error } = await supabase
+      .from("family_members")
+      .update({ meal_mode: mealMode } as never)
+      .eq("id", memberId)
+      .eq("user_id", user.id);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "family", step: "setMemberMealMode", userId: user.id },
+      });
+      return { ok: false, error: error.message };
+    }
+  }
+
+  revalidatePath("/plan");
+  revalidatePath("/family");
+
+  const gen = await runFamilyGeneration(supabase, user.id, {
+    regenerateMemberId: memberId,
+  });
+  if (gen.ok)
+    return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
+  if (gen.kind === "upgrade")
+    return {
+      ok: false,
+      upgrade_required: true,
+      member_id: memberId,
+      current: gen.current,
+      max: gen.max,
+    };
+  // Current plan still generating → mode change is saved; defer the regen.
+  if (gen.kind === "busy")
+    return { ok: true, member_id: memberId, plan_generation_id: null };
+  return { ok: false, error: gen.error };
+}

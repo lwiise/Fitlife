@@ -3,27 +3,40 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
+import type { LocaleCode } from "@fitlife/plan-engine";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { getPlanActionStrings } from "@/lib/plans/locales";
+
+type RegenScope = "both" | "shared" | "individual";
 
 export function RegenerateButton({
   className = "",
   memberId,
   memberName,
+  hasSharedMeals = false,
+  locale,
 }: {
   className?: string;
   // Scope the regen to the member being viewed (others kept untouched).
   memberId?: string;
   memberName?: string;
+  // When the member shares meals, offer a scope chooser (individual / shared /
+  // both). When false, a plain confirm (nothing to scope).
+  hasSharedMeals?: boolean;
+  locale?: LocaleCode;
 }) {
   const router = useRouter();
+  const t = getPlanActionStrings(locale ?? "ar");
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [issues, setIssues] = useState("");
   const [improvements, setImprovements] = useState("");
+  const [scope, setScope] = useState<RegenScope>("both");
 
   function openDialog() {
     setErrorMessage(null);
+    setScope("both");
     setConfirmOpen(true);
   }
 
@@ -32,6 +45,7 @@ export function RegenerateButton({
     setErrorMessage(null);
     setIssues("");
     setImprovements("");
+    setScope("both");
   }
 
   function handleConfirm() {
@@ -45,6 +59,8 @@ export function RegenerateButton({
             issues: issues.trim(),
             improvements: improvements.trim(),
             ...(memberId ? { memberId } : {}),
+            // Only meaningful when the member has shared meals to scope.
+            ...(memberId && hasSharedMeals ? { scope } : {}),
           }),
         });
         if (res.ok) {
@@ -60,6 +76,16 @@ export function RegenerateButton({
       }
     });
   }
+
+  const scopeOptions: { value: RegenScope; label: string; hint: string }[] = [
+    { value: "both", label: t.regen_scope_both, hint: t.regen_scope_both_hint },
+    { value: "shared", label: t.regen_scope_shared, hint: t.regen_scope_shared_hint },
+    {
+      value: "individual",
+      label: t.regen_scope_individual,
+      hint: t.regen_scope_individual_hint,
+    },
+  ];
 
   return (
     <div className={className}>
@@ -99,6 +125,46 @@ export function RegenerateButton({
         }}
       >
         <div className="space-y-4">
+          {memberId && hasSharedMeals && (
+            <fieldset>
+              <legend className="block text-sm font-bold text-brand-ink mb-2">
+                {t.regen_scope_title}
+              </legend>
+              <div className="space-y-2">
+                {scopeOptions.map((opt) => {
+                  const selected = scope === opt.value;
+                  return (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 min-h-11 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                        selected
+                          ? "border-brand-purple-900 bg-brand-lavender/20"
+                          : "border-brand-ink/10 hover:border-brand-ink/20"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="regen-scope"
+                        value={opt.value}
+                        checked={selected}
+                        onChange={() => setScope(opt.value)}
+                        disabled={isPending}
+                        className="mt-1 size-4 accent-brand-purple-900 flex-shrink-0"
+                      />
+                      <span className="flex-1">
+                        <span className="block text-sm font-bold text-brand-ink">
+                          {opt.label}
+                        </span>
+                        <span className="block text-xs text-brand-ink-muted leading-relaxed mt-0.5">
+                          {opt.hint}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
           <div>
             <label
               htmlFor="regen-issues"

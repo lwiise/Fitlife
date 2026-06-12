@@ -310,6 +310,12 @@ export default async (req: Request): Promise<Response> => {
     independentRegen?: boolean;
     // One-at-a-time add: generate ONLY this member; carry everyone else over.
     onlyMemberId?: string;
+    // Per-member edit/regenerate target — authoritative for the loading screen's
+    // member name (generating_member_id), even with other members still incomplete.
+    regenerateMemberId?: string;
+    // Literal partial regenerate scope (regenerate-scope dialog). With this set,
+    // existingPlan is the WHOLE prior plan (target not stripped).
+    regenScope?: "individual" | "shared" | "both";
     // Tier cap: when the family exceeds the plan limit, the allow-list of non-mom
     // beneficiary ids to generate this run (mom is always included). Others defer.
     limitMemberIds?: string[];
@@ -408,6 +414,8 @@ export default async (req: Request): Promise<Response> => {
       existingPlan: existingPlan ?? null,
       independentRegen: body.independentRegen,
       onlyMemberId: body.onlyMemberId,
+      regenerateMemberId: body.regenerateMemberId,
+      regenScope: body.regenScope,
       // Persist progressively + flip "ready" on the first emit (the shell), so
       // the plan opens showing all days as loading and they fill in 1→7.
       onProgress: async (snapshot) => {

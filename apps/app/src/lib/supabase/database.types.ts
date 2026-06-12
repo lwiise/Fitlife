@@ -332,6 +332,7 @@ export type Database = {
           high_risk_pregnancy: boolean | null
           id: string
           is_pregnant: boolean
+          meal_mode: string
           meal_out_frequency: string | null
           medical_conditions: string[] | null
           member_addition_order: Json | null
@@ -365,6 +366,7 @@ export type Database = {
           high_risk_pregnancy?: boolean | null
           id: string
           is_pregnant?: boolean
+          meal_mode?: string
           meal_out_frequency?: string | null
           medical_conditions?: string[] | null
           member_addition_order?: Json | null
@@ -398,6 +400,7 @@ export type Database = {
           high_risk_pregnancy?: boolean | null
           id?: string
           is_pregnant?: boolean
+          meal_mode?: string
           meal_out_frequency?: string | null
           medical_conditions?: string[] | null
           member_addition_order?: Json | null
