@@ -896,25 +896,40 @@ export async function generateMealPlan(params: {
 
   let skeleton: PlanSkeleton;
   if (needsSkeleton.length > 0) {
-    const sk = await streamAnthropic({
-      apiKey: anthropicApiKey,
-      model: PLAN_MODEL,
-      maxTokens: SKELETON_MAX_TOKENS,
-      systemStatic: STATIC_SYSTEM,
-      systemPrompt: buildSkeletonPrompt(
-        context,
-        needsSkeleton.map((b) => b.member_id),
-      ),
-    });
+    const skeletonSystemPrompt = buildSkeletonPrompt(
+      context,
+      needsSkeleton.map((b) => b.member_id),
+    );
+    const runSkeleton = (maxTokens: number) =>
+      streamAnthropic({
+        apiKey: anthropicApiKey,
+        model: PLAN_MODEL,
+        maxTokens,
+        systemStatic: STATIC_SYSTEM,
+        systemPrompt: skeletonSystemPrompt,
+      });
+    let sk = await runSkeleton(SKELETON_MAX_TOKENS);
     totalIn += sk.tokensIn;
     totalOut += sk.tokensOut;
+    // A truncated skeleton (stop_reason=max_tokens) yields invalid JSON and kills
+    // the whole generation. Retry ONCE at double the cap before giving up — counts
+    // the wasted first attempt's tokens toward cost accounting.
+    if (sk.stopReason === "max_tokens") {
+      const retryMax = SKELETON_MAX_TOKENS * 2;
+      console.warn(
+        `[plan-generate] skeleton truncated at ${SKELETON_MAX_TOKENS} — retrying with ${retryMax}`,
+      );
+      sk = await runSkeleton(retryMax);
+      totalIn += sk.tokensIn;
+      totalOut += sk.tokensOut;
+      if (sk.stopReason === "max_tokens")
+        throw new PlanValidationError(
+          `Skeleton hit max_tokens (${retryMax})`,
+          sk.text,
+        );
+    }
     if (!sk.text.trim())
       throw new PlanValidationError("Empty skeleton from Anthropic", sk.text);
-    if (sk.stopReason === "max_tokens")
-      throw new PlanValidationError(
-        `Skeleton hit max_tokens (${SKELETON_MAX_TOKENS})`,
-        sk.text,
-      );
     try {
       const parsed = JSON.parse(stripMarkdownFence(sk.text));
       const r = PlanSkeletonSchema.safeParse(parsed);

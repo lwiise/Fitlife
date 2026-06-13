@@ -43,11 +43,15 @@ export function pricingForModel(model: string): {
  */
 export const PLAN_MAX_TOKENS = 32000;
 
-// Parallel-by-day generation caps. Phase 1 (skeleton) is names + targets only
-// (small). Phase 2 expands one day at a time, in parallel, so wall-clock ≈ one
-// day regardless of week/family size. DAY_CONCURRENCY caps simultaneous calls to
-// stay under Anthropic rate limits (with retry/backoff on 429).
-export const SKELETON_MAX_TOKENS = 6000;
+// Parallel-by-day generation caps. Phase 1 (skeleton) is names + targets only,
+// but it scales with members-in-scope (a fresh full-family run skeletons every
+// member, and verbose cases like a child's food-pyramid notes inflate output),
+// so 16000 gives headroom under the 32000 full-plan ceiling — generate.ts also
+// retries once at 2x if it still truncates. Phase 2 expands one day at a time,
+// in parallel, so wall-clock ≈ one day regardless of week/family size.
+// DAY_CONCURRENCY caps simultaneous calls to stay under Anthropic rate limits
+// (with retry/backoff on 429).
+export const SKELETON_MAX_TOKENS = 16000;
 export const DAY_MAX_TOKENS = 12000;
 // Sequential (one day at a time, in order): the plan opens showing all 7 days
 // as "loading" and they fill in 1→7. Higher values parallelize (faster total).
