@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import { AdultWizard } from "../../add/wizards/AdultWizard";
-import { ChildWizard } from "../../add/wizards/ChildWizard";
-import { PregnantWizard } from "../../add/wizards/PregnantWizard";
-import { LactatingWizard } from "../../add/wizards/LactatingWizard";
 import { HousekeeperForm } from "../../add/HousekeeperForm";
 import type { MemberWizardInitial } from "../../add/MemberWizard";
+import { MemberEditForm } from "./MemberEditForm";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
@@ -50,12 +47,7 @@ export default async function EditMemberPage({
     );
   }
 
-  const type = (m.member_type ?? "adult") as
-    | "adult"
-    | "child"
-    | "pregnant"
-    | "lactating"
-    | "housekeeper";
+  const type = (m.member_type ?? "adult") as "adult" | "child" | "pregnant" | "lactating";
 
   const initial: MemberWizardInitial = {
     name: m.name,
@@ -80,15 +72,14 @@ export default async function EditMemberPage({
     meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
   };
 
-  const common = { role: m.role, editMemberId: memberId, initial };
-  switch (type) {
-    case "child":
-      return <ChildWizard {...common} />;
-    case "pregnant":
-      return <PregnantWizard {...common} />;
-    case "lactating":
-      return <LactatingWizard {...common} />;
-    default:
-      return <AdultWizard {...common} />;
-  }
+  // Editing shows every field for the member's type on one page (not the
+  // step-by-step add wizard). The wizards remain in use for /family/add.
+  return (
+    <MemberEditForm
+      type={type}
+      role={m.role}
+      editMemberId={memberId}
+      initial={initial}
+    />
+  );
 }
