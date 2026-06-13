@@ -106,6 +106,7 @@ export function OnboardingFamilyBuilder() {
             onboarding
             count={1}
             onComplete={advance}
+            onSkip={finalize}
             terminalLabel={terminalLabel}
           />
         )}
@@ -117,6 +118,7 @@ export function OnboardingFamilyBuilder() {
             onboarding
             count={task.count}
             onComplete={advance}
+            onSkip={finalize}
             terminalLabel={terminalLabel}
           />
         )}
@@ -128,6 +130,7 @@ export function OnboardingFamilyBuilder() {
             onboarding
             count={task.count}
             onComplete={advance}
+            onSkip={finalize}
             terminalLabel={terminalLabel}
           />
         )}
@@ -137,10 +140,16 @@ export function OnboardingFamilyBuilder() {
             onboarding
             count={task.count}
             onComplete={advance}
+            onSkip={finalize}
           />
         )}
         {task.kind === "maid" && (
-          <HousekeeperForm key={`maid-${index}`} onboarding onComplete={advance} />
+          <HousekeeperForm
+            key={`maid-${index}`}
+            onboarding
+            onComplete={advance}
+            onSkip={finalize}
+          />
         )}
       </div>
     );

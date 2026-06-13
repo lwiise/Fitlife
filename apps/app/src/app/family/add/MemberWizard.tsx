@@ -203,6 +203,7 @@ export function MemberWizard({
   onboarding = false,
   count = 1,
   onComplete,
+  onSkip,
   terminalLabel,
 }: {
   type: MemberType;
@@ -218,6 +219,10 @@ export function MemberWizard({
   // When provided (the onboarding family builder), called after all `count` members
   // are saved instead of navigating — lets a parent drive a longer sequence.
   onComplete?: () => void;
+  // When provided (the onboarding family builder), renders a "skip for now" escape
+  // hatch. The family is optional, so she can bail out of the rest of the sequence
+  // and generate the plan now with whoever's already saved, adding the rest later.
+  onSkip?: () => void;
   // Label for the very last member's submit button (default "أنشئي الخطة"). The
   // family builder passes "التالي" when more member types still follow.
   terminalLabel?: string;
@@ -925,17 +930,33 @@ export function MemberWizard({
           </div>
         )}
 
-        {step > 0 && (
-          <button
-            type="button"
-            onClick={goBack}
-            disabled={isPending}
-            className="mt-6 inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-          >
-            <ChevronRight className="size-4" aria-hidden="true" />
-            رجوع
-          </button>
-        )}
+        <div className="mt-6 flex items-center justify-between gap-3">
+          {step > 0 ? (
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={isPending}
+              className="inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+              رجوع
+            </button>
+          ) : (
+            <span />
+          )}
+
+          {/* Family is optional — let her bail out and generate the plan now. */}
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              disabled={isPending}
+              className="px-3 py-2 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              تخطّي الآن — أضيفهم لاحقاً
+            </button>
+          )}
+        </div>
       </div>
     </main>
   );

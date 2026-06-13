@@ -13,10 +13,14 @@ export function PregLactSwitch({
   onboarding = false,
   count = 1,
   onComplete,
+  onSkip,
 }: {
   onboarding?: boolean;
   count?: number;
   onComplete?: () => void;
+  // When provided (the onboarding family builder), renders a "skip for now" escape
+  // hatch so she can generate the plan now and add this member later.
+  onSkip?: () => void;
 }) {
   const [choice, setChoice] = useState<"pregnant" | "lactating" | null>(null);
 
@@ -27,6 +31,7 @@ export function PregLactSwitch({
         onboarding={onboarding}
         count={count}
         onComplete={onComplete}
+        onSkip={onSkip}
       />
     );
   if (choice === "lactating")
@@ -36,6 +41,7 @@ export function PregLactSwitch({
         onboarding={onboarding}
         count={count}
         onComplete={onComplete}
+        onSkip={onSkip}
       />
     );
 
@@ -66,6 +72,17 @@ export function PregLactSwitch({
             مرضعة
           </button>
         </div>
+
+        {/* Family is optional — let her bail out and generate the plan now. */}
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+          >
+            تخطّي الآن — أضيفهم لاحقاً
+          </button>
+        )}
       </div>
     </main>
   );

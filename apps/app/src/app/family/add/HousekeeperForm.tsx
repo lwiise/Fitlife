@@ -9,6 +9,7 @@ import { LOCALE_CODES_ORDERED, LOCALE_INFO } from "@/lib/plans/locales";
 export function HousekeeperForm({
   onboarding = false,
   onComplete,
+  onSkip,
   initial,
   editing = false,
 }: {
@@ -16,6 +17,9 @@ export function HousekeeperForm({
   // When provided (the onboarding family builder), called after the maid is saved
   // instead of navigating — lets the parent finish the sequence and generate.
   onComplete?: () => void;
+  // When provided (the onboarding family builder), renders a "skip for now" escape
+  // hatch so she can generate the plan now and add the maid later.
+  onSkip?: () => void;
   // Edit mode: prefill the maid's existing name + reading language.
   initial?: { name?: string; preferred_language?: string };
   editing?: boolean;
@@ -128,15 +132,29 @@ export function HousekeeperForm({
           {isPending ? "جاري التجهيز…" : editing ? "حفظ التعديلات" : "إضافة الخدامة"}
         </button>
 
-        <button
-          type="button"
-          onClick={() => router.push("/family")}
-          disabled={isPending}
-          className="inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-        >
-          <ChevronRight className="size-4" aria-hidden="true" />
-          رجوع
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => router.push("/family")}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+          >
+            <ChevronRight className="size-4" aria-hidden="true" />
+            رجوع
+          </button>
+
+          {/* Family is optional — let her bail out and generate the plan now. */}
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              disabled={isPending}
+              className="px-3 py-2 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              تخطّي الآن — أضيفهم لاحقاً
+            </button>
+          )}
+        </div>
       </div>
     </main>
   );
