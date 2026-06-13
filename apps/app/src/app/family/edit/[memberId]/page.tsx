@@ -1,17 +1,60 @@
+import { Suspense } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { UserRound, HeartPulse, ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { Logo } from "@/components/Logo";
+import { BackButton } from "@/components/BackButton";
+import { mapSaraGoalToUser } from "@/lib/plans/goalMapping";
 import { HousekeeperForm } from "../../add/HousekeeperForm";
-import type { MemberWizardInitial } from "../../add/MemberWizard";
-import { MemberEditForm } from "./MemberEditForm";
-import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
+import { MemberEditedBanner } from "./MemberEditedBanner";
+import {
+  ACTIVITY_OPTIONS,
+  CHILD_ACTIVITY,
+  GOALS,
+  asStringArray,
+  labelFor,
+} from "./labels";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
-export const metadata = { title: "تعديل فرد" };
+export const metadata = {
+  title: "تعديل فرد — فت لايف",
+  robots: { index: false, follow: false },
+};
 
-function toStrings(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+const currentYear = new Date().getFullYear();
+
+function SectionCard({
+  href,
+  title,
+  summary,
+  icon: Icon,
+}: {
+  href: string;
+  title: string;
+  summary: string;
+  icon: typeof UserRound;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-4 bg-white rounded-2xl border border-brand-ink/5 p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+    >
+      <div className="size-11 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
+        <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h2 className="font-bold text-brand-ink text-base">{title}</h2>
+        <p className="text-brand-ink-muted text-sm mt-0.5 truncate">{summary}</p>
+      </div>
+      <span className="inline-flex items-center gap-1 text-brand-purple-900 text-sm font-bold flex-shrink-0 group-hover:text-brand-purple-700 transition-colors">
+        تعديل
+        <ChevronLeft className="size-4" aria-hidden="true" />
+      </span>
+    </Link>
+  );
 }
 
 export default async function EditMemberPage({
@@ -37,7 +80,7 @@ export default async function EditMemberPage({
   if (!m) redirect("/family");
 
   // The maid isn't a plan beneficiary — she has only a name + reading language, so
-  // she's edited via the HousekeeperForm (prefilled), not the member wizards.
+  // she's edited via the HousekeeperForm (prefilled), not the member sections.
   if (m.role === "housekeeper") {
     return (
       <HousekeeperForm
@@ -47,39 +90,106 @@ export default async function EditMemberPage({
     );
   }
 
-  const type = (m.member_type ?? "adult") as "adult" | "child" | "pregnant" | "lactating";
+  const type = (m.member_type ?? "adult") as
+    | "adult"
+    | "child"
+    | "pregnant"
+    | "lactating";
 
-  const initial: MemberWizardInitial = {
-    name: m.name,
-    birth_year: m.birth_year ?? undefined,
-    sex: m.sex ?? null,
-    height_cm: m.height_cm ?? null,
-    weight_kg: m.weight_kg ?? null,
-    activity_level: m.activity_level ?? null,
-    allergies: toStrings(m.allergies),
-    dislikes: toStrings(m.dislikes),
-    conditions: toStrings(m.medical_conditions),
-    trimester: m.trimester ?? null,
-    months_postpartum: m.months_postpartum ?? null,
-    high_risk_pregnancy: !!m.high_risk_pregnancy,
-    school_meal_handling: m.school_meal_handling ?? null,
-    picky_eater: !!m.picky_eater,
-    consulted_doctor: !!m.consulted_doctor,
-    // Pre-select the goal radio from the stored Sara goal (lossy inverse; the real
-    // goal is re-derived from the full form on save) and keep the meal mode, so an
-    // edit doesn't silently reset them.
-    user_goal: m.primary_goal ? mapSaraGoalToUser(m.primary_goal as SaraGoal) : undefined,
-    meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
-  };
+  // ── Card summaries (mirror the mom profile hub) ──────────────────────────
+  const age = m.birth_year ? currentYear - m.birth_year : null;
+  const personalSummary =
+    [
+      age ? `${age} سنة` : null,
+      m.height_cm ? `${m.height_cm} سم` : null,
+      m.weight_kg ? `${m.weight_kg} كجم` : null,
+    ]
+      .filter(Boolean)
+      .join("، ") || "أكملي المعلومات";
 
-  // Editing shows every field for the member's type on one page (not the
-  // step-by-step add wizard). The wizards remain in use for /family/add.
+  const goalLabel =
+    type === "pregnant"
+      ? "حامل"
+      : type === "lactating"
+        ? "مرضعة"
+        : type === "child"
+          ? "طفل"
+          : m.primary_goal
+            ? labelFor(GOALS, mapSaraGoalToUser(m.primary_goal as never))
+            : null;
+  const activityLabel = labelFor(
+    type === "child" ? CHILD_ACTIVITY : ACTIVITY_OPTIONS,
+    m.activity_level,
+  );
+  const allergyCount = asStringArray(m.allergies).length;
+  const conditionCount = (m.medical_conditions ?? []).length;
+  const healthSummary =
+    [
+      goalLabel,
+      activityLabel,
+      conditionCount > 0 ? `${conditionCount} حالة صحية` : null,
+      allergyCount > 0 ? `${allergyCount} حساسية` : null,
+    ]
+      .filter(Boolean)
+      .join("، ") || "أضيفي التفاصيل الصحية";
+
   return (
-    <MemberEditForm
-      type={type}
-      role={m.role}
-      editMemberId={memberId}
-      initial={initial}
-    />
+    <main className="min-h-screen bg-brand-surface">
+      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
+        <div className="container-app py-4 flex items-center justify-between">
+          <a
+            href="/dashboard"
+            aria-label="فت لايف — الرئيسية"
+            className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          >
+            <Logo className="h-9 w-auto" />
+          </a>
+          <BackButton href="/family" />
+        </div>
+      </header>
+
+      <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
+        <header>
+          <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+            تعديل بيانات {m.name}
+          </h1>
+          <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+            اختاري القسم اللي تبين تعدّلينه.
+          </p>
+        </header>
+
+        <Suspense fallback={null}>
+          <MemberEditedBanner memberId={memberId} />
+        </Suspense>
+
+        <div className="space-y-3">
+          <SectionCard
+            href={`/family/edit/${memberId}/personal`}
+            title="المعلومات الشخصية"
+            summary={personalSummary}
+            icon={UserRound}
+          />
+          <SectionCard
+            href={`/family/edit/${memberId}/health`}
+            title="الصحة والأهداف"
+            summary={healthSummary}
+            icon={HeartPulse}
+          />
+        </div>
+
+        <div className="rounded-2xl bg-white/60 border border-brand-ink/5 px-4 py-3">
+          <p className="text-brand-ink-muted text-sm leading-relaxed">
+            أي تعديل لن يطبق على الخطة حتى تنشئي{" "}
+            <Link
+              href="/plan"
+              className="text-brand-purple-900 font-bold underline underline-offset-4 hover:text-brand-purple-700 transition-colors"
+            >
+              خطة جديدة من صفحة الخطة
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+    </main>
   );
 }
