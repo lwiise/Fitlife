@@ -10,7 +10,6 @@ import { SettingsLink } from "@/components/SettingsLink";
 import { FamilyMemberCard } from "./FamilyMemberCard";
 import { HousekeeperCard } from "./HousekeeperCard";
 import { AddMemberPicker } from "./AddMemberPicker";
-import { FinalizeButton } from "./FinalizeButton";
 
 export const metadata = { title: "عائلتك" };
 
@@ -81,8 +80,6 @@ export default async function FamilyPage() {
         </div>
 
         <AddMemberPicker />
-
-        <FinalizeButton />
       </div>
     </main>
   );
