@@ -65,6 +65,8 @@ export default async function HealthEditPage() {
             conditions,
             other_condition: otherCondition,
             consulted_doctor: profile.consulted_doctor,
+            meal_mode:
+              profile.meal_mode === "independent" ? "independent" : "shared",
           }}
         />
       </div>

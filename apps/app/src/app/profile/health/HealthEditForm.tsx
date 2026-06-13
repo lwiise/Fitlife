@@ -276,6 +276,30 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         </div>
       </section>
 
+      {/* نمط الوجبات */}
+      <section className="space-y-3">
+        <GroupHeading>نمط الوجبات</GroupHeading>
+        <p className="text-brand-ink-muted text-sm leading-relaxed">
+          تختارين تشاركين وجبات العائلة، أو تكون لك خطة بأطباق خاصة بك.
+        </p>
+        <div className="space-y-2">
+          <OptionButton
+            full
+            active={mealMode === "shared"}
+            onClick={() => setMealMode("shared")}
+          >
+            وجبات مشتركة مع العائلة
+          </OptionButton>
+          <OptionButton
+            full
+            active={mealMode === "independent"}
+            onClick={() => setMealMode("independent")}
+          >
+            خطة مستقلة لي
+          </OptionButton>
+        </div>
+      </section>
+
       {/* الحالات الصحية */}
       <section className="space-y-4">
         <GroupHeading>الحالات الصحية</GroupHeading>
