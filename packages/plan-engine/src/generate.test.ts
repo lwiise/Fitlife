@@ -610,6 +610,84 @@ describe("generateMealPlan — regenerateMemberId name stamping", () => {
   });
 });
 
+// ── New shared member anchors to a SHARED peer, never an independent member ──
+// Repro: mom (main user) is 'independent' and is member #0 in the prior plan;
+// member-2 is 'shared'. Adding member-3 ('shared') must align to member-2's shared
+// dishes — NOT to mom's private independent dishes (the "first member with meals"
+// the old family-grid loop would have picked).
+describe("generateMealPlan — new shared member aligns to a shared peer", () => {
+  it("aligns a newly-added shared member to the shared member's menu, not the independent main user's", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+
+    // Context: mom INDEPENDENT, member-2 + member-3 SHARED.
+    const context = makeContext({ extraMember: true }); // mom + member-2
+    context.mom.meal_mode = "independent";
+    context.family_members[0]!.meal_mode = "shared"; // member-2
+    context.family_members.push({
+      id: "member-3",
+      name: "ندى",
+      role: "daughter",
+      member_type: "child",
+      sex: "female",
+      age: 8,
+      height_cm: 130,
+      weight_kg: 28,
+      activity_level: "moderate",
+      primary_goal: null,
+      dietary_restrictions: [],
+      medical_conditions: [],
+      allergies: [],
+      dislikes: [],
+      trimester: null,
+      months_postpartum: null,
+      high_risk_pregnancy: false,
+      school_meal_handling: null,
+      picky_eater: false,
+      consulted_doctor: false,
+      is_child: true,
+      preferred_language: "ar",
+      meal_mode: "shared",
+    });
+
+    // Prior plan (member #0 = mom with her own independent dishes, member-2 with
+    // its distinct shared dishes). member-3 is absent → it's the one being added.
+    const momMember = makeCompleteMember("mom", "أم محمد"); // dishes "mom-طبق-{di}"
+    const sharedMember = makeCompleteMember("member-2", "سارة"); // dishes "member-2-طبق-{di}"
+    const existingPlan = makeExistingPlan([momMember, sharedMember]);
+
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context,
+      existingPlan,
+      onlyMemberId: "member-3",
+    });
+
+    // The day prompts for member-3 must align it to member-2's SHARED dish menu
+    // (so the deterministic re-sync groups them into one batch), never to mom's
+    // private "mom-طبق-*" dishes. (The mock day-slice always echoes "*-fresh-*", so
+    // we assert on the dishes the engine ASKED for, which is the alignment signal.)
+    const dayPrompts = mockedStream.mock.calls
+      .map((c) => c[0]!.systemPrompt)
+      .filter((p) => /day_index=\d/.test(p));
+    expect(dayPrompts.length).toBe(DAY_INDICES.length);
+    for (const di of DAY_INDICES) {
+      const p = dayPrompts.find((pr) => pr.includes(`day_index=${di}`))!;
+      expect(p).toContain(`member-2-طبق-${di}`); // aligned to the shared peer
+      expect(p).not.toContain(`mom-طبق-${di}`); // NOT the independent main user
+    }
+
+    // mom (independent) and member-2 are carried over untouched.
+    expect(
+      plan.members.find((m) => m.member_id === "mom")!.days,
+    ).toEqual(momMember.days);
+    expect(
+      plan.members.find((m) => m.member_id === "member-2")!.days,
+    ).toEqual(sharedMember.days);
+  });
+});
+
 // ── Item 3: literal partial regenerate (scope) ──────────────────────────────
 // mom + member-2 share lunch "كبسة" AND each has their own breakfast — so we can
 // regenerate one category and assert the other is preserved byte-for-byte.

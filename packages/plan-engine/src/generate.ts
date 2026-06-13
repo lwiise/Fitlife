@@ -675,6 +675,16 @@ export async function generateMealPlan(params: {
       (m) => [m.id, m.is_child] as [string, boolean],
     ),
   ]);
+  // meal_mode per beneficiary (mom + family members). Used so the family dish grid
+  // below is seeded ONLY from members who actually eat the shared menu — an
+  // independent member (incl. the mom herself) has private dishes that must not
+  // become the anchor a newly-added shared member aligns to.
+  const mealModeById = new Map<string, "shared" | "independent">([
+    ["mom", context.mom.meal_mode],
+    ...context.family_members.map(
+      (m) => [m.id, m.meal_mode] as [string, "shared" | "independent"],
+    ),
+  ]);
 
   // ── Analyse the prior plan: per-(member, day) carry-over and the family grid ──
   // Each member keeps its COMPLETED days verbatim; only its empty/missing (member,
@@ -696,6 +706,13 @@ export async function generateMealPlan(params: {
     ).sort((a, b) => a - b);
     for (const di of familyDayIndices) {
       for (const m of existingPlan.members) {
+        // Only a SHARED member's dishes define the family menu. An independent
+        // member has their own private dishes; if we seeded the grid from them, a
+        // newly-added shared member would align to the independent member's menu
+        // instead of the actual shared members'. When no shared member has this
+        // day, the grid stays empty for it — a lone shared member then gets a
+        // skeleton (fresh dishes), correct since there's no one to share with.
+        if (mealModeById.get(m.member_id) === "independent") continue;
         const day = m.days.find((d) => d.day_index === di);
         if (day && day.meals.length > 0) {
           familyDishGrid.set(
