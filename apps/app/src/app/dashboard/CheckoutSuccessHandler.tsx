@@ -27,6 +27,29 @@ export function CheckoutSuccessHandler() {
       if (cancelled) return;
       if (Date.now() - startedAt > TIMEOUT_MS) {
         clearInterval(interval);
+        // Last resort before giving up: the webhook never arrived, so verify
+        // the payment directly against Lemonsqueezy and activate the row. If it
+        // worked, proceed exactly as the happy path would.
+        try {
+          const res = await fetch("/api/subscription/reconcile", {
+            method: "POST",
+            cache: "no-store",
+          });
+          const body = (await res.json().catch(() => ({}))) as {
+            active?: boolean;
+          };
+          if (!cancelled && body.active) {
+            setStage("active");
+            const { triggered } = await syncFamilyPlanAfterSubscribe().catch(
+              () => ({ triggered: false }),
+            );
+            router.replace(triggered ? "/plan" : "/dashboard");
+            return;
+          }
+        } catch {
+          // fall through to the timeout message
+        }
+        if (cancelled) return;
         setStage("timeout");
         // Strip the URL param + refetch via router.replace (avoids the
         // SecurityError that history.replaceState can throw under some

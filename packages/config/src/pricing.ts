@@ -122,6 +122,25 @@ export function getVariantId(tier: Tier, cadence: Cadence): string {
 }
 
 /**
+ * Reverse of getVariantId: resolve the (tier, cadence) a Lemonsqueezy variant ID
+ * maps to. Used when reconciling a subscription directly from the Lemonsqueezy
+ * API (the webhook gets tier from checkout custom_data, but listSubscriptions
+ * only exposes the variant id). Returns null for an unrecognized variant.
+ */
+export function getTierCadenceByVariantId(
+  variantId: string | number,
+): { tier: Tier; cadence: Cadence } | null {
+  const id = String(variantId);
+  for (const t of Object.values(PRICING_TIERS)) {
+    if (t.lemonsqueezy_variant_id_monthly === id)
+      return { tier: t.id, cadence: "monthly" };
+    if (t.lemonsqueezy_variant_id_annual === id)
+      return { tier: t.id, cadence: "annual" };
+  }
+  return null;
+}
+
+/**
  * Returns the per-month equivalent when paying annually (for display on toggles
  * that show "X SAR/month" but bill the full year up front). Rounded to nearest SAR.
  */
