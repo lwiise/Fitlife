@@ -27,6 +27,7 @@ export type HealthInitial = {
   conditions: string[];
   other_condition: string;
   consulted_doctor: boolean;
+  meal_mode: "shared" | "independent";
 };
 
 function OptionButton({
@@ -88,6 +89,9 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
   const [conditions, setConditions] = useState<string[]>(initial.conditions);
   const [otherCondition, setOtherCondition] = useState(initial.other_condition);
   const [consultedDoctor, setConsultedDoctor] = useState(initial.consulted_doctor);
+  const [mealMode, setMealMode] = useState<"shared" | "independent">(
+    initial.meal_mode,
+  );
 
   const doctorNeeded = useMemo(
     () =>
@@ -124,6 +128,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         conditions,
         other_condition: otherCondition.trim() || undefined,
         consulted_doctor: consultedDoctor,
+        meal_mode: mealMode,
       });
       if (!result.ok) return setError(result.error);
       router.push("/profile?edited=health");
@@ -268,6 +273,30 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
             disabled={isPending}
             placeholder="مثلاً: كبدة، باذنجان"
           />
+        </div>
+      </section>
+
+      {/* نمط الوجبات */}
+      <section className="space-y-3">
+        <GroupHeading>نمط الوجبات</GroupHeading>
+        <p className="text-brand-ink-muted text-sm leading-relaxed">
+          تختارين تشاركين وجبات العائلة، أو تكون لك خطة بأطباق خاصة بك.
+        </p>
+        <div className="space-y-2">
+          <OptionButton
+            full
+            active={mealMode === "shared"}
+            onClick={() => setMealMode("shared")}
+          >
+            وجبات مشتركة مع العائلة
+          </OptionButton>
+          <OptionButton
+            full
+            active={mealMode === "independent"}
+            onClick={() => setMealMode("independent")}
+          >
+            خطة مستقلة لي
+          </OptionButton>
         </div>
       </section>
 

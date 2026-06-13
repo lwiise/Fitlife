@@ -79,6 +79,9 @@ const HealthSchema = z.object({
   conditions: z.array(z.string()),
   other_condition: z.string().optional(),
   consulted_doctor: z.boolean(),
+  // Shared family meals (default) vs your own independent dishes. Applied at the
+  // next plan generation (like the rest of this form), not regenerated in place.
+  meal_mode: z.enum(["shared", "independent"]),
 });
 
 export async function saveMomHealthInfo(
@@ -135,6 +138,7 @@ export async function saveMomHealthInfo(
       has_medical_conditions: hasMedical,
       medical_conditions: conditions,
       consulted_doctor: data.consulted_doctor,
+      meal_mode: data.meal_mode,
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", user.id);

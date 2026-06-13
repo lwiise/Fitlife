@@ -8,7 +8,6 @@ import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle } from "lucid
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
-import { MealModeToggle } from "./MealModeToggle";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
 import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
@@ -50,7 +49,6 @@ export function PlanViewer({
   readOnly = false,
   housekeeperLocale,
   locale,
-  memberMealModes,
 }: {
   plan: MealPlan;
   planId: string;
@@ -68,8 +66,6 @@ export function PlanViewer({
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
-  // member_id → meal_mode, for the shared↔independent toggle (mom included).
-  memberMealModes?: Record<string, "shared" | "independent">;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -173,8 +169,6 @@ export function PlanViewer({
       ),
     [activeMember],
   );
-  const activeMemberMode: "shared" | "independent" =
-    (activeMember && memberMealModes?.[activeMember.member_id]) ?? "shared";
 
   const memberLabel = (m: MemberPlan) =>
     translated ? (m.member_name_translated ?? m.member_name_ar) : m.member_name_ar;
@@ -321,14 +315,6 @@ export function PlanViewer({
               memberPlan={activeMember}
               planMetadata={{ week_start_date: plan.week_start_date }}
               memberNames={memberNames}
-            />
-          )}
-          {!readOnly && (
-            <MealModeToggle
-              memberId={activeMember.member_id}
-              memberName={activeMember.member_name_ar}
-              currentMode={activeMemberMode}
-              locale={locale}
             />
           )}
           {!readOnly && (
