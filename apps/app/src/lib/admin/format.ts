@@ -89,6 +89,39 @@ export function fmtDate(iso: string | null | undefined, locale: AdminLocale): st
   }).format(new Date(iso));
 }
 
+/**
+ * X-axis label for a time-series bucket. Month buckets show the short month;
+ * day/week buckets show day + short month. Localized digits/month names.
+ */
+export function fmtBucketLabel(
+  iso: string | null | undefined,
+  granularity: "hour" | "day" | "week" | "month",
+  locale: AdminLocale,
+): string {
+  if (!iso) return "—";
+  const opts: Intl.DateTimeFormatOptions =
+    granularity === "hour"
+      ? { hour: "numeric" }
+      : granularity === "month"
+        ? { month: "short" }
+        : { day: "numeric", month: "short" };
+  return new Intl.DateTimeFormat(TAG[locale], opts).format(new Date(iso));
+}
+
+/**
+ * Format a metric value by its unit — SAR money (full or compact) or a plain
+ * localized count. Used by the Overview metric tabs, chart axis, and tooltip.
+ */
+export function fmtMetricValue(
+  n: number,
+  unit: "sar" | "count",
+  locale: AdminLocale,
+  compact = false,
+): string {
+  if (unit === "sar") return compact ? fmtSarCompact(n, locale) : fmtSar(n, locale);
+  return fmtNumber(n, locale);
+}
+
 const REL_DIVISORS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ["year", 1000 * 60 * 60 * 24 * 365],
   ["month", 1000 * 60 * 60 * 24 * 30],

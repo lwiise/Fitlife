@@ -433,3 +433,160 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
 export function getPlanStrings(locale: LocaleCode): PlanStrings {
   return PLAN_STRINGS[locale] ?? PLAN_STRINGS.ar;
 }
+
+/**
+ * Strings for the plan-page owner controls (shared↔independent toggle + the
+ * regenerate-scope chooser). Owner-facing only (hidden in the read-only
+ * housekeeper view), so `ar` is authoritative and `en` solid; the others are
+ * best-effort and should get native-speaker review before scale. `{name}` is
+ * interpolated by the component.
+ */
+export interface PlanActionStrings {
+  meal_mode_label: string;
+  meal_mode_shared: string;
+  meal_mode_independent: string;
+  meal_mode_switch_title: string;
+  meal_mode_to_independent_body: string;
+  meal_mode_to_shared_body: string;
+  meal_mode_confirm: string;
+  regen_scope_title: string;
+  regen_scope_both: string;
+  regen_scope_both_hint: string;
+  regen_scope_shared: string;
+  regen_scope_shared_hint: string;
+  regen_scope_individual: string;
+  regen_scope_individual_hint: string;
+}
+
+export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
+  ar: {
+    meal_mode_label: "نوع الوجبات",
+    meal_mode_shared: "وجبات مشتركة",
+    meal_mode_independent: "وجبات مستقلة",
+    meal_mode_switch_title: "تغيير نوع الوجبات",
+    meal_mode_to_independent_body:
+      "بنحوّل وجبات {name} إلى وجبات مستقلة بأطباقه الخاصة، ونعيد إنشاءها. ونحدّث خطط الأفراد اللي كانوا يشاركونه تلقائياً. الخطة الحالية تنحفظ في السجل.",
+    meal_mode_to_shared_body:
+      "بنحوّل وجبات {name} إلى وجبات مشتركة مع العائلة حيثما تناسب، ونعيد إنشاءها. ونحدّث خطط الأفراد المشاركين تلقائياً. الخطة الحالية تنحفظ في السجل.",
+    meal_mode_confirm: "غيّري النوع",
+    regen_scope_title: "ايش تبين نجدد؟",
+    regen_scope_both: "كل الوجبات",
+    regen_scope_both_hint: "نجدد وجباته الخاصة والمشتركة",
+    regen_scope_shared: "الوجبات المشتركة",
+    regen_scope_shared_hint: "نجدد الأطباق اللي يشاركها مع العائلة — وتنعكس على بقية المشاركين",
+    regen_scope_individual: "الأطباق الخاصة به",
+    regen_scope_individual_hint: "نجدد وجباته الفردية فقط، والمشتركة تبقى كما هي",
+  },
+  en: {
+    meal_mode_label: "Meal type",
+    meal_mode_shared: "Shared meals",
+    meal_mode_independent: "Own meals",
+    meal_mode_switch_title: "Change meal type",
+    meal_mode_to_independent_body:
+      "We'll switch {name} to their own separate dishes and regenerate them. Anyone who shared meals with them is updated automatically. Your current plan is saved to history.",
+    meal_mode_to_shared_body:
+      "We'll switch {name} to the family's shared meals where they fit and regenerate them. The members who share are updated automatically. Your current plan is saved to history.",
+    meal_mode_confirm: "Change type",
+    regen_scope_title: "What would you like to regenerate?",
+    regen_scope_both: "All meals",
+    regen_scope_both_hint: "Regenerate their own and their shared meals",
+    regen_scope_shared: "Shared meals",
+    regen_scope_shared_hint: "Regenerate the dishes shared with the family — co-sharers update too",
+    regen_scope_individual: "Their own dishes",
+    regen_scope_individual_hint: "Regenerate only their individual meals; shared meals stay",
+  },
+  tl: {
+    meal_mode_label: "Uri ng pagkain",
+    meal_mode_shared: "Magkakasamang pagkain",
+    meal_mode_independent: "Sariling pagkain",
+    meal_mode_switch_title: "Baguhin ang uri ng pagkain",
+    meal_mode_to_independent_body:
+      "Ililipat namin si {name} sa sariling hiwalay na mga pagkain at gagawa ng bago. Ang sinumang kasalo niya ay awtomatikong ia-update. Ang kasalukuyang plano ay nakatabi sa history.",
+    meal_mode_to_shared_body:
+      "Ililipat namin si {name} sa magkakasamang pagkain ng pamilya kung saan bagay at gagawa ng bago. Ang mga kasalo ay awtomatikong ia-update. Ang kasalukuyang plano ay nakatabi sa history.",
+    meal_mode_confirm: "Baguhin ang uri",
+    regen_scope_title: "Ano ang gusto mong gawing bago?",
+    regen_scope_both: "Lahat ng pagkain",
+    regen_scope_both_hint: "Gawing bago ang sarili at magkakasamang pagkain",
+    regen_scope_shared: "Magkakasamang pagkain",
+    regen_scope_shared_hint: "Gawing bago ang mga pagkaing kasalo ng pamilya — maa-update din sila",
+    regen_scope_individual: "Sariling pagkain niya",
+    regen_scope_individual_hint: "Gawing bago lang ang indibidwal na pagkain; mananatili ang magkakasama",
+  },
+  id: {
+    meal_mode_label: "Jenis makanan",
+    meal_mode_shared: "Makanan bersama",
+    meal_mode_independent: "Makanan sendiri",
+    meal_mode_switch_title: "Ubah jenis makanan",
+    meal_mode_to_independent_body:
+      "Kami akan mengubah {name} ke hidangan sendiri yang terpisah dan membuatnya ulang. Siapa pun yang berbagi makanan dengannya akan diperbarui otomatis. Rencana saat ini disimpan di riwayat.",
+    meal_mode_to_shared_body:
+      "Kami akan mengubah {name} ke makanan bersama keluarga jika sesuai dan membuatnya ulang. Anggota yang berbagi diperbarui otomatis. Rencana saat ini disimpan di riwayat.",
+    meal_mode_confirm: "Ubah jenis",
+    regen_scope_title: "Apa yang ingin dibuat ulang?",
+    regen_scope_both: "Semua makanan",
+    regen_scope_both_hint: "Buat ulang makanan sendiri dan bersama",
+    regen_scope_shared: "Makanan bersama",
+    regen_scope_shared_hint: "Buat ulang hidangan yang dibagi dengan keluarga — yang lain ikut diperbarui",
+    regen_scope_individual: "Hidangan sendiri",
+    regen_scope_individual_hint: "Buat ulang hanya makanan individunya; yang bersama tetap",
+  },
+  bn: {
+    meal_mode_label: "খাবারের ধরন",
+    meal_mode_shared: "ভাগ করা খাবার",
+    meal_mode_independent: "নিজের খাবার",
+    meal_mode_switch_title: "খাবারের ধরন পরিবর্তন",
+    meal_mode_to_independent_body:
+      "আমরা {name}-কে তার নিজের আলাদা খাবারে পরিবর্তন করে নতুন করে তৈরি করব। যারা তার সাথে খাবার ভাগ করত তারা স্বয়ংক্রিয়ভাবে হালনাগাদ হবে। বর্তমান পরিকল্পনা ইতিহাসে সংরক্ষিত থাকে।",
+    meal_mode_to_shared_body:
+      "আমরা {name}-কে যেখানে মানানসই সেখানে পরিবারের ভাগ করা খাবারে পরিবর্তন করে নতুন করে তৈরি করব। যারা ভাগ করে তারা স্বয়ংক্রিয়ভাবে হালনাগাদ হবে। বর্তমান পরিকল্পনা ইতিহাসে সংরক্ষিত থাকে।",
+    meal_mode_confirm: "ধরন পরিবর্তন",
+    regen_scope_title: "আপনি কী নতুন করে তৈরি করতে চান?",
+    regen_scope_both: "সব খাবার",
+    regen_scope_both_hint: "তার নিজের ও ভাগ করা খাবার নতুন করে তৈরি",
+    regen_scope_shared: "ভাগ করা খাবার",
+    regen_scope_shared_hint: "পরিবারের সাথে ভাগ করা খাবার নতুন করা — অন্যরাও হালনাগাদ হবে",
+    regen_scope_individual: "তার নিজের খাবার",
+    regen_scope_individual_hint: "শুধু তার একক খাবার নতুন করা; ভাগ করা খাবার অপরিবর্তিত থাকে",
+  },
+  am: {
+    meal_mode_label: "የምግብ ዓይነት",
+    meal_mode_shared: "የጋራ ምግቦች",
+    meal_mode_independent: "የራሱ ምግቦች",
+    meal_mode_switch_title: "የምግብ ዓይነት ለውጥ",
+    meal_mode_to_independent_body:
+      "{name}ን ወደ የራሱ የተለዩ ምግቦች እንቀይራለን አዲስም እናዘጋጃለን። ከእሱ ጋር ምግብ ይጋሩ የነበሩ ሁሉ በራስ-ሰር ይዘምናሉ። የአሁኑ እቅድ በታሪክ ይቀመጣል።",
+    meal_mode_to_shared_body:
+      "{name}ን በሚስማማበት ቦታ ወደ የቤተሰብ የጋራ ምግቦች እንቀይራለን አዲስም እናዘጋጃለን። የሚጋሩ አባላት በራስ-ሰር ይዘምናሉ። የአሁኑ እቅድ በታሪክ ይቀመጣል።",
+    meal_mode_confirm: "ዓይነት ለውጥ",
+    regen_scope_title: "ምን እንዲታደስ ይፈልጋሉ?",
+    regen_scope_both: "ሁሉም ምግቦች",
+    regen_scope_both_hint: "የራሱንና የጋራ ምግቦቹን እናድሳለን",
+    regen_scope_shared: "የጋራ ምግቦች",
+    regen_scope_shared_hint: "ከቤተሰብ ጋር የሚጋሩ ምግቦችን እናድሳለን — ሌሎቹም ይዘምናሉ",
+    regen_scope_individual: "የራሱ ምግቦች",
+    regen_scope_individual_hint: "የግል ምግቦቹን ብቻ እናድሳለን፤ የጋራዎቹ እንዳሉ ይቆያሉ",
+  },
+  ur: {
+    meal_mode_label: "کھانے کی قسم",
+    meal_mode_shared: "مشترکہ کھانے",
+    meal_mode_independent: "اپنے کھانے",
+    meal_mode_switch_title: "کھانے کی قسم تبدیل کریں",
+    meal_mode_to_independent_body:
+      "ہم {name} کو اپنے الگ کھانوں میں منتقل کر کے دوبارہ بنائیں گے۔ جو لوگ ان کے ساتھ کھانے بانٹتے تھے وہ خود بخود اپ ڈیٹ ہو جائیں گے۔ موجودہ پلان تاریخ میں محفوظ رہتا ہے۔",
+    meal_mode_to_shared_body:
+      "ہم {name} کو جہاں مناسب ہو خاندان کے مشترکہ کھانوں میں منتقل کر کے دوبارہ بنائیں گے۔ شریک افراد خود بخود اپ ڈیٹ ہو جائیں گے۔ موجودہ پلان تاریخ میں محفوظ رہتا ہے۔",
+    meal_mode_confirm: "قسم تبدیل کریں",
+    regen_scope_title: "آپ کیا دوبارہ بنانا چاہتی ہیں؟",
+    regen_scope_both: "تمام کھانے",
+    regen_scope_both_hint: "ان کے اپنے اور مشترکہ کھانے دوبارہ بنائیں",
+    regen_scope_shared: "مشترکہ کھانے",
+    regen_scope_shared_hint: "خاندان کے ساتھ مشترکہ کھانے دوبارہ بنائیں — باقی بھی اپ ڈیٹ ہوں گے",
+    regen_scope_individual: "ان کے اپنے کھانے",
+    regen_scope_individual_hint: "صرف ان کے انفرادی کھانے دوبارہ بنائیں؛ مشترکہ ویسے ہی رہیں گے",
+  },
+};
+
+export function getPlanActionStrings(locale: LocaleCode): PlanActionStrings {
+  return PLAN_ACTION_STRINGS[locale] ?? PLAN_ACTION_STRINGS.ar;
+}

@@ -2,20 +2,18 @@ import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import {
-  buildOverviewActionQueue,
+  buildOverviewView,
   buildSubscriberRows,
-  computeKpis,
   filterSortPaginate,
   loadAdminDataset,
 } from "@/lib/admin/queries";
-import { getPeriodPair } from "@/lib/admin/period";
 import { getAdminLocale } from "@/lib/admin/locale";
 import type { SubscriberSortKey } from "@/lib/admin/types";
 import type { AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
 import { AdminTopBar } from "./_components/AdminTopBar";
-import { KpiStrip } from "./_components/KpiStrip";
-import { ActionQueue } from "./_components/ActionQueue";
+import { RevenueChartSection } from "./_components/RevenueChartSection";
+import { AiCostStrip } from "./_components/AiCostStrip";
 import { FilterBar } from "./_components/FilterBar";
 import { SubscriberTable } from "./_components/SubscriberTable";
 import { Pagination } from "./_components/Pagination";
@@ -43,12 +41,17 @@ export default async function AdminOverviewPage({
   const params = flatten(await searchParams);
   const baseParams = params;
 
-  const periodDays = params.days === "90" ? 90 : 30;
-
   const dataset = await loadAdminDataset();
-  const kpis = computeKpis(dataset, getPeriodPair(periodDays));
+  const overview = buildOverviewView(dataset, {
+    metric: params.metric,
+    metrics: params.metrics,
+    range: params.range,
+    from: params.from,
+    to: params.to,
+    interval: params.interval,
+    cmp: params.cmp,
+  });
   const rows = buildSubscriberRows(dataset);
-  const actionItems = buildOverviewActionQueue(dataset);
 
   const sort = SORT_KEYS.includes(params.sort as SubscriberSortKey)
     ? (params.sort as SubscriberSortKey)
@@ -65,7 +68,7 @@ export default async function AdminOverviewPage({
     page,
   });
 
-  // PDPL: record the list access (who / filters / when).
+  // PDPL: record the list access (who / filters / window / when).
   await logAdminAccess({
     adminUserId: admin.userId,
     action: "view_subscriber_list",
@@ -77,7 +80,11 @@ export default async function AdminOverviewPage({
         tier: params.tier ?? null,
         status: params.status ?? null,
       },
-      periodDays,
+      metric: overview.selectedMetric,
+      range: overview.preset,
+      interval: overview.interval,
+      cmp: overview.comparisonOn,
+      section: "overview_v2",
     },
   });
 
@@ -92,29 +99,27 @@ export default async function AdminOverviewPage({
 
   return (
     <>
-      <AdminTopBar
-        locale={locale}
-        activeNav="overview"
-        periodDays={periodDays}
-        baseParams={baseParams}
-        adminEmail={admin.email}
-      />
+      <AdminTopBar locale={locale} activeNav="overview" adminEmail={admin.email} />
 
       <main className="container-app space-y-6 py-6">
         <h1 className="sr-only">{t("nav_overview", locale)}</h1>
-        {kpis.subscriberCount === 0 ? (
+        {overview.subscriberCount === 0 ? (
           <EmptyState locale={locale} />
         ) : (
           <>
-            <KpiStrip kpis={kpis} locale={locale} />
+            <RevenueChartSection
+              view={overview}
+              baseParams={baseParams}
+              locale={locale}
+            />
+
+            <AiCostStrip view={overview} locale={locale} />
 
             {dataset.truncated.length > 0 ? (
               <p className="rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">
                 {t("truncated_warning", locale)}
               </p>
             ) : null}
-
-            <ActionQueue items={actionItems} locale={locale} />
 
             <section className="space-y-3" aria-labelledby="admin-subscribers-heading">
               <div className="flex flex-wrap items-center justify-between gap-3">

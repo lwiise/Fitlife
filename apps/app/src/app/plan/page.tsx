@@ -87,9 +87,27 @@ export default async function PlanPage({
     housekeeper && housekeeper.preferred_language !== "ar"
       ? housekeeper.preferred_language
       : undefined;
-  // Who we're generating for: the just-added member (from the redirect param),
-  // otherwise the account owner. Never framed as "the family".
-  const generatingFor = member || profile?.display_name || null;
+  // member_id → meal_mode for the shared↔independent toggle. mom's lives on the
+  // profile; everyone else's on their family_members row. Plan member_ids match
+  // family_members.id (mom is the literal "mom").
+  const memberMealModes: Record<string, "shared" | "independent"> = {
+    mom: profile?.meal_mode === "independent" ? "independent" : "shared",
+  };
+  for (const m of familyMembers) {
+    memberMealModes[m.id] = m.meal_mode === "independent" ? "independent" : "shared";
+  }
+  // Who we're generating for: prefer the plan's own targeted member (stamped on
+  // single-member add/regenerate/edit) so the loader names the right person even when
+  // the URL has no ?member (the regenerate button refreshes without it). The
+  // add-member redirect's ?member (a name) and the account owner are fallbacks.
+  // Never framed as "the family".
+  const genId = latest?.plan_data?.generating_member_id;
+  const genName = genId
+    ? genId === "mom"
+      ? (profile?.display_name ?? null)
+      : (familyMembers.find((m) => m.id === genId)?.name ?? null)
+    : null;
+  const generatingFor = genName ?? member ?? profile?.display_name ?? null;
 
   // A member added mid-run is saved + queued (the drain generates them once the
   // current run finishes) — reassure rather than show a "wait" error.
@@ -193,6 +211,7 @@ export default async function PlanPage({
               updatedAt={latest.updated_at}
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
+              memberMealModes={memberMealModes}
             />
           </>
         )}

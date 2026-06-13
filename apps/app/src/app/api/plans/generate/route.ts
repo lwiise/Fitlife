@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     issues?: string;
     improvements?: string;
     memberId?: string;
+    scope?: "individual" | "shared" | "both";
   };
   const issues = body.issues?.trim();
   const improvements = body.improvements?.trim();
@@ -50,15 +51,28 @@ export async function POST(req: Request) {
   }
 
   const memberId = body.memberId?.trim();
+  // The regenerate-scope dialog (only meaningful for a member with shared meals).
+  const scope =
+    memberId &&
+    (body.scope === "individual" || body.scope === "shared" || body.scope === "both")
+      ? body.scope
+      : undefined;
 
   const result = await triggerPlanGeneration({
     supabase,
     userId: user.id,
     feedback,
     // Scope to the viewed member: carry the rest over, regenerate only this one
-    // with fresh independent dishes. No memberId → full regen (fallback).
+    // with fresh independent dishes. No memberId → full regen (fallback). With a
+    // scope, regenerate only that category of meals (partial regen, co-sharers
+    // recomputed) — see triggerPlanGeneration.regenScope.
     ...(memberId
-      ? { carryOver: true, regenerateMemberId: memberId, independentRegen: true }
+      ? {
+          carryOver: true,
+          regenerateMemberId: memberId,
+          independentRegen: true,
+          ...(scope ? { regenScope: scope } : {}),
+        }
       : {}),
   });
 

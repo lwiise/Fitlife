@@ -59,6 +59,12 @@ export async function triggerPlanGeneration(params: {
   // (not aligned to the family's shared dish grid). When omitted, it's derived
   // from the target member's meal_mode ('independent' → fresh dishes).
   independentRegen?: boolean;
+  // Literal partial regenerate (the regenerate-scope dialog): regenerate only a
+  // category of regenerateMemberId's meals ('individual' | 'shared' | 'both'),
+  // preserving the rest. Requires carryOver + regenerateMemberId. The engine keeps
+  // the full prior plan (the target is NOT stripped) so it can splice the
+  // out-of-scope meals back and recompute any co-sharers.
+  regenScope?: "individual" | "shared" | "both";
   // Manual regeneration: the user's "what's wrong / what to improve" feedback,
   // layered into the generation prompt (methodology/cookbook still take precedence).
   feedback?: string;
@@ -71,6 +77,7 @@ export async function triggerPlanGeneration(params: {
     regenerateMemberId,
     onlyMemberId,
     independentRegen,
+    regenScope,
     feedback,
   } = params;
 
@@ -151,14 +158,19 @@ export async function triggerPlanGeneration(params: {
   if (carryOver) {
     const prior = await getLatestPlan(userId);
     if (prior?.status === "ready" && prior.plan_data) {
-      existingPlan = regenerateMemberId
-        ? {
-            ...prior.plan_data,
-            members: prior.plan_data.members.filter(
-              (m) => m.member_id !== regenerateMemberId,
-            ),
-          }
-        : prior.plan_data;
+      // A partial scope regenerates only some of the target's meals, so the engine
+      // needs the WHOLE prior plan (including the target) to preserve out-of-scope
+      // meals and recompute co-sharers. A plain per-member regen strips the target
+      // so it regenerates entirely.
+      existingPlan =
+        regenerateMemberId && !regenScope
+          ? {
+              ...prior.plan_data,
+              members: prior.plan_data.members.filter(
+                (m) => m.member_id !== regenerateMemberId,
+              ),
+            }
+          : prior.plan_data;
     }
   }
 
@@ -166,9 +178,13 @@ export async function triggerPlanGeneration(params: {
   // member run (add via onlyMemberId, edit via regenerateMemberId), 'independent'
   // gives fresh dishes; 'shared' aligns to the family dish grid.
   const targetMemberId = onlyMemberId ?? regenerateMemberId;
-  const targetMode = targetMemberId
-    ? context.family_members.find((m) => m.id === targetMemberId)?.meal_mode
-    : undefined;
+  // mom's meal_mode lives on `profiles` (context.mom), not family_members.
+  const targetMode =
+    targetMemberId === "mom"
+      ? context.mom.meal_mode
+      : targetMemberId
+        ? context.family_members.find((m) => m.id === targetMemberId)?.meal_mode
+        : undefined;
   const effIndependentRegen =
     independentRegen ?? (targetMode === "independent" ? true : undefined);
 
@@ -224,6 +240,8 @@ export async function triggerPlanGeneration(params: {
         existingPlan,
         independentRegen: effIndependentRegen,
         onlyMemberId,
+        regenerateMemberId,
+        regenScope,
       });
       return { ok: true, mealPlanId, status: "ready" };
     } catch (err) {
@@ -261,6 +279,8 @@ export async function triggerPlanGeneration(params: {
           feedback,
           independentRegen: effIndependentRegen,
           onlyMemberId,
+          regenerateMemberId,
+          regenScope,
           limitMemberIds,
         }),
       },

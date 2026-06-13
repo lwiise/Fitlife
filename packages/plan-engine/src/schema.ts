@@ -86,6 +86,20 @@ export const MealSchema = z.object({
   shared_recipe: z.boolean().optional(),
   batch_finished_weight_g: z.number().optional(),
   per_member_portions: z.array(PerMemberPortionSchema).optional(),
+  // Shared meals only: this member's OWN single portion (the pre-merge recipe),
+  // retained so the family batch can be re-derived when ONE member is later edited
+  // without regenerating the others. `ingredients` here is the single portion, NOT
+  // the batch (top-level `ingredients` holds the batch when shared). Absent on
+  // individual meals and on plans generated before this field existed — those fall
+  // back to scaling the batch by the member's share on the first re-sync, then it
+  // is stored correctly thereafter.
+  own_portion: z
+    .object({
+      recipe_name_ar: z.string(),
+      ingredients: z.array(IngredientSchema),
+      prep_steps_ar: z.array(z.string()),
+    })
+    .optional(),
 });
 export type Meal = z.infer<typeof MealSchema>;
 

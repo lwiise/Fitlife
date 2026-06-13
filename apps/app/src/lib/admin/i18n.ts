@@ -364,6 +364,52 @@ const STRINGS = {
   },
   chart_empty: { ar: "لا توجد بيانات بعد", en: "No data yet" },
   chart_error: { ar: "تعذّر عرض الرسم", en: "Couldn’t render this chart" },
+
+  // ── Overview: revenue & subscriptions chart ──
+  chart_revenue_subscriptions: {
+    ar: "الإيراد والاشتراكات حسب الباقة",
+    en: "Revenue & subscriptions by tier",
+  },
+  metric_label: { ar: "المقياس", en: "Metric" },
+  metric_revenue: { ar: "الإيراد", en: "Revenue" },
+  metric_subscriptions: { ar: "الاشتراكات", en: "Subscriptions" },
+  range_week: { ar: "هذا الأسبوع", en: "This week" },
+  range_month: { ar: "هذا الشهر", en: "This month" },
+  range_custom: { ar: "مخصص", en: "Custom" },
+  date_from: { ar: "من", en: "From" },
+  date_to: { ar: "إلى", en: "To" },
+  range_apply: { ar: "تطبيق", en: "Apply" },
+  col_total: { ar: "الإجمالي", en: "Total" },
+
+  // ── Overview: AI cost strip ──
+  ai_cost_per_account: { ar: "تكلفة الذكاء لكل حساب", en: "AI cost per account" },
+  ai_cost_per_member: { ar: "تكلفة الذكاء لكل مستفيد", en: "AI cost per beneficiary" },
+  kpi_active_users: { ar: "المستخدمون النشطون", en: "Active users" },
+  per_account: { ar: "لكل حساب", en: "per account" },
+  per_beneficiary: { ar: "لكل مستفيد", en: "per beneficiary" },
+
+  // ── Overview: Kajabi-style chart controls ──
+  range_24h: { ar: "آخر ٢٤ ساعة", en: "Last 24h" },
+  range_7d: { ar: "آخر ٧ أيام", en: "Last 7 days" },
+  interval_label: { ar: "التقسيم الزمني", en: "Group by" },
+  interval_hour: { ar: "ساعة", en: "Hour" },
+  interval_day: { ar: "يوم", en: "Day" },
+  interval_week: { ar: "أسبوع", en: "Week" },
+  interval_month: { ar: "شهر", en: "Month" },
+  compare_label: { ar: "المقارنة", en: "Compare" },
+  compare_prior: { ar: "الفترة السابقة", en: "Previous period" },
+  compare_off: { ar: "بدون مقارنة", en: "No comparison" },
+  legend_current: { ar: "الحالية", en: "Current" },
+  legend_previous: { ar: "السابقة", en: "Previous" },
+  delta_label: { ar: "التغيّر", en: "Change" },
+  customize_metrics: { ar: "تخصيص المؤشرات", en: "Customize metrics" },
+  currency_label: { ar: "ر.س", en: "SAR" },
+
+  // ── Overview: metric labels ──
+  metric_gross_revenue: { ar: "إجمالي الإيراد", en: "Gross revenue" },
+  metric_active_subs: { ar: "المشتركون النشطون", en: "Active subscribers" },
+  metric_trials: { ar: "التجارب", en: "Trials" },
+  metric_churned: { ar: "الإلغاءات", en: "Churned" },
 } as const satisfies Record<string, Entry>;
 
 export type AdminStringKey = keyof typeof STRINGS;
@@ -472,31 +518,34 @@ export function failureCauseLabel(cause: string, locale: AdminLocale): string {
   return key ? t(key, locale) : cause;
 }
 
-const ACTION_KIND_KEY: Record<string, AdminStringKey> = {
-  trial_expiring: "aq_trial_expiring",
-  past_due: "aq_past_due",
-  quiet_high_value: "aq_quiet_high_value",
-  systemic_failures: "aq_systemic_failures",
-};
-export function actionQueueKindLabel(kind: string, locale: AdminLocale): string {
-  const key = ACTION_KIND_KEY[kind];
-  return key ? t(key, locale) : kind;
-}
-
-const SEVERITY_KEY: Record<string, AdminStringKey> = {
-  high: "severity_high",
-  medium: "severity_medium",
-  low: "severity_low",
-};
-export function severityLabel(severity: string, locale: AdminLocale): string {
-  const key = SEVERITY_KEY[severity];
-  return key ? t(key, locale) : severity;
-}
-
 const LANG_NAME = new Map<string, string>(
   SUPPORTED_LANGUAGES.map((l) => [l.code, l.name]),
 );
 /** Native language name for a locale code (e.g. "العربية", "Tagalog"). */
 export function localeName(code: string): string {
   return LANG_NAME.get(code) ?? code;
+}
+
+const METRIC_KEY: Record<string, AdminStringKey> = {
+  gross_revenue: "metric_gross_revenue",
+  mrr: "kpi_mrr",
+  active_subs: "metric_active_subs",
+  new_signups: "kpi_new_signups",
+  trials: "metric_trials",
+  churned: "metric_churned",
+};
+export function metricLabel(metric: string, locale: AdminLocale): string {
+  const key = METRIC_KEY[metric];
+  return key ? t(key, locale) : metric;
+}
+
+const INTERVAL_KEY: Record<string, AdminStringKey> = {
+  hour: "interval_hour",
+  day: "interval_day",
+  week: "interval_week",
+  month: "interval_month",
+};
+export function intervalLabel(interval: string, locale: AdminLocale): string {
+  const key = INTERVAL_KEY[interval];
+  return key ? t(key, locale) : interval;
 }

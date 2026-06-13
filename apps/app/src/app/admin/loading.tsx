@@ -10,11 +10,25 @@ export default function AdminLoading() {
         aria-busy="true"
         aria-label={t("loading_label", "ar")}
       >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 7 }).map((_, i) => (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="h-6 w-40 animate-pulse rounded bg-surface-elevated" />
+            <div className="h-11 w-96 max-w-full animate-pulse rounded bg-surface-elevated" />
+          </div>
+          <div className="space-y-4 rounded-2xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-brand-surface" />
+              ))}
+            </div>
+            <div className="h-64 animate-pulse rounded-xl bg-brand-surface" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-xl border border-brand-ink/10 bg-surface-elevated"
+              className="h-24 animate-pulse rounded-xl border border-brand-ink/10 bg-surface-elevated"
             />
           ))}
         </div>
