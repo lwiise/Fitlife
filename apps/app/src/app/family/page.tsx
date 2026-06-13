@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { User } from "lucide-react";
 import {
@@ -47,7 +48,7 @@ export default async function FamilyPage() {
         </header>
 
         <div className="space-y-3">
-          {/* Mom — non-editable here (she edits via her own flow). */}
+          {/* Mom — edits via her own profile flow (/profile), not the member wizard. */}
           <div className="flex items-center gap-3 bg-white rounded-2xl p-4 border border-brand-ink/5">
             <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center flex-shrink-0">
               <User className="size-5 text-brand-pink" aria-hidden="true" />
@@ -59,6 +60,12 @@ export default async function FamilyPage() {
               </p>
               <p className="text-brand-ink-muted text-xs mt-0.5">صاحبة الحساب</p>
             </div>
+            <Link
+              href="/profile"
+              className="text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md px-1 min-h-11 inline-flex items-center flex-shrink-0"
+            >
+              تعديل
+            </Link>
           </div>
 
           {members.map((m) => (
