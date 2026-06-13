@@ -64,6 +64,10 @@ export default async function DashboardPage() {
   const beneficiaryCount = familyMembers.filter(
     (m) => m.role !== "housekeeper",
   ).length;
+  // The mom (account owner) lives in `profiles`, not `family_members`, but she
+  // is a member of the household and the /family page always renders her card.
+  // Count her so the dashboard total matches what that page shows.
+  const familyCount = familyMembers.length + 1;
   // Mom's plan exists but no other family members yet → nudge to add family.
   // Gate on real readiness (content present, not still generating) so the
   // "خطتك جاهزة" banner never shows over the generating loader.
@@ -200,7 +204,7 @@ export default async function DashboardPage() {
               <p className="text-brand-ink-muted text-sm font-medium">أفراد العائلة</p>
             </div>
             <p className="font-extrabold text-xl text-brand-ink mt-1 tabular-nums">
-              {familyMembers.length}
+              {familyCount}
             </p>
             <p className="inline-flex items-center gap-1 text-brand-purple-900 text-xs font-bold mt-1">
               إدارة العائلة
