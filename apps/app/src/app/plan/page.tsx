@@ -17,6 +17,7 @@ import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
+import { SubscriptionSelfHeal } from "./SubscriptionSelfHeal";
 
 export const metadata = {
   title: "خطتي — فت لايف",
@@ -161,6 +162,10 @@ export default async function PlanPage({
 
         {pendingBlocked && (
           <div className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-4 mb-6">
+            {/* A paid user can land here if their activation webhook was missed.
+                Reconcile directly with Lemonsqueezy once; if it activates, the
+                page refreshes and the drain takes over instead of this banner. */}
+            <SubscriptionSelfHeal />
             <div className="flex items-start gap-3">
               <Users
                 className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900"
