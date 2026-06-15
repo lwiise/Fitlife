@@ -7,6 +7,7 @@ import {
   DaySchema,
   MemberPlanSchema,
   MealPlanSchema,
+  SkeletonMemberSchema,
   planHasContent,
   type MealPlan,
 } from "./schema";
@@ -386,5 +387,38 @@ describe("supporting schemas", () => {
       return d;
     }));
     expect(MemberPlanSchema.safeParse(member).success).toBe(false);
+  });
+});
+
+// ─── Children have no weight goal ─────────────────────────────────────────────
+// A child's primary_goal is null (the model returns explicit null, not just an
+// omitted field). .optional() rejects null and failed the whole skeleton for any
+// family with a child; .nullish() must accept null, undefined, and a real goal.
+describe("primary_goal is nullable (children have no goal)", () => {
+  it("MemberPlanSchema accepts primary_goal: null", () => {
+    expect(MemberPlanSchema.safeParse({ ...makeMember(), primary_goal: null }).success).toBe(true);
+  });
+
+  it("SkeletonMemberSchema accepts primary_goal: null", () => {
+    const skeletonMember = {
+      member_id: "child-1",
+      member_name_ar: "سارة",
+      primary_goal: null,
+      daily_calories_target: 1400,
+      macros_target: makeMacros(),
+      days: [{ day_index: 0, day_name_ar: "السبت", meals: [{ slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة دجاج" }] }],
+    };
+    expect(SkeletonMemberSchema.safeParse(skeletonMember).success).toBe(true);
+  });
+
+  it("SkeletonMemberSchema still accepts an omitted goal and a real goal", () => {
+    const base = {
+      member_id: "mom",
+      daily_calories_target: 1800,
+      macros_target: makeMacros(),
+      days: [{ day_index: 0, day_name_ar: "السبت", meals: [{ slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة دجاج" }] }],
+    };
+    expect(SkeletonMemberSchema.safeParse(base).success).toBe(true);
+    expect(SkeletonMemberSchema.safeParse({ ...base, primary_goal: "fat_loss" }).success).toBe(true);
   });
 });

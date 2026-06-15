@@ -136,7 +136,9 @@ export const MemberPlanSchema = z.object({
   // Housekeeper view: the member's name rendered in her language/script.
   member_name_translated: z.string().optional(),
   member_name_translated_locale: z.enum(LOCALE_CODES).optional(),
-  primary_goal: z.enum(PRIMARY_GOALS).optional(),
+  // Children have no weight goal — the model returns null (not just omits it),
+  // so accept null/undefined as well as a goal. .optional() alone rejects null.
+  primary_goal: z.enum(PRIMARY_GOALS).nullish(),
   daily_calories_target: z.number(),
   macros_target: MacrosSchema,
   // Prompt asks for exactly 7; tolerate an occasional short week (the UI fills
@@ -201,7 +203,9 @@ export const SkeletonDaySchema = z.object({
 export const SkeletonMemberSchema = z.object({
   member_id: z.string().min(1),
   member_name_ar: z.string().optional(),
-  primary_goal: z.enum(PRIMARY_GOALS).optional(),
+  // Children have no weight goal — the model returns null. .optional() rejects an
+  // explicit null, which fails the whole skeleton for any family with a child.
+  primary_goal: z.enum(PRIMARY_GOALS).nullish(),
   daily_calories_target: z.number(),
   macros_target: MacrosSchema,
   days: z.array(SkeletonDaySchema).min(1).max(7),
