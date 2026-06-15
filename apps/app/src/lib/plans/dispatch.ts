@@ -275,7 +275,12 @@ export async function triggerPlanGeneration(params: {
         body: JSON.stringify({
           userId,
           mealPlanId,
-          existingPlan,
+          // Don't ship the prior plan by value — it grows with every carried-over
+          // member and, past ~3 members, crosses Netlify's background-function
+          // invoke payload limit → a platform 500 at invoke time (the symptom that
+          // blocked adding a 4th member). Send only the carry-over INTENT; the bg
+          // fn re-reads the prior plan from the DB itself (see fetchPriorPlan).
+          carryOver,
           feedback,
           independentRegen: effIndependentRegen,
           onlyMemberId,
@@ -425,7 +430,9 @@ export async function triggerPlanTranslation(params: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
         },
-        body: JSON.stringify({ mode: "translate", userId, mealPlanId, plan, locale }),
+        // Don't ship the whole plan in the body (same payload-limit reasoning as
+        // generation above) — the bg fn re-reads plan_data by mealPlanId.
+        body: JSON.stringify({ mode: "translate", userId, mealPlanId, locale }),
       },
     );
     if (!res.ok && res.status !== 202) {

@@ -14,7 +14,7 @@ import {
   hasPendingGeneration,
 } from "../../../../packages/plan-engine/src/generate";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
-import { LOCALE_CODES } from "../../../../packages/plan-engine/src/schema";
+import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
@@ -98,6 +98,49 @@ async function sbInsert(
     const text = await res.text().catch(() => "");
     throw new Error(`PostgREST insert ${table} → ${res.status} ${text}`);
   }
+}
+
+// Read a single plan_data row by id and validate it. Returns the parsed MealPlan
+// or null (no row / unparseable). Used by translate mode so the whole plan no
+// longer has to ride in the invocation body.
+async function fetchPlanById(
+  base: string,
+  serviceKey: string,
+  mealPlanId: string,
+): Promise<MealPlan | null> {
+  const row = await sbSelectOne(
+    base,
+    serviceKey,
+    "meal_plans",
+    `id=eq.${mealPlanId}&select=plan_data`,
+  );
+  if (!row) return null;
+  const parsed = MealPlanSchema.safeParse(row.plan_data);
+  return parsed.success ? parsed.data : null;
+}
+
+// The carry-over source for an incremental run: the user's latest READY plan
+// OTHER than the one we're generating now. createPlanRows inserts the new row as
+// 'generating', so the prior plan is unambiguously the newest 'ready' row with a
+// different id. Re-read here instead of receiving it by value — passing the prior
+// plan in the POST body grew the payload with every carried-over member and, past
+// ~3 members, crossed Netlify's background-function invoke payload limit → a
+// platform 500 at invoke time.
+async function fetchPriorPlan(
+  base: string,
+  serviceKey: string,
+  userId: string,
+  currentMealPlanId: string,
+): Promise<MealPlan | null> {
+  const row = await sbSelectOne(
+    base,
+    serviceKey,
+    "meal_plans",
+    `user_id=eq.${userId}&status=eq.ready&id=neq.${currentMealPlanId}&select=plan_data&order=created_at.desc&limit=1`,
+  );
+  if (!row) return null;
+  const parsed = MealPlanSchema.safeParse(row.plan_data);
+  return parsed.success ? parsed.data : null;
 }
 
 // ─── Context shaping (mirror of buildContext, but fed by PostgREST rows) ────
@@ -272,6 +315,9 @@ async function buildContextViaFetch(
       months_postpartum: (profile.months_postpartum as number | null) ?? null,
       high_risk_pregnancy: !!profile.high_risk_pregnancy,
       consulted_doctor: !!profile.consulted_doctor,
+      // Mirror buildContext.ts — mom's meal_mode was missing here, leaving it
+      // undefined on the prod context (PlanPromptContextMom requires it).
+      meal_mode: profile.meal_mode === "independent" ? "independent" : "shared",
     },
     family_members,
     family_wide: {
@@ -302,9 +348,10 @@ export default async (req: Request): Promise<Response> => {
   let body: {
     userId?: string;
     mealPlanId?: string;
-    existingPlan?: MealPlan | null;
+    // Carry-over INTENT only. When true the fn re-reads the prior plan from the DB
+    // (fetchPriorPlan) — the plan is no longer shipped in the body (payload limit).
+    carryOver?: boolean;
     mode?: "generate" | "translate";
-    plan?: MealPlan | null;
     locale?: LocaleCode;
     feedback?: string;
     independentRegen?: boolean;
@@ -314,7 +361,7 @@ export default async (req: Request): Promise<Response> => {
     // member name (generating_member_id), even with other members still incomplete.
     regenerateMemberId?: string;
     // Literal partial regenerate scope (regenerate-scope dialog). With this set,
-    // existingPlan is the WHOLE prior plan (target not stripped).
+    // the carried prior plan is kept WHOLE (target not stripped).
     regenScope?: "individual" | "shared" | "both";
     // Tier cap: when the family exceeds the plan limit, the allow-list of non-mom
     // beneficiary ids to generate this run (mom is always included). Others defer.
@@ -325,21 +372,28 @@ export default async (req: Request): Promise<Response> => {
   } catch {
     return new Response("Bad request", { status: 400 });
   }
-  const { userId, mealPlanId, existingPlan } = body;
+  const { userId, mealPlanId } = body;
   if (!userId || !mealPlanId) {
     return new Response("Missing userId or mealPlanId", { status: 400 });
   }
 
   // ── Translate mode: translate the existing plan IN PLACE (no regen) ──
   if (body.mode === "translate") {
-    if (!body.plan || !body.locale) {
-      return new Response("Missing plan or locale", { status: 400 });
+    if (!body.locale) {
+      return new Response("Missing locale", { status: 400 });
+    }
+    // Re-read the plan from the DB by id instead of taking it in the body.
+    const planToTranslate = await fetchPlanById(supabaseUrl, expected, mealPlanId);
+    if (!planToTranslate) {
+      // No row, or plan_data no longer parses — nothing to translate. Non-fatal:
+      // the maid view falls back to Arabic and re-triggers on her next visit.
+      return new Response("No plan to translate", { status: 200 });
     }
     const translateStartMs = Date.now();
     try {
       const { plan: translated, usage } = await translateMealPlan({
         anthropicApiKey: anthropicKey,
-        plan: body.plan,
+        plan: planToTranslate,
         locale: body.locale,
         // Persist each day as it lands (today-first) so the maid sees recipes
         // within seconds. The final update below is the complete snapshot.
@@ -387,6 +441,28 @@ export default async (req: Request): Promise<Response> => {
   try {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
     if (body.feedback) context.user_feedback = body.feedback;
+
+    // Carry-over source, re-read from the DB (not received by value — see
+    // fetchPriorPlan). A plain per-member regen strips the target so it
+    // regenerates entirely; a partial-scope regen keeps the WHOLE prior plan so
+    // the engine can preserve out-of-scope meals and recompute co-sharers. This
+    // mirrors the stripping triggerPlanGeneration did before it stopped sending
+    // the plan in the body.
+    let existingPlan: MealPlan | null = null;
+    if (body.carryOver) {
+      const prior = await fetchPriorPlan(supabaseUrl, expected, userId, mealPlanId);
+      if (prior) {
+        existingPlan =
+          body.regenerateMemberId && !body.regenScope
+            ? {
+                ...prior,
+                members: prior.members.filter(
+                  (m) => m.member_id !== body.regenerateMemberId,
+                ),
+              }
+            : prior;
+      }
+    }
 
     // One-at-a-time add: restrict this run to the existing plan's members plus
     // the single target, so other pending members are NOT generated here (they
