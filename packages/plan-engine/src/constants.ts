@@ -11,6 +11,39 @@
 // model — no code change needed; remove the env var to go back to Opus.
 export const PLAN_MODEL = process.env.PLAN_MODEL?.trim() || "claude-opus-4-7";
 
+// ── Tiered (per-phase) models ────────────────────────────────────────────
+// Generation has three phases with very different stakes:
+//   • Skeleton  — decides each member's calorie/macro TARGETS and plans the week.
+//                 For pregnancy/lactation/children/medical conditions this is real
+//                 reasoning + a safety surface, and it's tiny in output tokens, so
+//                 it stays on the strongest model (PLAN_MODEL).
+//   • Day       — expands named dishes into recipes that hit the targets. ~95% of
+//                 output tokens but mechanical given names+targets → cheaper/faster
+//                 model is the big cost/latency win.
+//   • Translate — purely mechanical (Arabic → housekeeper language) → cheapest model.
+// Each is independently overridable by env so prod can roll out / revert per phase
+// without a code change. Set e.g. PLAN_DAY_MODEL=claude-sonnet-4-6 to revert the
+// day phase to Sonnet. Defaults below encode the recommended tiered setup: skeleton
+// inherits PLAN_MODEL; day + translate default to Haiku.
+const HAIKU = "claude-haiku-4-5-20251001";
+export const SKELETON_MODEL = process.env.PLAN_SKELETON_MODEL?.trim() || PLAN_MODEL;
+export const DAY_MODEL = process.env.PLAN_DAY_MODEL?.trim() || HAIKU;
+export const TRANSLATE_MODEL = process.env.PLAN_TRANSLATE_MODEL?.trim() || HAIKU;
+
+/**
+ * Human-readable label for the model(s) a generation used, recorded in the audit
+ * rows (plan_generations.model, meal_plans.ai_model). When the skeleton and day
+ * phases use the same model it's just that id; otherwise a composite like
+ * "claude-sonnet-4-6+claude-haiku-4-5-20251001" so the audit reflects the tiered
+ * split. NOTE: this is a display/audit label only — cost_usd is computed per-call
+ * from each phase's actual model, never from this string.
+ */
+export function planModelLabel(): string {
+  return SKELETON_MODEL === DAY_MODEL
+    ? DAY_MODEL
+    : `${SKELETON_MODEL}+${DAY_MODEL}`;
+}
+
 // USD per million tokens, keyed by model id. cost_usd in plan_generations is an
 // internal audit figure (NOT the SAR price charged to users — that lives in
 // packages/config). Verify rates at https://docs.claude.com/en/docs/about-claude/pricing

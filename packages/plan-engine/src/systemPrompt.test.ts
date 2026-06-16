@@ -70,3 +70,33 @@ describe("buildDayPrompt — mom meal_mode", () => {
     expect(prompt).not.toContain("وجبات مستقلة (طبق خاص باسم مختلف)");
   });
 });
+
+describe("buildDayPrompt — token-lean output contract", () => {
+  const prompt = buildDayPrompt(makeMomContext("shared"), skeleton, 0, "اليوم 1");
+
+  it("asks for terse JSON keys", () => {
+    expect(prompt).toContain("d: number");
+    expect(prompt).toContain("ms: Array");
+    expect(prompt).toContain("st: string[]");
+    expect(prompt).toContain("mc: { p: number; cb: number; f: number }");
+  });
+
+  it("does not declare slot_name_ar as an output field (filled in code)", () => {
+    expect(prompt).not.toContain("slot_name_ar:");
+  });
+
+  it("caps prep steps at 3", () => {
+    expect(prompt).toContain("3 خطوات");
+  });
+
+  it("does NOT inline housekeeper translation even with a housekeeper locale", () => {
+    const hkPrompt = buildDayPrompt(
+      { ...makeMomContext("shared"), housekeeper_locale: "tl" },
+      skeleton,
+      0,
+      "اليوم 1",
+    );
+    expect(hkPrompt).not.toContain("recipe_name_translated");
+    expect(hkPrompt).not.toContain("ترجمة الوصفة للخادمة");
+  });
+});
