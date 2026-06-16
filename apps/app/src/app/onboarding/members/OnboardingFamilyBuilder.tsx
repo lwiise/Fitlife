@@ -171,7 +171,7 @@ export function OnboardingFamilyBuilder() {
             مين معك في البيت؟
           </h2>
           <p className="text-brand-ink-muted text-sm leading-relaxed">
-            اختاري الأفراد، ونكمل بياناتهم واحداً واحداً، ثم ننشئ خطة الجميع دفعة واحدة.
+            أضيفي عيلتك، ولكل واحد خطته — أطباق فردية أو مشتركة، بضغطة وحدة
           </p>
         </header>
 
