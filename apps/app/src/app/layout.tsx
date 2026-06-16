@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
-import { createClient } from "@/lib/supabase/server";
 import { SentryUserSync } from "./SentryUserSync";
 
 const tajawal = Tajawal({
@@ -26,26 +25,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  let userId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    userId = null;
-  }
-
   return (
     <html lang="ar" dir="rtl" className={tajawal.variable}>
       <body className="antialiased">
-        <SentryUserSync userId={userId} />
+        <SentryUserSync />
         {children}
       </body>
     </html>

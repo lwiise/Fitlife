@@ -11,7 +11,19 @@ const nextConfig: NextConfig = {
   // Marking it server-external tells Next.js not to bundle it for the server.
   serverExternalPackages: ["@react-pdf/renderer"],
 
+  // Tree-shake heavy barrel-style imports so only the icons/components actually
+  // used reach the client bundle (motion/react is eagerly imported across ~22
+  // marketing components). lucide-react is optimized by default; listed for clarity.
+  experimental: {
+    optimizePackageImports: ["motion/react", "lucide-react"],
+  },
+
   images: {
+    // Serve AVIF (smallest) with a WebP fallback. Cache optimized variants for a
+    // year — source assets are content-addressed/immutable, so revalidation churn
+    // is pure waste.
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 31536000,
     remotePatterns: [
       {
         protocol: "https",
