@@ -375,15 +375,6 @@ export default async function DashboardPage() {
             </a>
           </div>
         )}
-
-        <details className="mt-12 text-xs text-brand-ink-muted/40">
-          <summary className="cursor-pointer hover:text-brand-ink-muted transition-colors">
-            معلومات تشخيصية (للمطور فقط)
-          </summary>
-          <pre className="mt-2 p-3 bg-white/50 rounded-lg overflow-auto">
-            {JSON.stringify({ profile, familyMembers, latestPlan }, null, 2)}
-          </pre>
-        </details>
       </div>
     </main>
   );
