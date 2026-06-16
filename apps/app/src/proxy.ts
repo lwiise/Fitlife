@@ -11,8 +11,6 @@ import { updateSession } from "@/lib/supabase/middleware";
  * 3. Redirect authenticated users away from auth routes (no need to log in twice)
  */
 export async function proxy(request: NextRequest) {
-  const { response, user } = await updateSession(request);
-
   const pathname = request.nextUrl.pathname;
 
   const isAuthRoute = pathname.startsWith("/auth");
@@ -24,11 +22,20 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     pathname === "/" || pathname === "/privacy" || pathname === "/terms";
 
-  if (isApiRoute || isPublicAsset) {
+  // Public pages + static assets need no session: skip the Supabase getUser()
+  // round-trip entirely so these (statically prerendered) routes aren't gated
+  // on an auth network call at the edge. These routes never consume `user`.
+  if (isPublicAsset || isPublicRoute) {
+    return NextResponse.next();
+  }
+
+  const { response, user } = await updateSession(request);
+
+  if (isApiRoute) {
     return response;
   }
 
-  if (!user && !isAuthRoute && !isPublicRoute) {
+  if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect_to", pathname);
