@@ -7,6 +7,7 @@ import {
   runMealPlanGeneration,
   runMealPlanTranslation,
   hasPendingGeneration,
+  prepareSharedGroupRegen,
   MEMBER_GEN_MAX_ATTEMPTS,
   OnboardingIncompleteError,
   MedicalGateError,
@@ -55,6 +56,11 @@ export async function triggerPlanGeneration(params: {
   // One-at-a-time add: generate ONLY this member this run; carry everyone else
   // over verbatim (other pending members generate later, one at a time).
   onlyMemberId?: string;
+  // Shared-group regen (a new SHARED member was added): rebuild EVERY shared
+  // beneficiary together (mom if shared + every shared member + the newcomer),
+  // carrying independent members + the housekeeper verbatim. Mutually exclusive
+  // with onlyMemberId / regenerateMemberId.
+  regenerateSharedGroup?: boolean;
   // Per-member "new plan": the regenerated member gets fresh independent dishes
   // (not aligned to the family's shared dish grid). When omitted, it's derived
   // from the target member's meal_mode ('independent' → fresh dishes).
@@ -76,6 +82,7 @@ export async function triggerPlanGeneration(params: {
     carryOver = false,
     regenerateMemberId,
     onlyMemberId,
+    regenerateSharedGroup,
     independentRegen,
     regenScope,
     feedback,
@@ -88,7 +95,7 @@ export async function triggerPlanGeneration(params: {
   // generate up to the limit (mom + as many members as fit) and defer the rest,
   // which the dashboard then nudges to upgrade for. Single-member runs (add/edit)
   // and other denials (inactive/past_due/trial) still block.
-  const isFullRun = !onlyMemberId && !regenerateMemberId;
+  const isFullRun = !onlyMemberId && !regenerateMemberId && !regenerateSharedGroup;
   let capMaxPeople: number | null = null;
   if (!access.allowed) {
     if (
@@ -199,6 +206,17 @@ export async function triggerPlanGeneration(params: {
     );
   }
 
+  // Shared-group regen (a new SHARED member was added): rebuild every shared
+  // beneficiary together, carrying independent members + the housekeeper verbatim,
+  // so the new menu is genuinely shared and the whole group streams in day-by-day.
+  // No generating_member_id is stamped (>1 member regenerates) → the UI shows them
+  // all loading. See prepareSharedGroupRegen.
+  if (regenerateSharedGroup && existingPlan) {
+    const prep = prepareSharedGroupRegen(context, existingPlan);
+    existingPlan = prep.existingPlan;
+    context.family_members = prep.familyMembers;
+  }
+
   // Tier can't cover the whole family → cap this run to the limit: keep mom (always
   // beneficiary #1) + the first (max-1) other beneficiaries by display order; keep
   // housekeepers (they cook, they aren't beneficiaries). The dropped members stay in
@@ -285,6 +303,7 @@ export async function triggerPlanGeneration(params: {
           independentRegen: effIndependentRegen,
           onlyMemberId,
           regenerateMemberId,
+          regenerateSharedGroup,
           regenScope,
           limitMemberIds,
         }),

@@ -36,7 +36,11 @@ import {
   type LocaleCode,
 } from "./schema";
 import { PlanValidationError, AnthropicCallError } from "./errors";
-import { getBeneficiaries, type PlanPromptContext } from "./buildContext";
+import {
+  getBeneficiaries,
+  type PlanPromptContext,
+  type PlanPromptContextMember,
+} from "./buildContext";
 import { riyadhTodayISO, khaleejiDayName } from "./dates";
 
 // Accepts any Supabase client shape (cookie-typed or service-role admin).
@@ -681,6 +685,57 @@ function extractInScopeFresh(
     const arr = bySlot.get(m.slot);
     return arr && arr.length ? arr.shift()! : null;
   });
+}
+
+/**
+ * Prepare a carried-over plan + context for a SHARED-GROUP regen — used when a new
+ * SHARED member is added. Every shared beneficiary (mom if shared + each shared
+ * family member, including the newcomer) is rebuilt TOGETHER as one coherent menu
+ * that streams in day-by-day side by side; independent members and the housekeeper
+ * are carried verbatim. Each shared member's MEALS are emptied while the day shells
+ * are kept (so the week grid survives even when the WHOLE family is shared — that
+ * grid is what lets the plan open in place and stream day-by-day rather than falling
+ * back to a full-screen "generating" state). Emptied meals make the engine treat
+ * those members as incomplete (the family dish grid is seeded only from shared
+ * members' MEALED days, so an empty-meal grid → a fresh, genuinely-shared menu for
+ * the whole group). Returns the cleared plan + the context member list restricted to
+ * this run: shared members
+ * regenerate, already-in-plan independent members + the housekeeper are kept (carried),
+ * and pending NON-shared members not yet in the plan are dropped so they still
+ * generate later, one at a time. Pure — does not mutate its inputs.
+ */
+export function prepareSharedGroupRegen(
+  context: PlanPromptContext,
+  existingPlan: MealPlan,
+): { existingPlan: MealPlan; familyMembers: PlanPromptContextMember[] } {
+  const sharedIds = new Set<string>();
+  if (context.mom.meal_mode === "shared") sharedIds.add("mom");
+  for (const m of context.family_members)
+    if (m.role !== "housekeeper" && m.meal_mode === "shared") sharedIds.add(m.id);
+
+  const clearedPlan: MealPlan = {
+    ...existingPlan,
+    members: existingPlan.members.map((m) =>
+      sharedIds.has(m.member_id)
+        ? {
+            ...m,
+            // Keep the day shells (preserves week_grid / day-by-day loading), drop
+            // the meals so the engine regenerates this member.
+            days: m.days.map((d) => ({
+              ...d,
+              meals: [],
+              day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+            })),
+          }
+        : m,
+    ),
+  };
+
+  const inPlan = new Set(clearedPlan.members.map((m) => m.member_id));
+  const familyMembers = context.family_members.filter(
+    (m) => m.role === "housekeeper" || m.meal_mode === "shared" || inPlan.has(m.id),
+  );
+  return { existingPlan: clearedPlan, familyMembers };
 }
 
 /**
