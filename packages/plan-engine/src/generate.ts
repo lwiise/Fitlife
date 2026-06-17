@@ -219,6 +219,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Exponential backoff with full jitter. attempt is 1-based (first retry = 1).
 const MAX_RETRIES = 3;
+// Content re-rolls for ONE day, separate from the network retries above. A day
+// that hits max_tokens, returns un-parseable JSON, or fails the schema is a
+// CONTENT failure — isRetryable() only covers network errors (429/529/5xx/
+// timeout), so without this such a day was abandoned on the FIRST try, leaving
+// the user a multi-minute generation with one empty day ("تعذّر تجهيز هذا اليوم")
+// and only a full-member regen to recover. A truncated day is re-rolled at a
+// larger cap; a malformed/invalid day is just re-sampled. This is the day-loop
+// analogue of the skeleton phase's "retry once at 2x on truncation".
+const MAX_DAY_CONTENT_RETRIES = 2;
 function backoffMs(attempt: number): number {
   const base = 800 * 2 ** (attempt - 1); // 800, 1600, 3200
   return base + Math.floor(Math.random() * 400); // jitter avoids thundering herd
@@ -1283,10 +1292,12 @@ export async function generateMealPlan(params: {
       dayIndex,
       dayNameByIndex.get(dayIndex),
     );
-    // Size this day's cap + timeout to the members actually missing it.
-    const dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
+    // Size this day's cap + timeout to the members actually missing it. dayCap is
+    // mutable so a truncated (max_tokens) re-roll can ask for more room.
+    let dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
     const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
     let attempt = 0;
+    let contentAttempt = 0;
     for (;;) {
       try {
         const res = await streamAnthropic({
@@ -1463,6 +1474,24 @@ export async function generateMealPlan(params: {
           attempt++;
           await sleep(backoffMs(attempt));
           continue;
+        }
+        // Content failure (truncation / bad JSON / schema): re-roll a couple of
+        // times instead of abandoning the day. A fresh sample usually parses, and
+        // a truncated day just needs more room — so bump the cap on max_tokens,
+        // unless we're already at the model ceiling (another try would only
+        // truncate again, so fall through and give up).
+        if (
+          err instanceof PlanValidationError &&
+          contentAttempt < MAX_DAY_CONTENT_RETRIES
+        ) {
+          const truncated = err.message.includes("max_tokens");
+          if (!truncated || dayCap < MAX_OUTPUT_TOKENS) {
+            contentAttempt++;
+            if (truncated)
+              dayCap = Math.min(MAX_OUTPUT_TOKENS, Math.ceil(dayCap * 1.6));
+            await sleep(backoffMs(contentAttempt));
+            continue;
+          }
         }
         console.error(
           "[plan-generate] day failed (omitting)",
