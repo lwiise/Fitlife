@@ -31,7 +31,7 @@ const familyMembers: FamilyMember[] = [
   {
     label: "خطة للأب",
     sublabel: "اللي على حمية",
-    imageSrc: "/family-dad.png",
+    imageSrc: "/family-dad.webp",
     imageAlt: "صورة الأب — رجل خليجي يبتسم",
     accentColor: "#D9B0FC",
     textColor: "text-[#4E2490]",
@@ -39,7 +39,7 @@ const familyMembers: FamilyMember[] = [
   {
     label: "وجبات الأم",
     sublabel: "بسعرات محسوبة",
-    imageSrc: "/family-mom.png",
+    imageSrc: "/family-mom.webp",
     imageAlt: "صورة الأم — امرأة خليجية بحجاب تبتسم",
     accentColor: "#C5458F",
     textColor: "text-white",
@@ -47,7 +47,7 @@ const familyMembers: FamilyMember[] = [
   {
     label: "تطبخ للعائلة",
     sublabel: "بلغتها",
-    imageSrc: "/family-housekeeper.png",
+    imageSrc: "/family-housekeeper.webp",
     imageAlt: "صورة الخدامة — امرأة فلبينية تبتسم",
     accentColor: "#F2BB16",
     textColor: "text-[#4E2490]",
@@ -56,7 +56,7 @@ const familyMembers: FamilyMember[] = [
   {
     label: "للأولاد",
     sublabel: "حسب أعمارهم",
-    imageSrc: "/family-daughter.png",
+    imageSrc: "/family-daughter.webp",
     imageAlt: "صورة البنت — طفلة سعيدة",
     accentColor: "#4E2490",
     textColor: "text-white",
@@ -64,7 +64,7 @@ const familyMembers: FamilyMember[] = [
   {
     label: "كل البيت",
     sublabel: "في خطة واحدة",
-    imageSrc: "/family-son.png",
+    imageSrc: "/family-son.webp",
     imageAlt: "صورة الولد — طفل سعيد",
     accentColor: "#E89B5A",
     textColor: "text-[#1A1023]",
