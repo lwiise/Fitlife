@@ -604,26 +604,12 @@ export function buildDayPrompt(
   const dayName = dayNameOverride ?? DAY_NAMES_AR[dayIndex] ?? `اليوم ${dayIndex + 1}`;
   const isSolo = skeleton.members.length === 1;
 
-  // Housekeeper translation: when set, every meal must also carry the recipe in
-  // her language (produced in this same call). When absent, the prompt stays lean.
-  const hkLocale = context.housekeeper_locale;
-  const hkName = hkLocale ? HK_LANG_NAMES[hkLocale] : null;
-  const translationDirective =
-    hkLocale && hkName
-      ? `\n\n# ترجمة الوصفة للخادمة (إلزامي)
-الخدامة تطبخ وتقرأ بـ ${hkName}. لكل وجبة، أضيفي بجانب الحقول العربية:
-- recipe_name_translated: اسم الطبق بـ ${hkName}.
-- ingredients_translated: نفس المكونات (بنفس البنية والمقادير) وأسماؤها بـ ${hkName}.
-- prep_steps_translated: نفس خطوات prep_steps_ar مترجمة بـ ${hkName}، ترجمة طبيعية عملية كأنك تكتبين لطباخة تقرأ هذه اللغة كلغة أم (تجنّبي الترجمة الحرفية).
-الحقول العربية تبقى كما هي (هي المرجع للأم).`
-      : "";
-  const translationShape =
-    hkLocale && hkName
-      ? `
-      recipe_name_translated: string;        // اسم الطبق بـ ${hkName}
-      ingredients_translated: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: string }>;
-      prep_steps_translated: string[];       // خطوات الطبخ بـ ${hkName}`
-      : "";
+  // Housekeeper translation is NOT produced in this call. Generating each recipe
+  // twice (Arabic + fully translated, amounts and all) here roughly DOUBLED output
+  // tokens for maid households. Translation now runs only as a separate LEAN pass
+  // (buildTranslatePrompt → names + steps, no re-emitted amounts/macros): the
+  // background function calls translateMealPlan at end-of-run for maid households,
+  // and the maid view re-triggers it on demand. So the day prompt stays Arabic-only.
 
   const memberBlocks = skeleton.members
     .map((sm) => {
@@ -681,29 +667,27 @@ ${sharedRule}
 ${memberBlocks}${familyWideText(context)}${feedbackText(context)}
 
 # الإيجاز
-- prep_steps_ar: 3-4 خطوات قصيرة كحد أقصى.
-- الحقول الاختيارية (substitutions_ar، notes_ar، prep_time_minutes، cook_time_minutes، servings_count): اتركيها فارغة إلا عند ضرورة حقيقية.
-- قائمة مكونات موجزة. "سلطة حرة" → unit:"unlimited".
-- الكتابة بالعربية فقط، صيغة المؤنث، بدون علامات تعجب.${translationDirective}
+- st (خطوات التحضير): 3 خطوات قصيرة كحد أقصى، صيغة أمر مباشرة بلا حشو.
+- الحقول الاختيارية (sub، nt): اتركيها فارغة تماماً إلا عند ضرورة حقيقية.
+- قائمة مكونات موجزة. "سلطة حرة" → u:"unlimited".
+- الكتابة بالعربية فقط، صيغة المؤنث، بدون علامات تعجب.
 
 # الإخراج
-أرجعي JSON صالحاً فقط لهذا اليوم (لا day_total — نحسبه نحن). الشكل:
+أرجعي JSON صالحاً فقط لهذا اليوم. استخدمي **المفاتيح المختصرة التالية بالضبط** (لتصغير الحجم)، ولا تضيفي أي مفاتيح أخرى (لا day_total ولا slot_name_ar — نحسبهما نحن):
 \`\`\`ts
 type DaySlice = {
-  day_index: number;                       // ${dayIndex}
-  day_name_ar: string;                     // "${dayName}"
-  members: Array<{
-    member_id: string;                     // كما هو أعلاه
-    meals: Array<{
-      slot: "breakfast"|"lunch"|"dinner"|"snack";
-      slot_name_ar: string;
-      recipe_name_ar: string;
-      ingredients: Array<{ name_ar: string; amount: number; amount_min?: number; amount_max?: number; unit: "g"|"kg"|"ml"|"l"|"tbsp"|"tsp"|"cup"|"piece"|"serving"|"unlimited" }>;
-      prep_steps_ar: string[];${translationShape}
-      substitutions_ar?: string[];
-      notes_ar?: string;
-      calories: number;
-      macros: { protein_g: number; carbs_g: number; fat_g: number };
+  d: number;                               // day_index = ${dayIndex}
+  ms: Array<{                              // الأفراد (members)
+    id: string;                            // member_id كما هو أعلاه
+    m: Array<{                             // وجبات اليوم (meals)
+      s: "breakfast"|"lunch"|"dinner"|"snack";   // الوجبة (slot)
+      r: string;                           // اسم الطبق
+      ig: Array<{ n: string; a: number; mn?: number; mx?: number; u: "g"|"kg"|"ml"|"l"|"tbsp"|"tsp"|"cup"|"piece"|"serving"|"unlimited" }>;  // المكونات: n=الاسم، a=الكمية، mn/mx=نطاق اختياري، u=الوحدة
+      st: string[];                        // خطوات التحضير
+      sub?: string[];                      // بدائل (اختياري)
+      nt?: string;                         // ملاحظات (اختياري)
+      c: number;                           // السعرات
+      mc: { p: number; cb: number; f: number };  // ماكروز الحصة: p=بروتين، cb=كارب، f=دهون (جم)
     }>;
   }>;
 };

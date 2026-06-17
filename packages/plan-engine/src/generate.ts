@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  PLAN_MODEL,
+  SKELETON_MODEL,
+  DAY_MODEL,
+  TRANSLATE_MODEL,
+  planModelLabel,
   SKELETON_MAX_TOKENS,
   DAY_MAX_TOKENS,
   DAY_CONCURRENCY,
@@ -48,6 +51,89 @@ export interface GenerateResult {
   };
 }
 
+// Static slot → Arabic label. The day prompt no longer asks the model to echo
+// slot_name_ar (a per-meal token cost for a value derivable from `slot`); we fill
+// it here. Both snacks collapse to "سناك" — the morning/evening snack nuance the
+// skeleton might carry is not worth re-emitting on every meal.
+const SLOT_NAME_AR: Record<string, string> = {
+  breakfast: "الفطور",
+  lunch: "الغداء",
+  dinner: "العشاء",
+  snack: "سناك",
+};
+
+/**
+ * Expand a TERSE-keyed day slice (the compact JSON the day prompt asks for, to cut
+ * output tokens) into the canonical DaySlice shape that DaySliceSchema and the rest
+ * of the engine expect, and fill slot_name_ar from slot. Tolerant of canonical keys
+ * too (`n ?? name_ar` etc.), so a meal the model emits in full-key form still parses.
+ * Pure and total: returns a fresh object; malformed input falls through unchanged to
+ * zod validation (which yields the existing "failed validation" error). `??` (not
+ * `||`) so a legitimate 0 amount/calorie is preserved.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function expandTerseDaySlice(raw: unknown): any {
+  if (raw == null || typeof raw !== "object") return raw;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as Record<string, any>;
+  const members = r.ms ?? r.members;
+  if (!Array.isArray(members)) return raw;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const expandIngredient = (g: any) => {
+    if (g == null || typeof g !== "object") return g;
+    const out: Record<string, unknown> = {
+      name_ar: g.n ?? g.name_ar,
+      amount: g.a ?? g.amount,
+      unit: g.u ?? g.unit,
+    };
+    const mn = g.mn ?? g.amount_min;
+    const mx = g.mx ?? g.amount_max;
+    if (mn != null) out.amount_min = mn;
+    if (mx != null) out.amount_max = mx;
+    return out;
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const expandMeal = (m: any) => {
+    if (m == null || typeof m !== "object") return m;
+    const slot = m.s ?? m.slot;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mc = (m.mc ?? m.macros ?? {}) as Record<string, any>;
+    const out: Record<string, unknown> = {
+      slot,
+      slot_name_ar:
+        m.slot_name_ar ??
+        (typeof slot === "string" ? SLOT_NAME_AR[slot] : undefined) ??
+        slot,
+      recipe_name_ar: m.r ?? m.recipe_name_ar,
+      ingredients: (m.ig ?? m.ingredients ?? []).map(expandIngredient),
+      prep_steps_ar: m.st ?? m.prep_steps_ar ?? [],
+      calories: m.c ?? m.calories,
+      macros: {
+        protein_g: mc.p ?? mc.protein_g,
+        carbs_g: mc.cb ?? mc.carbs_g,
+        fat_g: mc.f ?? mc.fat_g,
+      },
+    };
+    const sub = m.sub ?? m.substitutions_ar;
+    if (sub != null) out.substitutions_ar = sub;
+    const nt = m.nt ?? m.notes_ar;
+    if (nt != null) out.notes_ar = nt;
+    return out;
+  };
+
+  return {
+    day_index: r.d ?? r.day_index,
+    ...(r.day_name_ar != null ? { day_name_ar: r.day_name_ar } : {}),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    members: members.map((sm: any) => ({
+      member_id: sm.id ?? sm.member_id,
+      meals: (sm.m ?? sm.meals ?? []).map(expandMeal),
+    })),
+  };
+}
+
 /**
  * Synchronously insert the placeholder rows so the polling UI has something to
  * watch. Fast (<1s). Returns the new meal_plan id.
@@ -63,7 +149,7 @@ export async function createPlanRows(
     user_id: userId,
     status: "generating",
     plan_data: {},
-    ai_model: PLAN_MODEL,
+    ai_model: planModelLabel(),
   });
   if (insertMealError) {
     throw new Error(`Failed to create meal_plan row: ${insertMealError.message}`);
@@ -74,7 +160,7 @@ export async function createPlanRows(
     .insert({
       user_id: userId,
       meal_plan_id: mealPlanId,
-      model: PLAN_MODEL,
+      model: planModelLabel(),
       status: "started",
       started_at: new Date().toISOString(),
     });
@@ -656,6 +742,10 @@ export async function generateMealPlan(params: {
   } = params;
   let totalIn = 0;
   let totalOut = 0;
+  // Tiered models: skeleton and day phases may run on different models with
+  // different per-token prices, so cost is summed per call from each phase's
+  // actual model rather than re-priced once at the end with a single model.
+  let totalCost = 0;
 
   // The week is anchored to the generation day (carried over on incremental
   // member changes). Day names are computed from this anchor, not the model.
@@ -903,7 +993,7 @@ export async function generateMealPlan(params: {
     const runSkeleton = (maxTokens: number) =>
       streamAnthropic({
         apiKey: anthropicApiKey,
-        model: PLAN_MODEL,
+        model: SKELETON_MODEL,
         maxTokens,
         systemStatic: STATIC_SYSTEM,
         systemPrompt: skeletonSystemPrompt,
@@ -911,6 +1001,7 @@ export async function generateMealPlan(params: {
     let sk = await runSkeleton(SKELETON_MAX_TOKENS);
     totalIn += sk.tokensIn;
     totalOut += sk.tokensOut;
+    totalCost += computeCostUsd(sk.tokensIn, sk.tokensOut, SKELETON_MODEL);
     // A truncated skeleton (stop_reason=max_tokens) yields invalid JSON and kills
     // the whole generation. Retry ONCE at double the cap before giving up — counts
     // the wasted first attempt's tokens toward cost accounting.
@@ -922,6 +1013,7 @@ export async function generateMealPlan(params: {
       sk = await runSkeleton(retryMax);
       totalIn += sk.tokensIn;
       totalOut += sk.tokensOut;
+      totalCost += computeCostUsd(sk.tokensIn, sk.tokensOut, SKELETON_MODEL);
       if (sk.stopReason === "max_tokens")
         throw new PlanValidationError(
           `Skeleton hit max_tokens (${retryMax})`,
@@ -1177,19 +1269,26 @@ export async function generateMealPlan(params: {
       try {
         const res = await streamAnthropic({
           apiKey: anthropicApiKey,
-          model: PLAN_MODEL,
+          model: DAY_MODEL,
           maxTokens: DAY_MAX_TOKENS,
           systemStatic: STATIC_SYSTEM,
           systemPrompt: prompt,
         });
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
+        totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
         if (res.stopReason === "max_tokens")
           throw new PlanValidationError(
             `Day ${dayIndex} hit max_tokens (${DAY_MAX_TOKENS})`,
             res.text,
           );
-        const parsed = JSON.parse(stripMarkdownFence(res.text));
+        // The day prompt asks for a terse-keyed slice (short keys to cut output
+        // tokens); expand it back to the canonical DaySlice shape — and fill
+        // slot_name_ar from slot — BEFORE validation. The expander tolerates
+        // canonical keys too, so an occasional non-terse meal still parses.
+        const parsed = expandTerseDaySlice(
+          JSON.parse(stripMarkdownFence(res.text)),
+        );
         const r = DaySliceSchema.safeParse(parsed);
         if (!r.success)
           throw new PlanValidationError(
@@ -1197,14 +1296,6 @@ export async function generateMealPlan(params: {
             res.text,
           );
         const slice = r.data;
-        // Stamp the translation locale on the freshly-generated meals in code
-        // (don't trust the model to echo it).
-        if (context.housekeeper_locale) {
-          for (const sm of slice.members)
-            for (const meal of sm.meals)
-              if (meal.prep_steps_translated && meal.prep_steps_translated.length > 0)
-                meal.prep_steps_translated_locale = context.housekeeper_locale;
-        }
 
         // Re-sync shared meals across the WHOLE family for this day — not just the
         // members regenerated now. The fresh members' raw single portions plus every
@@ -1484,7 +1575,7 @@ export async function generateMealPlan(params: {
     usage: {
       input_tokens: totalIn,
       output_tokens: totalOut,
-      cost_usd: computeCostUsd(totalIn, totalOut, PLAN_MODEL),
+      cost_usd: totalCost,
     },
     missingDays: [...failedDays].sort((a, b) => a - b),
   };
@@ -1791,7 +1882,7 @@ export async function translateMealPlan(params: {
         try {
           const res = await streamAnthropic({
             apiKey: anthropicApiKey,
-            model: PLAN_MODEL,
+            model: TRANSLATE_MODEL,
             maxTokens: DAY_MAX_TOKENS,
             systemPrompt: buildNameTranslatePrompt(
               [{ i: 0, name_ar: member.member_name_ar }],
@@ -1868,7 +1959,7 @@ export async function translateMealPlan(params: {
         try {
           const res = await streamAnthropic({
             apiKey: anthropicApiKey,
-            model: PLAN_MODEL,
+            model: TRANSLATE_MODEL,
             maxTokens: DAY_MAX_TOKENS,
             systemPrompt: buildTranslatePrompt(items, locale),
             userMessage: "ترجمي الآن.",
@@ -1941,8 +2032,8 @@ export async function translateMealPlan(params: {
     usage: {
       input_tokens: totalIn,
       output_tokens: totalOut,
-      cost_usd: computeCostUsd(totalIn, totalOut, PLAN_MODEL),
-      model: PLAN_MODEL,
+      cost_usd: computeCostUsd(totalIn, totalOut, TRANSLATE_MODEL),
+      model: TRANSLATE_MODEL,
     },
   };
 }
