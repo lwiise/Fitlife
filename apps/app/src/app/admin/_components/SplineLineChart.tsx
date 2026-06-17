@@ -151,7 +151,12 @@ export function SplineLineChart({
                 <stop
                   offset="0%"
                   stopColor="var(--color-brand-purple-900)"
-                  stopOpacity="0.16"
+                  stopOpacity="0.28"
+                />
+                <stop
+                  offset="60%"
+                  stopColor="var(--color-brand-purple-900)"
+                  stopOpacity="0.1"
                 />
                 <stop
                   offset="100%"

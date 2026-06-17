@@ -35,11 +35,10 @@ export function SubscriberTable({
 }) {
   const th =
     "whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase text-brand-ink/70";
-  // Frozen first column: opaque bg occludes content scrolling beneath it; the
-  // header corner sits above the body sticky cells (higher z).
+  // Frozen first column: an OPAQUE per-row-parity bg occludes content scrolling
+  // beneath it (zebra-aware); the header corner sits above the body sticky cells.
   const stickyHead = "sticky start-0 z-30 bg-surface-elevated";
-  const stickyCell =
-    "sticky start-0 z-10 bg-surface-elevated group-hover:bg-brand-surface/60";
+  const stickyBase = "sticky start-0 z-10 group-hover:bg-brand-purple-900/[0.06]";
 
   return (
     <div className="space-y-2">
@@ -131,15 +130,21 @@ export function SubscriberTable({
                 </td>
               </tr>
             ) : (
-              result.rows.map((r) => {
+              result.rows.map((r, i) => {
                 const href = `/admin/subscribers/${r.userId}`;
+                // Zebra: odd rows get a lavender tint; even rows stay white. The
+                // frozen first cell must use the SAME opaque parity bg to occlude.
+                const zebra = i % 2 === 1;
+                const rowTint = zebra ? "bg-admin-surface" : "bg-surface-elevated";
                 return (
                   <tr
                     key={r.userId}
-                    className="group border-t border-brand-ink/5 align-middle transition-colors hover:bg-brand-surface/60"
+                    className={`group border-t border-brand-ink/5 align-middle transition-colors hover:bg-brand-purple-900/[0.06] ${
+                      zebra ? "bg-admin-surface" : ""
+                    }`}
                   >
                     {/* Name + email — frozen first column, links to the drill-down */}
-                    <td className={`${stickyCell} px-3 py-2.5`}>
+                    <td className={`${stickyBase} ${rowTint} px-3 py-2.5`}>
                       <Link href={href} className="group/name flex flex-col gap-0.5">
                         <span className="flex items-center gap-1.5 font-medium text-brand-ink group-hover/name:text-brand-purple-900">
                           {r.displayName || "—"}

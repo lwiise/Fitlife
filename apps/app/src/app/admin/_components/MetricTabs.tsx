@@ -57,24 +57,24 @@ export function MetricTabs({
                 metric: key === "gross_revenue" ? undefined : key,
               })}
               aria-current={active ? "true" : undefined}
-              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl border p-3 transition-colors ${
+              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl bg-gradient-to-br from-brand-purple-900 to-brand-purple-700 p-3 text-white transition-all ${
                 active
-                  ? "border-brand-purple-900/50 bg-brand-surface ring-1 ring-inset ring-brand-purple-900/20"
-                  : "border-brand-ink/10 bg-surface-elevated hover:border-brand-ink/25"
+                  ? "shadow-md ring-2 ring-inset ring-white/70"
+                  : "opacity-90 hover:opacity-100"
               }`}
             >
               {active ? (
                 <span
                   aria-hidden="true"
-                  className="absolute inset-x-0 top-0 h-[3px] bg-brand-purple-900"
+                  className="absolute inset-x-0 top-0 h-[3px] bg-white"
                 />
               ) : null}
-              <span className="text-xs font-semibold uppercase text-brand-ink/70">
+              <span className="text-xs font-semibold uppercase text-white/70">
                 {metricLabel(key, locale)}
               </span>
               <span
                 dir="ltr"
-                className={`font-extrabold leading-none tabular-nums text-brand-ink ${
+                className={`font-extrabold leading-none tabular-nums text-white ${
                   active ? "text-2xl sm:text-3xl" : "text-xl"
                 }`}
               >
@@ -84,12 +84,13 @@ export function MetricTabs({
                 <TrendPill
                   trend={mv.delta}
                   polarity={metricPolarity(key)}
+                  onFilled
                   locale={locale}
                 />
                 {mv.current.length >= 2 ? (
                   <Sparkline
                     points={mv.current}
-                    className={active ? "text-brand-purple-900" : "text-brand-ink/40"}
+                    className={active ? "text-white" : "text-white/60"}
                   />
                 ) : null}
               </div>
