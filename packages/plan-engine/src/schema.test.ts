@@ -340,7 +340,7 @@ describe("planHasContent()", () => {
 
   it("returns false when every day has empty meals", () => {
     const plan = parsePlan(makeValidPlan());
-    plan.members[0].days[0].meals = [];
+    plan.members[0]!.days[0]!.meals = [];
     expect(planHasContent(plan)).toBe(false);
   });
 

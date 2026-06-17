@@ -1,0 +1,54 @@
+name: CI
+
+# Quality gate for the monorepo. Runs on every PR and on direct pushes to main.
+# There was previously no CI, and a Stop hook auto-pushed every change to main
+# (which auto-deploys both Netlify sites). To make this gate actually protect
+# production, enable branch protection on `main` in GitHub: require the "verify"
+# check + a PR review, and disallow direct pushes. Netlify deploys main, so once
+# nothing lands on main without a green run, prod only gets code that passed CI.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: type-check / lint / test / build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      # Node 20 matches the Netlify deploy target (NODE_VERSION in netlify.toml).
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm type-check
+      # apps/web is dead code with lint errors we're not fixing; exclude it for
+      # now and drop this --filter once apps/web is deleted.
+      - name: Lint
+        run: pnpm exec turbo run lint --filter='!@fitlife/web'
+      - name: Test
+        run: pnpm test
+      # env.ts validates NEXT_PUBLIC_* at module load, so `next build` needs
+      # non-empty placeholders. These are throwaway build-time values, NOT
+      # secrets (server secrets are read lazily at request time).
+      - name: Build
+        run: pnpm build:app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          NEXT_PUBLIC_APP_URL: https://app.example.com
+          NEXT_PUBLIC_WEB_URL: https://web.example.com
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Q0ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldC0xMjM0NQ==

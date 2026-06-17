@@ -41,8 +41,7 @@
       "Bash(git branch:*)",
       "Bash(git show:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git commit:*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -54,6 +53,7 @@
       "Bash(npm publish:*)"
     ],
     "ask": [
+      "Bash(git push:*)",
       "Bash(git checkout:*)",
       "Bash(git merge:*)",
       "Bash(git rebase:*)",
@@ -62,20 +62,6 @@
     ]
   },
   "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "if (git status --porcelain) { git add -A; git commit -m ('auto: ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')); git push origin main }",
-            "async": true,
-            "timeout": 60,
-            "statusMessage": "Auto-committing and pushing"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
