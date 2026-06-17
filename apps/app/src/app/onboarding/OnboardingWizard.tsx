@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Database } from "@/lib/supabase/database.types";
 import { saveProfileStep, saveFamilyMembers, completeOnboarding } from "./actions";
 import type { OnboardingState } from "./schema";

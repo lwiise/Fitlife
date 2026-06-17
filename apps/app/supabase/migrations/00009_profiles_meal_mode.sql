@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Fit Life 2.0 — profiles.meal_mode (mom: shared vs own meals)
 -- ============================================================================
--- Migration: 00008
+-- Migration: 00009
 -- Created: 2026-06-11
 --
 -- Mirror of 00007 (family_members.meal_mode) for the account owner ("mom"),

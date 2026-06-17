@@ -6,7 +6,9 @@ import {
   computeCostUsd,
   PLAN_MODEL,
 } from "@fitlife/plan-engine";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/database.types";
 import { getAnthropicKey } from "@/lib/env";
 import { hasAdvisorAccess } from "@/lib/subscription/access";
 import { buildHouseholdContext } from "@/lib/chat/context";
@@ -39,7 +41,10 @@ const bodySchema = z.object({
  * plan/profile/family writes, no generation trigger, no admin client, no tools.
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  // Typed as the supabase-js client so the .insert() below validates columns:
+  // the @supabase/ssr return type trips a postgrest-js@2.106 generic bug that
+  // resolves write params to `never` (same one-cast pattern as lib/admin/db.ts).
+  const supabase = (await createClient()) as unknown as SupabaseClient<Database>;
   const {
     data: { user },
     error: authError,
@@ -111,7 +116,7 @@ export async function POST(request: Request) {
             tokens_in: result.tokensIn,
             tokens_out: result.tokensOut,
             cost_usd: computeCostUsd(result.tokensIn, result.tokensOut, PLAN_MODEL),
-          } as never);
+          });
         } catch (logErr) {
           console.error("[chat] usage log failed", logErr);
         }

@@ -304,7 +304,7 @@ export default function Pricing() {
   const topInView = useInView(topRef, { amount: 0.3, once: true });
 
   const topInit = reduced ? false : { opacity: 0, y: 15 };
-  const topAnimate = (delay: number) =>
+  const topAnimate = (_delay: number) =>
     reduced
       ? undefined
       : topInView
