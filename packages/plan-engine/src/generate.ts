@@ -4,9 +4,12 @@ import {
   DAY_MODEL,
   TRANSLATE_MODEL,
   planModelLabel,
-  SKELETON_MAX_TOKENS,
+  MAX_OUTPUT_TOKENS,
   DAY_MAX_TOKENS,
-  DAY_CONCURRENCY,
+  skeletonMaxTokens,
+  dayMaxTokens,
+  bigCallTimeoutMs,
+  dayConcurrency,
   MEMBER_GEN_MAX_ATTEMPTS,
 } from "./constants";
 import { z } from "zod";
@@ -990,6 +993,11 @@ export async function generateMealPlan(params: {
       context,
       needsSkeleton.map((b) => b.member_id),
     );
+    // Cap + timeout scale with the members being skeletoned: a full family-tier
+    // run (up to 6) emits a week of dish names per member and was truncating at
+    // the old fixed 16000, which threw and failed the WHOLE generation.
+    const skeletonCap = skeletonMaxTokens(needsSkeleton.length);
+    const skeletonTimeout = bigCallTimeoutMs(needsSkeleton.length, false);
     const runSkeleton = (maxTokens: number) =>
       streamAnthropic({
         apiKey: anthropicApiKey,
@@ -997,18 +1005,20 @@ export async function generateMealPlan(params: {
         maxTokens,
         systemStatic: STATIC_SYSTEM,
         systemPrompt: skeletonSystemPrompt,
+        timeoutMs: skeletonTimeout,
       });
-    let sk = await runSkeleton(SKELETON_MAX_TOKENS);
+    let sk = await runSkeleton(skeletonCap);
     totalIn += sk.tokensIn;
     totalOut += sk.tokensOut;
     totalCost += computeCostUsd(sk.tokensIn, sk.tokensOut, SKELETON_MODEL);
     // A truncated skeleton (stop_reason=max_tokens) yields invalid JSON and kills
-    // the whole generation. Retry ONCE at double the cap before giving up — counts
-    // the wasted first attempt's tokens toward cost accounting.
+    // the whole generation. Retry ONCE at double the cap (clamped to the model
+    // ceiling) before giving up — counts the wasted first attempt's tokens toward
+    // cost accounting.
     if (sk.stopReason === "max_tokens") {
-      const retryMax = SKELETON_MAX_TOKENS * 2;
+      const retryMax = Math.min(MAX_OUTPUT_TOKENS, skeletonCap * 2);
       console.warn(
-        `[plan-generate] skeleton truncated at ${SKELETON_MAX_TOKENS} — retrying with ${retryMax}`,
+        `[plan-generate] skeleton truncated at ${skeletonCap} — retrying with ${retryMax}`,
       );
       sk = await runSkeleton(retryMax);
       totalIn += sk.tokensIn;
@@ -1246,7 +1256,16 @@ export async function generateMealPlan(params: {
   emit();
 
   // ── Phase 2: expand each missing day; per day, only the members missing it ──
-  await mapWithConcurrency(daysToGenerate, DAY_CONCURRENCY, async (dayIndex) => {
+  // Per-day cap, timeout, and loop concurrency all scale with the work: a big
+  // independent family with a housekeeper translation emits ~6× the recipes of a
+  // solo plan, so a fixed cap truncated days (dropping them) and a fixed 4-min
+  // timeout aborted them; parallelizing keeps 7 big days inside the function budget.
+  const hasTranslation = !!context.housekeeper_locale;
+  const dayLoopConcurrency = dayConcurrency(
+    membersToGenerate.length,
+    hasTranslation,
+  );
+  await mapWithConcurrency(daysToGenerate, dayLoopConcurrency, async (dayIndex) => {
     const dayMemberIds = new Set(
       membersToGenerate
         .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
@@ -1264,22 +1283,26 @@ export async function generateMealPlan(params: {
       dayIndex,
       dayNameByIndex.get(dayIndex),
     );
+    // Size this day's cap + timeout to the members actually missing it.
+    const dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
+    const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
     let attempt = 0;
     for (;;) {
       try {
         const res = await streamAnthropic({
           apiKey: anthropicApiKey,
           model: DAY_MODEL,
-          maxTokens: DAY_MAX_TOKENS,
+          maxTokens: dayCap,
           systemStatic: STATIC_SYSTEM,
           systemPrompt: prompt,
+          timeoutMs: dayTimeout,
         });
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
         totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
         if (res.stopReason === "max_tokens")
           throw new PlanValidationError(
-            `Day ${dayIndex} hit max_tokens (${DAY_MAX_TOKENS})`,
+            `Day ${dayIndex} hit max_tokens (${dayCap})`,
             res.text,
           );
         // The day prompt asks for a terse-keyed slice (short keys to cut output
