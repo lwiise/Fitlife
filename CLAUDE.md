@@ -108,8 +108,13 @@ Before building ANY section, you must:
 ## Current Database Schema (verified 05/26/2026)
 
 Point-in-time snapshot of the **production** `public` schema (from `information_schema.columns`).
-This is the source of truth for column names — reconcile `apps/app/src/lib/supabase/database.types.ts`
-to it if they differ. `ARRAY` = Postgres array (`text[]`). `nullable` maps `is_nullable` (YES→yes / NO→no).
+This prose table is a human-readable reference for column names. `ARRAY` = Postgres array
+(`text[]`). `nullable` maps `is_nullable` (YES→yes / NO→no).
+
+**`database.types.ts` is now GENERATED, not hand-maintained.** Regenerate it from the schema
+with `pnpm --filter @fitlife/app db:types` (runs `supabase gen types typescript --local`) — do
+NOT edit `apps/app/src/lib/supabase/database.types.ts` by hand. The generated file is the typed
+source of truth used by the code; the snapshot below is just documentation.
 
 ### family_members
 

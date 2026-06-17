@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Fit Life 2.0 — Admin audit log (PDPL accountability for back-office access)
 -- ============================================================================
--- Migration: 00009
+-- Migration: 00010
 -- Created: 2026-06-07
 --
 -- Every time an admin views a subscriber's data through /admin we record an
