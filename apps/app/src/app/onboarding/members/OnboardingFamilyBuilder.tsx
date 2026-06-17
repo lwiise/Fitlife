@@ -207,16 +207,15 @@ export function OnboardingFamilyBuilder() {
             {totalSelected > 0 ? "التالي — أكملي بيانات العائلة" : "جاهزة — أنشئي خطتي"}
           </button>
 
-          {/* Family is optional — let her skip and add them later from /family. */}
-          {totalSelected > 0 && (
-            <button
-              type="button"
-              onClick={finalize}
-              className="w-full min-h-11 text-center text-brand-ink-muted hover:text-brand-ink text-sm font-bold py-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-            >
-              تخطّي الآن — أضيفهم لاحقاً
-            </button>
-          )}
+          {/* Family is optional — let her skip and add them later from /family.
+              Always visible so the way out is clear before any selection. */}
+          <button
+            type="button"
+            onClick={finalize}
+            className="w-full min-h-11 text-center text-brand-ink-muted hover:text-brand-ink text-sm font-bold py-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          >
+            تخطّي الآن — أضيفهم لاحقاً
+          </button>
         </div>
       </div>
     </div>
