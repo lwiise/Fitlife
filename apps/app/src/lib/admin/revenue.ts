@@ -26,6 +26,15 @@ export function sarToUsd(sar: number): number {
   return Math.round(sar * SAR_TO_USD_RATE * 100) / 100;
 }
 
+/**
+ * Convert a USD amount to SAR at the platform rate. Inverse of `sarToUsd`.
+ * Returned unrounded — the formatter (`fmtSar`) applies display precision so
+ * small per-account/per-member figures keep their cents.
+ */
+export function usdToSar(usd: number): number {
+  return usd / SAR_TO_USD_RATE;
+}
+
 export interface MrrBreakdown {
   mrrSar: number;
   arrSar: number;

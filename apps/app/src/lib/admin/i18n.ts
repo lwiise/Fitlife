@@ -387,6 +387,24 @@ const STRINGS = {
   kpi_active_users: { ar: "المستخدمون النشطون", en: "Active users" },
   per_account: { ar: "لكل حساب", en: "per account" },
   per_beneficiary: { ar: "لكل مستفيد", en: "per beneficiary" },
+  cost_efficiency: { ar: "التكلفة والكفاءة", en: "Cost & efficiency" },
+  ai_billed_usd_note: {
+    ar: "تُحتسب تكلفة الذكاء بالدولار وتُعرض بالريال وفق سعر الصرف المعتمد.",
+    en: "AI is billed in USD; shown in SAR at the platform rate.",
+  },
+
+  // ── Overview: audience lockup (relating total / paying / active) ──
+  audience_label: { ar: "الحسابات", en: "Audience" },
+  audience_total: { ar: "إجمالي الحسابات", en: "Total accounts" },
+  audience_caption: {
+    ar: "إجمالي الحسابات ← الاشتراكات المدفوعة ← الحسابات النشطة في الفترة",
+    en: "Accounts → paying subscriptions → active in the selected period",
+  },
+
+  // ── Overview: subscribers table legend / affordances ──
+  table_legend_label: { ar: "دليل الرموز", en: "Legend" },
+  view_subscriber: { ar: "تفاصيل المشترك", en: "View subscriber" },
+  info_more: { ar: "تفاصيل إضافية", en: "More info" },
 
   // ── Overview: Kajabi-style chart controls ──
   range_24h: { ar: "آخر ٢٤ ساعة", en: "Last 24h" },
@@ -404,6 +422,8 @@ const STRINGS = {
   delta_label: { ar: "التغيّر", en: "Change" },
   customize_metrics: { ar: "تخصيص المؤشرات", en: "Customize metrics" },
   currency_label: { ar: "ر.س", en: "SAR" },
+  currency_usd_label: { ar: "دولار", en: "USD" },
+  currency_group_label: { ar: "عملة التكلفة", en: "Cost currency" },
 
   // ── Overview: metric labels ──
   metric_gross_revenue: { ar: "إجمالي الإيراد", en: "Gross revenue" },

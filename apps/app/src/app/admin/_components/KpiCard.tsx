@@ -35,6 +35,7 @@ export function KpiCard({
   polarity = "positive",
   accent = "purple",
   sparkline,
+  className = "",
   locale,
 }: {
   label: string;
@@ -45,10 +46,14 @@ export function KpiCard({
   accent?: Accent;
   /** Optional in-window series for a decorative trend sparkline. */
   sparkline?: number[];
+  /** Layout-only extra classes (e.g. column span). */
+  className?: string;
   locale: AdminLocale;
 }) {
   return (
-    <div className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 ps-5">
+    <div
+      className={`relative flex flex-col gap-2 overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 ps-5 ${className}`}
+    >
       <span
         aria-hidden="true"
         className={`absolute inset-y-0 start-0 w-[3px] ${SPINE[accent]}`}

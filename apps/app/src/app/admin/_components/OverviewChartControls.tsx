@@ -12,9 +12,9 @@ function pill(active: boolean): string {
 
 /**
  * Kajabi-style filter bar — all URL-param driven (zero client JS). Date presets
- * + custom-range GET form, interval grouping, a comparison toggle, and a static
- * SAR label (this product is SAR-only — no currency menu). Mirrors the admin's
- * server-rendered pill pattern.
+ * + custom-range GET form, interval grouping, and a comparison toggle. The chart
+ * plots SAR-native revenue metrics, so currency lives with the cost strip (the
+ * only USD-billed figures), not here. Mirrors the server-rendered pill pattern.
  */
 export function OverviewChartControls({
   locale,
@@ -134,11 +134,6 @@ export function OverviewChartControls({
           {comparisonOn ? t("compare_prior", locale) : t("compare_off", locale)}
         </span>
       </Link>
-
-      {/* Static currency (SAR-only) */}
-      <span className="inline-flex min-h-11 items-center rounded-lg border border-brand-ink/10 bg-brand-surface px-3 text-sm font-medium text-brand-ink-muted">
-        {t("currency_label", locale)}
-      </span>
     </div>
   );
 }

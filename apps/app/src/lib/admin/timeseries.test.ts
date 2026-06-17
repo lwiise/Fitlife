@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeActiveUsersInRange,
   computeAiCostInRange,
+  computeAiCostSeries,
   computeBeneficiaryTotal,
   computeMetricSeries,
   computeMetricView,
@@ -187,5 +189,36 @@ describe("computeAiCostInRange", () => {
 describe("computeBeneficiaryTotal", () => {
   it("counts one owner per account plus non-housekeeper members", () => {
     expect(computeBeneficiaryTotal(3, [{ role: "daughter" }, { role: "son" }, { role: "housekeeper" }])).toBe(5);
+  });
+});
+
+describe("computeAiCostSeries", () => {
+  it("sums generation + chat cost into the matching bucket", () => {
+    const series = computeAiCostSeries(
+      [
+        { created_at: "2026-06-03T06:00:00.000Z", cost_usd: 0.5 },
+        { created_at: "2026-06-05T06:00:00.000Z", cost_usd: 1 },
+        { created_at: "2026-06-30T00:00:00.000Z", cost_usd: 9 }, // outside all buckets
+      ],
+      [{ created_at: "2026-06-04T06:00:00.000Z", cost_usd: 0.25 }],
+      BUCKETS, // Jun 3, 4, 5
+    );
+    expect(series).toEqual([0.5, 0.25, 1]);
+  });
+});
+
+describe("computeActiveUsersInRange", () => {
+  const range = { start: new Date("2026-06-01T00:00:00.000Z"), end: new Date("2026-06-08T00:00:00.000Z") };
+  it("counts distinct users active (generation or chat) within the range", () => {
+    const n = computeActiveUsersInRange(
+      [
+        { created_at: "2026-06-02T00:00:00.000Z", user_id: "u1" },
+        { created_at: "2026-06-03T00:00:00.000Z", user_id: "u1" }, // dup user
+        { created_at: "2026-05-20T00:00:00.000Z", user_id: "u9" }, // out of range
+      ],
+      [{ created_at: "2026-06-04T00:00:00.000Z", user_id: "u2" }],
+      range,
+    );
+    expect(n).toBe(2); // u1 + u2
   });
 });

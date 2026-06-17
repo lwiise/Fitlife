@@ -9,11 +9,12 @@ import {
 } from "@/lib/admin/queries";
 import { getAdminLocale } from "@/lib/admin/locale";
 import type { SubscriberSortKey } from "@/lib/admin/types";
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
 import { AdminTopBar } from "./_components/AdminTopBar";
 import { RevenueChartSection } from "./_components/RevenueChartSection";
 import { AiCostStrip } from "./_components/AiCostStrip";
+import { AudienceBar } from "./_components/AudienceBar";
 import { FilterBar } from "./_components/FilterBar";
 import { SubscriberTable } from "./_components/SubscriberTable";
 import { Pagination } from "./_components/Pagination";
@@ -40,6 +41,7 @@ export default async function AdminOverviewPage({
 
   const params = flatten(await searchParams);
   const baseParams = params;
+  const currency: Currency = params.cur === "usd" ? "usd" : "sar";
 
   const dataset = await loadAdminDataset();
   const overview = buildOverviewView(dataset, {
@@ -84,6 +86,7 @@ export default async function AdminOverviewPage({
       range: overview.preset,
       interval: overview.interval,
       cmp: overview.comparisonOn,
+      cur: currency,
       section: "overview_v2",
     },
   });
@@ -113,7 +116,19 @@ export default async function AdminOverviewPage({
               locale={locale}
             />
 
-            <AiCostStrip view={overview} locale={locale} />
+            <AiCostStrip
+              view={overview}
+              currency={currency}
+              baseParams={baseParams}
+              locale={locale}
+            />
+
+            <AudienceBar
+              total={overview.subscriberCount}
+              activeSubs={overview.totalActive}
+              activeUsers={overview.activeUsersInRange}
+              locale={locale}
+            />
 
             {dataset.truncated.length > 0 ? (
               <p className="rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">
@@ -145,6 +160,7 @@ export default async function AdminOverviewPage({
                 result={list}
                 baseParams={baseParams}
                 sortState={{ sort, dir }}
+                currency={currency}
                 locale={locale}
               />
 

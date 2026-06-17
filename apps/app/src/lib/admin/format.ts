@@ -4,7 +4,12 @@
  * system. Arabic uses Arabic-Indic digits via Intl; English uses Latin.
  */
 
+import { usdToSar } from "@/lib/admin/revenue";
+
 export type AdminLocale = "ar" | "en";
+
+/** Operator-chosen display currency for cost figures (SAR is the default). */
+export type Currency = "sar" | "usd";
 
 const TAG: Record<AdminLocale, string> = { ar: "ar-SA", en: "en-US" };
 
@@ -25,11 +30,16 @@ export function fmtUsd(
   }).format(n);
 }
 
-export function fmtSar(n: number, locale: AdminLocale): string {
+export function fmtSar(
+  n: number,
+  locale: AdminLocale,
+  maxFractionDigits = 0,
+): string {
   return new Intl.NumberFormat(TAG[locale], {
     style: "currency",
     currency: "SAR",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: maxFractionDigits,
+    minimumFractionDigits: Math.min(maxFractionDigits, 2),
   }).format(n);
 }
 
@@ -120,6 +130,22 @@ export function fmtMetricValue(
 ): string {
   if (unit === "sar") return compact ? fmtSarCompact(n, locale) : fmtSar(n, locale);
   return fmtNumber(n, locale);
+}
+
+/**
+ * Format a cost in the operator's chosen display currency. Source amounts are
+ * USD (AI spend is billed in USD); SAR is converted at the platform rate. USD
+ * always caps at 2 decimals (no raw floats like $1.6395); SAR rounds to whole
+ * riyals unless `prec` is given (e.g. 2 for small per-account/per-member values).
+ */
+export function fmtMoney(
+  usdAmount: number,
+  currency: Currency,
+  locale: AdminLocale,
+  prec = 0,
+): string {
+  if (currency === "usd") return fmtUsd(usdAmount, locale, 2);
+  return fmtSar(usdToSar(usdAmount), locale, prec);
 }
 
 const REL_DIVISORS: Array<[Intl.RelativeTimeFormatUnit, number]> = [

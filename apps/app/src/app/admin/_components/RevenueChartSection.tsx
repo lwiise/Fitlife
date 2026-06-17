@@ -6,6 +6,7 @@ import { ChartFrame } from "./ChartFrame";
 import { SplineLineChart } from "./SplineLineChart";
 import { OverviewChartControls } from "./OverviewChartControls";
 import { MetricTabs } from "./MetricTabs";
+import { InfoTooltip } from "./InfoTooltip";
 
 const DAY_MS = 86_400_000;
 function dayBefore(iso: string, locale: AdminLocale): string {
@@ -40,9 +41,15 @@ export function RevenueChartSection({
   return (
     <section aria-labelledby="ov-chart-heading" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="ov-chart-heading" className="text-lg font-bold text-brand-ink">
-          {title}
-        </h2>
+        <div className="flex items-center gap-1">
+          <h2 id="ov-chart-heading" className="text-lg font-bold text-brand-ink">
+            {title}
+          </h2>
+          <InfoTooltip
+            text={t("approx_snapshot", locale)}
+            label={t("info_more", locale)}
+          />
+        </div>
         <OverviewChartControls
           locale={locale}
           preset={view.preset}
@@ -60,7 +67,6 @@ export function RevenueChartSection({
         <ChartFrame
           ariaLabel={title}
           state={hasData ? "ready" : "empty"}
-          note={t("approx_snapshot", locale)}
           locale={locale}
         >
           <SplineLineChart
@@ -77,7 +83,7 @@ export function RevenueChartSection({
           />
 
           {/* Legend: solid = current, dotted = comparison */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-brand-ink-muted">
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-brand-ink/70">
             <span className="inline-flex items-center gap-2">
               <span className="h-0.5 w-6 rounded bg-brand-purple-900" aria-hidden="true" />
               {currentLabel}

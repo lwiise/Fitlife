@@ -3,8 +3,11 @@ import "server-only";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
 import { computeMrr } from "@/lib/admin/revenue";
+import { trend, type Trend } from "@/lib/admin/period";
 import {
+  computeActiveUsersInRange,
   computeAiCostInRange,
+  computeAiCostSeries,
   computeBeneficiaryTotal,
   computeMetricView,
   makeBuckets,
@@ -351,6 +354,14 @@ export function buildOverviewView(
   const subscriberCount = ds.profiles.length;
   const beneficiaryTotal = computeBeneficiaryTotal(subscriberCount, ds.members);
   const aiCostUsd = computeAiCostInRange(ds.generations, ds.chats, range);
+  const aiCostSeries = computeAiCostSeries(ds.generations, ds.chats, curBuckets);
+  const aiCostPriorUsd = comparisonOn
+    ? computeAiCostInRange(ds.generations, ds.chats, priorRange)
+    : 0;
+  const aiCostDelta: Trend = comparisonOn
+    ? trend(aiCostUsd, aiCostPriorUsd)
+    : { pct: null, direction: "flat" };
+  const activeUsersInRange = computeActiveUsersInRange(ds.generations, ds.chats, range);
 
   // "% of revenue": MRR(USD) prorated to the range length (est.).
   const mrr = computeMrr(
@@ -387,6 +398,10 @@ export function buildOverviewView(
     aiCostPerMemberUsd,
     aiPctOfRevenue,
     beneficiaryTotal,
+    aiCostSeries,
+    aiCostPriorUsd,
+    aiCostDelta,
+    activeUsersInRange,
     approximated: true,
   };
 }

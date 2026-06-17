@@ -3,8 +3,9 @@ import { fmtMetricValue, fmtSignedPct } from "@/lib/admin/format";
 
 /**
  * Kajabi-style spline line chart — zero client JS. The current range is a smooth
- * monotone-ish spline with a vertical gradient stroke (warm at peaks → brand
- * purple at troughs); the comparison range is a faded dotted line behind it.
+ * monotone-ish spline in a single confident brand-purple stroke over a soft
+ * purple→transparent area fade (depth, one hue — no arbitrary colour shift); the
+ * comparison range is a faded dotted line behind it.
  * Hover (date · current · comparison · delta) + crosshair are pure CSS: a row of
  * invisible per-bucket columns reveal a tooltip/crosshair/markers on hover.
  *
@@ -25,7 +26,8 @@ const PAD_TOP = 16;
 const PAD_BOT = 16;
 const INNER_H = H - PAD_TOP - PAD_BOT;
 
-const GRAD_ID = "ovChartGrad";
+const AREA_ID = "ovChartArea";
+const BASE_Y = PAD_TOP + INNER_H;
 
 function splinePath(pts: Array<[number, number]>): string {
   if (pts.length === 0) return "";
@@ -86,6 +88,15 @@ export function SplineLineChart({
   const curPts: Array<[number, number]> = current.map((v, i) => [xAt(i), yAt(v)]);
   const cmpPts: Array<[number, number]> = comparison.map((v, i) => [xAt(i), yAt(v)]);
 
+  // Closed area under the current spline → baseline, for the soft fill.
+  const curD = splinePath(curPts);
+  const firstX = curPts[0]?.[0];
+  const lastX = curPts[curPts.length - 1]?.[0];
+  const areaD =
+    curPts.length >= 2 && firstX != null && lastX != null
+      ? `${curD} L${lastX.toFixed(2)},${BASE_Y} L${firstX.toFixed(2)},${BASE_Y} Z`
+      : "";
+
   const yTicks = [maxV, maxV / 2, 0];
   const gridYs = [0, 0.25, 0.5, 0.75, 1].map((f) => PAD_TOP + f * INNER_H);
 
@@ -130,16 +141,23 @@ export function SplineLineChart({
           >
             <defs>
               <linearGradient
-                id={GRAD_ID}
+                id={AREA_ID}
                 gradientUnits="userSpaceOnUse"
                 x1="0"
                 y1={PAD_TOP}
                 x2="0"
-                y2={PAD_TOP + INNER_H}
+                y2={BASE_Y}
               >
-                <stop offset="0%" stopColor="#e8743c" />
-                <stop offset="55%" stopColor="#9b6cd4" />
-                <stop offset="100%" stopColor="#4e2490" />
+                <stop
+                  offset="0%"
+                  stopColor="var(--color-brand-purple-900)"
+                  stopOpacity="0.16"
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--color-brand-purple-900)"
+                  stopOpacity="0"
+                />
               </linearGradient>
             </defs>
 
@@ -157,6 +175,8 @@ export function SplineLineChart({
               />
             ))}
 
+            {areaD ? <path d={areaD} fill={`url(#${AREA_ID})`} stroke="none" /> : null}
+
             {hasCmp ? (
               <path
                 d={splinePath(cmpPts)}
@@ -170,9 +190,9 @@ export function SplineLineChart({
             ) : null}
 
             <path
-              d={splinePath(curPts)}
+              d={curD}
               fill="none"
-              stroke={`url(#${GRAD_ID})`}
+              stroke="var(--color-brand-purple-900)"
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -184,7 +204,7 @@ export function SplineLineChart({
           {yTicks.map((v, i) => (
             <span
               key={i}
-              className="absolute start-0 -translate-y-1/2 bg-surface-elevated/70 pe-1 text-[0.65rem] tabular-nums text-brand-ink-muted"
+              className="absolute start-0 -translate-y-1/2 bg-surface-elevated/70 pe-1 text-[0.7rem] tabular-nums text-brand-ink/70"
               style={{ top: `${topPct(v)}%` }}
             >
               {fmt(v)}
@@ -248,7 +268,7 @@ export function SplineLineChart({
           {labels.map((label, i) => (
             <span
               key={i}
-              className="flex-1 truncate text-center text-[0.65rem] text-brand-ink-muted"
+              className="flex-1 truncate text-center text-[0.7rem] text-brand-ink/70"
             >
               {i % labelStep === 0 ? label : ""}
             </span>

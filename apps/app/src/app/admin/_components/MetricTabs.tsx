@@ -6,6 +6,12 @@ import { metricLabel, t } from "@/lib/admin/i18n";
 import { DEFAULT_METRICS, METRIC_POOL } from "@/lib/admin/timeseries";
 import { buildQuery } from "./searchParams";
 import { TrendPill } from "./TrendPill";
+import { Sparkline } from "./Sparkline";
+
+/** A rising value is "good" for everything except churn. */
+function metricPolarity(key: MetricKey): "positive" | "negative" {
+  return key === "churned" ? "negative" : "positive";
+}
 
 function sameSet(a: MetricKey[], b: MetricKey[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
@@ -51,22 +57,42 @@ export function MetricTabs({
                 metric: key === "gross_revenue" ? undefined : key,
               })}
               aria-current={active ? "true" : undefined}
-              className={`flex flex-col gap-1.5 rounded-xl border p-3 transition-colors ${
+              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl border p-3 transition-colors ${
                 active
-                  ? "border-brand-purple-900/40 bg-brand-surface"
+                  ? "border-brand-purple-900/50 bg-brand-surface ring-1 ring-inset ring-brand-purple-900/20"
                   : "border-brand-ink/10 bg-surface-elevated hover:border-brand-ink/25"
               }`}
             >
-              <span className="text-xs font-semibold uppercase text-brand-ink-muted">
+              {active ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-0 top-0 h-[3px] bg-brand-purple-900"
+                />
+              ) : null}
+              <span className="text-xs font-semibold uppercase text-brand-ink/70">
                 {metricLabel(key, locale)}
               </span>
               <span
                 dir="ltr"
-                className="text-xl font-extrabold leading-none tabular-nums text-brand-ink"
+                className={`font-extrabold leading-none tabular-nums text-brand-ink ${
+                  active ? "text-2xl sm:text-3xl" : "text-xl"
+                }`}
               >
                 {fmtMetricValue(mv.headline, mv.unit, locale)}
               </span>
-              <TrendPill trend={mv.delta} polarity="positive" locale={locale} />
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <TrendPill
+                  trend={mv.delta}
+                  polarity={metricPolarity(key)}
+                  locale={locale}
+                />
+                {mv.current.length >= 2 ? (
+                  <Sparkline
+                    points={mv.current}
+                    className={active ? "text-brand-purple-900" : "text-brand-ink/40"}
+                  />
+                ) : null}
+              </div>
             </Link>
           );
         })}
@@ -85,14 +111,17 @@ export function MetricTabs({
               ? view.shownMetrics.filter((k) => k !== key)
               : [...view.shownMetrics, key];
             if (disabled) {
+              // Focusable + announced (no `disabled` attr) so keyboard/SR users
+              // discover the 4-metric cap; no handler → clicking is a no-op.
               return (
-                <span
+                <button
                   key={key}
+                  type="button"
                   aria-disabled="true"
                   className="inline-flex min-h-11 cursor-not-allowed items-center rounded-full border border-brand-ink/15 px-3 text-sm text-brand-ink-muted opacity-40"
                 >
                   {metricLabel(key, locale)}
-                </span>
+                </button>
               );
             }
             return (

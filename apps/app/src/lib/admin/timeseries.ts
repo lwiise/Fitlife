@@ -356,6 +356,37 @@ export function computeAiCostInRange(
   return Math.round(total * 100) / 100;
 }
 
+/** Exact AI spend (USD) per bucket — same source as computeAiCostInRange, for
+ * the cost-strip sparkline. A bucket is a DateRange, so reuse `inRange`. */
+export function computeAiCostSeries(
+  generations: Array<{ created_at: string; cost_usd: number | null }>,
+  chats: Array<{ created_at: string; cost_usd: number | null }>,
+  buckets: Bucket[],
+): number[] {
+  return buckets.map((b) => {
+    let total = 0;
+    for (const g of generations) if (inRange(g.created_at, b)) total += g.cost_usd ?? 0;
+    for (const c of chats) if (inRange(c.created_at, b)) total += c.cost_usd ?? 0;
+    return Math.round(total * 100) / 100;
+  });
+}
+
+/**
+ * Distinct users with any AI activity (a plan generation or a chat message)
+ * within the range — the honest "active users" engagement metric, separate from
+ * "active subscribers" (paying) and total accounts.
+ */
+export function computeActiveUsersInRange(
+  generations: Array<{ created_at: string; user_id: string }>,
+  chats: Array<{ created_at: string; user_id: string }>,
+  range: DateRange,
+): number {
+  const seen = new Set<string>();
+  for (const g of generations) if (inRange(g.created_at, range)) seen.add(g.user_id);
+  for (const c of chats) if (inRange(c.created_at, range)) seen.add(c.user_id);
+  return seen.size;
+}
+
 /**
  * Total plan beneficiaries across all accounts, using the same definition as the
  * tier-limit logic (owner + non-housekeeper members): one owner per account plus

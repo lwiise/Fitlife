@@ -81,6 +81,14 @@ export interface OverviewView {
   /** AI cost ÷ range-prorated revenue (est.). */
   aiPctOfRevenue: number | null;
   beneficiaryTotal: number;
+  /** Exact AI spend (USD) per current-range bucket — for the cost sparkline. */
+  aiCostSeries: number[];
+  /** Exact AI spend (USD) in the immediately-preceding equal window. */
+  aiCostPriorUsd: number;
+  /** AI-cost period-over-period change (pct null when comparison is off). */
+  aiCostDelta: Trend;
+  /** Distinct users with AI activity in the range (engagement, not paying). */
+  activeUsersInRange: number;
 
   /** Series are reconstructed from the snapshot (labeled in the UI). */
   approximated: true;
