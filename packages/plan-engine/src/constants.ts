@@ -152,9 +152,19 @@ export function bigCallTimeoutMs(memberCount: number, hasTranslation: boolean): 
  * so we parallelize enough to keep total wall-clock ≈ one or two waves. Bounded so
  * we don't fan out an unreasonable number of concurrent heavy calls at once.
  */
+// Optional prod override for the large-family parallel day-call cap (no deploy
+// needed). Falls back to the tuned defaults below. The ≤3-member sequential
+// behavior is unaffected.
+const DAY_CONCURRENCY_OVERRIDE = (() => {
+  const n = Number(process.env.PLAN_DAY_CONCURRENCY?.trim());
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : undefined;
+})();
+
 export function dayConcurrency(memberCount: number, hasTranslation: boolean): number {
-  if (memberCount <= 3) return DAY_CONCURRENCY;
-  return hasTranslation ? 7 : 4;
+  if (memberCount <= 3) return DAY_CONCURRENCY; // small families: calm sequential 1→7 fill
+  // Cap the parallel haiku burst so it stays under the day-model rate limit — 7
+  // simultaneous large calls reliably tripped 429s. Override via PLAN_DAY_CONCURRENCY.
+  return DAY_CONCURRENCY_OVERRIDE ?? (hasTranslation ? 5 : 4);
 }
 
 // Translation (maid/housekeeper) is a separate pass over already-generated meals.
