@@ -477,9 +477,11 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
     getLatestPlan(user.id),
     supabase
       .from("family_members")
-      .select("id, role, display_order")
+      .select("id, role, display_order, meal_mode")
       .eq("user_id", user.id)
-      .returns<{ id: string; role: string; display_order: number }[]>(),
+      .returns<
+        { id: string; role: string; display_order: number; meal_mode: string }[]
+      >(),
   ]);
 
   if (!profileRes.data?.onboarding_completed_at) return { fired: false };
@@ -502,15 +504,23 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
   });
   if (!nextId) return { fired: false };
 
-  // An ABSENT pending member (e.g. one a new subscription just unlocked) must be
-  // generated WITH the rest of the family in a single pass so shared meals group
-  // across everyone — the incremental one-at-a-time path can't merge a new member
-  // into the others' existing shared meals. An already-in-plan member that's only
-  // missing a failed day is finished alone (no shared-meal impact).
+  // An already-in-plan member only missing a failed day is finished alone (no
+  // shared-meal impact). An ABSENT (new) member that SHARES the family menu rebuilds
+  // the whole shared group together so shared meals merge across everyone (the
+  // one-at-a-time path can't merge a newcomer into the others' existing shared
+  // meals); an INDEPENDENT newcomer has private dishes — generate only them, carry
+  // the rest.
   const inPlan = latest.plan_data.members.some((m) => m.member_id === nextId);
-  const gen = inPlan
-    ? await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId })
-    : await runFamilyGeneration(supabase, user.id, { fullRegen: true });
+  let gen: FamilyGenResult;
+  if (inPlan) {
+    gen = await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId });
+  } else {
+    const nextMode = (membersRes.data ?? []).find((m) => m.id === nextId)?.meal_mode;
+    gen =
+      nextMode === "independent"
+        ? await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId })
+        : await runFamilyGeneration(supabase, user.id, { regenerateSharedGroup: true });
+  }
   return { fired: gen.ok };
 }
 
@@ -569,7 +579,12 @@ type FamilyGenResult =
 async function runFamilyGeneration(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  opts: { regenerateMemberId?: string; onlyMemberId?: string; fullRegen?: boolean } = {},
+  opts: {
+    regenerateMemberId?: string;
+    onlyMemberId?: string;
+    regenerateSharedGroup?: boolean;
+    fullRegen?: boolean;
+  } = {},
 ): Promise<FamilyGenResult> {
   const result = await triggerPlanGeneration({
     supabase,
@@ -577,11 +592,15 @@ async function runFamilyGeneration(
     bypassRateLimit: true,
     // Family changes are incremental: keep already-generated members and
     // generate only the new/edited one (aligned to the family's dishes).
-    // A full regen (fullRegen) is needed when the change affects EVERY meal —
-    // e.g. adding a housekeeper, which requires translating all recipes.
+    // regenerateSharedGroup rebuilds the WHOLE shared group together (carry-over
+    // ON — independent members are kept) when a new shared member is added.
+    // A full regen (fullRegen) is the only one with carry-over OFF — it's needed
+    // when the change affects EVERY meal (e.g. adding a housekeeper, which
+    // requires translating all recipes).
     carryOver: !opts.fullRegen,
     regenerateMemberId: opts.regenerateMemberId,
     onlyMemberId: opts.onlyMemberId,
+    regenerateSharedGroup: opts.regenerateSharedGroup,
   });
 
   if (result.ok) return { ok: true, plan_generation_id: result.mealPlanId };
@@ -766,34 +785,46 @@ export async function addFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: null };
   }
 
-  // Generate the NEXT member in order — NOT necessarily the just-added one. If an
-  // earlier-added member is still pending (or an in-plan member is incomplete), it
-  // goes first; the just-added member then waits its turn in the drain. This keeps
-  // strict add order even when adds arrive while nothing is generating (otherwise
-  // the latest add would jump ahead of an earlier still-pending member). Others
-  // are carried over; never two members generating at once.
-  let target = memberId;
+  // Post-onboarding generation. A SHARED add rebuilds the whole shared group
+  // together so the existing shared members stream in day-by-day alongside the
+  // newcomer; an INDEPENDENT add (or no base plan) keeps the one-at-a-time drain.
   const latest = await getLatestPlan(user.id);
-  if (
-    latest?.status === "ready" &&
-    latest.plan_data &&
-    planHasContent(latest.plan_data)
-  ) {
-    const { data: famRows } = await supabase
-      .from("family_members")
-      .select("id, role, display_order")
-      .eq("user_id", user.id)
-      .returns<{ id: string; role: string; display_order: number }[]>();
-    target =
-      pickNextMemberId({
-        plan: latest.plan_data,
-        members: famRows ?? [],
-        additionOrder: updatedOrder,
-      }) ?? memberId;
+  const basePlan =
+    latest?.status === "ready" && latest.plan_data && planHasContent(latest.plan_data)
+      ? latest.plan_data
+      : null;
+  const isSharedAdd = (input.meal_mode ?? "shared") === "shared";
+
+  let gen: FamilyGenResult;
+  if (isSharedAdd && basePlan) {
+    // Shared add: rebuild the WHOLE shared group together (mom + every shared member
+    // + the newcomer) so the new menu is genuinely shared and the existing shared
+    // members stream in day-by-day alongside the new one. Independent members + the
+    // housekeeper are carried over verbatim. (A lone shared member — no one else
+    // shares — just generates itself, handled downstream.)
+    gen = await runFamilyGeneration(supabase, user.id, { regenerateSharedGroup: true });
+  } else {
+    // Independent add (or no base plan to carry): one-at-a-time drain. Generate the
+    // NEXT member in order — NOT necessarily the just-added one. If an earlier-added
+    // member is still pending (or an in-plan member is incomplete), it goes first;
+    // the just-added member waits its turn. Others are carried; never two members
+    // generating at once.
+    let target = memberId;
+    if (basePlan) {
+      const { data: famRows } = await supabase
+        .from("family_members")
+        .select("id, role, display_order")
+        .eq("user_id", user.id)
+        .returns<{ id: string; role: string; display_order: number }[]>();
+      target =
+        pickNextMemberId({
+          plan: basePlan,
+          members: famRows ?? [],
+          additionOrder: updatedOrder,
+        }) ?? memberId;
+    }
+    gen = await runFamilyGeneration(supabase, user.id, { onlyMemberId: target });
   }
-  const gen = await runFamilyGeneration(supabase, user.id, {
-    onlyMemberId: target,
-  });
   if (gen.ok)
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")

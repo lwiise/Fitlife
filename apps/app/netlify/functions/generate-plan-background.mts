@@ -12,6 +12,7 @@ import {
   generateMealPlan,
   translateMealPlan,
   hasPendingGeneration,
+  prepareSharedGroupRegen,
 } from "../../../../packages/plan-engine/src/generate";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
@@ -357,6 +358,9 @@ export default async (req: Request): Promise<Response> => {
     independentRegen?: boolean;
     // One-at-a-time add: generate ONLY this member; carry everyone else over.
     onlyMemberId?: string;
+    // Shared-group regen (a new SHARED member was added): rebuild every shared
+    // beneficiary together; carry independent members + the housekeeper verbatim.
+    regenerateSharedGroup?: boolean;
     // Per-member edit/regenerate target — authoritative for the loading screen's
     // member name (generating_member_id), even with other members still incomplete.
     regenerateMemberId?: string;
@@ -473,6 +477,16 @@ export default async (req: Request): Promise<Response> => {
       context.family_members = context.family_members.filter((m) =>
         keep.has(m.id),
       );
+    }
+
+    // Shared-group regen (a new SHARED member was added): rebuild every shared
+    // beneficiary together, carrying independent members + the housekeeper. Mirrors
+    // triggerPlanGeneration. No single generating_member_id → the UI shows them all
+    // loading.
+    if (body.regenerateSharedGroup && existingPlan) {
+      const prep = prepareSharedGroupRegen(context, existingPlan);
+      existingPlan = prep.existingPlan;
+      context.family_members = prep.familyMembers;
     }
 
     // Tier cap (full run): restrict to mom + the allow-listed beneficiaries; keep

@@ -10,6 +10,7 @@ export {
   createPlanRows,
   runMealPlanGeneration,
   generateMealPlan,
+  prepareSharedGroupRegen,
   translateMealPlan,
   runMealPlanTranslation,
   hasPendingGeneration,
