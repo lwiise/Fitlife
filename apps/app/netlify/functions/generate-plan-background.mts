@@ -498,7 +498,7 @@ export default async (req: Request): Promise<Response> => {
       );
     }
 
-    const { plan, usage, missingDays } = await generateMealPlan({
+    const { plan, usage, missingDays, missingDaysCause } = await generateMealPlan({
       anthropicApiKey: anthropicKey,
       context,
       existingPlan: existingPlan ?? null,
@@ -607,7 +607,9 @@ export default async (req: Request): Promise<Response> => {
     // PII-safe note (day indices only — never recipe/member content) so partials
     // are auditable.
     const partialNote =
-      missingDays.length > 0 ? `partial: days [${missingDays.join(", ")}] failed` : null;
+      missingDays.length > 0
+        ? `partial: days [${missingDays.join(", ")}] failed${missingDaysCause ? ` — ${missingDaysCause}` : ""}`
+        : null;
     if (partialNote) {
       console.warn(`[generate-plan-background] ${partialNote}`, { userId, mealPlanId });
     }

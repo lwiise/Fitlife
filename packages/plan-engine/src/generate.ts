@@ -261,6 +261,25 @@ export function summarizeDayErrors(errors: string[]): string {
   return best.slice(0, 300);
 }
 
+// A single day re-rolls this many times on a transient CONTENT failure before
+// giving up (separate from MAX_RETRIES, which governs API-transient retries).
+const CONTENT_MAX_RETRIES = 2;
+
+/**
+ * A one-off bad model RESPONSE that a fresh re-roll typically fixes: malformed
+ * JSON (native SyntaxError from JSON.parse) or a DaySliceSchema validation miss
+ * (PlanValidationError "… failed validation …"). Model sampling varies between
+ * calls, so re-asking the same prompt usually parses — this is exactly what the
+ * manual "regenerate this day" button does. Deliberately NOT max_tokens (handled
+ * by the doubled-cap retry) and NOT logic errors like a resync TypeError (those
+ * are deterministic — fail fast so they surface). Exported for unit testing.
+ */
+export function isTransientContentError(err: unknown): boolean {
+  if (err instanceof SyntaxError) return true;
+  if (err instanceof PlanValidationError) return /failed validation/.test(err.message);
+  return false;
+}
+
 function sumDayTotal(meals: Meal[]) {
   let calories = 0,
     protein_g = 0,
@@ -820,6 +839,9 @@ export async function generateMealPlan(params: {
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
   // Day indices that were expected but dropped after retries (partial plan).
   missingDays: number[];
+  // Representative reason the dropped days failed (e.g. "Day 3 failed validation: …"),
+  // so a PARTIAL failure is diagnosable in error_message — not just which days. "" if none.
+  missingDaysCause?: string;
 }> {
   const {
     anthropicApiKey,
@@ -1373,9 +1395,11 @@ export async function generateMealPlan(params: {
       dayNameByIndex.get(dayIndex),
     );
     // Size this day's cap + timeout to the members actually missing it.
-    const dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
+    let dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
     const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
-    let attempt = 0;
+    let apiAttempt = 0; // 429/529/5xx/overload/stream/timeout retries (honor Retry-After)
+    let contentAttempt = 0; // re-rolls for a one-off malformed/invalid model response
+    let tokensRetried = false; // one doubled-cap retry on truncation
     for (;;) {
       try {
         const res = await streamAnthropic({
@@ -1389,11 +1413,19 @@ export async function generateMealPlan(params: {
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
         totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
-        if (res.stopReason === "max_tokens")
+        if (res.stopReason === "max_tokens") {
+          // Truncated. Re-rolling at the same cap will truncate again — retry once
+          // at a doubled cap (mirrors the skeleton retry) before failing the day.
+          if (!tokensRetried && dayCap < MAX_OUTPUT_TOKENS) {
+            tokensRetried = true;
+            dayCap = Math.min(MAX_OUTPUT_TOKENS, dayCap * 2);
+            continue;
+          }
           throw new PlanValidationError(
             `Day ${dayIndex} hit max_tokens (${dayCap})`,
             res.text,
           );
+        }
         // The day prompt asks for a terse-keyed slice (short keys to cut output
         // tokens); expand it back to the canonical DaySlice shape — and fill
         // slot_name_ar from slot — BEFORE validation. The expander tolerates
@@ -1548,11 +1580,21 @@ export async function generateMealPlan(params: {
         emit();
         return;
       } catch (err) {
-        const ra =
-          err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
-        if (isRetryable(err) && attempt < MAX_RETRIES) {
-          attempt++;
-          await sleep(retryWaitMs(attempt, ra));
+        // (1) API-transient (rate limit / overload / timeout): retry honoring Retry-After.
+        if (isRetryable(err) && apiAttempt < MAX_RETRIES) {
+          apiAttempt++;
+          const ra =
+            err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
+          await sleep(retryWaitMs(apiAttempt, ra));
+          continue;
+        }
+        // (2) Transient CONTENT failure (malformed JSON / schema mismatch): re-roll a
+        // couple times — a fresh roll usually parses (what the manual "regenerate"
+        // button does). Excludes max_tokens (doubled-cap retry above) and logic
+        // errors like a resync TypeError (deterministic → fail fast so they surface).
+        if (isTransientContentError(err) && contentAttempt < CONTENT_MAX_RETRIES) {
+          contentAttempt++;
+          await sleep(retryWaitMs(contentAttempt));
           continue;
         }
         const msg = err instanceof Error ? err.message : String(err);
@@ -1693,6 +1735,7 @@ export async function generateMealPlan(params: {
       cost_usd: totalCost,
     },
     missingDays: [...failedDays].sort((a, b) => a - b),
+    missingDaysCause: summarizeDayErrors(dayErrors),
   };
 }
 
@@ -1728,6 +1771,7 @@ export async function runMealPlanGeneration(params: {
   let plan: MealPlan;
   let usage: { input_tokens: number; output_tokens: number; cost_usd: number };
   let missingDays: number[] = [];
+  let missingDaysCause = "";
   try {
     const result = await generateMealPlan({
       anthropicApiKey,
@@ -1749,6 +1793,7 @@ export async function runMealPlanGeneration(params: {
     plan = result.plan;
     usage = result.usage;
     missingDays = result.missingDays;
+    missingDaysCause = result.missingDaysCause ?? "";
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -1862,7 +1907,9 @@ export async function runMealPlanGeneration(params: {
   // (the CHECK allows only started/completed/failed), but record a PII-safe note
   // (day indices only — never recipe/member content) so partials are auditable.
   const partialNote =
-    missingDays.length > 0 ? `partial: days [${missingDays.join(", ")}] failed` : null;
+    missingDays.length > 0
+      ? `partial: days [${missingDays.join(", ")}] failed${missingDaysCause ? ` — ${missingDaysCause}` : ""}`
+      : null;
   if (partialNote) {
     console.warn(`[runMealPlanGeneration] ${partialNote}`);
   }
