@@ -186,7 +186,7 @@ export function SplineLineChart({
               <path
                 d={splinePath(cmpPts)}
                 fill="none"
-                stroke="#666377"
+                stroke="var(--color-brand-ink-muted)"
                 strokeWidth="2"
                 strokeDasharray="2 5"
                 strokeLinecap="round"

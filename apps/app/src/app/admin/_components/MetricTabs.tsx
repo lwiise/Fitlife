@@ -57,10 +57,10 @@ export function MetricTabs({
                 metric: key === "gross_revenue" ? undefined : key,
               })}
               aria-current={active ? "true" : undefined}
-              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl bg-gradient-to-br from-brand-purple-900 to-brand-purple-700 p-3 text-white transition-all ${
+              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl bg-gradient-to-br from-brand-purple-900 to-brand-purple-700 p-3 text-white transition ${
                 active
                   ? "shadow-md ring-2 ring-inset ring-white/70"
-                  : "opacity-90 hover:opacity-100"
+                  : "ring-1 ring-inset ring-white/15 hover:ring-white/40"
               }`}
             >
               {active ? (
@@ -69,7 +69,7 @@ export function MetricTabs({
                   className="absolute inset-x-0 top-0 h-[3px] bg-white"
                 />
               ) : null}
-              <span className="text-xs font-semibold uppercase text-white/70">
+              <span className="text-xs font-semibold uppercase text-white/80">
                 {metricLabel(key, locale)}
               </span>
               <span
