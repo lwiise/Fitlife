@@ -103,8 +103,16 @@ export async function streamAnthropic(params: {
 
     if (!res.ok || !res.body) {
       const errText = await res.text().catch(() => "");
+      // Anthropic returns Retry-After (integer seconds) on 429/529. Capture it so
+      // the day-loop retry waits out the real rate-limit window instead of the
+      // (much shorter) exponential backoff, which otherwise exhausts retries mid-window.
+      const ra = res.headers.get("retry-after");
+      const retryAfterMs =
+        ra && /^\d+$/.test(ra.trim()) ? Number(ra.trim()) * 1000 : undefined;
       throw new AnthropicCallError(
         `Anthropic API ${res.status}: ${errText.slice(0, 500)}`,
+        undefined,
+        retryAfterMs,
       );
     }
 

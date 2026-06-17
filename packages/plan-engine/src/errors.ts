@@ -25,7 +25,14 @@ export class RateLimitError extends Error {
 }
 
 export class AnthropicCallError extends Error {
-  constructor(message: string, public cause?: unknown) {
+  // retryAfterMs: when the failure is a 429/529 carrying a Retry-After header, the
+  // server-advised wait (ms). The retry loop honors it so we wait out the actual
+  // rate-limit window instead of a much shorter exponential backoff.
+  constructor(
+    message: string,
+    public cause?: unknown,
+    public readonly retryAfterMs?: number,
+  ) {
     super(message);
     this.name = "AnthropicCallError";
   }

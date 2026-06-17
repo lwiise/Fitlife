@@ -222,10 +222,43 @@ function isRetryable(err: unknown): boolean {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Exponential backoff with full jitter. attempt is 1-based (first retry = 1).
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 function backoffMs(attempt: number): number {
   const base = 800 * 2 ** (attempt - 1); // 800, 1600, 3200
   return base + Math.floor(Math.random() * 400); // jitter avoids thundering herd
+}
+
+/**
+ * How long to wait before a day-call retry. Honors the server's Retry-After
+ * (rate-limit window) when present; otherwise exponential backoff with jitter,
+ * capped at 30s so a transient 429/529 burst gets a real chance to clear within
+ * the function budget. Exported for unit testing.
+ */
+export function retryWaitMs(attempt: number, retryAfterMs?: number): number {
+  const jitter = Math.floor(Math.random() * 400);
+  if (retryAfterMs != null) return Math.min(60_000, retryAfterMs) + jitter;
+  return Math.min(30_000, 800 * 2 ** (attempt - 1)) + jitter;
+}
+
+/**
+ * The representative cause for an all-days-failed throw: the most frequent per-day
+ * error message (ties → earliest seen), truncated. Surfaces the true reason
+ * (e.g. "Anthropic API 429: rate_limit_error…" or "Day N failed validation: …")
+ * into meal_plans.error_message / the UI technical details / Sentry instead of a count.
+ * Exported for unit testing.
+ */
+export function summarizeDayErrors(errors: string[]): string {
+  if (errors.length === 0) return "";
+  const counts = new Map<string, number>();
+  for (const e of errors) counts.set(e, (counts.get(e) ?? 0) + 1);
+  let best = "";
+  let bestN = 0;
+  for (const [msg, n] of counts)
+    if (n > bestN) {
+      best = msg;
+      bestN = n;
+    }
+  return best.slice(0, 300);
 }
 
 function sumDayTotal(meals: Meal[]) {
@@ -1231,6 +1264,7 @@ export async function generateMealPlan(params: {
   }
   const done = new Set<number>(); // generated days completed successfully
   const failedDays = new Set<number>(); // days dropped after retries exhausted
+  const dayErrors: string[] = []; // per-day failure messages, for the fatal-throw cause
 
   // Generate starting from TODAY so the day the user is viewing fills first, then
   // forward (wrapping earlier days to the end). Order only — day_index unchanged.
@@ -1514,16 +1548,16 @@ export async function generateMealPlan(params: {
         emit();
         return;
       } catch (err) {
+        const ra =
+          err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
         if (isRetryable(err) && attempt < MAX_RETRIES) {
           attempt++;
-          await sleep(backoffMs(attempt));
+          await sleep(retryWaitMs(attempt, ra));
           continue;
         }
-        console.error(
-          "[plan-generate] day failed (omitting)",
-          dayIndex,
-          err instanceof Error ? err.message : String(err),
-        );
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[plan-generate] day failed (omitting)", dayIndex, msg);
+        dayErrors.push(msg);
         failedDays.add(dayIndex);
         emit();
         return;
@@ -1538,7 +1572,10 @@ export async function generateMealPlan(params: {
     (b) => carriedDays.get(b.member_id)!.size === 0,
   );
   if (done.size === 0 && nothingCarried) {
-    throw new PlanValidationError(`All ${genDayCount} day generations failed`);
+    const cause = summarizeDayErrors(dayErrors);
+    throw new PlanValidationError(
+      `All ${genDayCount} day generations failed${cause ? ` — ${cause}` : ""}`,
+    );
   }
 
   // ── Final assembled MealPlan ──
