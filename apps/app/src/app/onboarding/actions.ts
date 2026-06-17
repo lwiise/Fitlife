@@ -308,13 +308,17 @@ export async function saveMomProfile(
 }
 
 /**
- * End of the onboarding add-a-member loop: mark onboarding complete and send the
- * user to the subscription screen. NO plan is generated here — the choice there
- * decides what gets generated:
- *   • subscribe → the LemonSqueezy webhook generates the WHOLE family together on
- *     activation (so shared meals group across the full roster), or
- *   • "continue with just my plan" → generateSoloAndContinue() makes the primary
- *     user's plan only.
+ * End of the onboarding add-a-member loop: mark onboarding complete and route the
+ * user onward. The destination depends on whether they've ALREADY paid:
+ *   • PAID active subscription (e.g. they purchased from the dashboard before
+ *     finishing the quiz) → skip the pricing screen entirely. Trigger the
+ *     whole-family generation (now that onboarding is complete) and send them to
+ *     /plan, exactly as the post-checkout handler does.
+ *   • Trial / no paid subscription → show the subscription screen, where:
+ *       - subscribe → the LemonSqueezy webhook generates the WHOLE family together
+ *         on activation (so shared meals group across the full roster), or
+ *       - "continue with just my plan" → generateSoloAndContinue() makes the
+ *         primary user's plan only.
  */
 export async function finishOnboardingToSubscription(): Promise<void> {
   const supabase = await createClient();
@@ -330,6 +334,19 @@ export async function finishOnboardingToSubscription(): Promise<void> {
     .eq("id", user.id);
 
   revalidatePath("/dashboard");
+
+  // If the user already paid (e.g. via the dashboard link before taking the quiz),
+  // do NOT bounce them back to the pricing page. A PAID active subscription has a
+  // lemonsqueezy_subscription_id — trial rows never do. Mirror the post-checkout
+  // path: kick off the whole-family generation and land them on /plan.
+  const sub = await getCurrentSubscription(user.id);
+  if (sub && isSubscriptionActive(sub) && sub.lemonsqueezy_subscription_id) {
+    const { triggered } = await syncFamilyPlanAfterSubscribe().catch(() => ({
+      triggered: false,
+    }));
+    redirect(triggered ? "/plan" : "/dashboard");
+  }
+
   redirect("/pricing?from=onboarding");
 }
 
