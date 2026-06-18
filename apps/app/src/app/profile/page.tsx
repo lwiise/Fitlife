@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, Utensils, ChevronLeft } from "lucide-react";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
-import { mapSaraGoalToUser } from "@/lib/plans/goalMapping";
+import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { SettingsLink } from "@/components/SettingsLink";
@@ -70,7 +70,7 @@ export default async function ProfilePage() {
 
   const activityLabel = labelFor(ACTIVITY_OPTIONS, profile.activity_level);
   const goalLabel = profile.primary_goal
-    ? labelFor(GOALS, mapSaraGoalToUser(profile.primary_goal as never))
+    ? labelFor(GOALS, mapSaraGoalToUser(profile.primary_goal as SaraGoal))
     : null;
   const allergyCount = asStringArray(profile.allergies).length;
   const conditionCount = (profile.medical_conditions ?? []).length;

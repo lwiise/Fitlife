@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
-import { mapSaraGoalToUser, type UserGoal } from "@/lib/plans/goalMapping";
+import { mapSaraGoalToUser, type UserGoal, type SaraGoal } from "@/lib/plans/goalMapping";
 import {
   GATE_CONDITIONS,
   STABLE_CONDITIONS,
@@ -33,7 +33,7 @@ export default async function HealthEditPage() {
       : "none";
 
   const userGoal: UserGoal | undefined = profile.primary_goal
-    ? mapSaraGoalToUser(profile.primary_goal as never)
+    ? mapSaraGoalToUser(profile.primary_goal as SaraGoal)
     : undefined;
 
   return (

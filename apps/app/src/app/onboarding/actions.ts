@@ -34,11 +34,6 @@ type ProfileUpdates = Partial<{
   consulted_doctor: boolean;
 }>;
 
-// The __InternalSupabase wrapper in generated types breaks the <Database> generic
-// flow through postgrest-js@2.106. .update()/.insert() parameters resolve to
-// `never`. Runtime behavior is fine — these types just need a ts-expect-error
-// escape hatch at each call site. When postgrest-js fixes the generic, remove
-// the expect-error pragmas (TS will tell us — they become unused).
 type FamilyMemberInsertRow =
   Database["public"]["Tables"]["family_members"]["Insert"];
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
@@ -62,7 +57,7 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
 
   const { error } = await supabase
     .from("profiles")
-    .update(updates as never)
+    .update(updates)
     .eq("id", user.id);
 
   if (error) {
@@ -120,7 +115,7 @@ export async function saveFamilyMembers(
     }));
     const { error: insertError } = await supabase
       .from("family_members")
-      .insert(rows as never);
+      .insert(rows);
 
     if (insertError) {
       Sentry.captureException(insertError, {
@@ -154,7 +149,7 @@ export async function completeOnboarding(
 
   const { error } = await supabase
     .from("profiles")
-    .update({ onboarding_completed_at: new Date().toISOString() } as never)
+    .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
 
   if (error) {
@@ -203,7 +198,7 @@ export async function saveFamilyWidePreferences(
       cooking_methods: input.cooking_methods,
       meal_out_frequency: input.meal_out_frequency,
       family_wide_completed_at: new Date().toISOString(),
-    } as never)
+    })
     .eq("id", user.id);
 
   if (error) {
@@ -289,7 +284,7 @@ export async function saveMomProfile(
       months_postpartum: isLactating ? (input.months_postpartum ?? null) : null,
       consulted_doctor: input.consulted_doctor,
       mom_profile_completed_at: now,
-    } as never)
+    })
     .eq("id", user.id);
 
   if (error) {
@@ -330,7 +325,7 @@ export async function finishOnboardingToSubscription(): Promise<void> {
 
   await supabase
     .from("profiles")
-    .update({ onboarding_completed_at: new Date().toISOString() } as never)
+    .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
 
   revalidatePath("/dashboard");
@@ -436,7 +431,7 @@ export async function finalizeOnboarding(): Promise<void> {
 
   await supabase
     .from("profiles")
-    .update({ onboarding_completed_at: new Date().toISOString() } as never)
+    .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
 
   revalidatePath("/dashboard");
@@ -750,7 +745,7 @@ export async function addFamilyMember(
 
   const { error: insertError } = await supabase
     .from("family_members")
-    .insert(row as never);
+    .insert(row);
   if (insertError) {
     Sentry.captureException(insertError, {
       tags: { area: "family", step: "addFamilyMember.insert", userId: user.id },
@@ -772,7 +767,7 @@ export async function addFamilyMember(
   const updatedOrder = [...order, memberId];
   await supabase
     .from("profiles")
-    .update({ member_addition_order: updatedOrder } as never)
+    .update({ member_addition_order: updatedOrder })
     .eq("id", user.id);
 
   revalidatePath("/family");
@@ -879,7 +874,7 @@ export async function addHousekeeper(input: {
     };
     const { error } = await supabase
       .from("family_members")
-      .update(updateRow as never)
+      .update(updateRow)
       .eq("id", existingId)
       .eq("user_id", user.id);
     if (error) {
@@ -901,7 +896,7 @@ export async function addHousekeeper(input: {
     };
     const { error } = await supabase
       .from("family_members")
-      .insert(insertRow as never);
+      .insert(insertRow);
     if (error) {
       Sentry.captureException(error, {
         tags: { area: "family", step: "addHousekeeper.insert", userId: user.id },
@@ -988,7 +983,7 @@ export async function updateFamilyMember(
   const row = buildMemberRow(input, user.id);
   const { error } = await supabase
     .from("family_members")
-    .update(row as never)
+    .update(row)
     .eq("id", memberId)
     .eq("user_id", user.id);
   if (error) {

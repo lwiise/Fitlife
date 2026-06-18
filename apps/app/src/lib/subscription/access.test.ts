@@ -83,9 +83,11 @@ function stubBeneficiaryCount(count: number, error: unknown = null) {
     // neq is the terminal call that is awaited
     neq: vi.fn().mockResolvedValue({ count, error }),
   };
+  // Intentional partial mock — only the .from() chain countBeneficiaries() uses
+  // is stubbed; cast to the real client type instead of disabling type-checks.
   mockCreateClient.mockResolvedValue({
     from: vi.fn().mockReturnValue(builder),
-  } as never);
+  } as unknown as Awaited<ReturnType<typeof createClient>>);
 }
 
 beforeEach(() => {

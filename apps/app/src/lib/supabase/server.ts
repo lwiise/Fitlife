@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 import type { Database } from "./database.types";
 
@@ -9,7 +10,12 @@ import type { Database } from "./database.types";
  * - Route Handlers (app/api/.../route.ts)
  * - Server Actions
  */
-export async function createClient() {
+// Returned as the supabase-js `SupabaseClient<Database>` so .insert()/.update()
+// validate row columns. The @supabase/ssr return type trips a postgrest-js@2.106
+// generic bug — the `__InternalSupabase` wrapper in the generated types resolves
+// write params to `never` — so one cast at the source types every call site
+// (same one-cast pattern as lib/admin/db.ts). Type-only; runtime client unchanged.
+export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -35,5 +41,5 @@ export async function createClient() {
         },
       },
     }
-  );
+  ) as unknown as SupabaseClient<Database>;
 }
