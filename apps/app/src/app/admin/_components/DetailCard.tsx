@@ -18,9 +18,9 @@ export function DetailCard({
   return (
     <section
       aria-label={title}
-      className="overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated"
+      className="overflow-hidden rounded-xl border border-brand-purple-900/10 bg-surface-elevated shadow-sm"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-brand-ink/10 px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b border-brand-purple-900/10 bg-brand-purple-900/[0.03] px-4 py-3">
         <Heading className="text-sm font-bold text-brand-ink">{title}</Heading>
         {action}
       </header>
