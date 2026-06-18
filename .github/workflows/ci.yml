@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-      # Node 20 matches the Netlify deploy target (NODE_VERSION in netlify.toml).
+      # Node 20 matches the Netlify deploy target (NODE_VERSION in apps/app/netlify.toml).
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
@@ -35,10 +35,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Type-check
         run: pnpm type-check
-      # apps/web is dead code with lint errors we're not fixing; exclude it for
-      # now and drop this --filter once apps/web is deleted.
       - name: Lint
-        run: pnpm exec turbo run lint --filter='!@fitlife/web'
+        run: pnpm lint
       - name: Test
         run: pnpm test
       # env.ts validates NEXT_PUBLIC_* at module load, so `next build` needs

@@ -5,10 +5,8 @@
   "description": "Fit Life 2.0 — Smart nutrition for Gulf families",
   "scripts": {
     "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter=@fitlife/web",
     "dev:app": "turbo run dev --filter=@fitlife/app",
     "build": "turbo run build",
-    "build:web": "turbo run build --filter=@fitlife/web",
     "build:app": "turbo run build --filter=@fitlife/app",
     "lint": "turbo run lint",
     "test": "turbo run test",

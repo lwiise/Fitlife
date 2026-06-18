@@ -88,7 +88,7 @@ Before building ANY section, you must:
 **Site architecture**: Merged from two Netlify sites to one unified site.
 - Single production site: fitlife-app-mvp.netlify.app
 - Landing page lives at apps/app/src/marketing (the live one)
-- apps/web is DEAD CODE — do not edit
+- apps/web (the old standalone landing app) has been REMOVED — it was dead code; the landing is served from apps/app/src/marketing
 - Old fitlife-landing.netlify.app site is decommissioned
 
 **Database migration baseline**: Production Supabase has migrations 00001 through 00007 applied (verified 06/09/2026 — 00007 `meal_mode` column confirmed present via a read-only REST probe of `family_members`). Migration 00005 added per-member fields (member_type, sex, allergies, dislikes, trimester, school_meal_handling, picky_eater) and family-wide preferences (cuisine, dietary_restrictions, cooking_methods, meal_out_frequency). Migration 00006 added `chat_messages`; 00007 added `family_members.meal_mode` ('shared' default / 'independent'). Migrations are applied MANUALLY (no CI/Netlify runner) — when adding a migration, apply it to prod yourself.
