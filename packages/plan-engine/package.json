@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@fitlife/tsconfig": "workspace:*",
-    "typescript": "^5",
+    "typescript": "^6",
     "vitest": "^3.2.4"
   }
 }
