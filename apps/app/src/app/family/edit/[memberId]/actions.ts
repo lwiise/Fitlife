@@ -97,7 +97,7 @@ export async function updateMemberPersonal(
       weight_kg: data.weight_kg,
       role,
       updated_at: new Date().toISOString(),
-    } as never)
+    })
     .eq("id", memberId)
     .eq("user_id", userId);
 
@@ -212,7 +212,7 @@ export async function updateMemberHealth(
       school_meal_handling: isChild ? (data.school_meal_handling ?? null) : null,
       picky_eater: isChild ? data.picky_eater : false,
       updated_at: new Date().toISOString(),
-    } as never)
+    })
     .eq("id", memberId)
     .eq("user_id", userId);
 

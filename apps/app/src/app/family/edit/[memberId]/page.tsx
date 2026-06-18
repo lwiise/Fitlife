@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
-import { mapSaraGoalToUser } from "@/lib/plans/goalMapping";
+import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { HousekeeperForm } from "../../add/HousekeeperForm";
 import { MemberEditedBanner } from "./MemberEditedBanner";
 import {
@@ -115,7 +115,7 @@ export default async function EditMemberPage({
         : type === "child"
           ? "طفل"
           : m.primary_goal
-            ? labelFor(GOALS, mapSaraGoalToUser(m.primary_goal as never))
+            ? labelFor(GOALS, mapSaraGoalToUser(m.primary_goal as SaraGoal))
             : null;
   const activityLabel = labelFor(
     type === "child" ? CHILD_ACTIVITY : ACTIVITY_OPTIONS,

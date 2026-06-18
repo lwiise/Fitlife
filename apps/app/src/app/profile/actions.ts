@@ -41,7 +41,7 @@ export async function saveMomPersonalInfo(
 
   const { error } = await supabase
     .from("profiles")
-    .update({ ...parsed.data, updated_at: new Date().toISOString() } as never)
+    .update({ ...parsed.data, updated_at: new Date().toISOString() })
     .eq("id", user.id);
 
   if (error) {
@@ -140,7 +140,7 @@ export async function saveMomHealthInfo(
       consulted_doctor: data.consulted_doctor,
       meal_mode: data.meal_mode,
       updated_at: new Date().toISOString(),
-    } as never)
+    })
     .eq("id", user.id);
 
   if (error) {
@@ -189,7 +189,7 @@ export async function saveMomFamilyPreferences(
       cooking_methods: data.cooking_methods,
       meal_out_frequency: data.meal_out_frequency,
       updated_at: new Date().toISOString(),
-    } as never)
+    })
     .eq("id", user.id);
 
   if (error) {
@@ -226,7 +226,7 @@ export async function saveHousekeeperLanguage(
     .update({
       preferred_language: parsed.data.preferred_language,
       updated_at: new Date().toISOString(),
-    } as never)
+    })
     .eq("id", parsed.data.housekeeper_id)
     .eq("user_id", user.id);
 

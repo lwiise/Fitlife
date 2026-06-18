@@ -139,7 +139,7 @@ export async function triggerPlanGeneration(params: {
         status: "failed",
         error_message: "stale generation reclassified",
         completed_at: new Date().toISOString(),
-      } as never)
+      })
       .eq("id", live.id);
   }
 
@@ -326,7 +326,7 @@ export async function triggerPlanGeneration(params: {
       err instanceof Error ? err.message : "failed to start generation";
     await supabase
       .from("meal_plans")
-      .update({ status: "failed", error_message: errorMessage } as never)
+      .update({ status: "failed", error_message: errorMessage })
       .eq("id", mealPlanId);
     return { ok: false, kind: "dispatch" };
   }

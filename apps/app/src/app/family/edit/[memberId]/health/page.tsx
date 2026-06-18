@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
-import { mapSaraGoalToUser, type UserGoal } from "@/lib/plans/goalMapping";
+import { mapSaraGoalToUser, type UserGoal, type SaraGoal } from "@/lib/plans/goalMapping";
 import {
   GATE_CONDITIONS,
   STABLE_CONDITIONS,
@@ -63,7 +63,7 @@ export default async function MemberHealthEditPage({
 
   const userGoal: UserGoal | undefined =
     type === "adult" && m.primary_goal
-      ? mapSaraGoalToUser(m.primary_goal as never)
+      ? mapSaraGoalToUser(m.primary_goal as SaraGoal)
       : undefined;
 
   return (
