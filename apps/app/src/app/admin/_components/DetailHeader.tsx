@@ -24,7 +24,7 @@ export function DetailHeader({
   children?: ReactNode;
 }) {
   return (
-    <header className="border-b border-brand-ink/10 bg-surface-elevated">
+    <header className="border-b border-brand-purple-900/10 bg-gradient-to-b from-surface-elevated to-admin-surface">
       <div className="container-app py-4">
         <div className="flex items-center gap-3">
           <Link

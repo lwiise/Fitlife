@@ -151,7 +151,12 @@ export function SplineLineChart({
                 <stop
                   offset="0%"
                   stopColor="var(--color-brand-purple-900)"
-                  stopOpacity="0.16"
+                  stopOpacity="0.28"
+                />
+                <stop
+                  offset="60%"
+                  stopColor="var(--color-brand-purple-900)"
+                  stopOpacity="0.1"
                 />
                 <stop
                   offset="100%"
@@ -181,7 +186,7 @@ export function SplineLineChart({
               <path
                 d={splinePath(cmpPts)}
                 fill="none"
-                stroke="#666377"
+                stroke="var(--color-brand-ink-muted)"
                 strokeWidth="2"
                 strokeDasharray="2 5"
                 strokeLinecap="round"
