@@ -142,7 +142,7 @@ export function AdminLoginForm({
         <button
           type="submit"
           disabled={submitting || !email || !password}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-ink py-3.5 text-base font-bold text-white shadow-lg transition-colors hover:bg-brand-purple-900 disabled:cursor-not-allowed disabled:bg-brand-ink/40 disabled:shadow-none"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-purple-900 py-3.5 text-base font-bold text-white shadow-lg transition-colors hover:bg-brand-purple-700 disabled:cursor-not-allowed disabled:bg-brand-purple-900/40 disabled:shadow-none"
         >
           {submitting ? (
             <>
