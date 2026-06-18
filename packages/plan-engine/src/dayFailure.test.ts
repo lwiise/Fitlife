@@ -282,5 +282,39 @@ describe("generateMealPlan — Part E: partial failures surface the cause", () =
     expect(missingDays).toContain(1);
     expect(missingDaysCause).toBeTruthy();
     expect((missingDaysCause ?? "").length).toBeGreaterThan(0);
-  });
+    // A deterministically-failing day now runs its first-pass budget AND the
+    // in-run second-chance pass (both with real content-retry backoff) before
+    // being dropped, so give it headroom beyond the 5s default.
+  }, 15000);
+});
+
+describe("generateMealPlan — Part F: in-run second-chance pass", () => {
+  it("recovers a day that fails its first-pass re-rolls but passes on the second pass", async () => {
+    // Day 1's first 3 calls (initial + 2 content re-rolls = the whole first-pass
+    // budget) return malformed JSON → dropped into failedDays. The second-chance
+    // pass re-runs it with a fresh budget; the 4th call parses. Days 0+2 succeed
+    // first try. Day 1 must end up in the plan and NOT in missingDays.
+    let day1Calls = 0;
+    mockedStream.mockImplementation(async (params) => {
+      const systemPrompt =
+        (params as { systemPrompt?: string } | undefined)?.systemPrompt ?? "";
+      if (!/day_index=\d+/.test(systemPrompt)) return skeletonResponse();
+      if (/day_index=1\b/.test(systemPrompt)) {
+        day1Calls++;
+        if (day1Calls <= 3)
+          return { text: "{{ not valid json", tokensIn: 5, tokensOut: 5, stopReason: null };
+      }
+      return validDayResponse(systemPrompt);
+    });
+
+    const { plan, missingDays } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeSoloContext(),
+    });
+
+    expect(day1Calls).toBeGreaterThanOrEqual(4); // 3 first-pass fails + ≥1 second-pass
+    expect(missingDays).not.toContain(1);
+    const mom = plan.members.find((m) => m.member_id === "mom")!;
+    expect(mom.days.find((d) => d.day_index === 1)!.meals.length).toBeGreaterThan(0);
+  }, 20000);
 });

@@ -1376,7 +1376,7 @@ export async function generateMealPlan(params: {
     membersToGenerate.length,
     hasTranslation,
   );
-  await mapWithConcurrency(daysToGenerate, dayLoopConcurrency, async (dayIndex) => {
+  const generateDay = async (dayIndex: number): Promise<void> => {
     const dayMemberIds = new Set(
       membersToGenerate
         .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
@@ -1605,7 +1605,23 @@ export async function generateMealPlan(params: {
         return;
       }
     }
-  });
+  };
+
+  await mapWithConcurrency(daysToGenerate, dayLoopConcurrency, generateDay);
+
+  // Second-chance pass (in-run): give days that exhausted their per-day retry
+  // budget ONE more fresh full attempt within this same invocation, so a flaky
+  // model miss recovers here instead of being deferred to the drain — a separate
+  // background round-trip that refills the day minutes later and out of order
+  // (an early day still "preparing" while later days are already done). Bounded
+  // to a single extra wave; anything still failing falls through to the drain
+  // exactly as before. Skipped when nothing failed, or when EVERY day failed
+  // (that run throws below — a second wave wouldn't change the outcome).
+  if (failedDays.size > 0 && done.size > 0) {
+    const retryDays = daysToGenerate.filter((di) => failedDays.has(di));
+    failedDays.clear();
+    await mapWithConcurrency(retryDays, dayLoopConcurrency, generateDay);
+  }
 
   await progressTail;
 
