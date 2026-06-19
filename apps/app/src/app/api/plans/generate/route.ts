@@ -116,12 +116,12 @@ export async function POST(req: Request) {
         }
         case "rate_limit": {
           const days = access.details?.days_until_reset ?? 7;
-          return NextResponse.json(
-            {
-              error: `وصلتي للحد الأقصى من الخطط هذا الأسبوع. حاولي مرة ثانية بعد ${days} أيام`,
-            },
-            { status: 429 },
-          );
+          // Per-member regenerate quota (3/week per member) vs the account-wide
+          // new-plan pool — show the matching message.
+          const error = access.details?.member_regen
+            ? `وصلتي للحد الأقصى لإعادة إنشاء خطة هذا الفرد هذا الأسبوع (٣ مرات). حاولي بعد ${days} أيام`
+            : `وصلتي للحد الأقصى من الخطط هذا الأسبوع. حاولي مرة ثانية بعد ${days} أيام`;
+          return NextResponse.json({ error }, { status: 429 });
         }
       }
       return NextResponse.json({ error: "حدث خطأ غير متوقع" }, { status: 500 });

@@ -1079,6 +1079,9 @@ export async function generateMealPlan(params: {
       // Name the targeted member from the very first emit so the loading screen
       // shows the right person while the skeleton runs (matches snapshot() below).
       generating_member_id: targetedMemberId,
+      // Manual per-member regenerate marker (counted for the weekly per-member
+      // regen quota). Undefined for new plans / adds / drains.
+      regenerated_for: regenerateMemberId,
     };
     await Promise.resolve(
       onProgress(preShell, { readyDays: 0, totalDays: familyDayIndices.length }),
@@ -1336,6 +1339,10 @@ export async function generateMealPlan(params: {
     // empty/failed day doesn't render as "loading"). Covers adds (onlyMemberId) AND
     // per-member edit/regenerate (targetedMemberId). Cleared on the final plan.
     generating_member_id: generating && targetedMemberId ? targetedMemberId : undefined,
+    // Manual per-member regenerate marker — persisted on the FINAL plan too (unlike
+    // generating_member_id) so the weekly per-member regen quota can be counted from
+    // plan_data. Undefined for new plans / adds / drains.
+    regenerated_for: regenerateMemberId,
     // Drain (onlyMemberId): bump so a deterministically-failing day eventually caps.
     // Manual per-member regen (regenerateMemberId): RESET that member's count so the
     // drain gets a fresh budget if a day fails again. Else carry the prior counts.

@@ -20,6 +20,7 @@ import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
 import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
+  canRegenerateMemberPlan,
   type AccessResult,
 } from "@/lib/subscription/access";
 import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
@@ -88,9 +89,15 @@ export async function triggerPlanGeneration(params: {
     feedback,
   } = params;
 
+  // A manual per-member regenerate (regenerateMemberId, not a bypass family change)
+  // is gated by that member's OWN weekly quota (3/week), separate from the shared
+  // new-plan pool. Bypass runs (onboarding/family change) skip the rate limit; a
+  // plain new plan uses the account-wide weekly pool.
   const access = bypassRateLimit
     ? await canGenerateForFamilyChange(userId)
-    : await canGenerateNewPlan(userId);
+    : regenerateMemberId
+      ? await canRegenerateMemberPlan(userId, regenerateMemberId)
+      : await canGenerateNewPlan(userId);
   // On a full-family run, exceeding the tier's people limit doesn't block: we
   // generate up to the limit (mom + as many members as fit) and defer the rest,
   // which the dashboard then nudges to upgrade for. Single-member runs (add/edit)

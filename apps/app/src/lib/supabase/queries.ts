@@ -131,5 +131,48 @@ export async function canGeneratePlan(userId: string): Promise<boolean> {
       .map((r) => (r as { meal_plan_id: string | null }).meal_plan_id)
       .filter((id): id is string => id != null),
   );
+
+  // Per-member regenerations have their OWN weekly quota (see
+  // countMemberRegensThisWeek) and must NOT consume the shared new-plan pool.
+  // Subtract any plan in this window that was a manual per-member regenerate
+  // (plan_data.regenerated_for set). meal_plans.id === plan_generations.meal_plan_id.
+  const { data: regenRows, error: regenError } = await supabase
+    .from("meal_plans")
+    .select("id")
+    .eq("user_id", userId)
+    .gte("created_at", oneWeekAgo.toISOString())
+    .not("plan_data->>regenerated_for", "is", null);
+  if (!regenError && regenRows) {
+    for (const r of regenRows as { id: string }[]) distinctPlans.delete(r.id);
+  }
+
   return distinctPlans.size < 3;
+}
+
+/**
+ * Count this member's MANUAL regenerations in the last 7 days. Each regenerate
+ * creates a new meal_plan tagged with plan_data.regenerated_for = member_id, so a
+ * rolling-window count of non-failed plans carrying that tag is the per-member
+ * regen usage. Drives the per-member weekly regen quota (3). Best-effort: returns
+ * 0 on error so a transient read never blocks the user.
+ */
+export async function countMemberRegensThisWeek(
+  userId: string,
+  memberId: string,
+): Promise<number> {
+  const supabase = await createClient();
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  const { count, error } = await supabase
+    .from("meal_plans")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", oneWeekAgo.toISOString())
+    .neq("status", "failed")
+    .filter("plan_data->>regenerated_for", "eq", memberId);
+
+  if (error) return 0;
+  return count ?? 0;
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
+  canRegenerateMemberPlan,
 } from "./access";
 import type { SubscriptionRow } from "./state";
 
@@ -27,6 +28,7 @@ vi.mock("./state", () => ({
 
 vi.mock("@/lib/supabase/queries", () => ({
   canGeneratePlan: vi.fn(),
+  countMemberRegensThisWeek: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -38,13 +40,14 @@ import {
   isSubscriptionActive,
   getTierLimit,
 } from "./state";
-import { canGeneratePlan } from "@/lib/supabase/queries";
+import { canGeneratePlan, countMemberRegensThisWeek } from "@/lib/supabase/queries";
 import { createClient } from "@/lib/supabase/server";
 
 const mockGetCurrentSubscription = vi.mocked(getCurrentSubscription);
 const mockIsSubscriptionActive = vi.mocked(isSubscriptionActive);
 const mockGetTierLimit = vi.mocked(getTierLimit);
 const mockCanGeneratePlan = vi.mocked(canGeneratePlan);
+const mockCountMemberRegens = vi.mocked(countMemberRegensThisWeek);
 const mockCreateClient = vi.mocked(createClient);
 
 const USER = "user-123";
@@ -94,6 +97,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Sensible defaults: rate-limit OK, tier limit generous, count low.
   mockCanGeneratePlan.mockResolvedValue(true);
+  mockCountMemberRegens.mockResolvedValue(0);
   mockGetTierLimit.mockReturnValue(6);
   stubBeneficiaryCount(0); // -> 1 beneficiary (Mom only)
 });
@@ -294,5 +298,52 @@ describe("canGenerateForFamilyChange shared gating", () => {
 
     const res = await canGenerateForFamilyChange(USER);
     expect(res.allowed).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Per-member weekly regenerate quota (3 / member / 7 days)
+// ===========================================================================
+describe("canRegenerateMemberPlan — per-member weekly quota", () => {
+  beforeEach(() => {
+    mockGetCurrentSubscription.mockResolvedValue(makeSub({ status: "active" }));
+    mockIsSubscriptionActive.mockReturnValue(true);
+    mockGetTierLimit.mockReturnValue(6);
+    stubBeneficiaryCount(1);
+  });
+
+  it("under the per-member limit -> allowed", async () => {
+    mockCountMemberRegens.mockResolvedValue(2);
+
+    const res = await canRegenerateMemberPlan(USER, "member-1");
+    expect(res.allowed).toBe(true);
+  });
+
+  it("at the per-member limit -> blocked rate_limit with member_regen flag", async () => {
+    mockCountMemberRegens.mockResolvedValue(3);
+
+    const res = await canRegenerateMemberPlan(USER, "member-1");
+    expect(res.allowed).toBe(false);
+    if (!res.allowed) {
+      expect(res.reason).toBe("rate_limit");
+      expect(res.details).toEqual({ days_until_reset: 7, member_regen: true });
+    }
+  });
+
+  it("counts each member separately (member id passed through)", async () => {
+    mockCountMemberRegens.mockResolvedValue(0);
+
+    const res = await canRegenerateMemberPlan(USER, "anas");
+    expect(res.allowed).toBe(true);
+    expect(mockCountMemberRegens).toHaveBeenCalledWith(USER, "anas");
+  });
+
+  it("still enforces subscription (inactive -> blocked, quota not consulted)", async () => {
+    mockGetCurrentSubscription.mockResolvedValue(null);
+
+    const res = await canRegenerateMemberPlan(USER, "member-1");
+    expect(res.allowed).toBe(false);
+    if (!res.allowed) expect(res.reason).toBe("subscription_inactive");
+    expect(mockCountMemberRegens).not.toHaveBeenCalled();
   });
 });

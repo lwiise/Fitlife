@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { canGeneratePlan } from "@/lib/supabase/queries";
+import { canGeneratePlan, countMemberRegensThisWeek } from "@/lib/supabase/queries";
 import {
   getCurrentSubscription,
   getTierLimit,
@@ -19,6 +19,10 @@ export interface AccessDetails {
   current_people?: number;
   max_people?: number | null;
   days_until_reset?: number;
+  // True when a rate_limit denial is the PER-MEMBER regenerate quota (3/week per
+  // member), not the account-wide new-plan pool — lets the UI show a member-specific
+  // message.
+  member_regen?: boolean;
 }
 
 export type AccessResult =
@@ -121,6 +125,34 @@ export async function canGenerateForFamilyChange(
   userId: string,
 ): Promise<AccessResult> {
   return checkSubscriptionAndPersonCount(userId);
+}
+
+/**
+ * Access check for a MANUAL per-member regenerate (the "إنشاء خطة جديدة" button
+ * scoped to one member). Each member has its OWN weekly quota of 3 regenerations
+ * (rolling 7 days), counted separately from the account's new-plan pool — so
+ * refining one member never competes with new plans or other members. Subscription
+ * + person-count still apply. Denials reuse the `rate_limit` reason with
+ * `details.member_regen` so the route can show a member-specific message.
+ */
+const MEMBER_REGEN_WEEKLY_LIMIT = 3;
+export async function canRegenerateMemberPlan(
+  userId: string,
+  memberId: string,
+): Promise<AccessResult> {
+  const base = await checkSubscriptionAndPersonCount(userId);
+  if (!base.allowed) return base;
+
+  const used = await countMemberRegensThisWeek(userId, memberId);
+  if (used >= MEMBER_REGEN_WEEKLY_LIMIT) {
+    return {
+      allowed: false,
+      reason: "rate_limit",
+      details: { days_until_reset: 7, member_regen: true },
+    };
+  }
+
+  return { allowed: true };
 }
 
 /**

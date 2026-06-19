@@ -172,6 +172,10 @@ export const MealPlanSchema = z.object({
   // their Previous Plans view. Does NOT affect other members' access or the
   // active plan. Absent on older plans.
   hidden_for_member_ids: z.array(z.string()).optional(),
+  // member_id this plan was a MANUAL per-member regenerate of (the regenerate
+  // button) — persisted so the weekly per-member regen quota can be counted from
+  // plan_data. Absent on new plans, member-adds, and drains.
+  regenerated_for: z.string().optional(),
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 
