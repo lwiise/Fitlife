@@ -14,6 +14,7 @@ import {
   isTransientContentError,
 } from "./generate";
 import { AnthropicCallError, PlanValidationError } from "./errors";
+import { DAY_MODEL } from "./constants";
 import type { PlanPromptContext } from "./buildContext";
 
 const mockedStream = vi.mocked(streamAnthropic);
@@ -317,4 +318,11 @@ describe("generateMealPlan — Part F: in-run second-chance pass", () => {
     const mom = plan.members.find((m) => m.member_id === "mom")!;
     expect(mom.days.find((d) => d.day_index === 1)!.meals.length).toBeGreaterThan(0);
   }, 20000);
+});
+
+describe("DAY_MODEL default", () => {
+  it("defaults the day phase to Sonnet", () => {
+    // No PLAN_DAY_MODEL override in the test env → Sonnet is the default day model.
+    if (!process.env.PLAN_DAY_MODEL) expect(DAY_MODEL).toBe("claude-sonnet-4-6");
+  });
 });

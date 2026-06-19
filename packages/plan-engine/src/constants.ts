@@ -22,12 +22,13 @@ export const PLAN_MODEL = process.env.PLAN_MODEL?.trim() || "claude-opus-4-7";
 //                 model is the big cost/latency win.
 //   • Translate — purely mechanical (Arabic → housekeeper language) → cheapest model.
 // Each is independently overridable by env so prod can roll out / revert per phase
-// without a code change. Set e.g. PLAN_DAY_MODEL=claude-sonnet-4-6 to revert the
-// day phase to Sonnet. Defaults below encode the recommended tiered setup: skeleton
-// inherits PLAN_MODEL; day + translate default to Haiku.
+// without a code change. Set e.g. PLAN_DAY_MODEL=claude-haiku-4-5-20251001 to drop
+// the day phase back to Haiku (cheaper, but it reproducibly fails some member-days).
+// Defaults below: skeleton inherits PLAN_MODEL (Opus); the day phase runs on Sonnet
+// (strong enough that per-day failures effectively disappear); translate on Haiku.
 const HAIKU = "claude-haiku-4-5-20251001";
 export const SKELETON_MODEL = process.env.PLAN_SKELETON_MODEL?.trim() || PLAN_MODEL;
-export const DAY_MODEL = process.env.PLAN_DAY_MODEL?.trim() || HAIKU;
+export const DAY_MODEL = process.env.PLAN_DAY_MODEL?.trim() || "claude-sonnet-4-6";
 export const TRANSLATE_MODEL = process.env.PLAN_TRANSLATE_MODEL?.trim() || HAIKU;
 
 /**

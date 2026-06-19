@@ -1336,14 +1336,17 @@ export async function generateMealPlan(params: {
     // empty/failed day doesn't render as "loading"). Covers adds (onlyMemberId) AND
     // per-member edit/regenerate (targetedMemberId). Cleared on the final plan.
     generating_member_id: generating && targetedMemberId ? targetedMemberId : undefined,
-    // Carry the prior attempt counts; bump the targeted member by one (the drain
-    // uses this to cap completion-retries on a member that can't finish a day).
+    // Drain (onlyMemberId): bump so a deterministically-failing day eventually caps.
+    // Manual per-member regen (regenerateMemberId): RESET that member's count so the
+    // drain gets a fresh budget if a day fails again. Else carry the prior counts.
     gen_attempts: onlyMemberId
       ? {
           ...(existingPlan?.gen_attempts ?? {}),
           [onlyMemberId]: (existingPlan?.gen_attempts?.[onlyMemberId] ?? 0) + 1,
         }
-      : existingPlan?.gen_attempts,
+      : regenerateMemberId
+        ? { ...(existingPlan?.gen_attempts ?? {}), [regenerateMemberId]: 0 }
+        : existingPlan?.gen_attempts,
   });
 
   // Serialize onProgress writes.
@@ -1487,10 +1490,20 @@ export async function generateMealPlan(params: {
             inScopeInputs.push({ member_id: id, meals, fresh: true });
           }
           // Re-form shared batches among the in-scope fresh single portions only.
-          const reassembled =
-            inScopeInputs.length > 1
-              ? resyncSharedMeals(inScopeInputs)
-              : new Map(inScopeInputs.map((d) => [d.member_id, d.meals]));
+          let reassembled: Map<string, Meal[]>;
+          if (inScopeInputs.length > 1) {
+            try {
+              reassembled = resyncSharedMeals(inScopeInputs);
+            } catch (resyncErr) {
+              console.warn(
+                `[plan-generate] partial resyncSharedMeals failed for day ${dayIndex}; using un-merged in-scope meals:`,
+                resyncErr instanceof Error ? resyncErr.message : String(resyncErr),
+              );
+              reassembled = new Map(inScopeInputs.map((d) => [d.member_id, d.meals]));
+            }
+          } else {
+            reassembled = new Map(inScopeInputs.map((d) => [d.member_id, d.meals]));
+          }
 
           for (const id of dayMemberIds) {
             if (plainFresh.includes(id)) {
@@ -1544,10 +1557,23 @@ export async function generateMealPlan(params: {
               });
           }
         }
-        const assembled =
-          beneficiaries.length > 1
-            ? resyncSharedMeals(dayInputs)
-            : new Map(dayInputs.map((d) => [d.member_id, d.meals]));
+        let assembled: Map<string, Meal[]>;
+        if (beneficiaries.length > 1) {
+          try {
+            assembled = resyncSharedMeals(dayInputs);
+          } catch (resyncErr) {
+            // A deterministic assembly throw is a logic bug, not a bad model
+            // response — don't drop a good day over it; fall back to un-merged
+            // individual meals so the day still lands.
+            console.warn(
+              `[plan-generate] resyncSharedMeals failed for day ${dayIndex}; using un-merged meals:`,
+              resyncErr instanceof Error ? resyncErr.message : String(resyncErr),
+            );
+            assembled = new Map(dayInputs.map((d) => [d.member_id, d.meals]));
+          }
+        } else {
+          assembled = new Map(dayInputs.map((d) => [d.member_id, d.meals]));
+        }
 
         for (const di of dayInputs) {
           const meals = assembled.get(di.member_id) ?? di.meals;
