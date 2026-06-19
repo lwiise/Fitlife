@@ -36,7 +36,7 @@ export function CurrencyToggle({
             key={o.key}
             href={buildQuery(baseParams, { cur: o.cur })}
             aria-current={active ? "true" : undefined}
-            className={`inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold transition-colors ${
+            className={`inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold transition-colors ${
               active
                 ? "bg-brand-purple-900 text-white"
                 : "text-brand-ink-muted hover:text-brand-ink"

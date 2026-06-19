@@ -108,7 +108,7 @@ export function AdminLoginForm({
             autoComplete="email"
             dir="ltr"
             placeholder="you@example.com"
-            className="h-11 w-full rounded-xl border border-brand-ink/10 bg-brand-surface px-4 text-brand-ink transition-all placeholder:text-brand-ink-muted/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-purple-900"
+            className="h-11 w-full rounded-lg border border-brand-ink/10 bg-brand-surface px-4 text-brand-ink transition-all placeholder:text-brand-ink-muted/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-purple-900"
           />
         </div>
 
@@ -129,12 +129,12 @@ export function AdminLoginForm({
             autoComplete="current-password"
             dir="ltr"
             placeholder="********"
-            className="h-11 w-full rounded-xl border border-brand-ink/10 bg-brand-surface px-4 text-brand-ink transition-all placeholder:text-brand-ink-muted/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-purple-900"
+            className="h-11 w-full rounded-lg border border-brand-ink/10 bg-brand-surface px-4 text-brand-ink transition-all placeholder:text-brand-ink-muted/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-purple-900"
           />
         </div>
 
         {errorKey ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3" role="alert">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3" role="alert">
             <p className="text-sm leading-relaxed text-red-700">{t(errorKey, locale)}</p>
           </div>
         ) : null}
@@ -142,7 +142,7 @@ export function AdminLoginForm({
         <button
           type="submit"
           disabled={submitting || !email || !password}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-purple-900 py-3.5 text-base font-bold text-white shadow-lg transition-colors hover:bg-brand-purple-700 disabled:cursor-not-allowed disabled:bg-brand-purple-900/40 disabled:shadow-none"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-purple-900 py-3.5 text-base font-bold text-white shadow-lg transition-colors hover:bg-brand-purple-700 disabled:cursor-not-allowed disabled:bg-brand-purple-900/40 disabled:shadow-none"
         >
           {submitting ? (
             <>

@@ -57,25 +57,23 @@ export function MetricTabs({
                 metric: key === "gross_revenue" ? undefined : key,
               })}
               aria-current={active ? "true" : undefined}
-              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl bg-gradient-to-br from-brand-purple-900 to-brand-purple-700 p-3 text-white transition ${
+              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl border bg-surface-elevated p-3 ps-4 shadow-sm transition ${
                 active
-                  ? "shadow-md ring-2 ring-inset ring-white/70"
-                  : "ring-1 ring-inset ring-white/15 hover:ring-white/40"
+                  ? "border-brand-purple-900/30 bg-brand-purple-900/[0.06] ring-1 ring-inset ring-brand-purple-900/30"
+                  : "border-brand-ink/10 hover:border-brand-ink/25"
               }`}
             >
-              {active ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-x-0 top-0 h-[3px] bg-white"
-                />
-              ) : null}
-              <span className="text-xs font-semibold uppercase text-white/80">
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 start-0 w-[3px] bg-brand-purple-900"
+              />
+              <span className="adm-label uppercase text-brand-ink-muted">
                 {metricLabel(key, locale)}
               </span>
               <span
                 dir="ltr"
-                className={`font-extrabold leading-none tabular-nums text-white ${
-                  active ? "text-2xl sm:text-3xl" : "text-xl"
+                className={`tabular-nums text-brand-ink ${
+                  active ? "adm-display" : "text-xl font-extrabold leading-none"
                 }`}
               >
                 {fmtMetricValue(mv.headline, mv.unit, locale)}
@@ -84,13 +82,12 @@ export function MetricTabs({
                 <TrendPill
                   trend={mv.delta}
                   polarity={metricPolarity(key)}
-                  onFilled
                   locale={locale}
                 />
                 {mv.current.length >= 2 ? (
                   <Sparkline
                     points={mv.current}
-                    className={active ? "text-white" : "text-white/60"}
+                    className={active ? "text-brand-purple-900" : "text-brand-ink-muted"}
                   />
                 ) : null}
               </div>

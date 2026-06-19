@@ -42,10 +42,11 @@ export function RevenueChartSection({
     <section aria-labelledby="ov-chart-heading" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <h2 id="ov-chart-heading" className="text-lg font-bold text-brand-ink">
+          <h2 id="ov-chart-heading" className="adm-h2 text-brand-ink">
             {title}
           </h2>
           <InfoTooltip
+            id="ov-trends-info"
             text={t("approx_snapshot", locale)}
             label={t("info_more", locale)}
           />
@@ -61,12 +62,12 @@ export function RevenueChartSection({
         />
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
+      <div className="space-y-4 rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 shadow-sm sm:p-6">
         <MetricTabs view={view} baseParams={baseParams} locale={locale} />
 
         <ChartFrame
           ariaLabel={title}
-          state={hasData ? "ready" : "empty"}
+          state={!selected ? "error" : hasData ? "ready" : "empty"}
           locale={locale}
         >
           <SplineLineChart
@@ -83,7 +84,7 @@ export function RevenueChartSection({
           />
 
           {/* Legend: solid = current, dotted = comparison */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-brand-ink/70">
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 adm-micro text-brand-ink/70">
             <span className="inline-flex items-center gap-2">
               <span className="h-0.5 w-6 rounded bg-brand-purple-900" aria-hidden="true" />
               {currentLabel}

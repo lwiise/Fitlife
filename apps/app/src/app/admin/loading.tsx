@@ -15,7 +15,7 @@ export default function AdminLoading() {
             <div className="h-6 w-40 animate-pulse rounded bg-surface-elevated" />
             <div className="h-11 w-96 max-w-full animate-pulse rounded bg-surface-elevated" />
           </div>
-          <div className="space-y-4 rounded-2xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
+          <div className="space-y-4 rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-20 animate-pulse rounded-xl bg-brand-surface" />

@@ -52,15 +52,13 @@ export function KpiCard({
 }) {
   return (
     <div
-      className={`relative flex flex-col gap-2 overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 ps-5 ${className}`}
+      className={`relative flex flex-col gap-2 overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 ps-5 shadow-sm ${className}`}
     >
       <span
         aria-hidden="true"
         className={`absolute inset-y-0 start-0 w-[3px] ${SPINE[accent]}`}
       />
-      <p className="text-xs font-semibold uppercase text-brand-ink-muted">
-        {label}
-      </p>
+      <p className="adm-label uppercase text-brand-ink-muted">{label}</p>
       <div className="flex items-end justify-between gap-2">
         <span
           dir="ltr"
@@ -76,7 +74,7 @@ export function KpiCard({
         <Sparkline points={sparkline} className={SPARK[accent]} />
       ) : null}
       {hint ? (
-        <p className="text-xs leading-snug text-brand-ink-muted">{hint}</p>
+        <p className="adm-micro text-brand-ink-muted">{hint}</p>
       ) : null}
     </div>
   );

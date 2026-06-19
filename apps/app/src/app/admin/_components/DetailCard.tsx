@@ -18,10 +18,10 @@ export function DetailCard({
   return (
     <section
       aria-label={title}
-      className="overflow-hidden rounded-xl border border-brand-purple-900/10 bg-surface-elevated shadow-sm"
+      className="overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated shadow-sm"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-brand-purple-900/10 bg-brand-purple-900/[0.03] px-4 py-3">
-        <Heading className="text-sm font-bold text-brand-ink">{title}</Heading>
+      <header className="flex items-center justify-between gap-3 border-b border-brand-ink/10 bg-brand-purple-900/[0.04] px-4 py-3">
+        <Heading className="adm-h2 text-brand-ink">{title}</Heading>
         {action}
       </header>
       <div className={`p-4 ${className ?? ""}`}>{children}</div>
@@ -41,9 +41,9 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-0.5 py-1.5">
-      <dt className="text-xs text-brand-ink-muted">{label}</dt>
+      <dt className="adm-label text-brand-ink-muted">{label}</dt>
       <dd
-        className={`text-sm text-brand-ink ${mono ? "tabular-nums" : ""}`}
+        className={`adm-body text-brand-ink ${mono ? "tabular-nums" : ""}`}
         dir={mono ? "ltr" : undefined}
       >
         {value ?? "—"}

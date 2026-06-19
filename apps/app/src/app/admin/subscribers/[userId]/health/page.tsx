@@ -45,7 +45,7 @@ export default async function SubscriberHealthPage({
       />
 
       <main className="container-app space-y-4 py-6">
-        <p className="flex items-center gap-2 rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">
+        <p className="flex items-center gap-2 rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 adm-body text-brand-ink">
           <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
           {t("health_logged_note", locale)}
         </p>
@@ -97,7 +97,7 @@ function MemberHealthCard({
         />
       </dl>
 
-      <div className="mt-2 space-y-2 border-t border-brand-ink/5 pt-2">
+      <div className="mt-2 space-y-2 border-t border-brand-ink/10 pt-2">
         <ListField label={t("field_conditions", locale)} items={conditions} locale={locale} />
         <ListField label={t("field_allergies", locale)} items={allergies} locale={locale} />
         <ListField label={t("field_dislikes", locale)} items={dislikes} locale={locale} />
@@ -117,15 +117,15 @@ function ListField({
 }) {
   return (
     <div>
-      <p className="text-xs text-brand-ink-muted">{label}</p>
+      <p className="adm-label text-brand-ink-muted">{label}</p>
       {items.length === 0 ? (
-        <p className="text-sm text-brand-ink-muted">{t("none_listed", locale)}</p>
+        <p className="adm-body text-brand-ink-muted">{t("none_listed", locale)}</p>
       ) : (
         <ul className="mt-1 flex flex-wrap gap-1.5">
           {items.map((it, i) => (
             <li
               key={i}
-              className="rounded-md bg-brand-surface px-2 py-0.5 text-sm text-brand-ink"
+              className="rounded-full bg-brand-surface px-2.5 py-0.5 adm-body text-brand-ink"
             >
               {it}
             </li>

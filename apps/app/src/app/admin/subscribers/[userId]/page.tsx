@@ -248,8 +248,12 @@ function SubscriptionFields({
 }
 
 const TH =
-  "whitespace-nowrap px-4 py-2.5 text-start text-xs font-semibold uppercase text-brand-ink-muted";
-const TD = "whitespace-nowrap px-4 py-2.5 text-sm text-brand-ink";
+  "whitespace-nowrap px-4 py-2.5 text-start adm-label uppercase text-brand-ink-muted";
+const TD = "whitespace-nowrap px-4 py-2.5 adm-body text-brand-ink";
+// Frozen first column for horizontal scroll on narrow screens. No zebra in these
+// tables, so an opaque surface-elevated bg occludes content scrolling beneath.
+const STICKY_HEAD = "sticky start-0 z-20 bg-surface-elevated";
+const STICKY_CELL = "sticky start-0 z-10 bg-surface-elevated";
 
 function HouseholdTable({
   members,
@@ -263,7 +267,7 @@ function HouseholdTable({
       <table className="w-full min-w-[44rem] border-collapse">
         <thead className="border-b border-brand-ink/10">
           <tr>
-            <th scope="col" className={TH}>{t("col_name", locale)}</th>
+            <th scope="col" className={`${TH} ${STICKY_HEAD}`}>{t("col_name", locale)}</th>
             <th scope="col" className={TH}>{t("field_goal", locale)}</th>
             <th scope="col" className={`${TH} text-end`}>{t("field_calories", locale)}</th>
             <th scope="col" className={TH}>{t("field_macros", locale)}</th>
@@ -272,8 +276,8 @@ function HouseholdTable({
         </thead>
         <tbody>
           {members.map((m) => (
-            <tr key={m.id} className="border-t border-brand-ink/5">
-              <td className={TD}>
+            <tr key={m.id} className="border-t border-brand-ink/10">
+              <td className={`${TD} ${STICKY_CELL}`}>
                 <span className="font-medium">{m.name}</span>
                 <span className="ms-1.5 text-xs text-brand-ink-muted">
                   {roleLabel(m.role, locale)}
@@ -327,14 +331,18 @@ function PlansTable({
   locale: AdminLocale;
 }) {
   if (plans.length === 0)
-    return <p className="px-4 py-6 text-sm text-brand-ink-muted">{t("no_plans", locale)}</p>;
+    return (
+      <p className="px-4 py-16 text-center adm-body text-brand-ink-muted">
+        {t("no_plans", locale)}
+      </p>
+    );
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[52rem] border-collapse">
         <thead className="border-b border-brand-ink/10">
           <tr>
-            <th scope="col" className={TH}>{t("col_status", locale)}</th>
+            <th scope="col" className={`${TH} ${STICKY_HEAD}`}>{t("col_status", locale)}</th>
             <th scope="col" className={TH}>{t("col_signup", locale)}</th>
             <th scope="col" className={`${TH} text-end`}>{t("field_days", locale)}</th>
             <th scope="col" className={`${TH} text-end`}>{t("field_tokens", locale)}</th>
@@ -345,8 +353,8 @@ function PlansTable({
         </thead>
         <tbody>
           {plans.map((p) => (
-            <tr key={p.id} className="border-t border-brand-ink/5">
-              <td className={TD}>{planStatusLabel(p.status, locale)}</td>
+            <tr key={p.id} className="border-t border-brand-ink/10">
+              <td className={`${TD} ${STICKY_CELL}`}>{planStatusLabel(p.status, locale)}</td>
               <td className={TD}>{fmtDate(p.generatedAt ?? p.createdAt, locale)}</td>
               <td className={`${TD} text-end`}>
                 <span dir="ltr" className="tabular-nums">
@@ -392,7 +400,7 @@ function GenerationsTable({
 }) {
   if (generations.length === 0)
     return (
-      <p className="px-4 py-6 text-sm text-brand-ink-muted">
+      <p className="px-4 py-16 text-center adm-body text-brand-ink-muted">
         {t("no_generations", locale)}
       </p>
     );
@@ -402,7 +410,7 @@ function GenerationsTable({
       <table className="w-full min-w-[56rem] border-collapse">
         <thead className="border-b border-brand-ink/10">
           <tr>
-            <th scope="col" className={TH}>{t("col_status", locale)}</th>
+            <th scope="col" className={`${TH} ${STICKY_HEAD}`}>{t("col_status", locale)}</th>
             <th scope="col" className={TH}>{t("col_signup", locale)}</th>
             <th scope="col" className={TH}>{t("field_model", locale)}</th>
             <th scope="col" className={`${TH} text-end`}>{t("field_tokens", locale)}</th>
@@ -413,8 +421,8 @@ function GenerationsTable({
         </thead>
         <tbody>
           {generations.map((g) => (
-            <tr key={g.id} className="border-t border-brand-ink/5">
-              <td className={TD}>{genStatusLabel(g.status, locale)}</td>
+            <tr key={g.id} className="border-t border-brand-ink/10">
+              <td className={`${TD} ${STICKY_CELL}`}>{genStatusLabel(g.status, locale)}</td>
               <td className={TD}>{fmtDate(g.createdAt, locale)}</td>
               <td className={`${TD} text-brand-ink-muted`} dir="ltr">
                 {g.model ?? "—"}
@@ -466,7 +474,7 @@ function SubHistoryTable({
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-t border-brand-ink/5">
+            <tr key={i} className="border-t border-brand-ink/10">
               <td className={TD}>
                 <StatusBadge status={r.status} locale={locale} />
               </td>

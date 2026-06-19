@@ -40,11 +40,11 @@ export function AiCostStrip({
         <div className="flex items-center gap-1">
           <h2
             id="ov-cost-heading"
-            className="text-sm font-semibold uppercase text-brand-ink/70"
+            className="adm-label uppercase text-brand-ink/70"
           >
             {t("cost_efficiency", locale)}
           </h2>
-          <InfoTooltip text={note} label={t("info_more", locale)} />
+          <InfoTooltip id="ov-cost-info" text={note} label={t("info_more", locale)} />
         </div>
         <CurrencyToggle currency={currency} baseParams={baseParams} locale={locale} />
       </div>

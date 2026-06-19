@@ -140,7 +140,7 @@ export default async function AdminOverviewPage({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2
                   id="admin-subscribers-heading"
-                  className="text-lg font-bold text-brand-ink"
+                  className="adm-h2 text-brand-ink"
                 >
                   {t("table_title", locale)}
                 </h2>
@@ -181,10 +181,8 @@ export default async function AdminOverviewPage({
 
 function EmptyState({ locale }: { locale: AdminLocale }) {
   return (
-    <div className="grid place-items-center rounded-2xl border border-dashed border-brand-ink/15 bg-surface-elevated py-24 text-center">
-      <p className="text-base font-medium text-brand-ink">
-        {t("table_empty", locale)}
-      </p>
+    <div className="grid place-items-center rounded-xl border border-dashed border-brand-ink/15 bg-surface-elevated py-24 text-center">
+      <p className="adm-h2 text-brand-ink">{t("table_empty", locale)}</p>
     </div>
   );
 }

@@ -22,7 +22,7 @@ export function TierBadge({
   const arName = tier in PRICING_TIERS ? PRICING_TIERS[tier as Tier].name_ar : null;
   const dot = DOT[tier] ?? "bg-brand-ink/30";
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-brand-ink/10 bg-brand-surface px-2 py-0.5 text-xs font-medium text-brand-ink">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-ink/10 bg-brand-surface px-2.5 py-0.5 text-xs font-medium text-brand-ink">
       <span className={`size-1.5 rounded-full ${dot}`} aria-hidden="true" />
       {tierLabel(tier, locale, arName)}
     </span>

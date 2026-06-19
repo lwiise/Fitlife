@@ -28,7 +28,7 @@ export function AudienceBar({
   return (
     <section
       aria-label={t("audience_label", locale)}
-      className="rounded-xl border border-brand-ink/10 bg-surface-elevated p-4"
+      className="rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 shadow-sm"
     >
       <ul className="flex flex-wrap items-center gap-x-8 gap-y-3">
         {stats.map(({ icon: Icon, label, value }, i) => (
@@ -43,12 +43,12 @@ export function AudienceBar({
               >
                 {fmtNumber(value, locale)}
               </span>
-              <span className="text-xs text-brand-ink/70">{label}</span>
+              <span className="adm-micro text-brand-ink/70">{label}</span>
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-brand-ink/70">{t("audience_caption", locale)}</p>
+      <p className="mt-2 adm-micro text-brand-ink/70">{t("audience_caption", locale)}</p>
     </section>
   );
 }

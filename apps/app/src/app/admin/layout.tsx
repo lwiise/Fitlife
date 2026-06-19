@@ -22,7 +22,11 @@ export default async function AdminLayout({
   const dir = locale === "ar" ? "rtl" : "ltr";
 
   return (
-    <div dir={dir} lang={locale} className="min-h-screen bg-admin-surface text-brand-ink">
+    <div
+      dir={dir}
+      lang={locale}
+      className="admin-root min-h-screen bg-admin-surface text-brand-ink"
+    >
       {children}
     </div>
   );

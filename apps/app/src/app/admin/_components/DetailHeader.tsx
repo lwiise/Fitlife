@@ -24,7 +24,7 @@ export function DetailHeader({
   children?: ReactNode;
 }) {
   return (
-    <header className="border-b border-brand-purple-900/10 bg-gradient-to-b from-surface-elevated to-admin-surface">
+    <header className="border-b border-brand-ink/10 bg-gradient-to-b from-surface-elevated to-admin-surface">
       <div className="container-app py-4">
         <div className="flex items-center gap-3">
           <Link
@@ -40,9 +40,9 @@ export function DetailHeader({
           </div>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-xl font-extrabold text-brand-ink">{name || "—"}</h1>
+          <h1 className="adm-h1 text-brand-ink">{name || "—"}</h1>
           {email ? (
-            <span dir="ltr" className="text-sm text-brand-ink-muted">
+            <span dir="ltr" className="adm-body text-brand-ink-muted">
               {email}
             </span>
           ) : null}

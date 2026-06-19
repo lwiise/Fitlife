@@ -26,7 +26,7 @@ export function AdminTopBar({
   const localeNext = activeNav === "insights" ? "/admin/insights" : "/admin";
 
   return (
-    <header className="border-b border-brand-purple-900/10 bg-gradient-to-b from-surface-elevated to-admin-surface">
+    <header className="border-b border-brand-ink/10 bg-gradient-to-b from-surface-elevated to-admin-surface">
       <div className="container-app flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
         <Link href="/admin" className="flex min-h-11 items-center gap-2.5">
           <span
@@ -94,7 +94,7 @@ function NavTab({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+      className={`inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium transition-colors ${
         active
           ? "bg-brand-purple-900/10 text-brand-purple-900"
           : "text-brand-ink-muted hover:text-brand-ink"
@@ -131,7 +131,7 @@ function PeriodControl({
             key={o.days}
             href={buildQuery(baseParams, { days: o.days === 30 ? undefined : o.days })}
             aria-current={active ? "true" : undefined}
-            className={`inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+            className={`inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium transition-colors ${
               active
                 ? "bg-brand-purple-900 text-white"
                 : "text-brand-ink-muted hover:text-brand-ink"

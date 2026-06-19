@@ -12,14 +12,10 @@ import { t } from "@/lib/admin/i18n";
 export function TrendPill({
   trend,
   polarity = "positive",
-  onFilled = false,
   locale,
 }: {
   trend: Trend;
   polarity?: "positive" | "negative";
-  /** Set on a dark/filled card: uses a solid white chip so the delta stays
-   * legible (emerald/red text on white) instead of a translucent tint. */
-  onFilled?: boolean;
   locale: AdminLocale;
 }) {
   const { direction, pct } = trend;
@@ -31,22 +27,14 @@ export function TrendPill({
     (direction === "up" && polarity === "negative") ||
     (direction === "down" && polarity === "positive");
 
-  // On a filled (purple) card the chip is solid white with darker-than-brand
-  // emerald so the delta clears AA (translucent tints fail on the dark tile).
-  const neutral = onFilled
-    ? "bg-white text-brand-ink-muted"
-    : "bg-brand-ink/5 text-brand-ink-muted";
+  const neutral = "bg-brand-ink/5 text-brand-ink-muted";
   const tone =
     direction === "flat" || pct === null
       ? neutral
       : isGood
-        ? onFilled
-          ? "bg-white text-emerald-700"
-          : "bg-brand-emerald/10 text-brand-emerald"
+        ? "bg-brand-emerald/10 text-brand-emerald"
         : isBad
-          ? onFilled
-            ? "bg-white text-red-700"
-            : "bg-red-600/10 text-red-700"
+          ? "bg-red-600/10 text-red-700"
           : neutral;
 
   const Icon =

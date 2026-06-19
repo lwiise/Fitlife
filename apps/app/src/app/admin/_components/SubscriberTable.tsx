@@ -34,7 +34,7 @@ export function SubscriberTable({
   locale: AdminLocale;
 }) {
   const th =
-    "whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase text-brand-ink/70";
+    "whitespace-nowrap px-3 py-2.5 adm-label uppercase text-brand-ink/70";
   // Frozen first column: an OPAQUE per-row-parity bg occludes content scrolling
   // beneath it (zebra-aware); the header corner sits above the body sticky cells.
   const stickyHead = "sticky start-0 z-30 bg-surface-elevated";
@@ -139,7 +139,7 @@ export function SubscriberTable({
                 return (
                   <tr
                     key={r.userId}
-                    className={`group border-t border-brand-ink/5 align-middle transition-colors hover:bg-brand-purple-900/[0.06] ${
+                    className={`group border-t border-brand-ink/10 align-middle transition-colors hover:bg-brand-purple-900/[0.06] ${
                       zebra ? "bg-admin-surface" : ""
                     }`}
                   >
@@ -260,7 +260,7 @@ export function SubscriberTable({
                       <Link
                         href={href}
                         aria-label={`${t("view_subscriber", locale)}: ${r.displayName || r.email || ""}`}
-                        className="inline-flex size-11 items-center justify-center rounded-md text-brand-ink-muted transition-colors hover:bg-brand-surface hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-purple-900"
+                        className="inline-flex size-11 items-center justify-center rounded-lg text-brand-ink-muted transition-colors hover:bg-brand-surface hover:text-brand-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-purple-900"
                       >
                         <ChevronRight
                           className="size-4 rtl:rotate-180"

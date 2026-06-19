@@ -45,12 +45,12 @@ export default async function PlanInspectPage({
       />
 
       <main className="container-app space-y-4 py-6">
-        <p className="flex items-center gap-2 rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">
+        <p className="flex items-center gap-2 rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 adm-body text-brand-ink">
           <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
           {t("plan_data_logged_note", locale)}
         </p>
 
-        <p className="text-sm text-brand-ink-muted">
+        <p className="adm-body text-brand-ink-muted">
           {fmtDate(plan.generatedAt ?? plan.createdAt, locale)} ·{" "}
           <span dir="ltr" className="tabular-nums">
             {fmtNumber(json.length, locale)}

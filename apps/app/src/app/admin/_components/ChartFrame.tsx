@@ -27,9 +27,9 @@ export function ChartFrame({
       <div
         role="note"
         aria-label={ariaLabel}
-        className="grid min-h-40 place-items-center rounded-lg border border-dashed border-brand-ink/15 bg-brand-surface/50 p-6 text-center"
+        className="grid min-h-40 place-items-center rounded-xl border border-dashed border-brand-ink/15 bg-brand-surface/50 p-6 text-center"
       >
-        <p className="text-sm text-brand-ink-muted">
+        <p className="adm-body text-brand-ink-muted">
           {t(state === "empty" ? "chart_empty" : "chart_error", locale)}
         </p>
       </div>
@@ -40,7 +40,7 @@ export function ChartFrame({
     <div>
       {children}
       {note ? (
-        <p className="mt-2 text-xs leading-snug text-brand-ink-muted">{note}</p>
+        <p className="mt-2 adm-micro text-brand-ink-muted">{note}</p>
       ) : null}
     </div>
   );

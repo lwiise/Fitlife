@@ -5,7 +5,7 @@ import { intervalLabel, t } from "@/lib/admin/i18n";
 import { buildQuery } from "./searchParams";
 
 function pill(active: boolean): string {
-  return `inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+  return `inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium transition-colors ${
     active ? "bg-brand-purple-900 text-white" : "text-brand-ink-muted hover:text-brand-ink"
   }`;
 }
@@ -81,7 +81,7 @@ export function OverviewChartControls({
             name="from"
             defaultValue={fromValue}
             max={toValue}
-            className="min-h-11 rounded-md border border-brand-ink/15 bg-surface-elevated px-2 text-sm text-brand-ink"
+            className="min-h-11 rounded-lg border border-brand-ink/15 bg-surface-elevated px-2 text-sm text-brand-ink"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-brand-ink-muted">
@@ -90,12 +90,12 @@ export function OverviewChartControls({
             type="date"
             name="to"
             defaultValue={toValue}
-            className="min-h-11 rounded-md border border-brand-ink/15 bg-surface-elevated px-2 text-sm text-brand-ink"
+            className="min-h-11 rounded-lg border border-brand-ink/15 bg-surface-elevated px-2 text-sm text-brand-ink"
           />
         </label>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center rounded-md bg-brand-purple-900 px-3 text-sm font-medium text-white transition-colors hover:bg-brand-purple-700"
+          className="inline-flex min-h-11 items-center rounded-lg bg-brand-purple-900 px-3 text-sm font-medium text-white transition-colors hover:bg-brand-purple-700"
         >
           {t("range_apply", locale)}
         </button>

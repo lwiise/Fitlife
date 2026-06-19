@@ -31,7 +31,7 @@ export default async function AdminLoginPage() {
             FL
           </span>
         </div>
-        <div className="rounded-2xl border border-brand-ink/10 bg-surface-elevated p-6 shadow-sm">
+        <div className="rounded-xl border border-brand-ink/10 bg-surface-elevated p-6 shadow-sm">
           <AdminLoginForm locale={locale} deniedEmail={user?.email ?? null} />
         </div>
       </div>
