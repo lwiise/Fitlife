@@ -170,6 +170,16 @@ function describeMom(c: PlanPromptContext): string {
     line += ` لا تحب: ${m.dislikes.join("، ")}.`;
   }
   line += ` تفضل مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
+  // meal_mode is discretionary: 'shared' is the default (cook once, split), so it
+  // needs no instruction. Only flag 'independent' — and it must be surfaced HERE,
+  // in the roster the SKELETON sees, because the skeleton is the phase that decides
+  // which dishes are shared (same recipe_name_ar = shared). Without it the skeleton
+  // gives mom the family's shared dish names and she stays grouped as shared even
+  // after switching to independent. Mirrors describeMember (feminine phrasing).
+  if (m.meal_mode === "independent") {
+    line +=
+      " (وجبات مستقلة: أعطيها أطباقاً خاصة بها بأسماء مختلفة عن باقي العائلة، إلا إذا تعارض مع حالة طبية/حساسية/حمل فالصحة أولاً.)";
+  }
 
   return line;
 }

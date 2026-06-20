@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDayPrompt } from "./systemPrompt";
+import { buildDayPrompt, buildSkeletonPrompt } from "./systemPrompt";
 import type { PlanPromptContext } from "./buildContext";
 import type { PlanSkeleton } from "./schema";
 
@@ -68,6 +68,23 @@ describe("buildDayPrompt — mom meal_mode", () => {
   it("does not flag the independent exception when mom is 'shared'", () => {
     const prompt = buildDayPrompt(makeMomContext("shared"), skeleton, 0, "اليوم 1");
     expect(prompt).not.toContain("وجبات مستقلة (طبق خاص باسم مختلف)");
+  });
+});
+
+// The skeleton is the phase that decides which dishes are shared (same
+// recipe_name_ar). Mom's 'independent' flag must reach its roster — otherwise the
+// skeleton hands mom the family's shared dish names and she stays grouped as
+// shared even after switching to independent. Mom-only context → solo sharedNote,
+// which never says "وجبات مستقلة", so the roster line is the only possible source.
+describe("buildSkeletonPrompt — mom meal_mode in the roster", () => {
+  it("surfaces 'independent' for mom so the skeleton gives her own dish names", () => {
+    const prompt = buildSkeletonPrompt(makeMomContext("independent"));
+    expect(prompt).toContain("وجبات مستقلة: أعطيها أطباقاً خاصة بها");
+  });
+
+  it("does not flag the independent exception when mom is 'shared'", () => {
+    const prompt = buildSkeletonPrompt(makeMomContext("shared"));
+    expect(prompt).not.toContain("وجبات مستقلة");
   });
 });
 
