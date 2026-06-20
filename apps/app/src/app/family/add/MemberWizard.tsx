@@ -81,12 +81,12 @@ function OptionButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-11 rounded-xl border px-4 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+      className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
         full ? "w-full text-start" : ""
       } ${
         active
-          ? "border-brand-purple-900 bg-brand-purple-900 text-white"
-          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+          ? "border-brand-purple-900 bg-brand-purple-900/5"
+          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
       }`}
     >
       {children}

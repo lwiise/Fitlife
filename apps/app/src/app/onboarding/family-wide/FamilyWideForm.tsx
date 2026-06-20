@@ -163,10 +163,10 @@ export function FamilyWideForm() {
                       type="button"
                       onClick={() => setCuisine(o.value)}
                       aria-pressed={cuisine === o.value}
-                      className={`min-h-11 rounded-xl border px-4 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                      className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                         cuisine === o.value
-                          ? "border-brand-purple-900 bg-brand-purple-900 text-white"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                          ? "border-brand-purple-900 bg-brand-purple-900/5"
+                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
                       }`}
                     >
                       {o.label}
@@ -196,10 +196,10 @@ export function FamilyWideForm() {
                       type="button"
                       onClick={() => setDietary((s) => toggle(s, o.value))}
                       aria-pressed={dietary.includes(o.value)}
-                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                         dietary.includes(o.value)
-                          ? "border-brand-pink bg-brand-pink-light text-brand-pink"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-pink/40"
+                          ? "border-brand-purple-900 bg-brand-purple-900/5"
+                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
                       }`}
                     >
                       {o.label}
@@ -247,10 +247,10 @@ export function FamilyWideForm() {
                       type="button"
                       onClick={() => setCooking((s) => toggle(s, o.value))}
                       aria-pressed={cooking.includes(o.value)}
-                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                         cooking.includes(o.value)
-                          ? "border-brand-purple-900 bg-brand-lavender/40 text-brand-purple-900"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                          ? "border-brand-purple-900 bg-brand-purple-900/5"
+                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
                       }`}
                     >
                       {o.label}
@@ -275,10 +275,10 @@ export function FamilyWideForm() {
                       type="button"
                       onClick={() => setMealOut(o.value)}
                       aria-pressed={mealOut === o.value}
-                      className={`min-h-11 rounded-xl border px-4 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                      className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                         mealOut === o.value
-                          ? "border-brand-purple-900 bg-brand-purple-900 text-white"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                          ? "border-brand-purple-900 bg-brand-purple-900/5"
+                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
                       }`}
                     >
                       {o.label}
