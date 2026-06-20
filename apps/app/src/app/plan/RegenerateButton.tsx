@@ -15,6 +15,7 @@ export function RegenerateButton({
   memberName,
   hasSharedMeals = false,
   locale,
+  autoOpen = false,
 }: {
   className?: string;
   // Scope the regen to the member being viewed (others kept untouched).
@@ -24,12 +25,17 @@ export function RegenerateButton({
   // both). When false, a plain confirm (nothing to scope).
   hasSharedMeals?: boolean;
   locale?: LocaleCode;
+  // Arriving from the post-edit nudge (/plan?member=...&regen=1): open the confirm
+  // dialog on mount so the just-saved edit is one confirm away from applying.
+  autoOpen?: boolean;
 }) {
   const router = useRouter();
   const t = getPlanActionStrings(locale ?? "ar");
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  // Opens immediately when arriving from the post-edit nudge (autoOpen) so the
+  // just-saved edit is one confirm away from regenerating; otherwise closed.
+  const [confirmOpen, setConfirmOpen] = useState(autoOpen);
   const [issues, setIssues] = useState("");
   const [improvements, setImprovements] = useState("");
   const [scope, setScope] = useState<RegenScope>("both");

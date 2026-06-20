@@ -72,7 +72,7 @@ export function MemberEditedBanner({ memberId }: { memberId: string }) {
             عدّلتِ البيانات. أنشئي خطة جديدة لتطبيق التعديلات على الخطة
           </p>
           <Link
-            href="/plan"
+            href={`/plan?member=${encodeURIComponent(memberId)}&regen=1`}
             onClick={clearNudge}
             className="inline-flex items-center justify-center min-h-11 px-4 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
           >

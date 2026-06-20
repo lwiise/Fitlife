@@ -27,9 +27,9 @@ export const metadata = {
 export default async function PlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ member?: string }>;
+  searchParams: Promise<{ member?: string; regen?: string }>;
 }) {
-  const [{ member }, profile, latest, familyMembers] = await Promise.all([
+  const [{ member, regen }, profile, latest, familyMembers] = await Promise.all([
     searchParams,
     getCurrentUserProfile(),
     getCurrentUserLatestPlan(),
@@ -207,6 +207,7 @@ export default async function PlanPage({
               updatedAt={latest.updated_at}
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
+              autoRegen={regen === "1"}
             />
           </>
         )}

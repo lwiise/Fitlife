@@ -49,6 +49,7 @@ export function PlanViewer({
   readOnly = false,
   housekeeperLocale,
   locale,
+  autoRegen = false,
 }: {
   plan: MealPlan;
   planId: string;
@@ -66,6 +67,9 @@ export function PlanViewer({
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
+  // Open the regenerate dialog on load - set when the user arrives from the
+  // post-edit nudge (/plan?member=...&regen=1).
+  autoRegen?: boolean;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -323,6 +327,7 @@ export function PlanViewer({
               memberName={activeMember.member_name_ar}
               hasSharedMeals={activeMemberHasShared}
               locale={locale}
+              autoOpen={autoRegen}
             />
           )}
         </div>
