@@ -10,7 +10,7 @@ import { BackToDashboard } from "@/components/BackToDashboard";
 import { SettingsLink } from "@/components/SettingsLink";
 import { FamilyMemberCard } from "./FamilyMemberCard";
 import { HousekeeperCard } from "./HousekeeperCard";
-import { AddMemberPicker } from "./AddMemberPicker";
+import { FamilyAddBuilder } from "./FamilyAddBuilder";
 
 export const metadata = { title: "عائلتك" };
 
@@ -86,7 +86,10 @@ export default async function FamilyPage() {
           )}
         </div>
 
-        <AddMemberPicker />
+        <FamilyAddBuilder
+          canAddHusband={!members.some((m) => m.role === "dad")}
+          canAddHousekeeper={!housekeeper}
+        />
       </div>
     </main>
   );
