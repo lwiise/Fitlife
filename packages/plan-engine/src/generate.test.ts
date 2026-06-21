@@ -195,6 +195,49 @@ beforeEach(() => {
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
+describe("resyncSharedMeals — independent members never join a shared batch", () => {
+  const lunch = (chicken: number): Meal => ({
+    slot: "lunch",
+    slot_name_ar: "غداء",
+    // Same dish NAME for everyone — the collision that used to force a merge.
+    recipe_name_ar: "كبسة",
+    ingredients: [{ name_ar: "دجاج", amount: chicken, unit: "g" }],
+    prep_steps_ar: ["جهّزي الكبسة"],
+    calories: 500,
+    macros: { protein_g: 30, carbs_g: 40, fat_g: 10 },
+  });
+
+  it("peels an independent member out of a name-colliding share; shared peers still batch", () => {
+    const out = resyncSharedMeals(
+      [
+        { member_id: "mom", fresh: true, meals: [lunch(80)] },
+        { member_id: "m1", fresh: true, meals: [lunch(120)] },
+        { member_id: "m2", fresh: true, meals: [lunch(120)] },
+      ],
+      new Set(["mom"]), // mom is independent
+    );
+    const momLunch = out.get("mom")![0]!;
+    // Independent mom stays individual despite the identical dish name.
+    expect(momLunch.shared_recipe).toBeFalsy();
+    expect(momLunch.per_member_portions).toBeUndefined();
+    // The two shared members still form a batch together — without mom.
+    const m1Lunch = out.get("m1")![0]!;
+    expect(m1Lunch.shared_recipe).toBe(true);
+    expect(m1Lunch.per_member_portions!.map((p) => p.member_id).sort()).toEqual([
+      "m1",
+      "m2",
+    ]);
+  });
+
+  it("without the independent set, the same colliding dish DOES merge (guards the param)", () => {
+    const out = resyncSharedMeals([
+      { member_id: "mom", fresh: true, meals: [lunch(80)] },
+      { member_id: "m1", fresh: true, meals: [lunch(120)] },
+    ]);
+    expect(out.get("mom")![0]!.shared_recipe).toBe(true);
+  });
+});
+
 describe("generateMealPlan — incremental carry-over", () => {
   it("zero-call fast path: a fully-complete existing plan makes NO Anthropic calls", async () => {
     // Any call should fail the test outright.

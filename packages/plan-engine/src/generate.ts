@@ -585,8 +585,17 @@ function buildSharedGroup(
  * Returns the assembled meals per member (input order); unchanged carried meals are
  * returned by reference so carry-over stays byte-identical. Exported for testing.
  */
-export function resyncSharedMeals(members: MemberDayMeals[]): Map<string, Meal[]> {
+export function resyncSharedMeals(
+  members: MemberDayMeals[],
+  independentIds?: ReadonlySet<string>,
+): Map<string, Meal[]> {
   const freshSet = new Set(members.filter((m) => m.fresh).map((m) => m.member_id));
+  // An independent beneficiary (incl. the mom) never shares a dish, even when its
+  // emitted name collides with the family's. meal_mode is the STRUCTURAL guarantee
+  // here; the prompt only *asks* the model for distinct names. Without this, the
+  // dish-name grouping below silently re-merged an independent member into a shared
+  // batch — the "switched mom to independent but the plan is still shared" bug.
+  const isIndependent = (id: string) => independentIds?.has(id) ?? false;
 
   type Entry = { member_id: string; meal: Meal; fresh: boolean };
   const groups = new Map<string, Entry[]>();
@@ -609,8 +618,10 @@ export function resyncSharedMeals(members: MemberDayMeals[]): Map<string, Meal[]
     const entries = groups.get(key)!;
     // A group needs recompute when a fresh member is in it, OR a carried member in
     // it previously shared with a member that's fresh this run (so a fresh member
-    // that LEFT this dish is dropped from the remaining batch). Otherwise it's
-    // untouched by this run and every carried meal is kept exactly as-is.
+    // that LEFT this dish is dropped from the remaining batch), OR an independent
+    // member must be peeled out of a name-colliding share. Otherwise it's untouched
+    // by this run and every carried meal is kept exactly as-is.
+    const hasIndependent = entries.some((e) => isIndependent(e.member_id));
     const hasFresh = entries.some((e) => e.fresh);
     const referencesFresh =
       !hasFresh &&
@@ -619,21 +630,28 @@ export function resyncSharedMeals(members: MemberDayMeals[]): Map<string, Meal[]
           e.meal.shared_recipe === true &&
           (e.meal.per_member_portions ?? []).some((p) => freshSet.has(p.member_id)),
       );
-    if (!hasFresh && !referencesFresh) {
+    if (!hasFresh && !referencesFresh && !hasIndependent) {
       for (const e of entries) resolved.set(e.meal, e.meal);
       continue;
     }
-    const own = entries.map((e) => ({
+    // Independent members are always individual; only the shared members can batch.
+    const sharedEntries: Entry[] = [];
+    for (const e of entries) {
+      if (isIndependent(e.member_id)) resolved.set(e.meal, toIndividualMeal(e.meal));
+      else sharedEntries.push(e);
+    }
+    if (sharedEntries.length === 0) continue;
+    const own = sharedEntries.map((e) => ({
       member_id: e.member_id,
       meal: e.fresh ? toIndividualMeal(e.meal) : ownPortionMeal(e.meal, e.member_id),
     }));
     if (own.length < 2) {
       // Eaten by one person now → individual (dissolves a former share).
-      resolved.set(entries[0]!.meal, own[0]!.meal);
+      resolved.set(sharedEntries[0]!.meal, own[0]!.meal);
       continue;
     }
     const built = buildSharedGroup(own);
-    built.forEach((b, i) => resolved.set(entries[i]!.meal, b));
+    built.forEach((b, i) => resolved.set(sharedEntries[i]!.meal, b));
   }
 
   const out = new Map<string, Meal[]>();
@@ -888,6 +906,13 @@ export async function generateMealPlan(params: {
       (m) => [m.id, m.meal_mode] as [string, "shared" | "independent"],
     ),
   ]);
+  // Beneficiaries who eat their OWN dishes. Passed to resyncSharedMeals so a dish
+  // that collides by name with the family's can never merge them into a shared
+  // batch, and used below to keep them off the aligned family dish grid. This is
+  // what makes switching the mom (or a member) to 'independent' actually take.
+  const independentIds = new Set<string>(
+    [...mealModeById].filter(([, mode]) => mode === "independent").map(([id]) => id),
+  );
 
   // ── Analyse the prior plan: per-(member, day) carry-over and the family grid ──
   // Each member keeps its COMPLETED days verbatim; only its empty/missing (member,
@@ -1027,7 +1052,7 @@ export async function generateMealPlan(params: {
       for (const id of regenIds)
         if (!inputs.some((i) => i.member_id === id))
           inputs.push({ member_id: id, meals: [], fresh: true });
-      const resynced = resyncSharedMeals(inputs);
+      const resynced = resyncSharedMeals(inputs, independentIds);
       for (const b of beneficiaries) {
         const day = carriedDays.get(b.member_id)!.get(di);
         if (!day || day.meals.length === 0) continue;
@@ -1229,13 +1254,16 @@ export async function generateMealPlan(params: {
                 fat_g: 0,
               },
             };
+        // An independent member never aligns to the family dish grid — they get
+        // their own skeleton dishes even in an aligned (shared-grid) run.
+        const alignThis = aligned && !independentIds.has(b.member_id);
         return {
           member_id: b.member_id,
           ...targets,
           days: dayIndices.map((di) => ({
             day_index: di,
             day_name_ar: dayNameByIndex.get(di)!,
-            meals: aligned
+            meals: alignThis
               ? (familyDishGrid.get(di) ??
                 skM?.days.find((d) => d.day_index === di)?.meals ??
                 [])
@@ -1500,7 +1528,7 @@ export async function generateMealPlan(params: {
           let reassembled: Map<string, Meal[]>;
           if (inScopeInputs.length > 1) {
             try {
-              reassembled = resyncSharedMeals(inScopeInputs);
+              reassembled = resyncSharedMeals(inScopeInputs, independentIds);
             } catch (resyncErr) {
               console.warn(
                 `[plan-generate] partial resyncSharedMeals failed for day ${dayIndex}; using un-merged in-scope meals:`,
@@ -1567,7 +1595,7 @@ export async function generateMealPlan(params: {
         let assembled: Map<string, Meal[]>;
         if (beneficiaries.length > 1) {
           try {
-            assembled = resyncSharedMeals(dayInputs);
+            assembled = resyncSharedMeals(dayInputs, independentIds);
           } catch (resyncErr) {
             // A deterministic assembly throw is a logic bug, not a bad model
             // response — don't drop a good day over it; fall back to un-merged
