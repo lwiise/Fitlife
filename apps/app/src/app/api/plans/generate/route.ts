@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { triggerPlanGeneration } from "@/lib/plans/dispatch";
 import {
@@ -19,6 +20,22 @@ const GENERIC_502 = "حدث خطأ في إنشاء الخطة. حاولي مرة
  * runs through server actions that call triggerPlanGeneration with the bypass.
  */
 export async function POST(req: Request) {
+  // Safety net: any UNEXPECTED throw (transient DB latency, a serverless cold
+  // start, etc.) must return a clean JSON error — not a bare 500 with no body,
+  // which surfaced to the user as the generic "حدث خطأ. حاولي مرة ثانية" fallback
+  // with nothing logged. Capture the real cause so a recurrence is diagnosable.
+  try {
+    return await handleGenerate(req);
+  } catch (err) {
+    console.error("[/api/plans/generate] unhandled error", err);
+    Sentry.captureException(err, {
+      tags: { area: "plan-generation", step: "generate-route" },
+    });
+    return NextResponse.json({ error: GENERIC_502 }, { status: 500 });
+  }
+}
+
+async function handleGenerate(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
