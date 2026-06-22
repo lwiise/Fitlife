@@ -13,6 +13,13 @@
 
 [build]
   base = "apps/app"
+  # Build on EVERY push. Netlify otherwise skips a build when nothing under the base
+  # dir (apps/app) changed — but @fitlife/plan-engine and @fitlife/config live
+  # OUTSIDE base yet are compiled into the app, so package-only fixes were silently
+  # skipped ("Canceled build due to no content change") and never reached prod until
+  # an unrelated apps/app commit rebuilt main HEAD. /bin/false always exits non-zero,
+  # which tells Netlify "do not ignore" → the build always runs.
+  ignore = "/bin/false"
   command = "corepack enable && pnpm -w install --frozen-lockfile && pnpm --filter @fitlife/app build"
   # publish is relative to base — Netlify joins them, so ".next" resolves
   # to /opt/build/repo/apps/app/.next. Using "apps/app/.next" here would
