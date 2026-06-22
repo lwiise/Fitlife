@@ -457,7 +457,7 @@ export default async (req: Request): Promise<Response> => {
       const prior = await fetchPriorPlan(supabaseUrl, expected, userId, mealPlanId);
       if (prior) {
         existingPlan =
-          body.regenerateMemberId && !body.regenScope
+          body.regenerateMemberId && !body.regenScope && !body.regenerateSharedGroup
             ? {
                 ...prior,
                 members: prior.members.filter(
@@ -506,6 +506,9 @@ export default async (req: Request): Promise<Response> => {
       onlyMemberId: body.onlyMemberId,
       regenerateMemberId: body.regenerateMemberId,
       regenScope: body.regenScope,
+      // Shared-group regen rebuilds multiple members → don't pin the loader to one.
+      suppressTargetedMember:
+        !!body.regenerateSharedGroup && !!body.regenerateMemberId,
       // Persist progressively + flip "ready" on the first emit (the shell), so
       // the plan opens showing all days as loading and they fill in 1→7.
       onProgress: async (snapshot) => {

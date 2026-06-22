@@ -79,15 +79,16 @@ async function handleGenerate(req: Request) {
     supabase,
     userId: user.id,
     feedback,
-    // Scope to the viewed member: carry the rest over, regenerate only this one
-    // with fresh independent dishes. No memberId → full regen (fallback). With a
-    // scope, regenerate only that category of meals (partial regen, co-sharers
-    // recomputed) — see triggerPlanGeneration.regenScope.
+    // Scope to the viewed member: carry the rest over, regenerate only this one.
+    // independentRegen is NOT forced here — dispatch derives it from the member's
+    // CURRENT meal_mode (independent → fresh own dishes; shared → re-merge with the
+    // shared group), so toggling Shared→Individual→Shared round-trips. No memberId →
+    // full regen (fallback). With a scope, regenerate only that category of meals
+    // (partial regen, co-sharers recomputed) — see triggerPlanGeneration.regenScope.
     ...(memberId
       ? {
           carryOver: true,
           regenerateMemberId: memberId,
-          independentRegen: true,
           ...(scope ? { regenScope: scope } : {}),
         }
       : {}),

@@ -653,6 +653,71 @@ describe("generateMealPlan — regenerateMemberId name stamping", () => {
   });
 });
 
+// ── Shared-group regenerate (a member switched back to Shared re-merges) ──
+// Both shared beneficiaries rebuild together, so the loader must NOT pin one member
+// (UI shows them all loading), yet the regenerate still counts against the CLICKED
+// member's weekly quota (regenerated_for). suppressTargetedMember decouples the two.
+describe("generateMealPlan — suppressTargetedMember (shared-group regenerate)", () => {
+  // A prior shared plan with every shared member's meals cleared (day shells kept) —
+  // exactly what prepareSharedGroupRegen produces when a member flips back to Shared.
+  const clearedSharedPlan = (): MealPlan => {
+    const base = makeSharedExistingPlan(); // mom + member-2 sharing
+    return {
+      ...base,
+      members: base.members.map((m) => ({
+        ...m,
+        days: m.days.map((d) => ({
+          ...d,
+          meals: [],
+          day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        })),
+      })),
+    };
+  };
+
+  it("does not pin generating_member_id, but still records regenerated_for", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      sharedStreamReturns(systemPrompt),
+    );
+    const snaps: MealPlan[] = [];
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ extraMember: true }), // mom + member-2
+      existingPlan: clearedSharedPlan(),
+      regenerateMemberId: "mom",
+      suppressTargetedMember: true,
+      onProgress: (snap) => {
+        snaps.push(snap);
+      },
+    });
+    const genSnaps = snaps.filter((s) => s.generating);
+    expect(genSnaps.length).toBeGreaterThan(0);
+    // Two members rebuild together → no single member pinned.
+    expect(genSnaps.every((s) => s.generating_member_id == null)).toBe(true);
+    // Quota still attributes the regenerate to the clicked member.
+    expect(plan.regenerated_for).toBe("mom");
+  });
+
+  it("WITHOUT suppress, the same multi-member regenerate pins the clicked member", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      sharedStreamReturns(systemPrompt),
+    );
+    const snaps: MealPlan[] = [];
+    await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ extraMember: true }),
+      existingPlan: clearedSharedPlan(),
+      regenerateMemberId: "mom",
+      onProgress: (snap) => {
+        snaps.push(snap);
+      },
+    });
+    const genSnaps = snaps.filter((s) => s.generating);
+    expect(genSnaps.length).toBeGreaterThan(0);
+    expect(genSnaps.every((s) => s.generating_member_id === "mom")).toBe(true);
+  });
+});
+
 // ── New shared member anchors to a SHARED peer, never an independent member ──
 // Repro: mom (main user) is 'independent' and is member #0 in the prior plan;
 // member-2 is 'shared'. Adding member-3 ('shared') must align to member-2's shared

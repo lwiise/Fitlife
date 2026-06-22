@@ -847,6 +847,11 @@ export async function generateMealPlan(params: {
   //                  recompute on the shared ones).
   // Requires existingPlan + regenerateMemberId. Out-of-scope meals are kept exactly.
   regenScope?: "individual" | "shared" | "both";
+  // Shared-group regenerate: the run rebuilds MULTIPLE members together (a member
+  // switched back to Shared re-merges with the group), so don't pin
+  // generating_member_id to regenerateMemberId — leave it unset so the UI shows them
+  // all loading. regenerated_for (quota counting) still records regenerateMemberId.
+  suppressTargetedMember?: boolean;
   // Called (serialized) after each day completes with the plan-so-far.
   onProgress?: (
     snapshot: MealPlan,
@@ -869,6 +874,7 @@ export async function generateMealPlan(params: {
     onlyMemberId,
     regenerateMemberId,
     regenScope,
+    suppressTargetedMember,
     onProgress,
   } = params;
   let totalIn = 0;
@@ -1002,7 +1008,7 @@ export async function generateMealPlan(params: {
   // them. Undefined on an initial full-family run (every member generates).
   const targetedMemberId =
     onlyMemberId ??
-    regenerateMemberId ??
+    (suppressTargetedMember ? undefined : regenerateMemberId) ??
     (existingPlan && membersToGenerate.length === 1
       ? membersToGenerate[0]!.member_id
       : undefined);
@@ -1831,6 +1837,7 @@ export async function runMealPlanGeneration(params: {
   onlyMemberId?: string;
   regenerateMemberId?: string;
   regenScope?: "individual" | "shared" | "both";
+  suppressTargetedMember?: boolean;
 }): Promise<GenerateResult> {
   const {
     supabase,
@@ -1842,6 +1849,7 @@ export async function runMealPlanGeneration(params: {
     onlyMemberId,
     regenerateMemberId,
     regenScope,
+    suppressTargetedMember,
   } = params;
   const startMs = Date.now();
 
@@ -1858,6 +1866,7 @@ export async function runMealPlanGeneration(params: {
       onlyMemberId,
       regenerateMemberId,
       regenScope,
+      suppressTargetedMember,
       // Persist progressively; flip "ready" on the first emit (the shell) so the
       // plan opens showing all days loading and they fill in 1→7.
       onProgress: async (snapshot) => {

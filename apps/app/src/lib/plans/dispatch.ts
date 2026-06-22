@@ -166,18 +166,41 @@ export async function triggerPlanGeneration(params: {
   // Layer the user's regeneration feedback into the prompt context.
   if (feedback) context.user_feedback = feedback;
 
-  // Carry over the prior plan's completed members (minus the edited member, so
-  // it regenerates). Fetched BEFORE createPlanRows so it's the previous plan.
+  // A per-member regenerate honors the target's CURRENT meal_mode, not the prior
+  // plan's grouping. mom's meal_mode lives on `profiles` (context.mom); family
+  // members' on family_members.
+  const targetMemberId = onlyMemberId ?? regenerateMemberId;
+  const targetMode =
+    targetMemberId === "mom"
+      ? context.mom.meal_mode
+      : targetMemberId
+        ? context.family_members.find((m) => m.id === targetMemberId)?.meal_mode
+        : undefined;
+  // A plain (non-scoped) regenerate of a SHARED member becomes a shared-group regen,
+  // so the member RE-MERGES with the other shared members — round-tripping
+  // Shared→Individual→Shared — instead of staying stuck as a separate individual plan.
+  const sharedGroupRegen =
+    !!regenerateSharedGroup ||
+    (!!regenerateMemberId && !regenScope && targetMode === "shared");
+  // independentRegen is forced OFF for a shared-group rebuild (every shared member
+  // aligns to one menu); otherwise an explicit value wins, else it's derived from
+  // the target's current meal_mode.
+  const effIndependentRegen = sharedGroupRegen
+    ? undefined
+    : (independentRegen ?? (targetMode === "independent" ? true : undefined));
+
+  // Carry over the prior plan's completed members. Fetched BEFORE createPlanRows so
+  // it's the previous plan.
   let existingPlan: MealPlan | null = null;
   if (carryOver) {
     const prior = await getLatestPlan(userId);
     if (prior?.status === "ready" && prior.plan_data) {
-      // A partial scope regenerates only some of the target's meals, so the engine
-      // needs the WHOLE prior plan (including the target) to preserve out-of-scope
-      // meals and recompute co-sharers. A plain per-member regen strips the target
-      // so it regenerates entirely.
+      // A partial scope needs the WHOLE prior plan (to keep out-of-scope meals +
+      // recompute co-sharers); a shared-group regen also needs it (prepareSharedGroupRegen
+      // clears the shared members' meals itself, keeping day shells). Only an
+      // INDEPENDENT per-member regen strips the target so it regenerates entirely.
       existingPlan =
-        regenerateMemberId && !regenScope
+        regenerateMemberId && !regenScope && !sharedGroupRegen
           ? {
               ...prior.plan_data,
               members: prior.plan_data.members.filter(
@@ -187,20 +210,6 @@ export async function triggerPlanGeneration(params: {
           : prior.plan_data;
     }
   }
-
-  // Per-member meal_mode → independentRegen (explicit param wins). For a single
-  // member run (add via onlyMemberId, edit via regenerateMemberId), 'independent'
-  // gives fresh dishes; 'shared' aligns to the family dish grid.
-  const targetMemberId = onlyMemberId ?? regenerateMemberId;
-  // mom's meal_mode lives on `profiles` (context.mom), not family_members.
-  const targetMode =
-    targetMemberId === "mom"
-      ? context.mom.meal_mode
-      : targetMemberId
-        ? context.family_members.find((m) => m.id === targetMemberId)?.meal_mode
-        : undefined;
-  const effIndependentRegen =
-    independentRegen ?? (targetMode === "independent" ? true : undefined);
 
   // One-at-a-time add: carry the existing plan's members + generate ONLY the
   // target; exclude other pending members so they generate in later runs. (The
@@ -213,12 +222,13 @@ export async function triggerPlanGeneration(params: {
     );
   }
 
-  // Shared-group regen (a new SHARED member was added): rebuild every shared
-  // beneficiary together, carrying independent members + the housekeeper verbatim,
-  // so the new menu is genuinely shared and the whole group streams in day-by-day.
-  // No generating_member_id is stamped (>1 member regenerates) → the UI shows them
-  // all loading. See prepareSharedGroupRegen.
-  if (regenerateSharedGroup && existingPlan) {
+  // Shared-group regen — a new SHARED member was added, OR a SHARED member's
+  // regenerate (sharedGroupRegen) must re-merge them with the group. Rebuild every
+  // shared beneficiary together, carrying independent members + the housekeeper
+  // verbatim, so the menu is genuinely shared and the whole group streams in
+  // day-by-day. No generating_member_id is stamped (>1 member regenerates) → the UI
+  // shows them all loading. See prepareSharedGroupRegen.
+  if (sharedGroupRegen && existingPlan) {
     const prep = prepareSharedGroupRegen(context, existingPlan);
     existingPlan = prep.existingPlan;
     context.family_members = prep.familyMembers;
@@ -267,6 +277,7 @@ export async function triggerPlanGeneration(params: {
         onlyMemberId,
         regenerateMemberId,
         regenScope,
+        suppressTargetedMember: sharedGroupRegen,
       });
       return { ok: true, mealPlanId, status: "ready" };
     } catch (err) {
@@ -310,7 +321,7 @@ export async function triggerPlanGeneration(params: {
           independentRegen: effIndependentRegen,
           onlyMemberId,
           regenerateMemberId,
-          regenerateSharedGroup,
+          regenerateSharedGroup: sharedGroupRegen,
           regenScope,
           limitMemberIds,
         }),
