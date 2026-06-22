@@ -4,6 +4,14 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
+  // Bake the deploy's commit SHA (Netlify sets COMMIT_REF) into the client bundle
+  // AND the /api/version route. An open tab holds its build's SHA; the live route
+  // reports the currently-deployed SHA — a mismatch means a newer build shipped, so
+  // VersionWatcher prompts a refresh. "dev" (local/CI, no COMMIT_REF) → watcher no-ops.
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.COMMIT_REF ?? "dev",
+  },
+
   transpilePackages: ["@fitlife/ui", "@fitlife/config", "@fitlife/plan-engine"],
 
   // @react-pdf/renderer is loaded dynamically (ssr:false) by DownloadPDFButton,

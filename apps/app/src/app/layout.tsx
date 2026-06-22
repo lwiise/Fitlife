@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
 import { SentryUserSync } from "./SentryUserSync";
+import { VersionWatcher } from "@/components/VersionWatcher";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body className="antialiased">
         <SentryUserSync />
         {children}
+        <VersionWatcher />
       </body>
     </html>
   );
