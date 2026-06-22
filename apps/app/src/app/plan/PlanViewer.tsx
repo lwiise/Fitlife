@@ -564,7 +564,11 @@ export function PlanViewer({
                   t.generating}
               </p>
             </div>
-          ) : memberIsGenerating && !preparingStalled ? (
+          ) : generating && !preparingStalled ? (
+            // A run completes EVERY incomplete beneficiary, not just
+            // generating_member_id — so while the plan is still generating, any
+            // member's unfilled day is genuinely queued, not failed. Only fall
+            // through to the failed box once generation stops or stalls.
             <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
               {t.day_queued}
             </div>
