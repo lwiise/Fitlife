@@ -658,7 +658,18 @@ export function buildDayPrompt(
         ? "طفل — بالحصص، بدون هدف سعرات"
         : `الهدف: ${sm.daily_calories_target} سعرة، بروتين ${sm.macros_target.protein_g} / كارب ${sm.macros_target.carbs_g} / دهون ${sm.macros_target.fat_g} (جم)`;
 
-      return `• member_id="${sm.member_id}" — ${target}${constraints.length ? `؛ ${constraints.join("؛ ")}` : ""}\n  وجبات اليوم: ${meals || "—"}`;
+      // No preset dishes for this member today (the skeleton omitted this day, and
+      // the family grid is empty during a shared-group regen) → don't print "—",
+      // which the model echoes back as an empty `meals` array (DaySlice requires
+      // ≥1 → the day fails, and every retry re-rolls the same empty target). Direct
+      // a full fresh day that meets the target instead; the prompt lists every
+      // member's dishes, so a shared member can still align to a peer that DOES have
+      // this day's dishes.
+      const mealsLine =
+        meals ||
+        "لا أطباق محددة لهذا الفرد اليوم — صمّمي له يوماً كاملاً متنوعاً (فطور، غداء، عشاء، وسناك حسب اللزوم) يحقق هدفه، وشاركيه أطباق الآخرين حين تناسبه.";
+
+      return `• member_id="${sm.member_id}" — ${target}${constraints.length ? `؛ ${constraints.join("؛ ")}` : ""}\n  وجبات اليوم: ${mealsLine}`;
     })
     .join("\n");
 
@@ -669,7 +680,7 @@ export function buildDayPrompt(
       "شاركي الطبق فقط حين يناسب الجميع فعلاً (لا حساسية متعارضة ولا قيد غذائي/كره قوي ولا اختلاف ماكروز/حالة طبية يمنع ذلك). مَن لا يناسبه الطبق — أو مَن وُسم بـ(وجبات مستقلة) — أعطيه طبقاً مختلفاً **باسم مختلف** لتلك الوجبة. للأطفال: حصة مناسبة للعمر بدون معادلات سعرات.";
 
   return `# المطلوب (المرحلة 2: توسيع يوم واحد)
-وسّعي وجبات **${dayName}** (day_index=${dayIndex}) فقط، لكل فرد، إلى وصفات كاملة تحقق هدف كل فرد. أسماء الأطباق المعطاة لكل فرد هي خطة العائلة لهذا اليوم: التزمي بها **بنفس الاسم تماماً** حين تناسب الفرد (حتى تبقى وجبة عائلية واحدة تُطبخ مرة واحدة وتُقسَّم). أما إذا كان الطبق لا يناسب فرداً فعلاً — حساسية أو حالة طبية أو اختلاف هدف/ماكروز جذري أو طفل/حمل/رضاعة — فأعطيه بدلاً منه طبقاً مناسباً له **باسم مختلف بوضوح** لتلك الوجبة (سيُعامل تلقائياً كوجبة فردية). الأولوية لملاءمة الفرد، لا لتوحيد الطبق.
+وسّعي وجبات **${dayName}** (day_index=${dayIndex}) فقط، لكل فرد، إلى وصفات كاملة تحقق هدف كل فرد. أسماء الأطباق المعطاة لكل فرد هي خطة العائلة لهذا اليوم: التزمي بها **بنفس الاسم تماماً** حين تناسب الفرد (حتى تبقى وجبة عائلية واحدة تُطبخ مرة واحدة وتُقسَّم). أما إذا كان الطبق لا يناسب فرداً فعلاً — حساسية أو حالة طبية أو اختلاف هدف/ماكروز جذري أو طفل/حمل/رضاعة — فأعطيه بدلاً منه طبقاً مناسباً له **باسم مختلف بوضوح** لتلك الوجبة (سيُعامل تلقائياً كوجبة فردية). الأولوية لملاءمة الفرد، لا لتوحيد الطبق. وإن لم تُعطَ أطباق لفردٍ ما (مكتوب: «لا أطباق محددة»)، فصمّمي له يوماً كاملاً مناسباً لهدفه — ولا تتركي وجباته فارغة أبداً.
 
 ${sharedRule}
 

@@ -71,6 +71,44 @@ describe("buildDayPrompt — mom meal_mode", () => {
   });
 });
 
+// A member day with NO target dishes (the skeleton omitted it / the family grid was
+// empty during a shared-group regen) must NOT print "وجبات اليوم: —" — the model
+// echoes that as an empty `meals` array, which fails DaySlice validation (meals.min(1))
+// and every retry re-rolls the same empty target. Direct a fresh full day instead.
+describe("buildDayPrompt — empty meal target", () => {
+  const emptyDaySkeleton: PlanSkeleton = {
+    members: [
+      {
+        member_id: "mom",
+        member_name_ar: "أم محمد",
+        primary_goal: "fat_loss",
+        daily_calories_target: 1600,
+        macros_target: { protein_g: 100, carbs_g: 140, fat_g: 55 },
+        days: [{ day_index: 0, day_name_ar: "اليوم 1", meals: [] }],
+      },
+    ],
+    methodology_notes_ar: "ملاحظات",
+    safety_disclaimer_ar: "تنبيه",
+  };
+
+  it("directs a full fresh day instead of an empty '—' target", () => {
+    const prompt = buildDayPrompt(
+      makeMomContext("shared"),
+      emptyDaySkeleton,
+      0,
+      "اليوم 1",
+    );
+    expect(prompt).not.toContain("وجبات اليوم: —");
+    expect(prompt).toContain("لا أطباق محددة لهذا الفرد اليوم");
+  });
+
+  it("still lists the dish names verbatim when the day HAS a target", () => {
+    const prompt = buildDayPrompt(makeMomContext("shared"), skeleton, 0, "اليوم 1");
+    expect(prompt).toContain("بيض");
+    expect(prompt).not.toContain("لا أطباق محددة لهذا الفرد اليوم");
+  });
+});
+
 // The skeleton is the phase that decides which dishes are shared (same
 // recipe_name_ar). Mom's 'independent' flag must reach its roster — otherwise the
 // skeleton hands mom the family's shared dish names and she stays grouped as
