@@ -1,15 +1,19 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 
 /** A titled section card. `titleAs` sets the heading level so cards nest under
- * their section heading (h2 by default; h3 when inside an h2 section). */
+ * their section heading (h2 by default; h3 when inside an h2 section). `icon`
+ * adds a small leading glyph so a long stack of cards stays scannable. */
 export function DetailCard({
   title,
+  icon: Icon,
   action,
   children,
   className,
   titleAs: Heading = "h2",
 }: {
   title: string;
+  icon?: LucideIcon;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -21,8 +25,18 @@ export function DetailCard({
       className="overflow-hidden rounded-xl border border-brand-ink/10 bg-surface-elevated shadow-sm"
     >
       <header className="flex items-center justify-between gap-3 border-b border-brand-ink/10 bg-brand-purple-900/[0.04] px-4 py-3">
-        <Heading className="adm-h2 text-brand-ink">{title}</Heading>
-        {action}
+        <div className="flex min-w-0 items-center gap-2.5">
+          {Icon ? (
+            <span
+              aria-hidden="true"
+              className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-purple-900/10 text-brand-purple-900"
+            >
+              <Icon className="size-4" />
+            </span>
+          ) : null}
+          <Heading className="adm-h2 truncate text-brand-ink">{title}</Heading>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </header>
       <div className={`p-4 ${className ?? ""}`}>{children}</div>
     </section>

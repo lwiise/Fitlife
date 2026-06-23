@@ -173,6 +173,7 @@ const STRINGS = {
   field_goal: { ar: "الهدف", en: "Goal" },
   field_calories: { ar: "السعرات", en: "Calories" },
   field_macros: { ar: "الماكروز", en: "Macros" },
+  no_members: { ar: "لا يوجد أفراد في الأسرة", en: "No household members" },
   macro_protein: { ar: "بروتين", en: "Protein" },
   macro_carbs: { ar: "كارب", en: "Carbs" },
   macro_fat: { ar: "دهون", en: "Fat" },
@@ -195,6 +196,7 @@ const STRINGS = {
   section_generations: { ar: "سجل الإنشاء", en: "Generation history" },
   field_duration: { ar: "المدة", en: "Duration" },
   no_generations: { ar: "لا يوجد سجل", en: "No generation history" },
+  field_error: { ar: "الخطأ", en: "Error" },
   gen_completed: { ar: "اكتملت", en: "Completed" },
   gen_failed: { ar: "فشلت", en: "Failed" },
   gen_started: { ar: "قيد التنفيذ", en: "Running" },
@@ -395,14 +397,6 @@ const STRINGS = {
   ai_billed_usd_note: {
     ar: "تُحتسب تكلفة الذكاء بالدولار وتُعرض بالريال وفق سعر الصرف المعتمد.",
     en: "AI is billed in USD; shown in SAR at the platform rate.",
-  },
-
-  // ── Overview: audience lockup (relating total / paying / active) ──
-  audience_label: { ar: "الحسابات", en: "Audience" },
-  audience_total: { ar: "إجمالي الحسابات", en: "Total accounts" },
-  audience_caption: {
-    ar: "إجمالي الحسابات ← الاشتراكات المدفوعة ← الحسابات النشطة في الفترة",
-    en: "Accounts → paying subscriptions → active in the selected period",
   },
 
   // ── Overview: subscribers table legend / affordances ──

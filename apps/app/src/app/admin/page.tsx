@@ -14,7 +14,6 @@ import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
 import { AdminTopBar } from "./_components/AdminTopBar";
 import { RevenueChartSection } from "./_components/RevenueChartSection";
 import { AiCostStrip } from "./_components/AiCostStrip";
-import { AudienceBar } from "./_components/AudienceBar";
 import { FilterBar } from "./_components/FilterBar";
 import { SubscriberTable } from "./_components/SubscriberTable";
 import { Pagination } from "./_components/Pagination";
@@ -120,13 +119,6 @@ export default async function AdminOverviewPage({
               view={overview}
               currency={currency}
               baseParams={baseParams}
-              locale={locale}
-            />
-
-            <AudienceBar
-              total={overview.subscriberCount}
-              activeSubs={overview.totalActive}
-              activeUsers={overview.activeUsersInRange}
               locale={locale}
             />
 

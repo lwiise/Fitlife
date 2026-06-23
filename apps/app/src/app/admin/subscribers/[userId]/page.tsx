@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { HeartPulse } from "lucide-react";
+import {
+  CalendarDays,
+  CreditCard,
+  HeartPulse,
+  History,
+  MessageSquare,
+  Sparkles,
+  User,
+  Users,
+} from "lucide-react";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import {
@@ -23,6 +32,7 @@ import {
 } from "@/lib/admin/i18n";
 import { DetailHeader } from "../../_components/DetailHeader";
 import { DetailCard, Field } from "../../_components/DetailCard";
+import { DataTable, type DataColumn } from "../../_components/DataTable";
 import { Chip } from "../../_components/Chip";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { TierBadge } from "../../_components/TierBadge";
@@ -72,7 +82,7 @@ export default async function SubscriberDetailPage({
 
       <main className="container-app space-y-4 py-6">
         <div className="grid gap-4 lg:grid-cols-2">
-          <DetailCard title={t("section_account", locale)}>
+          <DetailCard title={t("section_account", locale)} icon={User}>
             <dl className="grid gap-x-6 sm:grid-cols-2">
               <Field label={t("field_email", locale)} value={detail.email} mono />
               <Field
@@ -111,7 +121,7 @@ export default async function SubscriberDetailPage({
             </dl>
           </DetailCard>
 
-          <DetailCard title={t("section_subscription", locale)}>
+          <DetailCard title={t("section_subscription", locale)} icon={CreditCard}>
             {subscription ? (
               <SubscriptionFields sub={subscription} locale={locale} />
             ) : (
@@ -124,6 +134,7 @@ export default async function SubscriberDetailPage({
 
         <DetailCard
           title={t("section_household", locale)}
+          icon={Users}
           action={
             <Link
               href={`/admin/subscribers/${userId}/health`}
@@ -138,16 +149,24 @@ export default async function SubscriberDetailPage({
           <HouseholdTable members={detail.members} locale={locale} />
         </DetailCard>
 
-        <DetailCard title={t("section_plans", locale)} className="p-0">
+        <DetailCard
+          title={t("section_plans", locale)}
+          icon={CalendarDays}
+          className="p-0"
+        >
           <PlansTable plans={detail.plans} userId={userId} locale={locale} />
         </DetailCard>
 
-        <DetailCard title={t("section_generations", locale)} className="p-0">
+        <DetailCard
+          title={t("section_generations", locale)}
+          icon={Sparkles}
+          className="p-0"
+        >
           <GenerationsTable generations={detail.generations} locale={locale} />
         </DetailCard>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <DetailCard title={t("section_engagement", locale)}>
+          <DetailCard title={t("section_engagement", locale)} icon={MessageSquare}>
             <dl className="grid gap-x-6 sm:grid-cols-2">
               <Field
                 label={t("field_chat_count", locale)}
@@ -171,7 +190,11 @@ export default async function SubscriberDetailPage({
           </DetailCard>
 
           {detail.subscriptionHistory.length > 1 ? (
-            <DetailCard title={t("section_sub_history", locale)} className="p-0">
+            <DetailCard
+              title={t("section_sub_history", locale)}
+              icon={History}
+              className="p-0"
+            >
               <SubHistoryTable rows={detail.subscriptionHistory} locale={locale} />
             </DetailCard>
           ) : null}
@@ -247,14 +270,6 @@ function SubscriptionFields({
   );
 }
 
-const TH =
-  "whitespace-nowrap px-4 py-2.5 text-start adm-label uppercase text-brand-ink-muted";
-const TD = "whitespace-nowrap px-4 py-2.5 adm-body text-brand-ink";
-// Frozen first column for horizontal scroll on narrow screens. No zebra in these
-// tables, so an opaque surface-elevated bg occludes content scrolling beneath.
-const STICKY_HEAD = "sticky start-0 z-20 bg-surface-elevated";
-const STICKY_CELL = "sticky start-0 z-10 bg-surface-elevated";
-
 function HouseholdTable({
   members,
   locale,
@@ -262,62 +277,77 @@ function HouseholdTable({
   members: MemberSummary[];
   locale: AdminLocale;
 }) {
+  const columns: DataColumn<MemberSummary>[] = [
+    {
+      key: "name",
+      header: t("col_name", locale),
+      primary: true,
+      cell: (m) => (
+        <>
+          <span className="font-medium text-brand-ink">{m.name}</span>
+          <span className="ms-1.5 text-xs text-brand-ink-muted">
+            {roleLabel(m.role, locale)}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: "goal",
+      header: t("field_goal", locale),
+      cell: (m) => goalLabel(m.primaryGoal, locale),
+    },
+    {
+      key: "calories",
+      header: t("field_calories", locale),
+      align: "end",
+      cell: (m) =>
+        m.caloriesTarget != null ? (
+          <span dir="ltr" className="tabular-nums">
+            {fmtNumber(m.caloriesTarget, locale)}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "macros",
+      header: t("field_macros", locale),
+      cell: (m) =>
+        m.macros ? (
+          <span dir="ltr" className="tabular-nums text-brand-ink-muted">
+            {m.macros.protein_g} / {m.macros.carbs_g} / {m.macros.fat_g}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "flags",
+      header: t("section_flags", locale),
+      block: true,
+      cell: (m) => (
+        <span className="flex flex-wrap gap-1">
+          {m.medicalGate ? (
+            <Chip tone="danger">{t("flag_medical_gate", locale)}</Chip>
+          ) : null}
+          {m.pickyEater ? (
+            <Chip tone="neutral">{t("flag_picky", locale)}</Chip>
+          ) : null}
+          {m.isHousekeeper ? (
+            <Chip tone="neutral">{t("flag_housekeeper", locale)}</Chip>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[44rem] border-collapse">
-        <thead className="border-b border-brand-ink/10">
-          <tr>
-            <th scope="col" className={`${TH} ${STICKY_HEAD}`}>{t("col_name", locale)}</th>
-            <th scope="col" className={TH}>{t("field_goal", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_calories", locale)}</th>
-            <th scope="col" className={TH}>{t("field_macros", locale)}</th>
-            <th scope="col" className={TH}>{t("section_flags", locale)}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {members.map((m) => (
-            <tr key={m.id} className="border-t border-brand-ink/10">
-              <td className={`${TD} ${STICKY_CELL}`}>
-                <span className="font-medium">{m.name}</span>
-                <span className="ms-1.5 text-xs text-brand-ink-muted">
-                  {roleLabel(m.role, locale)}
-                </span>
-              </td>
-              <td className={TD}>{goalLabel(m.primaryGoal, locale)}</td>
-              <td className={`${TD} text-end`}>
-                {m.caloriesTarget != null ? (
-                  <span dir="ltr" className="tabular-nums">
-                    {fmtNumber(m.caloriesTarget, locale)}
-                  </span>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className={TD}>
-                {m.macros ? (
-                  <span dir="ltr" className="tabular-nums text-brand-ink-muted">
-                    {m.macros.protein_g} / {m.macros.carbs_g} / {m.macros.fat_g}
-                  </span>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className={TD}>
-                <span className="flex flex-wrap gap-1">
-                  {m.medicalGate ? (
-                    <Chip tone="danger">{t("flag_medical_gate", locale)}</Chip>
-                  ) : null}
-                  {m.pickyEater ? <Chip tone="neutral">{t("flag_picky", locale)}</Chip> : null}
-                  {m.isHousekeeper ? (
-                    <Chip tone="neutral">{t("flag_housekeeper", locale)}</Chip>
-                  ) : null}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={members}
+      rowKey={(m) => m.id}
+      minWidthClass="min-w-[44rem]"
+      empty={t("no_members", locale)}
+    />
   );
 }
 
@@ -330,64 +360,80 @@ function PlansTable({
   userId: string;
   locale: AdminLocale;
 }) {
-  if (plans.length === 0)
-    return (
-      <p className="px-4 py-16 text-center adm-body text-brand-ink-muted">
-        {t("no_plans", locale)}
-      </p>
-    );
-
+  const columns: DataColumn<PlanSummary>[] = [
+    {
+      key: "status",
+      header: t("col_status", locale),
+      primary: true,
+      cell: (p) => planStatusLabel(p.status, locale),
+    },
+    {
+      key: "date",
+      header: t("col_signup", locale),
+      cell: (p) => fmtDate(p.generatedAt ?? p.createdAt, locale),
+    },
+    {
+      key: "days",
+      header: t("field_days", locale),
+      align: "end",
+      cell: (p) => (
+        <span dir="ltr" className="tabular-nums">
+          {fmtNumber(p.daysCovered, locale)}
+        </span>
+      ),
+    },
+    {
+      key: "tokens",
+      header: t("field_tokens", locale),
+      align: "end",
+      cell: (p) => (
+        <span dir="ltr" className="tabular-nums text-brand-ink-muted">
+          {p.aiInputTokens != null ? fmtNumber(p.aiInputTokens, locale) : "—"} /{" "}
+          {p.aiOutputTokens != null ? fmtNumber(p.aiOutputTokens, locale) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "cost",
+      header: t("field_cost", locale),
+      align: "end",
+      cell: (p) => (
+        <span dir="ltr" className="tabular-nums">
+          {p.costUsd != null ? fmtUsd(p.costUsd, locale, 4) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "model",
+      header: t("field_model", locale),
+      cell: (p) => (
+        <span dir="ltr" className="text-brand-ink-muted">
+          {p.aiModel ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "inspect",
+      header: "",
+      full: true,
+      cell: (p) => (
+        <Link
+          href={`/admin/subscribers/${userId}/plan/${p.id}`}
+          className="inline-flex min-h-11 items-center text-xs font-semibold text-brand-purple-900 hover:underline"
+        >
+          {t("inspect_plan", locale)}
+        </Link>
+      ),
+    },
+  ];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[52rem] border-collapse">
-        <thead className="border-b border-brand-ink/10">
-          <tr>
-            <th scope="col" className={`${TH} ${STICKY_HEAD}`}>{t("col_status", locale)}</th>
-            <th scope="col" className={TH}>{t("col_signup", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_days", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_tokens", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_cost", locale)}</th>
-            <th scope="col" className={TH}>{t("field_model", locale)}</th>
-            <th scope="col" className={TH}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {plans.map((p) => (
-            <tr key={p.id} className="border-t border-brand-ink/10">
-              <td className={`${TD} ${STICKY_CELL}`}>{planStatusLabel(p.status, locale)}</td>
-              <td className={TD}>{fmtDate(p.generatedAt ?? p.createdAt, locale)}</td>
-              <td className={`${TD} text-end`}>
-                <span dir="ltr" className="tabular-nums">
-                  {fmtNumber(p.daysCovered, locale)}
-                </span>
-              </td>
-              <td className={`${TD} text-end`}>
-                <span dir="ltr" className="tabular-nums text-brand-ink-muted">
-                  {p.aiInputTokens != null ? fmtNumber(p.aiInputTokens, locale) : "—"} /{" "}
-                  {p.aiOutputTokens != null ? fmtNumber(p.aiOutputTokens, locale) : "—"}
-                </span>
-              </td>
-              <td className={`${TD} text-end`}>
-                <span dir="ltr" className="tabular-nums">
-                  {p.costUsd != null ? fmtUsd(p.costUsd, locale, 4) : "—"}
-                </span>
-              </td>
-              <td className={`${TD} text-brand-ink-muted`} dir="ltr">
-                {p.aiModel ?? "—"}
-              </td>
-              <td className={TD}>
-                <Link
-                  href={`/admin/subscribers/${userId}/plan/${p.id}`}
-                  className="text-xs font-semibold text-brand-purple-900 hover:underline"
-                >
-                  {t("inspect_plan", locale)}
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={plans}
+      rowKey={(p) => p.id}
+      minWidthClass="min-w-[52rem]"
+      empty={t("no_plans", locale)}
+    />
   );
 }
 
@@ -398,59 +444,82 @@ function GenerationsTable({
   generations: GenerationSummary[];
   locale: AdminLocale;
 }) {
-  if (generations.length === 0)
-    return (
-      <p className="px-4 py-16 text-center adm-body text-brand-ink-muted">
-        {t("no_generations", locale)}
-      </p>
-    );
-
+  const columns: DataColumn<GenerationSummary>[] = [
+    {
+      key: "status",
+      header: t("col_status", locale),
+      primary: true,
+      cell: (g) => genStatusLabel(g.status, locale),
+    },
+    {
+      key: "date",
+      header: t("col_signup", locale),
+      cell: (g) => fmtDate(g.createdAt, locale),
+    },
+    {
+      key: "model",
+      header: t("field_model", locale),
+      cell: (g) => (
+        <span dir="ltr" className="text-brand-ink-muted">
+          {g.model ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "tokens",
+      header: t("field_tokens", locale),
+      align: "end",
+      cell: (g) => (
+        <span dir="ltr" className="tabular-nums text-brand-ink-muted">
+          {g.tokensIn != null ? fmtNumber(g.tokensIn, locale) : "—"} /{" "}
+          {g.tokensOut != null ? fmtNumber(g.tokensOut, locale) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "cost",
+      header: t("field_cost", locale),
+      align: "end",
+      cell: (g) => (
+        <span dir="ltr" className="tabular-nums">
+          {g.costUsd != null ? fmtUsd(g.costUsd, locale, 4) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "duration",
+      header: t("field_duration", locale),
+      align: "end",
+      cell: (g) => (
+        <span dir="ltr" className="tabular-nums text-brand-ink-muted">
+          {g.durationMs != null ? `${(g.durationMs / 1000).toFixed(1)}s` : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "error",
+      header: t("field_error", locale),
+      block: true,
+      hide: (g) => !g.errorMessage,
+      cell: (g) =>
+        g.errorMessage ? (
+          <span
+            className="block max-w-[16rem] truncate text-xs text-red-700"
+            title={g.errorMessage}
+          >
+            {g.errorMessage}
+          </span>
+        ) : null,
+    },
+  ];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[56rem] border-collapse">
-        <thead className="border-b border-brand-ink/10">
-          <tr>
-            <th scope="col" className={`${TH} ${STICKY_HEAD}`}>{t("col_status", locale)}</th>
-            <th scope="col" className={TH}>{t("col_signup", locale)}</th>
-            <th scope="col" className={TH}>{t("field_model", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_tokens", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_cost", locale)}</th>
-            <th scope="col" className={`${TH} text-end`}>{t("field_duration", locale)}</th>
-            <th scope="col" className={TH}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {generations.map((g) => (
-            <tr key={g.id} className="border-t border-brand-ink/10">
-              <td className={`${TD} ${STICKY_CELL}`}>{genStatusLabel(g.status, locale)}</td>
-              <td className={TD}>{fmtDate(g.createdAt, locale)}</td>
-              <td className={`${TD} text-brand-ink-muted`} dir="ltr">
-                {g.model ?? "—"}
-              </td>
-              <td className={`${TD} text-end`}>
-                <span dir="ltr" className="tabular-nums text-brand-ink-muted">
-                  {g.tokensIn != null ? fmtNumber(g.tokensIn, locale) : "—"} /{" "}
-                  {g.tokensOut != null ? fmtNumber(g.tokensOut, locale) : "—"}
-                </span>
-              </td>
-              <td className={`${TD} text-end`}>
-                <span dir="ltr" className="tabular-nums">
-                  {g.costUsd != null ? fmtUsd(g.costUsd, locale, 4) : "—"}
-                </span>
-              </td>
-              <td className={`${TD} text-end`}>
-                <span dir="ltr" className="tabular-nums text-brand-ink-muted">
-                  {g.durationMs != null ? `${(g.durationMs / 1000).toFixed(1)}s` : "—"}
-                </span>
-              </td>
-              <td className={`${TD} max-w-xs truncate text-xs text-red-700`}>
-                {g.errorMessage ?? ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={generations}
+      rowKey={(g) => g.id}
+      minWidthClass="min-w-[56rem]"
+      empty={t("no_generations", locale)}
+    />
   );
 }
 
@@ -461,32 +530,36 @@ function SubHistoryTable({
   rows: SubscriptionRow[];
   locale: AdminLocale;
 }) {
+  const columns: DataColumn<SubscriptionRow>[] = [
+    {
+      key: "status",
+      header: t("col_status", locale),
+      primary: true,
+      cell: (r) => <StatusBadge status={r.status} locale={locale} />,
+    },
+    {
+      key: "tier",
+      header: t("col_tier", locale),
+      cell: (r) => <TierBadge tier={r.tier} locale={locale} />,
+    },
+    {
+      key: "cadence",
+      header: t("field_cadence", locale),
+      cell: (r) => cadenceLabel(r.cadence, locale),
+    },
+    {
+      key: "date",
+      header: t("col_signup", locale),
+      cell: (r) => fmtDate(r.createdAt, locale),
+    },
+  ];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[28rem] border-collapse">
-        <thead className="border-b border-brand-ink/10">
-          <tr>
-            <th scope="col" className={TH}>{t("col_status", locale)}</th>
-            <th scope="col" className={TH}>{t("col_tier", locale)}</th>
-            <th scope="col" className={TH}>{t("field_cadence", locale)}</th>
-            <th scope="col" className={TH}>{t("col_signup", locale)}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t border-brand-ink/10">
-              <td className={TD}>
-                <StatusBadge status={r.status} locale={locale} />
-              </td>
-              <td className={TD}>
-                <TierBadge tier={r.tier} locale={locale} />
-              </td>
-              <td className={TD}>{cadenceLabel(r.cadence, locale)}</td>
-              <td className={TD}>{fmtDate(r.createdAt, locale)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(_r, i) => String(i)}
+      minWidthClass="min-w-[28rem]"
+      empty={t("status_none", locale)}
+    />
   );
 }
