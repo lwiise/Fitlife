@@ -48,7 +48,7 @@ export function TrendPill({
     >
       <Icon className="size-3.5" aria-hidden="true" />
       <span className="sr-only">{t(dirKey, locale)} </span>
-      <span dir="ltr" className="tabular-nums">
+      <span dir="ltr" suppressHydrationWarning className="tabular-nums">
         {fmtSignedPct(pct, locale)}
       </span>
     </span>

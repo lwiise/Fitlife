@@ -90,7 +90,7 @@ export function TrendsBoard({
               aria-hidden="true"
             />
             {currentLabel}
-            <span dir="ltr" className="tabular-nums">
+            <span dir="ltr" suppressHydrationWarning className="tabular-nums">
               {currentRange}
             </span>
           </span>

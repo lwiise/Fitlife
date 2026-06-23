@@ -108,8 +108,12 @@ export function SplineLineChart({
         <tbody>
           {labels.map((label, i) => (
             <tr key={i}>
-              <th scope="row">{label}</th>
-              <td>{fmtMetricValue(current[i] ?? 0, unit, locale, currency)}</td>
+              <th scope="row" suppressHydrationWarning>
+                {label}
+              </th>
+              <td suppressHydrationWarning>
+                {fmtMetricValue(current[i] ?? 0, unit, locale, currency)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -180,6 +184,7 @@ export function SplineLineChart({
           {yTicks.map((v, i) => (
             <span
               key={i}
+              suppressHydrationWarning
               className="absolute start-0 -translate-y-1/2 bg-surface-elevated/70 pe-1 text-[0.7rem] tabular-nums text-brand-ink/70"
               style={{ top: `${topPct(v)}%` }}
             >
@@ -199,11 +204,19 @@ export function SplineLineChart({
                     style={{ top: `${topPct(cur)}%` }}
                   />
                   <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 mx-auto mb-3 hidden w-max max-w-44 rounded-lg border border-brand-ink/10 bg-surface-elevated px-3 py-2 text-start shadow-lg group-hover:block">
-                    <p className="mb-1 text-xs font-semibold text-brand-ink">{label}</p>
+                    <p
+                      suppressHydrationWarning
+                      className="mb-1 text-xs font-semibold text-brand-ink"
+                    >
+                      {label}
+                    </p>
                     <p className="flex items-center gap-1.5 text-xs text-brand-ink-muted">
                       <span className="size-2 rounded-full bg-brand-purple-900" />
                       {currentLabel}
-                      <span className="ms-auto ps-2 tabular-nums text-brand-ink">
+                      <span
+                        suppressHydrationWarning
+                        className="ms-auto ps-2 tabular-nums text-brand-ink"
+                      >
                         {fmtMetricValue(cur, unit, locale, currency)}
                       </span>
                     </p>
@@ -219,6 +232,7 @@ export function SplineLineChart({
           {labels.map((label, i) => (
             <span
               key={i}
+              suppressHydrationWarning
               className="flex-1 truncate text-center text-[0.7rem] text-brand-ink/70"
             >
               {i % labelStep === 0 ? label : ""}

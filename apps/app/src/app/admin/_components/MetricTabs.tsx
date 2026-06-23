@@ -84,6 +84,7 @@ export function MetricTabs({
               </span>
               <span
                 dir="ltr"
+                suppressHydrationWarning
                 className={`tabular-nums text-brand-ink ${
                   active ? "adm-display" : "text-xl font-extrabold leading-none"
                 }`}
