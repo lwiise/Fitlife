@@ -1,8 +1,8 @@
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import type { InsightsView } from "@/lib/admin/insights";
 import { MARGIN_ASSUMPTIONS } from "@/lib/admin/margin";
-import type { AdminLocale } from "@/lib/admin/format";
-import { fmtMonth, fmtPct, fmtSar, fmtSarCompact, fmtUsd } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
+import { fmtMetricValue, fmtMoney, fmtMoneyFromSar, fmtMonth, fmtPct } from "@/lib/admin/format";
 import { t, tierLabel } from "@/lib/admin/i18n";
 import { DetailCard, Field } from "../DetailCard";
 import { ChartFrame } from "../ChartFrame";
@@ -19,9 +19,11 @@ function tierName(tier: string, locale: AdminLocale): string {
 export function EconomicsSection({
   view,
   locale,
+  currency,
 }: {
   view: InsightsView;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const gm = view.grossMargin;
   const marginAccent = (gm.marginPct ?? 0) >= 0 ? "emerald" : "pink";
@@ -29,12 +31,12 @@ export function EconomicsSection({
   const tierSlices = view.revenueByTier.map((tr) => ({
     label: tierName(tr.tier, locale),
     value: tr.mrrSar,
-    valueLabel: `${fmtSar(tr.mrrSar, locale)} · ${fmtPct(tr.pct, locale)}`,
+    valueLabel: `${fmtMoneyFromSar(tr.mrrSar, currency, locale)} · ${fmtPct(tr.pct, locale)}`,
   }));
   const aiLine = view.aiCost.map((p) => ({
     label: fmtMonth(p.monthStart, locale),
     value: p.value,
-    valueLabel: fmtUsd(p.value, locale, 2),
+    valueLabel: fmtMoney(p.value, currency, locale, 0, 2),
   }));
 
   return (
@@ -48,14 +50,14 @@ export function EconomicsSection({
           locale={locale}
           accent="emerald"
           label={t("kpi_mrr", locale)}
-          value={fmtSar(view.mrr.mrrSar, locale)}
-          hint={<span dir="auto">{t("kpi_arr", locale)} {fmtSar(view.mrr.arrSar, locale)}</span>}
+          value={fmtMoneyFromSar(view.mrr.mrrSar, currency, locale)}
+          hint={<span dir="auto">{t("kpi_arr", locale)} {fmtMoneyFromSar(view.mrr.arrSar, currency, locale)}</span>}
         />
         <KpiCard
           locale={locale}
           accent="ink"
           label={t("kpi_arpu", locale)}
-          value={view.arpuSar != null ? fmtSar(view.arpuSar, locale) : "—"}
+          value={view.arpuSar != null ? fmtMoneyFromSar(view.arpuSar, currency, locale) : "—"}
         />
         <KpiCard
           locale={locale}
@@ -68,7 +70,7 @@ export function EconomicsSection({
           locale={locale}
           accent="yellow"
           label={t("stat_cost_per_user", locale)}
-          value={view.costPerActiveUserUsd != null ? fmtUsd(view.costPerActiveUserUsd, locale, 4) : "—"}
+          value={view.costPerActiveUserUsd != null ? fmtMoney(view.costPerActiveUserUsd, currency, locale, 4, 4) : "—"}
         />
       </div>
 
@@ -78,18 +80,18 @@ export function EconomicsSection({
           titleAs="h3"
         >
           <dl>
-            <Field label={t("econ_revenue", locale)} value={fmtUsd(gm.revenueUsd, locale)} mono />
-            <Field label={t("econ_fees", locale)} value={fmtUsd(gm.lsFeesUsd, locale)} mono />
-            <Field label={t("econ_ai_cost", locale)} value={fmtUsd(gm.aiCostUsd, locale)} mono />
-            <Field label={t("econ_infra", locale)} value={fmtUsd(gm.infraUsd, locale)} mono />
-            <Field label={t("econ_gross_profit", locale)} value={fmtUsd(gm.grossProfitUsd, locale)} mono />
+            <Field label={t("econ_revenue", locale)} value={fmtMoney(gm.revenueUsd, currency, locale)} mono />
+            <Field label={t("econ_fees", locale)} value={fmtMoney(gm.lsFeesUsd, currency, locale)} mono />
+            <Field label={t("econ_ai_cost", locale)} value={fmtMoney(gm.aiCostUsd, currency, locale)} mono />
+            <Field label={t("econ_infra", locale)} value={fmtMoney(gm.infraUsd, currency, locale)} mono />
+            <Field label={t("econ_gross_profit", locale)} value={fmtMoney(gm.grossProfitUsd, currency, locale)} mono />
           </dl>
           <div className="mt-2 border-t border-brand-ink/10 pt-2">
             <p className="text-xs font-semibold text-brand-ink-muted">{t("econ_assumptions", locale)}</p>
             <p className="mt-1 text-xs leading-relaxed text-brand-ink-muted">
               {t("assume_ls_fee", locale)}: {fmtPct(MARGIN_ASSUMPTIONS.ls_fee_pct * 100, locale)} +{" "}
-              {fmtUsd(MARGIN_ASSUMPTIONS.ls_fee_fixed_usd, locale)} · {t("assume_infra", locale)}:{" "}
-              {fmtUsd(MARGIN_ASSUMPTIONS.infra_usd_per_active_user_mo, locale)}
+              {fmtMoney(MARGIN_ASSUMPTIONS.ls_fee_fixed_usd, currency, locale)} · {t("assume_infra", locale)}:{" "}
+              {fmtMoney(MARGIN_ASSUMPTIONS.infra_usd_per_active_user_mo, currency, locale)}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-brand-ink-muted">{t("est_note", locale)}</p>
           </div>
@@ -104,7 +106,7 @@ export function EconomicsSection({
             <DonutChart
               data={tierSlices}
               ariaLabel={t("chart_revenue_by_tier", locale)}
-              centerLabel={fmtSarCompact(view.mrr.mrrSar, locale)}
+              centerLabel={fmtMetricValue(view.mrr.mrrSar, "sar", locale, currency, true)}
             />
           </ChartFrame>
         </DetailCard>

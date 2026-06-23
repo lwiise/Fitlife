@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import type { InsightsView } from "@/lib/admin/insights";
-import type { AdminLocale } from "@/lib/admin/format";
-import { fmtDate, fmtMonth, fmtNumber, fmtPct, fmtRelative, fmtSar } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
+import { fmtDate, fmtMoneyFromSar, fmtMonth, fmtNumber, fmtPct, fmtRelative } from "@/lib/admin/format";
 import { t, tierLabel } from "@/lib/admin/i18n";
 import { DetailCard } from "../DetailCard";
 import { ChartFrame } from "../ChartFrame";
@@ -22,9 +22,11 @@ const TD = "whitespace-nowrap px-4 py-2.5 text-sm text-brand-ink";
 export function RetentionSection({
   view,
   locale,
+  currency,
 }: {
   view: InsightsView;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const cohortRows = view.cohort.map((c) => ({
     label: fmtMonth(c.cohortMonth, locale),
@@ -66,11 +68,11 @@ export function RetentionSection({
           locale={locale}
           accent="pink"
           label={t("kpi_revenue_at_risk", locale)}
-          value={fmtSar(view.revenueAtRisk.totalSar, locale)}
+          value={fmtMoneyFromSar(view.revenueAtRisk.totalSar, currency, locale)}
           hint={
             <span dir="auto">
-              {t("potential_label", locale)} {fmtSar(view.revenueAtRisk.trialsMrrSar, locale)} ·{" "}
-              {t("at_risk_label", locale)} {fmtSar(view.revenueAtRisk.pastDueMrrSar, locale)}
+              {t("potential_label", locale)} {fmtMoneyFromSar(view.revenueAtRisk.trialsMrrSar, currency, locale)} ·{" "}
+              {t("at_risk_label", locale)} {fmtMoneyFromSar(view.revenueAtRisk.pastDueMrrSar, currency, locale)}
             </span>
           }
         />
@@ -153,7 +155,7 @@ export function RetentionSection({
                     <td className={`${TD} text-brand-ink-muted`}>{tierName(q.tier, locale)}</td>
                     <td className={`${TD} text-brand-ink-muted`}>{fmtDate(q.renewalAt, locale)}</td>
                     <td className={`${TD} text-brand-ink-muted`}>{fmtRelative(q.lastActivityAt, locale)}</td>
-                    <td className={`${TD} tabular-nums`} dir="ltr">{fmtSar(q.mrrSar, locale)}</td>
+                    <td className={`${TD} tabular-nums`} dir="ltr">{fmtMoneyFromSar(q.mrrSar, currency, locale)}</td>
                   </tr>
                 ))}
               </tbody>

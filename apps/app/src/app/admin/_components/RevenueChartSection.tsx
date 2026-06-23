@@ -1,4 +1,4 @@
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import type { OverviewView } from "@/lib/admin/types";
 import { t } from "@/lib/admin/i18n";
 import { OverviewChartControls } from "./OverviewChartControls";
@@ -9,10 +9,12 @@ export function RevenueChartSection({
   view,
   baseParams,
   locale,
+  currency,
 }: {
   view: OverviewView;
   baseParams: Record<string, string>;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const title = t("section_trends", locale);
 
@@ -43,7 +45,12 @@ export function RevenueChartSection({
         />
       </div>
 
-      <TrendsBoard view={view} baseParams={baseParams} locale={locale} />
+      <TrendsBoard
+        view={view}
+        baseParams={baseParams}
+        locale={locale}
+        currency={currency}
+      />
     </section>
   );
 }

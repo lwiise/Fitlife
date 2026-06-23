@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
-import { getAdminLocale } from "@/lib/admin/locale";
+import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { buildInsightsView, loadInsightsDataset } from "@/lib/admin/insights";
 import { t } from "@/lib/admin/i18n";
 import { AdminTopBar } from "../_components/AdminTopBar";
@@ -36,10 +36,14 @@ export default async function InsightsPage({
 
   const admin = await requireAdmin();
   const locale = await getAdminLocale();
+  const currency = await getAdminCurrency();
 
   const params = flatten(await searchParams);
   const baseParams = params;
   const periodDays = params.days === "90" ? 90 : 30;
+  // Query-preserving return path for the header toggles (keeps the 30/90 period).
+  const qs = new URLSearchParams(baseParams).toString();
+  const topBarNext = qs ? `/admin/insights?${qs}` : "/admin/insights";
 
   const dataset = await loadInsightsDataset();
   const view = buildInsightsView(dataset, periodDays);
@@ -56,6 +60,8 @@ export default async function InsightsPage({
         locale={locale}
         activeNav="insights"
         adminEmail={admin.email}
+        currency={currency}
+        next={topBarNext}
         periodDays={periodDays}
         baseParams={baseParams}
       />
@@ -68,10 +74,10 @@ export default async function InsightsPage({
           </p>
         ) : null}
 
-        <GrowthSection view={view} locale={locale} />
-        <RetentionSection view={view} locale={locale} />
+        <GrowthSection view={view} locale={locale} currency={currency} />
+        <RetentionSection view={view} locale={locale} currency={currency} />
         <ConversionSection view={view} locale={locale} />
-        <EconomicsSection view={view} locale={locale} />
+        <EconomicsSection view={view} locale={locale} currency={currency} />
         <ProductSection view={view} locale={locale} />
       </main>
     </>

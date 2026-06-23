@@ -7,9 +7,9 @@ import {
   filterSortPaginate,
   loadAdminDataset,
 } from "@/lib/admin/queries";
-import { getAdminLocale } from "@/lib/admin/locale";
+import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import type { SubscriberSortKey } from "@/lib/admin/types";
-import type { AdminLocale, Currency } from "@/lib/admin/format";
+import type { AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
 import { AdminTopBar } from "./_components/AdminTopBar";
 import { RevenueChartSection } from "./_components/RevenueChartSection";
@@ -40,7 +40,11 @@ export default async function AdminOverviewPage({
 
   const params = flatten(await searchParams);
   const baseParams = params;
-  const currency: Currency = params.cur === "usd" ? "usd" : "sar";
+  const currency = await getAdminCurrency();
+  // Query-preserving return path so flipping currency/language keeps the current
+  // sort/filter/page (and metric/range) — shared by both header toggles.
+  const qs = new URLSearchParams(baseParams).toString();
+  const topBarNext = qs ? `/admin?${qs}` : "/admin";
 
   const dataset = await loadAdminDataset();
   const overview = buildOverviewView(dataset, {
@@ -101,7 +105,13 @@ export default async function AdminOverviewPage({
 
   return (
     <>
-      <AdminTopBar locale={locale} activeNav="overview" adminEmail={admin.email} />
+      <AdminTopBar
+        locale={locale}
+        activeNav="overview"
+        adminEmail={admin.email}
+        currency={currency}
+        next={topBarNext}
+      />
 
       <main className="container-app space-y-6 py-6">
         <h1 className="sr-only">{t("nav_overview", locale)}</h1>
@@ -113,14 +123,10 @@ export default async function AdminOverviewPage({
               view={overview}
               baseParams={baseParams}
               locale={locale}
+              currency={currency}
             />
 
-            <AiCostStrip
-              view={overview}
-              currency={currency}
-              baseParams={baseParams}
-              locale={locale}
-            />
+            <AiCostStrip view={overview} currency={currency} locale={locale} />
 
             {dataset.truncated.length > 0 ? (
               <p className="rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">

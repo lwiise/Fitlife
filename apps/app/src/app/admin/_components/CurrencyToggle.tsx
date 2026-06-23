@@ -1,41 +1,42 @@
-import Link from "next/link";
 import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
-import { buildQuery } from "./searchParams";
+import { setAdminCurrency } from "../actions";
 
 /**
- * SAR | USD display-currency toggle for cost figures (zero JS, URL-param
- * driven). SAR is the default and omits the param for a clean URL. Lives in the
- * "Cost & efficiency" header because revenue is always SAR — only the
- * USD-billed AI cost figures (strip + table column) switch.
+ * SAR | USD display-currency switch — a zero-JS form whose server action sets
+ * the `admin_currency` cookie and returns to `next` (mirrors LocaleToggle). The
+ * choice is global: every money value across the admin honors it, so this lives
+ * in the header beside the language switch rather than on a single section.
  */
 export function CurrencyToggle({
   currency,
-  baseParams,
+  next,
   locale,
 }: {
   currency: Currency;
-  baseParams: Record<string, string>;
+  next: string;
   locale: AdminLocale;
 }) {
-  const opts: Array<{ key: Currency; label: string; cur?: string }> = [
-    { key: "sar", label: t("currency_label", locale) },
-    { key: "usd", label: t("currency_usd_label", locale), cur: "usd" },
+  const options: Array<{ value: Currency; label: string }> = [
+    { value: "sar", label: t("currency_label", locale) },
+    { value: "usd", label: t("currency_usd_label", locale) },
   ];
-
   return (
-    <div
-      role="group"
+    <form
+      action={setAdminCurrency}
       aria-label={t("currency_group_label", locale)}
       className="inline-flex rounded-lg border border-brand-ink/15 p-0.5"
     >
-      {opts.map((o) => {
-        const active = o.key === currency;
+      <input type="hidden" name="next" value={next} />
+      {options.map((o) => {
+        const active = o.value === currency;
         return (
-          <Link
-            key={o.key}
-            href={buildQuery(baseParams, { cur: o.cur })}
-            aria-current={active ? "true" : undefined}
+          <button
+            key={o.value}
+            type="submit"
+            name="currency"
+            value={o.value}
+            aria-pressed={active}
             className={`inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold transition-colors ${
               active
                 ? "bg-brand-purple-900 text-white"
@@ -43,9 +44,9 @@ export function CurrencyToggle({
             }`}
           >
             {o.label}
-          </Link>
+          </button>
         );
       })}
-    </div>
+    </form>
   );
 }

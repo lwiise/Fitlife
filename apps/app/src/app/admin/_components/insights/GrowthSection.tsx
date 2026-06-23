@@ -1,6 +1,6 @@
 import type { InsightsView } from "@/lib/admin/insights";
-import type { AdminLocale } from "@/lib/admin/format";
-import { fmtMonth, fmtNumber, fmtSar } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
+import { fmtMoneyFromSar, fmtMonth, fmtNumber } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { DetailCard } from "../DetailCard";
 import { ChartFrame } from "../ChartFrame";
@@ -14,9 +14,11 @@ const allZero = (values: number[]) => values.every((v) => v === 0);
 export function GrowthSection({
   view,
   locale,
+  currency,
 }: {
   view: InsightsView;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const signupBars = view.newSignups.map((p) => ({
     label: fmtMonth(p.monthStart, locale),
@@ -33,9 +35,9 @@ export function GrowthSection({
     up: m.newSar,
     down: m.churnedSar,
     net: m.netSar,
-    upLabel: fmtSar(m.newSar, locale),
-    downLabel: fmtSar(m.churnedSar, locale),
-    netLabel: fmtSar(m.netSar, locale),
+    upLabel: fmtMoneyFromSar(m.newSar, currency, locale),
+    downLabel: fmtMoneyFromSar(m.churnedSar, currency, locale),
+    netLabel: fmtMoneyFromSar(m.netSar, currency, locale),
   }));
 
   return (

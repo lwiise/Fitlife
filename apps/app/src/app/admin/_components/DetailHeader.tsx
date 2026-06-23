@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { LocaleToggle } from "./LocaleToggle";
+import { CurrencyToggle } from "./CurrencyToggle";
 
 /** Drill-down chrome: a reading-direction-aware back link + locale toggle, then
  * an identity lockup (initial avatar, name, email) and an optional row of
@@ -14,6 +15,7 @@ export function DetailHeader({
   email,
   locale,
   localeNext,
+  currency,
   children,
 }: {
   backHref: string;
@@ -22,6 +24,7 @@ export function DetailHeader({
   email?: string | null;
   locale: AdminLocale;
   localeNext: string;
+  currency: Currency;
   children?: ReactNode;
 }) {
   const initial =
@@ -39,7 +42,8 @@ export function DetailHeader({
             <ChevronLeft className="size-4 rtl:hidden" aria-hidden="true" />
             {backLabel}
           </Link>
-          <div className="ms-auto">
+          <div className="ms-auto flex items-center gap-3">
+            <CurrencyToggle currency={currency} next={localeNext} locale={locale} />
             <LocaleToggle locale={locale} next={localeNext} />
           </div>
         </div>

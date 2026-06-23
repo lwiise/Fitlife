@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import { loadSubscriberHealth, type MemberHealth } from "@/lib/admin/detail";
 import type { AdminLocale } from "@/lib/admin/format";
-import { getAdminLocale } from "@/lib/admin/locale";
+import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { roleLabel, t } from "@/lib/admin/i18n";
 import { DetailHeader } from "../../../_components/DetailHeader";
 import { DetailCard, Field } from "../../../_components/DetailCard";
@@ -25,6 +25,7 @@ export default async function SubscriberHealthPage({
   if (!health) notFound();
 
   const locale = await getAdminLocale();
+  const currency = await getAdminCurrency();
 
   // PDPL: explicitly log the view of health/medical detail.
   await logAdminAccess({
@@ -42,6 +43,7 @@ export default async function SubscriberHealthPage({
         name={`${health.displayName ?? "—"} — ${t("health_title", locale)}`}
         locale={locale}
         localeNext={`/admin/subscribers/${userId}/health`}
+        currency={currency}
       />
 
       <main className="container-app space-y-4 py-6">

@@ -3,7 +3,6 @@ import type { OverviewView } from "@/lib/admin/types";
 import { fmtMoney, fmtPct } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { KpiCard } from "./KpiCard";
-import { CurrencyToggle } from "./CurrencyToggle";
 import { InfoTooltip } from "./InfoTooltip";
 
 /**
@@ -18,12 +17,10 @@ import { InfoTooltip } from "./InfoTooltip";
 export function AiCostStrip({
   view,
   currency,
-  baseParams,
   locale,
 }: {
   view: OverviewView;
   currency: Currency;
-  baseParams: Record<string, string>;
   locale: AdminLocale;
 }) {
   const pct = view.aiPctOfRevenue;
@@ -46,7 +43,6 @@ export function AiCostStrip({
           </h2>
           <InfoTooltip id="ov-cost-info" text={note} label={t("info_more", locale)} />
         </div>
-        <CurrencyToggle currency={currency} baseParams={baseParams} locale={locale} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

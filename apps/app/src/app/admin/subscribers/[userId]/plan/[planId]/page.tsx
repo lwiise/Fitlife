@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import { loadPlanForInspect } from "@/lib/admin/detail";
 import { fmtDate } from "@/lib/admin/format";
-import { getAdminLocale } from "@/lib/admin/locale";
+import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { planStatusLabel, t } from "@/lib/admin/i18n";
 import { DetailHeader } from "../../../../_components/DetailHeader";
 import { PlanViewer } from "@/app/plan/PlanViewer";
@@ -28,6 +28,7 @@ export default async function AdminPlanViewPage({
   if (!plan) notFound();
 
   const locale = await getAdminLocale();
+  const currency = await getAdminCurrency();
 
   await logAdminAccess({
     adminUserId: admin.userId,
@@ -45,6 +46,7 @@ export default async function AdminPlanViewPage({
         backLabel={t("back_to_subscriber", locale)}
         name={`${t("plan_data_title", locale)} — ${planStatusLabel(plan.status, locale)}`}
         locale={locale}
+        currency={currency}
         localeNext={`/admin/subscribers/${userId}/plan/${planId}`}
       />
 

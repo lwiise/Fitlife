@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import type { MetricKey, OverviewView } from "@/lib/admin/types";
 import { fmtMetricValue } from "@/lib/admin/format";
 import { metricLabel, t } from "@/lib/admin/i18n";
@@ -36,12 +36,14 @@ export function MetricTabs({
   view,
   baseParams,
   locale,
+  currency,
   selected,
   onSelect,
 }: {
   view: OverviewView;
   baseParams: Record<string, string>;
   locale: AdminLocale;
+  currency: Currency;
   selected: MetricKey;
   onSelect: (key: MetricKey) => void;
 }) {
@@ -86,7 +88,7 @@ export function MetricTabs({
                   active ? "adm-display" : "text-xl font-extrabold leading-none"
                 }`}
               >
-                {fmtMetricValue(mv.headline, mv.unit, locale)}
+                {fmtMetricValue(mv.headline, mv.unit, locale, currency)}
               </span>
               <div className="mt-0.5 flex items-center justify-between gap-2">
                 <TrendPill

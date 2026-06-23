@@ -1,8 +1,9 @@
 import Link from "next/link";
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { buildQuery } from "./searchParams";
 import { LocaleToggle } from "./LocaleToggle";
+import { CurrencyToggle } from "./CurrencyToggle";
 
 /**
  * Admin chrome: product mark, nav tabs (Overview / Insights), an optional period
@@ -12,18 +13,23 @@ export function AdminTopBar({
   locale,
   activeNav,
   adminEmail,
+  currency,
+  next,
   periodDays,
   baseParams,
 }: {
   locale: AdminLocale;
   activeNav: "overview" | "insights";
   adminEmail: string | null;
+  currency: Currency;
+  /** Query-preserving return path the page computes, shared by both toggles so a
+   * currency/language switch keeps the current sort/filter/period. */
+  next: string;
   /** Provide both to show the period control (overview). */
   periodDays?: number;
   baseParams?: Record<string, string>;
 }) {
   const initial = (adminEmail ?? "?").charAt(0).toUpperCase();
-  const localeNext = activeNav === "insights" ? "/admin/insights" : "/admin";
 
   return (
     <header className="border-b border-brand-ink/5 bg-surface-elevated">
@@ -57,7 +63,8 @@ export function AdminTopBar({
             />
           ) : null}
 
-          <LocaleToggle locale={locale} next={localeNext} />
+          <CurrencyToggle currency={currency} next={next} locale={locale} />
+          <LocaleToggle locale={locale} next={next} />
 
           {adminEmail ? (
             <div className="flex items-center gap-2">

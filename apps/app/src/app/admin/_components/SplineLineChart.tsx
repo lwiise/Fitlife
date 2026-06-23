@@ -1,4 +1,4 @@
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { fmtMetricValue, fmtSignedPct } from "@/lib/admin/format";
 
 /**
@@ -59,6 +59,7 @@ export function SplineLineChart({
   comparisonLabel,
   deltaLabel,
   locale,
+  currency,
 }: {
   /** Full localized date per current-range bucket. */
   labels: string[];
@@ -72,6 +73,7 @@ export function SplineLineChart({
   comparisonLabel: string;
   deltaLabel: string;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const rtl = locale === "ar";
   const n = current.length;
@@ -101,7 +103,7 @@ export function SplineLineChart({
   const gridYs = [0, 0.25, 0.5, 0.75, 1].map((f) => PAD_TOP + f * INNER_H);
 
   const labelStep = Math.max(1, Math.ceil(n / 8));
-  const fmt = (v: number) => fmtMetricValue(v, unit, locale, true);
+  const fmt = (v: number) => fmtMetricValue(v, unit, locale, currency, true);
   const deltaPctAt = (i: number) => {
     const c = comparison[i] ?? 0;
     const cur = current[i] ?? 0;
@@ -124,8 +126,8 @@ export function SplineLineChart({
           {labels.map((label, i) => (
             <tr key={i}>
               <th scope="row">{label}</th>
-              <td>{fmtMetricValue(current[i] ?? 0, unit, locale)}</td>
-              {hasCmp ? <td>{fmtMetricValue(comparison[i] ?? 0, unit, locale)}</td> : null}
+              <td>{fmtMetricValue(current[i] ?? 0, unit, locale, currency)}</td>
+              {hasCmp ? <td>{fmtMetricValue(comparison[i] ?? 0, unit, locale, currency)}</td> : null}
               {hasCmp ? <td>{fmtSignedPct(deltaPctAt(i), locale)}</td> : null}
             </tr>
           ))}
@@ -241,7 +243,7 @@ export function SplineLineChart({
                       <span className="size-2 rounded-full bg-brand-purple-900" />
                       {currentLabel}
                       <span className="ms-auto ps-2 tabular-nums text-brand-ink">
-                        {fmtMetricValue(cur, unit, locale)}
+                        {fmtMetricValue(cur, unit, locale, currency)}
                       </span>
                     </p>
                     {hasCmp ? (
@@ -249,7 +251,7 @@ export function SplineLineChart({
                         <span className="size-2 rounded-full bg-brand-ink-muted" />
                         {comparisonLabel}
                         <span className="ms-auto ps-2 tabular-nums text-brand-ink">
-                          {fmtMetricValue(cmp, unit, locale)}
+                          {fmtMetricValue(cmp, unit, locale, currency)}
                         </span>
                       </p>
                     ) : null}

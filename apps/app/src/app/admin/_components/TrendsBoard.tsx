@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { AdminLocale } from "@/lib/admin/format";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
 import type { MetricKey, OverviewView } from "@/lib/admin/types";
 import { fmtBucketLabel } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
@@ -24,10 +24,12 @@ export function TrendsBoard({
   view,
   baseParams,
   locale,
+  currency,
 }: {
   view: OverviewView;
   baseParams: Record<string, string>;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const [metric, setMetric] = useState<MetricKey>(view.selectedMetric);
 
@@ -70,6 +72,7 @@ export function TrendsBoard({
         view={view}
         baseParams={baseParams}
         locale={locale}
+        currency={currency}
         selected={metric}
         onSelect={onSelect}
       />
@@ -90,6 +93,7 @@ export function TrendsBoard({
           comparisonLabel={comparisonLabel}
           deltaLabel={t("delta_label", locale)}
           locale={locale}
+          currency={currency}
         />
 
         {/* Legend: solid = current, dotted = comparison (range-level, not per-metric) */}

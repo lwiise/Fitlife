@@ -19,9 +19,9 @@ import {
   type PlanSummary,
   type SubscriptionRow,
 } from "@/lib/admin/detail";
-import type { AdminLocale } from "@/lib/admin/format";
-import { fmtDate, fmtNumber, fmtRelative, fmtUsd } from "@/lib/admin/format";
-import { getAdminLocale } from "@/lib/admin/locale";
+import type { AdminLocale, Currency } from "@/lib/admin/format";
+import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from "@/lib/admin/format";
+import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import {
   cadenceLabel,
   genStatusLabel,
@@ -49,6 +49,7 @@ export default async function SubscriberDetailPage({
   if (!detail) notFound();
 
   const locale = await getAdminLocale();
+  const currency = await getAdminCurrency();
 
   // PDPL: record the subscriber-detail access.
   await logAdminAccess({
@@ -68,6 +69,7 @@ export default async function SubscriberDetailPage({
         email={detail.email}
         locale={locale}
         localeNext={`/admin/subscribers/${userId}`}
+        currency={currency}
       >
         {subscription ? (
           <>
@@ -154,7 +156,12 @@ export default async function SubscriberDetailPage({
           icon={CalendarDays}
           className="p-0"
         >
-          <PlansTable plans={detail.plans} userId={userId} locale={locale} />
+          <PlansTable
+            plans={detail.plans}
+            userId={userId}
+            locale={locale}
+            currency={currency}
+          />
         </DetailCard>
 
         <DetailCard
@@ -162,7 +169,11 @@ export default async function SubscriberDetailPage({
           icon={Sparkles}
           className="p-0"
         >
-          <GenerationsTable generations={detail.generations} locale={locale} />
+          <GenerationsTable
+            generations={detail.generations}
+            locale={locale}
+            currency={currency}
+          />
         </DetailCard>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -183,7 +194,7 @@ export default async function SubscriberDetailPage({
               />
               <Field
                 label={t("field_chat_cost", locale)}
-                value={fmtUsd(detail.engagement.chatCostUsd, locale, 4)}
+                value={fmtMoney(detail.engagement.chatCostUsd, currency, locale, 4, 4)}
                 mono
               />
             </dl>
@@ -355,10 +366,12 @@ function PlansTable({
   plans,
   userId,
   locale,
+  currency,
 }: {
   plans: PlanSummary[];
   userId: string;
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const columns: DataColumn<PlanSummary>[] = [
     {
@@ -399,7 +412,7 @@ function PlansTable({
       align: "end",
       cell: (p) => (
         <span dir="ltr" className="tabular-nums">
-          {p.costUsd != null ? fmtUsd(p.costUsd, locale, 4) : "—"}
+          {p.costUsd != null ? fmtMoney(p.costUsd, currency, locale, 4, 4) : "—"}
         </span>
       ),
     },
@@ -440,9 +453,11 @@ function PlansTable({
 function GenerationsTable({
   generations,
   locale,
+  currency,
 }: {
   generations: GenerationSummary[];
   locale: AdminLocale;
+  currency: Currency;
 }) {
   const columns: DataColumn<GenerationSummary>[] = [
     {
@@ -482,7 +497,7 @@ function GenerationsTable({
       align: "end",
       cell: (g) => (
         <span dir="ltr" className="tabular-nums">
-          {g.costUsd != null ? fmtUsd(g.costUsd, locale, 4) : "—"}
+          {g.costUsd != null ? fmtMoney(g.costUsd, currency, locale, 4, 4) : "—"}
         </span>
       ),
     },
