@@ -152,7 +152,7 @@ async function loadEmailMap(
   return map;
 }
 
-async function fetchAdminDataset(): Promise<AdminDataset> {
+async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
   const db = adminDb();
   const truncated: string[] = [];
   const onTruncate = (label: string) => {
@@ -220,7 +220,9 @@ async function fetchAdminDataset(): Promise<AdminDataset> {
     plans,
     generations,
     chats,
-    emailByUser,
+    // Map → entries array: unstable_cache stores its result as JSON, and a Map
+    // serializes to `{}` (losing `.get`). The wrapper rebuilds the Map below.
+    emailEntries: [...emailByUser],
     truncated,
   };
 }
@@ -235,11 +237,23 @@ async function fetchAdminDataset(): Promise<AdminDataset> {
  */
 const ADMIN_DATASET_TTL_SECONDS = 60; // analytics tolerate ≤60s staleness
 
-export const loadAdminDataset = unstable_cache(
+/** JSON-safe shape stored in the cache: the `emailByUser` Map flattened to entries. */
+type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser"> & {
+  emailEntries: Array<[string, string | null]>;
+};
+
+const cachedAdminDataset = unstable_cache(
   fetchAdminDataset,
   ["admin-dataset"],
   { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: ["admin-dataset"] },
 );
+
+export async function loadAdminDataset(): Promise<AdminDataset> {
+  const { emailEntries, ...rest } = await cachedAdminDataset();
+  // Rebuild the Map on this side of the cache so every consumer still gets a real
+  // Map (`.get`), not the `{}` a serialized Map would degrade to.
+  return { ...rest, emailByUser: new Map(emailEntries) };
+}
 
 // ---------------------------------------------------------------------------
 // Aggregation (pure over the dataset)
