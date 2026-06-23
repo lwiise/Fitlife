@@ -12,15 +12,14 @@ function pill(active: boolean): string {
 
 /**
  * Kajabi-style filter bar — all URL-param driven (zero client JS). Date presets
- * + custom-range GET form, interval grouping, and a comparison toggle. The chart
- * plots SAR-native revenue metrics, so currency lives with the cost strip (the
- * only USD-billed figures), not here. Mirrors the server-rendered pill pattern.
+ * + custom-range GET form and interval grouping. The chart plots SAR-native
+ * revenue metrics, so currency lives with the cost strip (the only USD-billed
+ * figures), not here. Mirrors the server-rendered pill pattern.
  */
 export function OverviewChartControls({
   locale,
   preset,
   interval,
-  comparisonOn,
   fromValue,
   toValue,
   baseParams,
@@ -28,7 +27,6 @@ export function OverviewChartControls({
   locale: AdminLocale;
   preset: RangePreset;
   interval: Granularity;
-  comparisonOn: boolean;
   fromValue: string;
   toValue: string;
   baseParams: Record<string, string>;
@@ -118,22 +116,6 @@ export function OverviewChartControls({
           </Link>
         ))}
       </div>
-
-      {/* Comparison toggle */}
-      <Link
-        href={buildQuery(baseParams, { cmp: comparisonOn ? "off" : undefined })}
-        aria-current={comparisonOn ? "true" : undefined}
-        className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
-          comparisonOn
-            ? "border-brand-purple-900/40 bg-brand-surface text-brand-ink"
-            : "border-brand-ink/15 text-brand-ink-muted hover:text-brand-ink"
-        }`}
-      >
-        {t("compare_label", locale)}
-        <span className="text-xs text-brand-ink-muted">
-          {comparisonOn ? t("compare_prior", locale) : t("compare_off", locale)}
-        </span>
-      </Link>
     </div>
   );
 }

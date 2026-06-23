@@ -31,14 +31,13 @@ export function RevenueChartSection({
             label={t("info_more", locale)}
           />
         </div>
-        {/* Range / granularity / compare genuinely re-fetch (different buckets) →
-            these stay a server-driven GET form. The metric tabs + chart switch on
-            the client (TrendsBoard) since their data is already loaded. */}
+        {/* Range / granularity genuinely re-fetch (different buckets) → these stay
+            a server-driven GET form. The metric tabs + chart switch on the client
+            (TrendsBoard) since their data is already loaded. */}
         <OverviewChartControls
           locale={locale}
           preset={view.preset}
           interval={view.interval}
-          comparisonOn={view.comparisonOn}
           fromValue={view.fromValue}
           toValue={view.toValue}
           baseParams={baseParams}

@@ -1,13 +1,12 @@
 import type { AdminLocale, Currency } from "@/lib/admin/format";
-import { fmtMetricValue, fmtSignedPct } from "@/lib/admin/format";
+import { fmtMetricValue } from "@/lib/admin/format";
 
 /**
  * Kajabi-style spline line chart — zero client JS. The current range is a smooth
  * monotone-ish spline in a single confident brand-purple stroke over a soft
- * purple→transparent area fade (depth, one hue — no arbitrary colour shift); the
- * comparison range is a faded dotted line behind it.
- * Hover (date · current · comparison · delta) + crosshair are pure CSS: a row of
- * invisible per-bucket columns reveal a tooltip/crosshair/markers on hover.
+ * purple→transparent area fade (depth, one hue — no arbitrary colour shift).
+ * Hover (date · value) + crosshair are pure CSS: a row of invisible per-bucket
+ * columns reveal a tooltip/crosshair/marker on hover.
  *
  * Accessibility mirrors the rest of the kit: the visual plot is aria-hidden and
  * a visually-hidden table carries the real values. Unlike the other charts this
@@ -51,34 +50,26 @@ function splinePath(pts: Array<[number, number]>): string {
 export function SplineLineChart({
   labels,
   current,
-  comparison,
   unit,
   ariaLabel,
   timeLabel,
   currentLabel,
-  comparisonLabel,
-  deltaLabel,
   locale,
   currency,
 }: {
   /** Full localized date per current-range bucket. */
   labels: string[];
   current: number[];
-  /** Comparison series aligned 1:1 with `current`; empty when comparison off. */
-  comparison: number[];
   unit: "sar" | "count";
   ariaLabel: string;
   timeLabel: string;
   currentLabel: string;
-  comparisonLabel: string;
-  deltaLabel: string;
   locale: AdminLocale;
   currency: Currency;
 }) {
   const rtl = locale === "ar";
   const n = current.length;
-  const hasCmp = comparison.length > 0;
-  const maxV = Math.max(1, ...current, ...comparison);
+  const maxV = Math.max(1, ...current);
 
   const xAt = (i: number) => {
     const f = (i + 0.5) / Math.max(1, n);
@@ -88,7 +79,6 @@ export function SplineLineChart({
   const topPct = (v: number) => (yAt(v) / H) * 100;
 
   const curPts: Array<[number, number]> = current.map((v, i) => [xAt(i), yAt(v)]);
-  const cmpPts: Array<[number, number]> = comparison.map((v, i) => [xAt(i), yAt(v)]);
 
   // Closed area under the current spline → baseline, for the soft fill.
   const curD = splinePath(curPts);
@@ -104,11 +94,6 @@ export function SplineLineChart({
 
   const labelStep = Math.max(1, Math.ceil(n / 8));
   const fmt = (v: number) => fmtMetricValue(v, unit, locale, currency, true);
-  const deltaPctAt = (i: number) => {
-    const c = comparison[i] ?? 0;
-    const cur = current[i] ?? 0;
-    return c > 0 ? Math.round(((cur - c) / c) * 1000) / 10 : null;
-  };
 
   return (
     <figure aria-label={ariaLabel} className="m-0">
@@ -118,8 +103,6 @@ export function SplineLineChart({
           <tr>
             <th scope="col">{timeLabel}</th>
             <th scope="col">{currentLabel}</th>
-            {hasCmp ? <th scope="col">{comparisonLabel}</th> : null}
-            {hasCmp ? <th scope="col">{deltaLabel}</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -127,8 +110,6 @@ export function SplineLineChart({
             <tr key={i}>
               <th scope="row">{label}</th>
               <td>{fmtMetricValue(current[i] ?? 0, unit, locale, currency)}</td>
-              {hasCmp ? <td>{fmtMetricValue(comparison[i] ?? 0, unit, locale, currency)}</td> : null}
-              {hasCmp ? <td>{fmtSignedPct(deltaPctAt(i), locale)}</td> : null}
             </tr>
           ))}
         </tbody>
@@ -184,18 +165,6 @@ export function SplineLineChart({
 
             {areaD ? <path d={areaD} fill={`url(#${AREA_ID})`} stroke="none" /> : null}
 
-            {hasCmp ? (
-              <path
-                d={splinePath(cmpPts)}
-                fill="none"
-                stroke="var(--color-brand-ink-muted)"
-                strokeWidth="2"
-                strokeDasharray="2 5"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-              />
-            ) : null}
-
             <path
               d={curD}
               fill="none"
@@ -222,8 +191,6 @@ export function SplineLineChart({
           <div className="absolute inset-0 flex">
             {labels.map((label, i) => {
               const cur = current[i] ?? 0;
-              const cmp = comparison[i] ?? 0;
-              const dPct = deltaPctAt(i);
               return (
                 <div key={i} className="group relative flex-1">
                   <span className="absolute inset-y-0 inset-x-0 mx-auto w-px bg-brand-ink/20 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -231,12 +198,6 @@ export function SplineLineChart({
                     className="absolute inset-x-0 mx-auto size-2.5 -translate-y-1/2 rounded-full bg-brand-purple-900 opacity-0 ring-2 ring-surface-elevated group-hover:opacity-100"
                     style={{ top: `${topPct(cur)}%` }}
                   />
-                  {hasCmp ? (
-                    <span
-                      className="absolute inset-x-0 mx-auto size-2 -translate-y-1/2 rounded-full bg-brand-ink-muted opacity-0 ring-2 ring-surface-elevated group-hover:opacity-100"
-                      style={{ top: `${topPct(cmp)}%` }}
-                    />
-                  ) : null}
                   <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 mx-auto mb-3 hidden w-max max-w-44 rounded-lg border border-brand-ink/10 bg-surface-elevated px-3 py-2 text-start shadow-lg group-hover:block">
                     <p className="mb-1 text-xs font-semibold text-brand-ink">{label}</p>
                     <p className="flex items-center gap-1.5 text-xs text-brand-ink-muted">
@@ -246,23 +207,6 @@ export function SplineLineChart({
                         {fmtMetricValue(cur, unit, locale, currency)}
                       </span>
                     </p>
-                    {hasCmp ? (
-                      <p className="flex items-center gap-1.5 text-xs text-brand-ink-muted">
-                        <span className="size-2 rounded-full bg-brand-ink-muted" />
-                        {comparisonLabel}
-                        <span className="ms-auto ps-2 tabular-nums text-brand-ink">
-                          {fmtMetricValue(cmp, unit, locale, currency)}
-                        </span>
-                      </p>
-                    ) : null}
-                    {hasCmp ? (
-                      <p className="mt-1 text-xs text-brand-ink-muted">
-                        {deltaLabel}:{" "}
-                        <span className="tabular-nums text-brand-ink">
-                          {fmtSignedPct(dPct, locale)}
-                        </span>
-                      </p>
-                    ) : null}
                   </div>
                 </div>
               );
