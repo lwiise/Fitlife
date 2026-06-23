@@ -10,7 +10,7 @@ import { t } from "@/lib/admin/i18n";
 export default function SubscriberDetailLoading() {
   return (
     <>
-      <div className="h-28 border-b border-brand-ink/10 bg-gradient-to-b from-surface-elevated to-admin-surface" />
+      <div className="h-28 border-b border-brand-ink/5 bg-surface-elevated" />
       <main
         className="container-app space-y-4 py-6"
         aria-busy="true"

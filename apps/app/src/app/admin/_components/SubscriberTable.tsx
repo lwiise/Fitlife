@@ -132,15 +132,15 @@ export function SubscriberTable({
             ) : (
               result.rows.map((r, i) => {
                 const href = `/admin/subscribers/${r.userId}`;
-                // Zebra: odd rows get a lavender tint; even rows stay white. The
-                // frozen first cell must use the SAME opaque parity bg to occlude.
+                // Zebra: odd rows get a subtle surface tint; even rows stay white.
+                // The frozen first cell must use the SAME opaque parity bg to occlude.
                 const zebra = i % 2 === 1;
-                const rowTint = zebra ? "bg-admin-surface" : "bg-surface-elevated";
+                const rowTint = zebra ? "bg-brand-surface" : "bg-surface-elevated";
                 return (
                   <tr
                     key={r.userId}
                     className={`group border-t border-brand-ink/10 align-middle transition-colors hover:bg-brand-purple-900/[0.06] ${
-                      zebra ? "bg-admin-surface" : ""
+                      zebra ? "bg-brand-surface" : ""
                     }`}
                   >
                     {/* Name + email — frozen first column, links to the drill-down */}

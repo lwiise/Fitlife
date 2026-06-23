@@ -26,7 +26,7 @@ export function AdminTopBar({
   const localeNext = activeNav === "insights" ? "/admin/insights" : "/admin";
 
   return (
-    <header className="border-b border-brand-ink/10 bg-gradient-to-b from-surface-elevated to-admin-surface">
+    <header className="border-b border-brand-ink/5 bg-surface-elevated">
       <div className="container-app flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
         <Link href="/admin" className="flex min-h-11 items-center gap-2.5">
           <span

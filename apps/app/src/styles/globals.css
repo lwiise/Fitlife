@@ -17,9 +17,6 @@
   --color-brand-ink-muted: #666377;
   --color-brand-surface: #ebeff2;
   --color-brand-surface-elevated: #ffffff;
-  /* Admin-only lavender page surface (purple-forward back-office look). Scoped
-     to /admin via the admin layout; the consumer app keeps brand-surface. */
-  --color-admin-surface: #ece6f6;
   --color-brand-emerald: #059669;
   --color-brand-warm-orange: #e89b5a;
 

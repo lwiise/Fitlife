@@ -25,7 +25,7 @@ export default async function AdminLayout({
     <div
       dir={dir}
       lang={locale}
-      className="admin-root min-h-screen bg-admin-surface text-brand-ink"
+      className="admin-root min-h-screen bg-brand-surface text-brand-ink"
     >
       {children}
     </div>
