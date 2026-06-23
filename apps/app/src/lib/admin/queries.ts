@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
 import { computeMrr } from "@/lib/admin/revenue";
@@ -151,7 +152,7 @@ async function loadEmailMap(
   return map;
 }
 
-export async function loadAdminDataset(): Promise<AdminDataset> {
+async function fetchAdminDataset(): Promise<AdminDataset> {
   const db = adminDb();
   const truncated: string[] = [];
   const onTruncate = (label: string) => {
@@ -223,6 +224,22 @@ export async function loadAdminDataset(): Promise<AdminDataset> {
     truncated,
   };
 }
+
+/**
+ * The admin dataset is request-independent (service-role client, no cookies/headers),
+ * so cache it globally for a short window. The admin layout is `force-dynamic`, so
+ * WITHOUT this every navigation — including the header toggles (currency / locale)
+ * and the chart's granularity links — re-ran the full 6-table fetch (~1–3s). The
+ * per-request view computation + formatting stay OUTSIDE the cache, so locale /
+ * currency / range still apply live. `revalidateTag("admin-dataset")` force-refreshes.
+ */
+const ADMIN_DATASET_TTL_SECONDS = 60; // analytics tolerate ≤60s staleness
+
+export const loadAdminDataset = unstable_cache(
+  fetchAdminDataset,
+  ["admin-dataset"],
+  { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: ["admin-dataset"] },
+);
 
 // ---------------------------------------------------------------------------
 // Aggregation (pure over the dataset)
