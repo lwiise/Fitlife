@@ -26,8 +26,11 @@ export type DataColumn<T> = {
   hide?: (row: T) => boolean;
 };
 
+// Alignment is applied per-column below (start by default, end for numeric) — do
+// NOT bake `text-start` in here, or an `align:"end"` header gets both classes and
+// the conflict leaves the header left while its value is right.
 const TH =
-  "whitespace-nowrap px-4 py-3 text-start adm-label uppercase text-brand-ink/70";
+  "whitespace-nowrap px-4 py-3 adm-label uppercase text-brand-ink/70";
 const TD = "whitespace-nowrap px-4 py-3 adm-body text-brand-ink";
 // Frozen first column for the rare horizontal scroll on md/lg. No zebra in these
 // tables, so an opaque surface-elevated bg occludes content scrolling beneath.
@@ -75,7 +78,7 @@ export function DataTable<T>({
                   key={c.key}
                   scope="col"
                   className={`${TH} ${i === 0 ? STICKY_HEAD : ""} ${
-                    c.align === "end" ? "text-end" : ""
+                    c.align === "end" ? "text-end" : "text-start"
                   }`}
                 >
                   {c.header}
