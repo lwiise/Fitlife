@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { AdminLocale } from "@/lib/admin/format";
 import type { MetricKey, OverviewView } from "@/lib/admin/types";
@@ -23,19 +25,25 @@ function metricsParam(list: MetricKey[]): string | undefined {
 }
 
 /**
- * The metric row: up to 4 tabs (label · big value · period-over-period delta),
- * the selected one in a subtle highlight; clicking a tab re-plots the chart. All
- * URL-param driven. "Customize metrics" is a native <details> disclosure of
- * toggle links over the metric pool (zero JS), capped at 4.
+ * The metric row: up to 4 tabs (label · big value · period-over-period delta), the
+ * selected one highlighted. Selecting a tab is now a CONTROLLED client action
+ * (`onSelect`) — every shown metric's series is already on the client, so the chart
+ * re-plots instantly with no server round-trip (what used to make this slow). Which
+ * metrics are *shown* ("Customize metrics") still changes the data set, so it stays
+ * a zero-JS <details> of toggle links over the metric pool (capped at 4).
  */
 export function MetricTabs({
   view,
   baseParams,
   locale,
+  selected,
+  onSelect,
 }: {
   view: OverviewView;
   baseParams: Record<string, string>;
   locale: AdminLocale;
+  selected: MetricKey;
+  onSelect: (key: MetricKey) => void;
 }) {
   const byKey = new Map(view.metrics.map((m) => [m.key, m]));
 
@@ -49,23 +57,25 @@ export function MetricTabs({
         {view.shownMetrics.map((key) => {
           const mv = byKey.get(key);
           if (!mv) return null;
-          const active = key === view.selectedMetric;
+          const active = key === selected;
           return (
-            <Link
+            <button
               key={key}
-              href={buildQuery(baseParams, {
-                metric: key === "gross_revenue" ? undefined : key,
-              })}
-              aria-current={active ? "true" : undefined}
-              className={`relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl border bg-surface-elevated p-3 ps-4 shadow-sm transition ${
+              type="button"
+              aria-pressed={active}
+              onClick={() => onSelect(key)}
+              className={`group relative flex min-h-11 flex-col gap-1.5 overflow-hidden rounded-xl border bg-surface-elevated p-3 ps-4 text-start shadow-sm transition duration-150 ${
                 active
                   ? "border-brand-purple-900/30 bg-brand-purple-900/[0.06] ring-1 ring-inset ring-brand-purple-900/30"
-                  : "border-brand-ink/10 hover:border-brand-ink/25"
+                  : "border-brand-ink/10 hover:-translate-y-px hover:border-brand-ink/25 hover:shadow"
               }`}
             >
+              {/* Accent rail marks the ACTIVE tab (clearer selection feedback). */}
               <span
                 aria-hidden="true"
-                className="absolute inset-y-0 start-0 w-[3px] bg-brand-purple-900"
+                className={`absolute inset-y-0 start-0 w-[3px] bg-brand-purple-900 transition-opacity duration-150 ${
+                  active ? "opacity-100" : "opacity-0 group-hover:opacity-30"
+                }`}
               />
               <span className="adm-label uppercase text-brand-ink-muted">
                 {metricLabel(key, locale)}
@@ -91,7 +101,7 @@ export function MetricTabs({
                   />
                 ) : null}
               </div>
-            </Link>
+            </button>
           );
         })}
       </div>
