@@ -69,12 +69,12 @@ export function OverviewChartControls({
       </div>
 
       {/* Custom range */}
-      <form method="get" className="flex flex-wrap items-end gap-2">
+      <form method="get" className="flex flex-wrap items-center gap-2">
         {preserved.map(([k, v]) => (
           <input key={k} type="hidden" name={k} value={v} />
         ))}
         <input type="hidden" name="range" value="custom" />
-        <label className="flex flex-col gap-1 text-xs text-brand-ink-muted">
+        <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-brand-ink-muted">
           <span>{t("date_from", locale)}</span>
           <input
             type="date"
@@ -84,7 +84,7 @@ export function OverviewChartControls({
             className="min-h-11 rounded-lg border border-brand-ink/15 bg-surface-elevated px-2 text-sm text-brand-ink"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-brand-ink-muted">
+        <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-brand-ink-muted">
           <span>{t("date_to", locale)}</span>
           <input
             type="date"
