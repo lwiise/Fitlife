@@ -47,6 +47,7 @@ export function PlanViewer({
   updatedAt,
   preselectedMember,
   readOnly = false,
+  hideExport = false,
   housekeeperLocale,
   locale,
 }: {
@@ -61,6 +62,8 @@ export function PlanViewer({
   // Historical view (e.g. /plan/history/[id]): hide regenerate + add-member,
   // and don't rewrite the URL.
   readOnly?: boolean;
+  // Hide the PDF export (the admin plan view: read-only, no customer export).
+  hideExport?: boolean;
   // Set (to a non-Arabic locale) when the household has a housekeeper who reads
   // another language → show the "housekeeper recipes" entry link.
   housekeeperLocale?: string;
@@ -310,7 +313,7 @@ export function PlanViewer({
               وصفات الخدامة
             </Link>
           )}
-          {!translated && (
+          {!translated && !hideExport && (
             <DownloadPDFButton
               memberPlan={activeMember}
               planMetadata={{ week_start_date: plan.week_start_date }}

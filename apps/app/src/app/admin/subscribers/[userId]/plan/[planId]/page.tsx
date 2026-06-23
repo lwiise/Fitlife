@@ -1,18 +1,22 @@
 import { notFound } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
+import { MealPlanSchema } from "@fitlife/plan-engine";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import { loadPlanForInspect } from "@/lib/admin/detail";
-import { fmtDate, fmtNumber } from "@/lib/admin/format";
+import { fmtDate } from "@/lib/admin/format";
 import { getAdminLocale } from "@/lib/admin/locale";
 import { planStatusLabel, t } from "@/lib/admin/i18n";
 import { DetailHeader } from "../../../../_components/DetailHeader";
+import { PlanViewer } from "@/app/plan/PlanViewer";
 
 /**
- * Raw plan_data inspector. Plan data describes a household's meals/health needs,
- * so opening it records a `view_plan_data` audit event (PDPL).
+ * Admin view of a subscriber's meal plan — the real PlanViewer (read-only: no
+ * regenerate / add-member / PDF export), not a raw JSON dump. Plan data describes a
+ * household's meals + health needs, so opening it records a `view_plan_data` audit
+ * event (PDPL).
  */
-export default async function PlanInspectPage({
+export default async function AdminPlanViewPage({
   params,
 }: {
   params: Promise<{ userId: string; planId: string }>;
@@ -32,7 +36,7 @@ export default async function PlanInspectPage({
     detail: { planId },
   });
 
-  const json = JSON.stringify(plan.planData ?? null, null, 2);
+  const parsed = MealPlanSchema.safeParse(plan.planData);
 
   return (
     <>
@@ -51,19 +55,25 @@ export default async function PlanInspectPage({
         </p>
 
         <p className="adm-body text-brand-ink-muted">
-          {fmtDate(plan.generatedAt ?? plan.createdAt, locale)} ·{" "}
-          <span dir="ltr" className="tabular-nums">
-            {fmtNumber(json.length, locale)}
-          </span>{" "}
-          chars
+          {fmtDate(plan.generatedAt ?? plan.createdAt, locale)}
         </p>
 
-        <pre
-          dir="ltr"
-          className="max-h-[70vh] overflow-auto rounded-xl border border-brand-ink/10 bg-brand-ink/5 p-4 text-xs leading-relaxed text-brand-ink"
-        >
-          <code>{json}</code>
-        </pre>
+        {parsed.success ? (
+          // The plan content is Arabic — force RTL so it reads correctly even when
+          // the admin chrome is in English. PlanViewer is read-only with no export.
+          <div dir="rtl">
+            <PlanViewer
+              plan={parsed.data}
+              planId={plan.id}
+              readOnly
+              hideExport
+            />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-brand-ink/10 bg-surface-elevated p-10 text-center adm-body text-brand-ink-muted">
+            {t("plan_no_data", locale)}
+          </div>
+        )}
       </main>
     </>
   );

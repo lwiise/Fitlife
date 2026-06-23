@@ -185,7 +185,7 @@ const STRINGS = {
   field_tokens: { ar: "التوكنز", en: "Tokens" },
   field_cost: { ar: "التكلفة", en: "Cost" },
   field_model: { ar: "النموذج", en: "Model" },
-  inspect_plan: { ar: "فحص البيانات (مُسجّل)", en: "Inspect data (logged)" },
+  inspect_plan: { ar: "عرض الخطة", en: "View plan" },
   no_plans: { ar: "لا توجد خطط", en: "No plans yet" },
   plan_generating: { ar: "قيد الإنشاء", en: "Generating" },
   plan_ready: { ar: "جاهزة", en: "Ready" },
@@ -223,11 +223,15 @@ const STRINGS = {
   field_allergies: { ar: "الحساسية", en: "Allergies" },
   field_dislikes: { ar: "ما لا تفضله", en: "Dislikes" },
 
-  // ── Plan data inspect (gated) ──
-  plan_data_title: { ar: "بيانات الخطة", en: "Plan data" },
+  // ── Plan view (gated) ──
+  plan_data_title: { ar: "الخطة", en: "Plan" },
   plan_data_logged_note: {
-    ar: "تم تسجيل فحص بيانات الخطة في سجل التدقيق.",
-    en: "Inspecting plan data is recorded in the audit log.",
+    ar: "تم تسجيل عرض خطة المشترك في سجل التدقيق.",
+    en: "Viewing the subscriber's plan is recorded in the audit log.",
+  },
+  plan_no_data: {
+    ar: "لا توجد خطة بعد (لم تُنشأ أو فشلت).",
+    en: "No plan content yet (not generated or failed).",
   },
 
   // States
