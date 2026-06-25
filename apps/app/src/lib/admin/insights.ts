@@ -312,9 +312,14 @@ export function computeTrends(
         ds.chats.reduce((s, c) => s + (c.cost_usd ?? 0), 0)) *
         100,
     ) / 100;
+  // Cost PER PLAN is generation-only — the chat assistant (chats) is a separate
+  // feature, not part of producing a plan. (totalAiCostUsd above still includes
+  // chats for the overall AI-spend figures.)
+  const generationCostUsd =
+    Math.round(ds.generations.reduce((s, g) => s + (g.cost_usd ?? 0), 0) * 100) / 100;
   const planCount = ds.plans.length;
   const costPerPlanUsd =
-    planCount > 0 ? Math.round((totalAiCostUsd / planCount) * 10000) / 10000 : null;
+    planCount > 0 ? Math.round((generationCostUsd / planCount) * 10000) / 10000 : null;
   const costPerActiveUserUsd =
     funnel.active > 0
       ? Math.round((totalAiCostUsd / funnel.active) * 10000) / 10000

@@ -420,12 +420,16 @@ export function buildOverviewView(
     activeBeneficiaryTotal > 0
       ? Math.round((aiCostUsd / activeBeneficiaryTotal) * 10000) / 10000
       : null;
-  // Per plan: the period's AI spend ÷ plans generated in the period (mirrors the
-  // insights "cost per plan"). Every plan in the range incurred cost, so the
-  // denominator is the plain plan count — no active-account scoping needed.
+  // Per plan: the cost of GENERATING plans ÷ plans generated in the period. The
+  // numerator is generation-only (plan_generations spend, incl. translation rows) —
+  // NOT aiCostUsd, which also includes the AI chat assistant (chat_messages), a
+  // separate feature that has nothing to do with producing a plan.
+  const generationCostInRange = computeAiCostInRange(ds.generations, [], range);
   const planCountInRange = computePlanCountInRange(ds.plans, range);
   const aiCostPerPlanUsd =
-    planCountInRange > 0 ? Math.round((aiCostUsd / planCountInRange) * 10000) / 10000 : null;
+    planCountInRange > 0
+      ? Math.round((generationCostInRange / planCountInRange) * 10000) / 10000
+      : null;
 
   return {
     subscriberCount,
