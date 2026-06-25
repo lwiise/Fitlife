@@ -10,6 +10,7 @@ import {
   computeAiCostInRange,
   computeAiCostSeries,
   computeBeneficiaryTotal,
+  computeMemberSlicesInRange,
   computeMetricView,
   computePlanCountInRange,
   makeBuckets,
@@ -430,6 +431,13 @@ export function buildOverviewView(
     planCountInRange > 0
       ? Math.round((generationCostInRange / planCountInRange) * 10000) / 10000
       : null;
+  // Per member plan: generation cost ÷ member-slices (each plan counts its
+  // household's beneficiaries) — cost to put one person on one plan.
+  const memberSlicesInRange = computeMemberSlicesInRange(ds.plans, ds.members, range);
+  const aiCostPerMemberPlanUsd =
+    memberSlicesInRange > 0
+      ? Math.round((generationCostInRange / memberSlicesInRange) * 10000) / 10000
+      : null;
 
   return {
     subscriberCount,
@@ -452,6 +460,7 @@ export function buildOverviewView(
     aiCostPerAccountUsd,
     aiCostPerMemberUsd,
     aiCostPerPlanUsd,
+    aiCostPerMemberPlanUsd,
     aiPctOfRevenue,
     beneficiaryTotal,
     aiCostSeries,

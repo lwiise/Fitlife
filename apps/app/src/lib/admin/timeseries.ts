@@ -366,6 +366,30 @@ export function computePlanCountInRange(
   return n;
 }
 
+/**
+ * Total member-slices across plans in the range — each plan contributes its
+ * household's beneficiaries (owner + non-housekeeper members). Denominator for
+ * "AI cost per member plan" (a 4-person household plan counts as 4). plan_data
+ * isn't loaded in the overview dataset, so household size is taken from
+ * `family_members` (mirrors `computeBeneficiaryTotal`).
+ */
+export function computeMemberSlicesInRange(
+  plans: Array<{ user_id: string; created_at: string }>,
+  members: Array<{ user_id: string; role: string }>,
+  range: DateRange,
+): number {
+  const beneByUser = new Map<string, number>();
+  for (const m of members) {
+    if (m.role === "housekeeper") continue;
+    beneByUser.set(m.user_id, (beneByUser.get(m.user_id) ?? 0) + 1);
+  }
+  let slices = 0;
+  for (const p of plans) {
+    if (inRange(p.created_at, range)) slices += 1 + (beneByUser.get(p.user_id) ?? 0);
+  }
+  return slices;
+}
+
 /** Exact AI spend (USD) per bucket — same source as computeAiCostInRange, for
  * the cost-strip sparkline. A bucket is a DateRange, so reuse `inRange`. */
 export function computeAiCostSeries(
