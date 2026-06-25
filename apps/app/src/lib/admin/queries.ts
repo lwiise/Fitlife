@@ -161,7 +161,7 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
     if (!truncated.includes(label)) truncated.push(label);
   };
 
-  const [profiles, subscriptions, members, plans, generations, chats, emailByUser] =
+  const [profiles, subscriptions, members, plans, generations, chats] =
     await Promise.all([
       paginate<ProfileLite>(
         (f, t) =>
@@ -212,7 +212,6 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
         "chat_messages",
         onTruncate,
       ),
-      loadEmailMap(onTruncate),
     ]);
 
   return {
@@ -222,9 +221,6 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
     plans,
     generations,
     chats,
-    // Map → entries array: unstable_cache stores its result as JSON, and a Map
-    // serializes to `{}` (losing `.get`). The wrapper rebuilds the Map below.
-    emailEntries: [...emailByUser],
     truncated,
   };
 }
@@ -239,10 +235,8 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
  */
 const ADMIN_DATASET_TTL_SECONDS = 60; // analytics tolerate ≤60s staleness
 
-/** JSON-safe shape stored in the cache: the `emailByUser` Map flattened to entries. */
-type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser"> & {
-  emailEntries: Array<[string, string | null]>;
-};
+/** JSON-safe shape stored in the cache: the 6 tables (emails are cached separately). */
+type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser">;
 
 const cachedAdminDataset = unstable_cache(
   fetchAdminDataset,
@@ -250,11 +244,37 @@ const cachedAdminDataset = unstable_cache(
   { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: ["admin-dataset"] },
 );
 
+// Emails come from GoTrue (`loadEmailMap` paginates ALL users — the part that scales
+// worst), yet they change rarely and are used only by the subscriber table. Cache them
+// SEPARATELY on a longer TTL so the per-minute dataset refresh never pays the GoTrue
+// pagination. Entries array, not a Map: a Map serializes to `{}` under unstable_cache.
+const ADMIN_EMAIL_TTL_SECONDS = 300; // emails change rarely; 5 min is fresh enough
+
+async function fetchEmailEntries(): Promise<{
+  entries: Array<[string, string | null]>;
+  truncated: boolean;
+}> {
+  let truncated = false;
+  const map = await loadEmailMap(() => {
+    truncated = true;
+  });
+  return { entries: [...map], truncated };
+}
+
+const cachedEmailEntries = unstable_cache(fetchEmailEntries, ["admin-email-map"], {
+  revalidate: ADMIN_EMAIL_TTL_SECONDS,
+  tags: ["admin-email-map"],
+});
+
 export async function loadAdminDataset(): Promise<AdminDataset> {
-  const { emailEntries, ...rest } = await cachedAdminDataset();
+  const [base, email] = await Promise.all([cachedAdminDataset(), cachedEmailEntries()]);
   // Rebuild the Map on this side of the cache so every consumer still gets a real
   // Map (`.get`), not the `{}` a serialized Map would degrade to.
-  return { ...rest, emailByUser: new Map(emailEntries) };
+  return {
+    ...base,
+    emailByUser: new Map(email.entries),
+    truncated: email.truncated ? [...base.truncated, "emails"] : base.truncated,
+  };
 }
 
 // ---------------------------------------------------------------------------

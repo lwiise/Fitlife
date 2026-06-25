@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminDb } from "@/lib/admin/db";
@@ -33,8 +34,12 @@ export interface AdminContext {
 /**
  * Resolve the admin context for the current session, or null if the requester
  * is logged out or not an admin. Pure lookup — never redirects or throws.
+ *
+ * Wrapped in React `cache()` so a single request that resolves the context more
+ * than once (e.g. a page's `requireAdmin()` plus the chrome showing the signed-in
+ * admin) makes the `auth.getUser()` + `admin_users` round-trips just once.
  */
-export async function getAdminContext(): Promise<AdminContext | null> {
+export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   // 1. Resolve the authenticated user from the (cookie-bound) session.
   const supabase = await createClient();
   const {
@@ -58,7 +63,7 @@ export async function getAdminContext(): Promise<AdminContext | null> {
     email: user.email ?? null,
     role: data.role as AdminRole,
   };
-}
+});
 
 /**
  * Gate an admin RSC page / server action. Redirects anyone who is not an admin
