@@ -393,6 +393,10 @@ const STRINGS = {
   kpi_active_users: { ar: "المستخدمون النشطون", en: "Active users" },
   per_account: { ar: "لكل حساب", en: "per account" },
   per_beneficiary: { ar: "لكل مستفيد", en: "per beneficiary" },
+  ai_avg_active_note: {
+    ar: "المتوسطات محسوبة على الحسابات التي استخدمت الذكاء في الفترة.",
+    en: "Averages cover only accounts that used AI in the period.",
+  },
   cost_efficiency: { ar: "التكلفة والكفاءة", en: "Cost & efficiency" },
   ai_billed_usd_note: {
     ar: "تُحتسب تكلفة الذكاء بالدولار وتُعرض بالريال وفق سعر الصرف المعتمد.",

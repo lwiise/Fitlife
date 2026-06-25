@@ -28,6 +28,7 @@ export function AiCostStrip({
     pct != null
       ? `${fmtPct(pct, locale)} ${t("kpi_of_revenue", locale)} · ${t("est_label", locale)}`
       : t("est_label", locale),
+    t("ai_avg_active_note", locale),
     t("ai_billed_usd_note", locale),
   ].join(" · ");
 

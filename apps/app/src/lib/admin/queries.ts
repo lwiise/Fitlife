@@ -6,7 +6,7 @@ import { adminDb } from "@/lib/admin/db";
 import { computeMrr } from "@/lib/admin/revenue";
 import { trend, type Trend } from "@/lib/admin/period";
 import {
-  computeActiveUsersInRange,
+  computeActiveUserIds,
   computeAiCostInRange,
   computeAiCostSeries,
   computeBeneficiaryTotal,
@@ -392,7 +392,16 @@ export function buildOverviewView(
   const aiCostDelta: Trend = comparisonOn
     ? trend(aiCostUsd, aiCostPriorUsd)
     : { pct: null, direction: "flat" };
-  const activeUsersInRange = computeActiveUsersInRange(ds.generations, ds.chats, range);
+  // Accounts that actually used AI in the range — the denominators for the cost
+  // averages (dividing the period's spend by all-time accounts would dilute it
+  // with every account that never used AI).
+  const activeUserIds = computeActiveUserIds(ds.generations, ds.chats, range);
+  const activeUsersInRange = activeUserIds.size;
+  // Beneficiaries of those active accounts: owner + their non-housekeeper members.
+  const activeBeneficiaryTotal =
+    activeUsersInRange +
+    ds.members.filter((m) => m.role !== "housekeeper" && activeUserIds.has(m.user_id))
+      .length;
 
   // "% of revenue": MRR(USD) prorated to the range length (est.).
   const mrr = computeMrr(
@@ -403,9 +412,13 @@ export function buildOverviewView(
   const aiPctOfRevenue =
     revenueInRangeUsd > 0 ? Math.round((aiCostUsd / revenueInRangeUsd) * 1000) / 10 : null;
   const aiCostPerAccountUsd =
-    subscriberCount > 0 ? Math.round((aiCostUsd / subscriberCount) * 10000) / 10000 : null;
+    activeUsersInRange > 0
+      ? Math.round((aiCostUsd / activeUsersInRange) * 10000) / 10000
+      : null;
   const aiCostPerMemberUsd =
-    beneficiaryTotal > 0 ? Math.round((aiCostUsd / beneficiaryTotal) * 10000) / 10000 : null;
+    activeBeneficiaryTotal > 0
+      ? Math.round((aiCostUsd / activeBeneficiaryTotal) * 10000) / 10000
+      : null;
 
   return {
     subscriberCount,

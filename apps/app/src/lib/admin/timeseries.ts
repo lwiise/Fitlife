@@ -372,19 +372,33 @@ export function computeAiCostSeries(
 }
 
 /**
- * Distinct users with any AI activity (a plan generation or a chat message)
- * within the range — the honest "active users" engagement metric, separate from
- * "active subscribers" (paying) and total accounts.
+ * Distinct user IDs with any AI activity (a plan generation or a chat message)
+ * within the range. The set (not just the count) so callers can scope other
+ * figures — e.g. the AI-cost-per-account average — to exactly the accounts that
+ * incurred the cost.
+ */
+export function computeActiveUserIds(
+  generations: Array<{ created_at: string; user_id: string }>,
+  chats: Array<{ created_at: string; user_id: string }>,
+  range: DateRange,
+): Set<string> {
+  const seen = new Set<string>();
+  for (const g of generations) if (inRange(g.created_at, range)) seen.add(g.user_id);
+  for (const c of chats) if (inRange(c.created_at, range)) seen.add(c.user_id);
+  return seen;
+}
+
+/**
+ * Count of distinct users with any AI activity in the range — the honest "active
+ * users" engagement metric, separate from "active subscribers" (paying) and total
+ * accounts.
  */
 export function computeActiveUsersInRange(
   generations: Array<{ created_at: string; user_id: string }>,
   chats: Array<{ created_at: string; user_id: string }>,
   range: DateRange,
 ): number {
-  const seen = new Set<string>();
-  for (const g of generations) if (inRange(g.created_at, range)) seen.add(g.user_id);
-  for (const c of chats) if (inRange(c.created_at, range)) seen.add(c.user_id);
-  return seen.size;
+  return computeActiveUserIds(generations, chats, range).size;
 }
 
 /**
