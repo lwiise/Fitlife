@@ -17,7 +17,10 @@ export type AdminAuditAction =
   | "view_subscriber_detail"
   | "view_health_detail"
   | "view_plan_data"
-  | "view_insights";
+  | "view_insights"
+  | "deactivate_subscriber_account"
+  | "reactivate_subscriber_account"
+  | "delete_subscriber_account";
 
 export async function logAdminAccess(params: {
   adminUserId: string;

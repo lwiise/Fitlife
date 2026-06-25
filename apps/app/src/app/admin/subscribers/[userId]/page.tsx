@@ -36,6 +36,7 @@ import { DataTable, type DataColumn } from "../../_components/DataTable";
 import { Chip } from "../../_components/Chip";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { TierBadge } from "../../_components/TierBadge";
+import { AccountDangerZone } from "../../_components/AccountDangerZone";
 
 export default async function SubscriberDetailPage({
   params,
@@ -210,6 +211,13 @@ export default async function SubscriberDetailPage({
             </DetailCard>
           ) : null}
         </div>
+
+        <AccountDangerZone
+          userId={userId}
+          email={detail.email}
+          deactivated={detail.deactivated}
+          locale={locale}
+        />
       </main>
     </>
   );

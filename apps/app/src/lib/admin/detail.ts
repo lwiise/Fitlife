@@ -78,6 +78,8 @@ export interface GenerationSummary {
 export interface SubscriberDetail {
   userId: string;
   email: string | null;
+  /** GoTrue ban active (banned_until in the future) → blocked from logging in. */
+  deactivated: boolean;
   account: {
     displayName: string | null;
     preferredLanguage: string;
@@ -331,9 +333,16 @@ export async function loadSubscriberDetail(
       ? PRICING_TIERS[subscription.tier as Tier]
       : null;
 
+  const bannedUntil =
+    (userRes.data?.user as { banned_until?: string | null } | null | undefined)
+      ?.banned_until ?? null;
+  const deactivated =
+    bannedUntil != null && new Date(bannedUntil).getTime() > Date.now();
+
   return {
     userId,
     email: userRes.data?.user?.email ?? null,
+    deactivated,
     account: {
       displayName: profile.display_name,
       preferredLanguage: profile.preferred_language,

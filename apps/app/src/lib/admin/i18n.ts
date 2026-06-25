@@ -144,6 +144,48 @@ const STRINGS = {
   // ── Subscriber detail ──
   back_to_overview: { ar: "العودة إلى اللوحة", en: "Back to dashboard" },
   back_to_subscriber: { ar: "العودة إلى المشترك", en: "Back to subscriber" },
+
+  // ── Account actions (danger zone) ──
+  danger_zone: { ar: "منطقة الخطر", en: "Danger zone" },
+  account_active: { ar: "الحساب نشط", en: "Account active" },
+  account_deactivated: { ar: "الحساب معطّل", en: "Account deactivated" },
+  deactivate_desc: {
+    ar: "منع الدخول مع الاحتفاظ بكل البيانات. قابل للتراجع.",
+    en: "Blocks sign-in but keeps all data. Reversible.",
+  },
+  deactivate_account: { ar: "تعطيل", en: "Deactivate" },
+  reactivate_account: { ar: "إعادة تفعيل", en: "Reactivate" },
+  saving: { ar: "جارٍ الحفظ…", en: "Saving…" },
+  delete_desc: {
+    ar: "حذف الحساب وكل بياناته نهائياً وإلغاء الاشتراك. لا يمكن التراجع.",
+    en: "Permanently erase the account and all its data, and cancel billing. Cannot be undone.",
+  },
+  delete_account: { ar: "حذف الحساب", en: "Delete account" },
+  delete_modal_title: {
+    ar: "حذف هذا الحساب نهائياً",
+    en: "Delete this account permanently",
+  },
+  delete_modal_warn: {
+    ar: "هذه العملية لا يمكن التراجع عنها. سيتم حذف:",
+    en: "This cannot be undone. The following will be deleted:",
+  },
+  delete_item_account: { ar: "ملف المشترك وبياناته", en: "The subscriber's profile and data" },
+  delete_item_family: { ar: "كل أفراد العائلة", en: "All family members" },
+  delete_item_plans: {
+    ar: "كل الخطط الغذائية وسجل الإنشاء",
+    en: "All meal plans and generation history",
+  },
+  delete_item_billing: {
+    ar: "الاشتراك الحالي (يُلغى دون استرداد)",
+    en: "The current subscription (cancelled, no refund)",
+  },
+  delete_confirm_prompt: {
+    ar: "للتأكيد، اكتب بريد المشترك الإلكتروني:",
+    en: "To confirm, type the subscriber's email:",
+  },
+  delete_confirm_btn: { ar: "حذف نهائي", en: "Delete permanently" },
+  deleting: { ar: "جارٍ الحذف…", en: "Deleting…" },
+  action_cancel: { ar: "إلغاء", en: "Cancel" },
   not_set: { ar: "غير محدد", en: "Not set" },
   yes: { ar: "نعم", en: "Yes" },
   no: { ar: "لا", en: "No" },
