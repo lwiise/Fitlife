@@ -356,6 +356,16 @@ export function computeAiCostInRange(
   return Math.round(total * 100) / 100;
 }
 
+/** Plans (meal_plans) created within the range — denominator for "AI cost per plan". */
+export function computePlanCountInRange(
+  plans: Array<{ created_at: string }>,
+  range: DateRange,
+): number {
+  let n = 0;
+  for (const p of plans) if (inRange(p.created_at, range)) n += 1;
+  return n;
+}
+
 /** Exact AI spend (USD) per bucket — same source as computeAiCostInRange, for
  * the cost-strip sparkline. A bucket is a DateRange, so reuse `inRange`. */
 export function computeAiCostSeries(

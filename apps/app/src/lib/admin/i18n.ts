@@ -390,9 +390,11 @@ const STRINGS = {
   // ── Overview: AI cost strip ──
   ai_cost_per_account: { ar: "تكلفة الذكاء لكل حساب", en: "AI cost per account" },
   ai_cost_per_member: { ar: "تكلفة الذكاء لكل مستفيد", en: "AI cost per beneficiary" },
+  ai_cost_per_plan: { ar: "تكلفة الذكاء لكل خطة", en: "AI cost per plan" },
   kpi_active_users: { ar: "المستخدمون النشطون", en: "Active users" },
   per_account: { ar: "لكل حساب", en: "per account" },
   per_beneficiary: { ar: "لكل مستفيد", en: "per beneficiary" },
+  per_plan: { ar: "لكل خطة", en: "per plan" },
   ai_avg_active_note: {
     ar: "المتوسطات محسوبة على الحسابات التي استخدمت الذكاء في الفترة.",
     en: "Averages cover only accounts that used AI in the period.",

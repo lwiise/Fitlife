@@ -46,7 +46,7 @@ export function AiCostStrip({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <KpiCard
           locale={locale}
           accent="yellow"
@@ -78,6 +78,17 @@ export function AiCostStrip({
               : "—"
           }
           hint={t("per_beneficiary", locale)}
+        />
+        <KpiCard
+          locale={locale}
+          accent="ink"
+          label={t("ai_cost_per_plan", locale)}
+          value={
+            view.aiCostPerPlanUsd != null
+              ? fmtMoney(view.aiCostPerPlanUsd, currency, locale, 2)
+              : "—"
+          }
+          hint={t("per_plan", locale)}
         />
       </div>
     </section>

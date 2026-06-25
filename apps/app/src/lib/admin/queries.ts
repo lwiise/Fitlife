@@ -11,6 +11,7 @@ import {
   computeAiCostSeries,
   computeBeneficiaryTotal,
   computeMetricView,
+  computePlanCountInRange,
   makeBuckets,
   parseMetric,
   parseMetrics,
@@ -419,6 +420,12 @@ export function buildOverviewView(
     activeBeneficiaryTotal > 0
       ? Math.round((aiCostUsd / activeBeneficiaryTotal) * 10000) / 10000
       : null;
+  // Per plan: the period's AI spend ÷ plans generated in the period (mirrors the
+  // insights "cost per plan"). Every plan in the range incurred cost, so the
+  // denominator is the plain plan count — no active-account scoping needed.
+  const planCountInRange = computePlanCountInRange(ds.plans, range);
+  const aiCostPerPlanUsd =
+    planCountInRange > 0 ? Math.round((aiCostUsd / planCountInRange) * 10000) / 10000 : null;
 
   return {
     subscriberCount,
@@ -440,6 +447,7 @@ export function buildOverviewView(
     aiCostUsd,
     aiCostPerAccountUsd,
     aiCostPerMemberUsd,
+    aiCostPerPlanUsd,
     aiPctOfRevenue,
     beneficiaryTotal,
     aiCostSeries,

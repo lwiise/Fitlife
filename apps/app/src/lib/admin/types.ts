@@ -78,6 +78,8 @@ export interface OverviewView {
   aiCostUsd: number;
   aiCostPerAccountUsd: number | null;
   aiCostPerMemberUsd: number | null;
+  /** Range AI cost ÷ plans generated in the range. */
+  aiCostPerPlanUsd: number | null;
   /** AI cost ÷ range-prorated revenue (est.). */
   aiPctOfRevenue: number | null;
   beneficiaryTotal: number;
