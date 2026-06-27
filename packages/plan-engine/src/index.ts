@@ -24,6 +24,52 @@ export {
   buildTranslatePrompt,
 } from "./systemPrompt";
 
+// Phase-2 groundwork: authored + exported, deliberately NOT in STATIC_SYSTEM. See
+// exerciseProtocols.ts header for why (chat-leak / meal-only cost) and the guard test.
+export { SAFE_EXERCISE_PROTOCOLS } from "./exerciseProtocols";
+
+// Exercise Phase 2 (foundation) — canonical types + deterministic energy core. The
+// app re-exports the types from here; generation does not consume these yet.
+export type {
+  ExerciseFocus,
+  ExerciseSetting,
+  Equipment,
+  ExerciseType,
+  MskRegion,
+  AvailabilityDays,
+  SessionMinutes,
+  DeliveryType,
+  IntensityCeiling,
+  IntensityMode,
+  ExerciseScreening,
+  ExerciseProfile,
+  MemberType,
+  IntensityBand,
+  Modality,
+  EnergyBudgetMember,
+} from "./exercise/types";
+export {
+  EnergyBudgetSchema,
+  HrZoneSchema,
+  WorkoutPlanSchema,
+  WorkoutDaySchema,
+  WorkoutSessionSchema,
+  WorkoutRestSchema,
+  IntensityBandSchema,
+  IntensityModeSchema,
+  IntensityCeilingSchema,
+} from "./exercise/schema";
+export type {
+  EnergyBudget,
+  HrZone,
+  WorkoutPlan,
+  WorkoutDay,
+  WorkoutSession,
+  WorkoutRest,
+} from "./exercise/schema";
+export { computeEnergyBudget, computeHrZones, rpeForBand } from "./exercise/energyBudget";
+export { selectMet, MET_TABLE } from "./exercise/metTable";
+
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";
 
