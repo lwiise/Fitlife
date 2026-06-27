@@ -43,7 +43,7 @@ export function CheckoutSuccessHandler() {
             const { triggered } = await syncFamilyPlanAfterSubscribe().catch(
               () => ({ triggered: false }),
             );
-            router.replace(triggered ? "/plan" : "/dashboard");
+            router.replace(triggered ? "/plan?onboarding=exercise" : "/dashboard");
             return;
           }
         } catch {
@@ -72,7 +72,7 @@ export function CheckoutSuccessHandler() {
           const { triggered } = await syncFamilyPlanAfterSubscribe().catch(
             () => ({ triggered: false }),
           );
-          router.replace(triggered ? "/plan" : "/dashboard");
+          router.replace(triggered ? "/plan?onboarding=exercise" : "/dashboard");
         }
       } catch {
         // network blip — keep polling

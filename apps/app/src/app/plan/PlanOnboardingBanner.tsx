@@ -1,26 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Sparkles, Users, X } from "lucide-react";
+import { Activity, Sparkles, Users, X } from "lucide-react";
+import { dismissExercisePrompt } from "@/app/onboarding/actions";
 
 const MOM_FIRST_KEY = "plan_banner_mom_first_dismissed";
 const DASHBOARD_KEY = "fitlife.addFamilyBanner.dismissed";
 
 /**
  * Post-onboarding banners on /plan, driven by the ?onboarding query param:
+ *  - exercise: mom's POST-generation opt-in into an exercise plan. Shows only once
+ *    her meal plan is truly ready (the "aha"), and only once per account (gated by
+ *    the exercise_prompt_shown_at flag). "meals + exercise" → /onboarding/exercise;
+ *    "meals only" stamps the flag so it never returns. Visibility is derived from
+ *    props alone (no sessionStorage), so it needs no effect.
  *  - mom-first: once-per-session nudge to add family (coordinated with the
  *    dashboard nudge via a shared sessionStorage key).
  *  - member-added: transient confirmation; strips its own query param on mount
  *    and auto-dismisses after 5s.
  */
-export function PlanOnboardingBanner({ planReady = false }: { planReady?: boolean }) {
+export function PlanOnboardingBanner({
+  planReady = false,
+  exercisePromptShown = false,
+}: {
+  planReady?: boolean;
+  exercisePromptShown?: boolean;
+}) {
   const params = useSearchParams();
   const mode = params.get("onboarding");
   const memberName = params.get("member");
 
   const [visible, setVisible] = useState(false);
+  const [exDismissed, setExDismissed] = useState(false);
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     if (mode === "mom-first") {
@@ -43,6 +57,56 @@ export function PlanOnboardingBanner({ planReady = false }: { planReady?: boolea
     }
     setVisible(false);
   }, [mode, planReady]);
+
+  // Exercise opt-in — derived from props only (no effect / no sessionStorage).
+  if (mode === "exercise") {
+    if (!planReady || exercisePromptShown || exDismissed) return null;
+    // Either choice records the prompt as seen so it won't reappear, then clears
+    // the query param so a refresh doesn't replay it.
+    const dismiss = () => {
+      startTransition(() => {
+        void dismissExercisePrompt();
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("onboarding");
+      window.history.replaceState(null, "", url.toString());
+      setExDismissed(true);
+    };
+
+    return (
+      <div className="flex items-start gap-3 rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-4 mb-6">
+        <Activity className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900" aria-hidden="true" />
+        <div className="flex-1">
+          <p className="text-brand-ink text-sm font-medium leading-relaxed">
+            خطتك الغذائية جاهزة. تبين نضيف لها خطة تمارين على مقاسك؟
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link
+              href="/onboarding/exercise"
+              className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
+            >
+              أكل + تمارين
+            </Link>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="inline-flex items-center min-h-11 px-4 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-full"
+            >
+              الأكل بس
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          aria-label="إخفاء"
+          className="flex-shrink-0 inline-flex items-center justify-center size-11 rounded-full hover:bg-brand-purple-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+        >
+          <X className="size-4 text-brand-ink-muted" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
 
   if (!visible) return null;
 

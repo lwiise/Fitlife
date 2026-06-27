@@ -16,78 +16,94 @@ export type Database = {
     Tables: {
       admin_audit_log: {
         Row: {
-          id: string
-          admin_user_id: string | null
-          subscriber_id: string | null
           action: string
-          detail: Json | null
+          admin_user_id: string | null
           created_at: string
+          detail: Json | null
+          id: string
+          subscriber_id: string | null
         }
         Insert: {
-          id?: string
-          admin_user_id?: string | null
-          subscriber_id?: string | null
           action: string
-          detail?: Json | null
+          admin_user_id?: string | null
           created_at?: string
+          detail?: Json | null
+          id?: string
+          subscriber_id?: string | null
         }
         Update: {
-          id?: string
-          admin_user_id?: string | null
-          subscriber_id?: string | null
           action?: string
-          detail?: Json | null
+          admin_user_id?: string | null
           created_at?: string
+          detail?: Json | null
+          id?: string
+          subscriber_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_users: {
         Row: {
-          user_id: string
-          role: string
           created_at: string
+          role: string
+          user_id: string
         }
         Insert: {
-          user_id: string
-          role?: string
           created_at?: string
+          role?: string
+          user_id: string
         }
         Update: {
-          user_id?: string
-          role?: string
           created_at?: string
+          role?: string
+          user_id?: string
         }
         Relationships: []
       }
       chat_messages: {
         Row: {
+          cost_usd: number | null
+          created_at: string
           id: string
-          user_id: string
           model: string | null
           tokens_in: number | null
           tokens_out: number | null
-          cost_usd: number | null
-          created_at: string
+          user_id: string
         }
         Insert: {
+          cost_usd?: number | null
+          created_at?: string
           id?: string
-          user_id: string
           model?: string | null
           tokens_in?: number | null
           tokens_out?: number | null
-          cost_usd?: number | null
-          created_at?: string
+          user_id: string
         }
         Update: {
+          cost_usd?: number | null
+          created_at?: string
           id?: string
-          user_id?: string
           model?: string | null
           tokens_in?: number | null
           tokens_out?: number | null
-          cost_usd?: number | null
-          created_at?: string
+          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       family_members: {
         Row: {
@@ -99,6 +115,7 @@ export type Database = {
           dietary_restrictions: string[] | null
           dislikes: Json | null
           display_order: number
+          exercise_profile: Json | null
           height_cm: number | null
           high_risk_pregnancy: boolean | null
           id: string
@@ -127,6 +144,7 @@ export type Database = {
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_order?: number
+          exercise_profile?: Json | null
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
@@ -155,6 +173,7 @@ export type Database = {
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_order?: number
+          exercise_profile?: Json | null
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
@@ -324,6 +343,8 @@ export type Database = {
           dietary_restrictions: string[] | null
           dislikes: Json | null
           display_name: string | null
+          exercise_profile: Json | null
+          exercise_prompt_shown_at: string | null
           family_dietary_restrictions: Json | null
           family_dislikes: Json | null
           family_wide_completed_at: string | null
@@ -358,6 +379,8 @@ export type Database = {
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_name?: string | null
+          exercise_profile?: Json | null
+          exercise_prompt_shown_at?: string | null
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
@@ -392,6 +415,8 @@ export type Database = {
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_name?: string | null
+          exercise_profile?: Json | null
+          exercise_prompt_shown_at?: string | null
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
@@ -419,7 +444,7 @@ export type Database = {
       }
       subscriptions: {
         Row: {
-          billing_interval: string
+          billing_interval: string | null
           cadence: string | null
           cancel_at_period_end: boolean
           cancelled_at: string | null
@@ -431,10 +456,10 @@ export type Database = {
           lemonsqueezy_customer_id: string | null
           lemonsqueezy_subscription_id: string | null
           lemonsqueezy_variant_id: string | null
-          ls_customer_id: string
+          ls_customer_id: string | null
           ls_order_id: string | null
-          ls_subscription_id: string
-          ls_variant_id: string
+          ls_subscription_id: string | null
+          ls_variant_id: string | null
           status: string
           tier: string
           trial_ends_at: string | null
@@ -443,7 +468,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          billing_interval: string
+          billing_interval?: string | null
           cadence?: string | null
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
@@ -455,19 +480,19 @@ export type Database = {
           lemonsqueezy_customer_id?: string | null
           lemonsqueezy_subscription_id?: string | null
           lemonsqueezy_variant_id?: string | null
-          ls_customer_id: string
+          ls_customer_id?: string | null
           ls_order_id?: string | null
-          ls_subscription_id: string
-          ls_variant_id: string
-          status: string
-          tier: string
+          ls_subscription_id?: string | null
+          ls_variant_id?: string | null
+          status?: string
+          tier?: string
           trial_ends_at?: string | null
           trial_started_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          billing_interval?: string
+          billing_interval?: string | null
           cadence?: string | null
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
@@ -479,10 +504,10 @@ export type Database = {
           lemonsqueezy_customer_id?: string | null
           lemonsqueezy_subscription_id?: string | null
           lemonsqueezy_variant_id?: string | null
-          ls_customer_id?: string
+          ls_customer_id?: string | null
           ls_order_id?: string | null
-          ls_subscription_id?: string
-          ls_variant_id?: string
+          ls_subscription_id?: string | null
+          ls_variant_id?: string | null
           status?: string
           tier?: string
           trial_ends_at?: string | null
