@@ -15,11 +15,19 @@ import {
   prepareSharedGroupRegen,
 } from "../../../../packages/plan-engine/src/generate";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
+import {
+  distillPreferences,
+  mergePreferences,
+} from "../../../../packages/plan-engine/src/preferences";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
   PlanPromptContextMember,
+} from "../../../../packages/plan-engine/src/buildContext";
+import {
+  extractRecentDishes,
+  parseFoodPreferences,
 } from "../../../../packages/plan-engine/src/buildContext";
 
 type Activity =
@@ -295,6 +303,16 @@ async function buildContextViaFetch(
       ? (hkLang as LocaleCode)
       : undefined;
 
+  // Anti-repetition (WS4) — mirrors buildContext.ts. The 2 most recent READY plans'
+  // dish names; status=ready excludes the in-progress row. Used only on a fresh plan.
+  const recentPlans = await sbSelectMany(
+    base,
+    serviceKey,
+    "meal_plans",
+    `user_id=eq.${userId}&status=eq.ready&select=plan_data&order=created_at.desc&limit=2`,
+  );
+  const recent_dishes = extractRecentDishes(recentPlans);
+
   return {
     mom: {
       id: profile.id as string,
@@ -329,6 +347,8 @@ async function buildContextViaFetch(
     },
     composition_summary: buildCompositionSummary(family_members),
     housekeeper_locale,
+    recent_dishes,
+    food_preferences: parseFoodPreferences(profile.food_preferences),
   };
 }
 
@@ -521,6 +541,37 @@ export default async (req: Request): Promise<Response> => {
         );
       },
     });
+
+    // WS5a — durable preferences. When this was a feedback regen, distill the
+    // free-text feedback into structured loves/avoids/notes and persist them on the
+    // profile so FUTURE plans personalize (the prompt reads food_preferences). This
+    // is NOT model training — it's a per-family memory. Fully non-fatal and never
+    // blocks the plan; a quick Haiku call awaited so it finishes within this run.
+    if (body.feedback?.trim()) {
+      try {
+        const existingPrefs = context.food_preferences ?? {
+          loves: [],
+          avoids: [],
+          notes: [],
+        };
+        const distilled = await distillPreferences(
+          anthropicKey,
+          body.feedback,
+          existingPrefs,
+        );
+        if (distilled) {
+          const merged = mergePreferences(existingPrefs, distilled);
+          await sbUpdate(supabaseUrl, expected, "profiles", `id=eq.${userId}`, {
+            food_preferences: { ...merged, updated_at: new Date().toISOString() },
+          });
+        }
+      } catch (prefErr) {
+        console.warn(
+          "[generate-plan] preference distill failed (non-fatal):",
+          prefErr instanceof Error ? prefErr.message : String(prefErr),
+        );
+      }
+    }
 
     // End-of-run housekeeper translation. Re-read the housekeeper FRESH (catches
     // a maid added mid-generation, whose locale wasn't in the start context, so

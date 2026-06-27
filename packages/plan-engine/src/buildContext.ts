@@ -96,11 +96,73 @@ export interface PlanPromptContext {
   // The user's free-text feedback for a manual regeneration ("what's wrong /
   // what to improve"). Layered into the prompt as guidance. Undefined otherwise.
   user_feedback?: string;
+  // Dish names from the client's most recent ready plans (WS4 anti-repetition). Fed
+  // into the skeleton prompt on a FRESH plan so the new week varies from past ones.
+  // Advisory only. Undefined / empty when there's no prior plan.
+  recent_dishes?: string[];
+  // Durable, structured taste preferences distilled from past feedback (WS5a). Soft
+  // guidance ("more of loves, less of avoids"), NOT allergen/medical hard-excludes.
+  food_preferences?: FoodPreferences;
+}
+
+/** Durable per-family taste memory (profiles.food_preferences jsonb). */
+export interface FoodPreferences {
+  loves: string[];
+  avoids: string[];
+  notes: string[];
+}
+
+/** Parse the untyped jsonb food_preferences column into a safe, typed shape. */
+export function parseFoodPreferences(raw: unknown): FoodPreferences {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  return { loves: arr(o.loves), avoids: arr(o.avoids), notes: arr(o.notes) };
 }
 
 function ageFromBirthYear(birthYear: number | null): number | null {
   if (!birthYear) return null;
   return new Date().getFullYear() - birthYear;
+}
+
+/**
+ * Pull a deduped list of dish names from prior plans for the anti-repetition block
+ * (WS4). Pure + defensive (plan_data is untyped jsonb) and self-contained so BOTH
+ * context builders — the SDK one here and the fetch-based one in the Netlify
+ * function — can reuse it. Dedup folds whitespace/case only (advisory list; exact
+ * orthographic folding isn't needed). Caps the total to keep the prompt lean.
+ */
+export function extractRecentDishes(
+  plans: Array<{ plan_data?: unknown } | null | undefined>,
+  cap = 40,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of plans) {
+    const pd = (row?.plan_data ?? null) as { members?: unknown } | null;
+    const members = Array.isArray(pd?.members) ? (pd!.members as unknown[]) : [];
+    for (const m of members) {
+      const days = Array.isArray((m as { days?: unknown })?.days)
+        ? ((m as { days: unknown[] }).days)
+        : [];
+      for (const d of days) {
+        const meals = Array.isArray((d as { meals?: unknown })?.meals)
+          ? ((d as { meals: unknown[] }).meals)
+          : [];
+        for (const meal of meals) {
+          const raw = (meal as { recipe_name_ar?: unknown })?.recipe_name_ar;
+          const name = typeof raw === "string" ? raw.trim() : "";
+          if (!name) continue;
+          const key = name.normalize("NFC").replace(/\s+/g, " ").toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(name);
+          if (out.length >= cap) return out;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 /** jsonb columns come back as unknown JSON — coerce to a string[] defensively. */
@@ -285,12 +347,26 @@ export async function buildPlanContext(
       ? (hkLang as LocaleCode)
       : undefined;
 
+  // Anti-repetition (WS4): dish names from the 2 most recent READY plans. status=ready
+  // naturally excludes the in-progress generating row. The skeleton step uses this only
+  // on a fresh plan (see generate.ts), so it's safe to always gather here.
+  const { data: recentPlans } = await supabase
+    .from("meal_plans")
+    .select("plan_data")
+    .eq("user_id", userId)
+    .eq("status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(2);
+  const recent_dishes = extractRecentDishes(recentPlans ?? []);
+
   return {
     mom,
     family_members,
     family_wide,
     composition_summary: buildCompositionSummary(family_members),
     housekeeper_locale,
+    recent_dishes,
+    food_preferences: parseFoodPreferences(profile.food_preferences),
   };
 }
 

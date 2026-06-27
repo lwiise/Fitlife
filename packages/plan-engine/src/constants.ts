@@ -31,6 +31,51 @@ export const SKELETON_MODEL = process.env.PLAN_SKELETON_MODEL?.trim() || PLAN_MO
 export const DAY_MODEL = process.env.PLAN_DAY_MODEL?.trim() || "claude-sonnet-4-6";
 export const TRANSLATE_MODEL = process.env.PLAN_TRANSLATE_MODEL?.trim() || HAIKU;
 
+// ── Per-phase sampling temperature (optional) ────────────────────────────────
+// Off by default (undefined → the model's own default, unchanged behavior). Lower
+// temperature makes the mechanical DAY phase hit macro targets more reliably; the
+// skeleton does dish SELECTION too, so a low temperature there costs variety —
+// keep it moderate and lean on anti-repetition (WS4) instead.
+// IMPORTANT: the default skeleton model (Opus 4.7) REJECTS temperature (400). It's
+// dropped automatically for that family in anthropic.ts, so PLAN_SKELETON_TEMPERATURE
+// only takes effect if PLAN_SKELETON_MODEL is overridden to a model that accepts it
+// (e.g. Sonnet/Haiku). DAY (Sonnet) and TRANSLATE (Haiku) accept temperature today.
+function envTemperature(name: string): number | undefined {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : undefined;
+}
+export const SKELETON_TEMPERATURE = envTemperature("PLAN_SKELETON_TEMPERATURE");
+export const DAY_TEMPERATURE = envTemperature("PLAN_DAY_TEMPERATURE");
+export const TRANSLATE_TEMPERATURE = envTemperature("PLAN_TRANSLATE_TEMPERATURE");
+
+// ── Quality guard (WS3) ──────────────────────────────────────────────────────
+// A freshly generated day is re-rolled (up to GUARD_DAY_REROLLS extra calls) when
+// its recipes drift from a member's calorie target beyond DAY_CALORIE_DRIFT_BAND or
+// use refined flour/sugar; the least-bad attempt is kept (a day is NEVER dropped for
+// a style flag). Both env-tunable so prod can disable (rerolls=0) or widen the band
+// without a deploy.
+export const DAY_CALORIE_DRIFT_BAND = (() => {
+  const n = Number(process.env.PLAN_DAY_DRIFT_BAND?.trim());
+  return Number.isFinite(n) && n > 0 && n < 1 ? n : 0.12;
+})();
+// Read lazily (not a module-load const) so it can be toggled per-test, and default
+// to 0 under vitest — the guard's extra best-effort calls would otherwise desync the
+// existing day-failure mocks. Production defaults to 1; PLAN_GUARD_DAY_REROLLS wins.
+export function guardDayRerolls(): number {
+  const raw = process.env.PLAN_GUARD_DAY_REROLLS?.trim();
+  if (raw !== undefined && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+  }
+  return process.env.VITEST ? 0 : 1;
+}
+// Adults must not be targeted below this daily-calorie floor (children legitimately
+// eat less). A skeleton target under it is scaled up to the floor and its macro grams
+// scaled with it, so the target stays internally consistent (no bare clamp).
+export const ADULT_CALORIE_FLOOR = 1400;
+
 /**
  * Human-readable label for the model(s) a generation used, recorded in the audit
  * rows (plan_generations.model, meal_plans.ai_model). When the skeleton and day
@@ -153,27 +198,46 @@ export function bigCallTimeoutMs(memberCount: number, hasTranslation: boolean): 
  * so we parallelize enough to keep total wall-clock ≈ one or two waves. Bounded so
  * we don't fan out an unreasonable number of concurrent heavy calls at once.
  */
-// Optional prod override for the large-family parallel day-call cap (no deploy
-// needed). Falls back to the tuned defaults below. The ≤3-member sequential
-// behavior is unaffected.
+// Optional prod override for the parallel day-call cap (no deploy needed).
+// Falls back to the tuned defaults below and is authoritative for BOTH small and
+// large families, so it's the single throttle if we ever trip rate limits.
 const DAY_CONCURRENCY_OVERRIDE = (() => {
   const n = Number(process.env.PLAN_DAY_CONCURRENCY?.trim());
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : undefined;
 })();
 
+// Small families (≤3 members in scope) used to run strictly sequential (DAY_CONCURRENCY=1),
+// which made the common case pay ~7 serial day calls. Each generateDay is independent
+// (writes only its own dayIndex; resyncSharedMeals is within-day), so a small parallel
+// cap roughly halves Phase 2 wall-clock with no quality cost. Days fill out of order
+// instead of 1→7 — the loader already tolerates that for large families.
+const SMALL_FAMILY_DAY_CONCURRENCY = 3;
+const SMALL_FAMILY_DAY_CONCURRENCY_TRANSLATION = 4;
+
 export function dayConcurrency(memberCount: number, hasTranslation: boolean): number {
-  if (memberCount <= 3) return DAY_CONCURRENCY; // small families: calm sequential 1→7 fill
+  if (memberCount <= 3) {
+    // Small families: a few days in parallel (was sequential). Override still wins.
+    return (
+      DAY_CONCURRENCY_OVERRIDE ??
+      (hasTranslation ? SMALL_FAMILY_DAY_CONCURRENCY_TRANSLATION : SMALL_FAMILY_DAY_CONCURRENCY)
+    );
+  }
   // Cap the parallel haiku burst so it stays under the day-model rate limit — 7
   // simultaneous large calls reliably tripped 429s. Override via PLAN_DAY_CONCURRENCY.
   return DAY_CONCURRENCY_OVERRIDE ?? (hasTranslation ? 5 : 4);
 }
 
 // Translation (maid/housekeeper) is a separate pass over already-generated meals.
-// Strictly sequential (one day at a time, today-first): day 1's recipes fully
-// translate and appear, THEN day 2, etc. — never several days landing at once.
-// (Parallelizing was faster overall but made the recipes pop in unpredictable
-// batches, which read as broken; sequential is the intended UX.)
-export const TRANSLATE_CONCURRENCY = 1;
+// The FIRST visible unit (the first member's today-first day) is translated
+// sequentially so the maid sees a complete card within seconds; the rest fan out
+// at this cap, ordered today-first. Haiku is cheap/fast so the 429 risk is low.
+// PLAN_TRANSLATE_CONCURRENCY overrides without a deploy (set 1 to restore the old
+// strictly-sequential UX). The full plan is re-persisted at the end regardless, so
+// out-of-order progressive writes are cosmetic only.
+export const TRANSLATE_CONCURRENCY = (() => {
+  const n = Number(process.env.PLAN_TRANSLATE_CONCURRENCY?.trim());
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 4;
+})();
 
 // One-at-a-time member adds: the drain re-runs an incomplete member (a day that
 // failed after in-run retries) until it's whole BEFORE starting the next member.

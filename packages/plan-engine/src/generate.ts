@@ -3,6 +3,13 @@ import {
   SKELETON_MODEL,
   DAY_MODEL,
   TRANSLATE_MODEL,
+  TRANSLATE_CONCURRENCY,
+  SKELETON_TEMPERATURE,
+  DAY_TEMPERATURE,
+  TRANSLATE_TEMPERATURE,
+  DAY_CALORIE_DRIFT_BAND,
+  guardDayRerolls,
+  ADULT_CALORIE_FLOOR,
   planModelLabel,
   MAX_OUTPUT_TOKENS,
   DAY_MAX_TOKENS,
@@ -34,6 +41,7 @@ import {
   type Ingredient,
   type PerMemberPortion,
   type LocaleCode,
+  type DaySlice,
 } from "./schema";
 import { PlanValidationError, AnthropicCallError } from "./errors";
 import {
@@ -384,6 +392,43 @@ export function normalizeDishKey(name: string): string {
   // meaningful stem (>=3 chars). Leading-only (not per-word) to bound over-merge risk.
   if (s.startsWith("ال") && s.length - 2 >= 3) s = s.slice(2);
   return s;
+}
+
+// Refined-flour / refined-sugar flags (Sara's cookbook forbids them). Shared by the
+// per-day quality re-roll (scoreDaySlice) and the post-assembly observability warning.
+export const REFINED_FLAGS = ["سكر أبيض", "دقيق أبيض", "طحين أبيض"];
+
+/**
+ * Violation score for a freshly generated day slice — 0 means clean, higher is worse.
+ * Counts, per member: a calorie day-total that drifts from the member's skeleton target
+ * beyond DAY_CALORIE_DRIFT_BAND (only when `includeDrift`; a partial-scope slice is
+ * intentionally incomplete so its total is not comparable to the full-day target), plus
+ * each meal that uses a refined-flour/sugar ingredient. The day loop keeps the least-bad
+ * slice across re-rolls, so this just needs to order attempts by quality.
+ */
+export function scoreDaySlice(
+  slice: DaySlice,
+  daySkeleton: PlanSkeleton,
+  includeDrift: boolean,
+): number {
+  const targetById = new Map(
+    daySkeleton.members.map((m) => [m.member_id, m.daily_calories_target]),
+  );
+  let score = 0;
+  for (const m of slice.members) {
+    if (includeDrift) {
+      const target = targetById.get(m.member_id);
+      if (target && target > 0) {
+        const total = m.meals.reduce((sum, meal) => sum + (meal.calories ?? 0), 0);
+        if (Math.abs(total - target) / target > DAY_CALORIE_DRIFT_BAND) score++;
+      }
+    }
+    for (const meal of m.meals) {
+      const text = meal.ingredients.map((i) => i.name_ar).join(" ");
+      if (REFINED_FLAGS.some((f) => text.includes(f))) score++;
+    }
+  }
+  return score;
 }
 
 /** Every beneficiary's meals for ONE day, fed to resyncSharedMeals. */
@@ -1136,6 +1181,10 @@ export async function generateMealPlan(params: {
     const skeletonSystemPrompt = buildSkeletonPrompt(
       context,
       needsSkeleton.map((b) => b.member_id),
+      // Anti-repetition (WS4): only on a full FRESH plan. An add/edit/regen carries or
+      // aligns to the existing plan, so steering away from recent dishes there would
+      // fight carry-over and shared-meal grouping.
+      existingPlan ? undefined : context.recent_dishes,
     );
     // Cap + timeout scale with the members being skeletoned: a full family-tier
     // run (up to 6) emits a week of dish names per member and was truncating at
@@ -1150,6 +1199,7 @@ export async function generateMealPlan(params: {
         systemStatic: STATIC_SYSTEM,
         systemPrompt: skeletonSystemPrompt,
         timeoutMs: skeletonTimeout,
+        temperature: SKELETON_TEMPERATURE,
       });
     let sk = await runSkeleton(skeletonCap);
     totalIn += sk.tokensIn;
@@ -1200,6 +1250,39 @@ export async function generateMealPlan(params: {
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
     };
   }
+  // WS3: make each NEW member's target internally consistent and floored BEFORE day
+  // generation, so days are sized to a correct target rather than corrected only at the
+  // end (when the days have already been built against the wrong number). (1) snap the
+  // calorie target to its macros if they disagree >10% — arithmetic the model can't
+  // "re-roll" into consistency; (2) lift an adult below the floor up to it and scale the
+  // macro grams with it, so the floored target stays consistent (no bare clamp).
+  for (const m of skeleton.members) {
+    const { protein_g, carbs_g, fat_g } = m.macros_target;
+    const calcKcal = protein_g * 4 + carbs_g * 4 + fat_g * 9;
+    if (
+      calcKcal > 0 &&
+      Math.abs(calcKcal - m.daily_calories_target) /
+        Math.max(m.daily_calories_target, 1) >
+        0.1
+    ) {
+      m.daily_calories_target = Math.round(calcKcal);
+    }
+    const isChild = isChildById.get(m.member_id) ?? false;
+    if (
+      !isChild &&
+      m.daily_calories_target > 0 &&
+      m.daily_calories_target < ADULT_CALORIE_FLOOR
+    ) {
+      const scale = ADULT_CALORIE_FLOOR / m.daily_calories_target;
+      m.macros_target = {
+        protein_g: Math.round(protein_g * scale),
+        carbs_g: Math.round(carbs_g * scale),
+        fat_g: Math.round(fat_g * scale),
+      };
+      m.daily_calories_target = ADULT_CALORIE_FLOOR;
+    }
+  }
+
   const skeletonById = new Map(skeleton.members.map((m) => [m.member_id, m]));
 
   // Day grid: the family's (when carrying over) else the skeleton's own.
@@ -1441,6 +1524,38 @@ export async function generateMealPlan(params: {
     // Size this day's cap + timeout to the members actually missing it.
     let dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
     const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
+    // WS3 quality guard: one extra, best-effort day call. Returns the parsed+validated
+    // slice with its violation score, or null on ANY failure (truncation/parse/validation).
+    // Only invoked when we ALREADY hold a valid slice, so a bad re-roll can never cost us
+    // the day. Token usage still counts toward the run totals.
+    const tryRerollDay = async (): Promise<{ slice: DaySlice; score: number } | null> => {
+      try {
+        const res = await streamAnthropic({
+          apiKey: anthropicApiKey,
+          model: DAY_MODEL,
+          maxTokens: dayCap,
+          systemStatic: STATIC_SYSTEM,
+          systemPrompt: prompt,
+          timeoutMs: dayTimeout,
+          temperature: DAY_TEMPERATURE,
+        });
+        totalIn += res.tokensIn;
+        totalOut += res.tokensOut;
+        totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
+        if (res.stopReason === "max_tokens") return null;
+        const parsedAlt = expandTerseDaySlice(
+          JSON.parse(stripMarkdownFence(res.text)),
+        );
+        const rAlt = DaySliceSchema.safeParse(parsedAlt);
+        if (!rAlt.success) return null;
+        return {
+          slice: rAlt.data,
+          score: scoreDaySlice(rAlt.data, daySkeleton, !partialScope),
+        };
+      } catch {
+        return null;
+      }
+    };
     let apiAttempt = 0; // 429/529/5xx/overload/stream/timeout retries (honor Retry-After)
     let contentAttempt = 0; // re-rolls for a one-off malformed/invalid model response
     let tokensRetried = false; // one doubled-cap retry on truncation
@@ -1453,6 +1568,7 @@ export async function generateMealPlan(params: {
           systemStatic: STATIC_SYSTEM,
           systemPrompt: prompt,
           timeoutMs: dayTimeout,
+          temperature: DAY_TEMPERATURE,
         });
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
@@ -1483,7 +1599,22 @@ export async function generateMealPlan(params: {
             `Day ${dayIndex} failed validation: ${r.error.message.slice(0, 300)}`,
             res.text,
           );
-        const slice = r.data;
+        let slice = r.data;
+
+        // WS3 best-of-N: if this valid slice has cookbook/calorie violations and we
+        // still have re-roll budget, make up to GUARD_DAY_REROLLS extra best-effort
+        // calls and keep the least-bad slice. A failed re-roll is ignored — the day is
+        // NEVER dropped for a quality flag. We re-roll the WHOLE day (not one member) so
+        // the shared-meal grouping in the assembly below stays coherent.
+        let guardScore = scoreDaySlice(slice, daySkeleton, !partialScope);
+        const guardBudget = guardDayRerolls();
+        for (let g = 0; guardScore > 0 && g < guardBudget; g++) {
+          const alt = await tryRerollDay();
+          if (alt && alt.score < guardScore) {
+            slice = alt.slice;
+            guardScore = alt.score;
+          }
+        }
 
         // Re-sync shared meals across the WHOLE family for this day — not just the
         // members regenerated now. The fresh members' raw single portions plus every
@@ -1771,9 +1902,9 @@ export async function generateMealPlan(params: {
     }
   }
 
-  // Non-fatal cookbook-style guard: surface refined-flour/sugar deviations from
-  // Sara's cookbook in logs so the prompt can be tuned. Never blocks generation.
-  const REFINED_FLAGS = ["سكر أبيض", "دقيق أبيض", "طحين أبيض"];
+  // Non-fatal cookbook-style guard: surface refined-flour/sugar deviations that
+  // survived the per-day quality re-roll (WS3), in logs, so the prompt can be tuned.
+  // Never blocks generation. Uses the shared REFINED_FLAGS const.
   for (const memberPlan of plan.members) {
     for (const day of memberPlan.days) {
       for (const meal of day.meals) {
@@ -2116,164 +2247,177 @@ export async function translateMealPlan(params: {
       ? [...dayIndices.slice(startPos), ...dayIndices.slice(0, startPos)]
       : dayIndices;
 
-  // Translate strictly ONE MEMBER AT A TIME: finish a member's name + all their
-  // days before starting the next. Never batch two members into one call and
-  // never run two members concurrently — the maid sees one member's full week
-  // resolve, then the next. (Day-outer batching used to mix every member's meals
-  // into a single per-day call; this is the deliberate member-sequential trade.)
-  for (const member of members) {
-    // (a) Member name → locale (its own small call). Folding it into the member's
-    // block means the member is *fully* localized before the next one begins.
-    if (member.member_name_translated_locale !== locale) {
-      let nameAttempt = 0;
-      for (;;) {
-        try {
-          const res = await streamAnthropic({
-            apiKey: anthropicApiKey,
-            model: TRANSLATE_MODEL,
-            maxTokens: DAY_MAX_TOKENS,
-            systemPrompt: buildNameTranslatePrompt(
-              [{ i: 0, name_ar: member.member_name_ar }],
-              locale,
-            ),
-            userMessage: "ترجمي الآن.",
-          });
-          totalIn += res.tokensIn;
-          totalOut += res.tokensOut;
-          if (res.stopReason === "max_tokens")
-            throw new PlanValidationError("Name translate hit max_tokens", res.text);
-          const parsed = NameTranslateOutSchema.safeParse(
-            JSON.parse(stripMarkdownFence(res.text)),
-          );
-          if (!parsed.success)
-            throw new PlanValidationError(
-              `Name translate failed validation: ${parsed.error.message.slice(0, 200)}`,
-              res.text,
-            );
-          const out = parsed.data[0];
-          if (out) {
-            member.member_name_translated = out.name;
-            member.member_name_translated_locale = locale;
-          }
-          break;
-        } catch (err) {
-          if (isRetryable(err) && nameAttempt < MAX_RETRIES) {
-            nameAttempt++;
-            await sleep(backoffMs(nameAttempt));
-            continue;
-          }
-          // Non-fatal: maid view falls back to the Arabic name.
-          console.warn(
-            "[translateMealPlan] name translation failed for",
-            member.member_id,
-            err instanceof Error ? err.message : String(err),
-          );
-          break;
-        }
-      }
-      // Persist the name immediately so it shows even before this member's meals.
+  // Progressive snapshot of the shared `members` array (carries all completed work
+  // so far). Concurrent persists are last-write-wins and purely cosmetic — the caller
+  // re-persists the fully-translated plan returned below, so the final state is correct
+  // regardless of intermediate ordering. Non-fatal.
+  const persist = async (label: string): Promise<void> => {
+    try {
+      await onDayTranslated?.({ ...plan, members });
+    } catch (persistErr) {
+      console.warn(
+        "[translateMealPlan] progressive persist failed:",
+        label,
+        persistErr instanceof Error ? persistErr.message : String(persistErr),
+      );
+    }
+  };
+
+  // Translate one member's NAME → locale (self-guarding: no-op if already done).
+  const translateName = async (member: MemberPlan): Promise<void> => {
+    if (member.member_name_translated_locale === locale) return;
+    let nameAttempt = 0;
+    for (;;) {
       try {
-        await onDayTranslated?.({ ...plan, members });
-      } catch (persistErr) {
-        console.warn(
-          "[translateMealPlan] name progressive persist failed:",
-          persistErr instanceof Error ? persistErr.message : String(persistErr),
+        const res = await streamAnthropic({
+          apiKey: anthropicApiKey,
+          model: TRANSLATE_MODEL,
+          maxTokens: DAY_MAX_TOKENS,
+          systemPrompt: buildNameTranslatePrompt(
+            [{ i: 0, name_ar: member.member_name_ar }],
+            locale,
+          ),
+          userMessage: "ترجمي الآن.",
+          temperature: TRANSLATE_TEMPERATURE,
+        });
+        totalIn += res.tokensIn;
+        totalOut += res.tokensOut;
+        if (res.stopReason === "max_tokens")
+          throw new PlanValidationError("Name translate hit max_tokens", res.text);
+        const parsed = NameTranslateOutSchema.safeParse(
+          JSON.parse(stripMarkdownFence(res.text)),
         );
+        if (!parsed.success)
+          throw new PlanValidationError(
+            `Name translate failed validation: ${parsed.error.message.slice(0, 200)}`,
+            res.text,
+          );
+        const out = parsed.data[0];
+        if (out) {
+          member.member_name_translated = out.name;
+          member.member_name_translated_locale = locale;
+        }
+        break;
+      } catch (err) {
+        if (isRetryable(err) && nameAttempt < MAX_RETRIES) {
+          nameAttempt++;
+          await sleep(backoffMs(nameAttempt));
+          continue;
+        }
+        // Non-fatal: maid view falls back to the Arabic name.
+        console.warn(
+          "[translateMealPlan] name translation failed for",
+          member.member_id,
+          err instanceof Error ? err.message : String(err),
+        );
+        break;
       }
     }
+    await persist(`name ${member.member_id}`);
+  };
 
-    // (b) This member's days, today-first, fully sequential.
-    for (const dayIndex of order) {
-      const day = member.days.find((d) => d.day_index === dayIndex);
-      if (!day) continue;
-      const refs: Meal[] = day.meals.filter(
-        (meal) =>
-          !(
-            meal.prep_steps_translated_locale === locale &&
-            !!meal.prep_steps_translated?.length
-          ),
-      );
-      if (refs.length === 0) continue;
+  // Translate one member's meals for ONE day (self-guarding: no-op if absent / all
+  // already translated). Each job mutates only its own member/day's meal objects, so
+  // running these concurrently is data-race-free.
+  const translateDay = async (member: MemberPlan, dayIndex: number): Promise<void> => {
+    const day = member.days.find((d) => d.day_index === dayIndex);
+    if (!day) return;
+    const refs: Meal[] = day.meals.filter(
+      (meal) =>
+        !(
+          meal.prep_steps_translated_locale === locale &&
+          !!meal.prep_steps_translated?.length
+        ),
+    );
+    if (refs.length === 0) return;
 
-      const items = refs.map((meal, i) => ({
-        i,
-        recipe_name_ar: meal.recipe_name_ar,
-        ingredient_names: meal.ingredients.map((g) => g.name_ar),
-        prep_steps_ar: meal.prep_steps_ar,
-      }));
+    const items = refs.map((meal, i) => ({
+      i,
+      recipe_name_ar: meal.recipe_name_ar,
+      ingredient_names: meal.ingredients.map((g) => g.name_ar),
+      prep_steps_ar: meal.prep_steps_ar,
+    }));
 
-      let attempt = 0;
-      for (;;) {
-        try {
-          const res = await streamAnthropic({
-            apiKey: anthropicApiKey,
-            model: TRANSLATE_MODEL,
-            maxTokens: DAY_MAX_TOKENS,
-            systemPrompt: buildTranslatePrompt(items, locale),
-            userMessage: "ترجمي الآن.",
-          });
-          totalIn += res.tokensIn;
-          totalOut += res.tokensOut;
-          if (res.stopReason === "max_tokens")
-            throw new PlanValidationError(
-              `Translate ${member.member_id} day ${dayIndex} hit max_tokens`,
-              res.text,
-            );
-          const parsed = TranslateOutSchema.safeParse(
-            JSON.parse(stripMarkdownFence(res.text)),
+    let attempt = 0;
+    for (;;) {
+      try {
+        const res = await streamAnthropic({
+          apiKey: anthropicApiKey,
+          model: TRANSLATE_MODEL,
+          maxTokens: DAY_MAX_TOKENS,
+          systemPrompt: buildTranslatePrompt(items, locale),
+          userMessage: "ترجمي الآن.",
+          temperature: TRANSLATE_TEMPERATURE,
+        });
+        totalIn += res.tokensIn;
+        totalOut += res.tokensOut;
+        if (res.stopReason === "max_tokens")
+          throw new PlanValidationError(
+            `Translate ${member.member_id} day ${dayIndex} hit max_tokens`,
+            res.text,
           );
-          if (!parsed.success)
-            throw new PlanValidationError(
-              `Translate ${member.member_id} day ${dayIndex} failed validation: ${parsed.error.message.slice(0, 200)}`,
-              res.text,
-            );
-          for (const out of parsed.data) {
-            const meal = refs[out.i];
-            if (!meal) continue;
-            meal.recipe_name_translated = out.recipe_name;
-            meal.prep_steps_translated = out.steps;
-            meal.prep_steps_translated_locale = locale;
-            meal.ingredients_translated = meal.ingredients.map((g, k) => ({
-              ...g,
-              name_ar: out.ingredient_names[k] ?? g.name_ar,
-            }));
-          }
-          // Progressive snapshot: this member's day landed. `members` is the
-          // shared working array, so the snapshot carries all prior progress.
-          // Non-fatal: a failed persist must not abort the translation pass.
-          try {
-            await onDayTranslated?.({ ...plan, members });
-          } catch (persistErr) {
-            console.warn(
-              "[translateMealPlan]",
-              member.member_id,
-              "day",
-              dayIndex,
-              "progressive persist failed:",
-              persistErr instanceof Error ? persistErr.message : String(persistErr),
-            );
-          }
-          break;
-        } catch (err) {
-          if (isRetryable(err) && attempt < MAX_RETRIES) {
-            attempt++;
-            await sleep(backoffMs(attempt));
-            continue;
-          }
-          // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
-          console.warn(
-            "[translateMealPlan]",
-            member.member_id,
-            "day",
-            dayIndex,
-            "translation failed:",
-            err instanceof Error ? err.message : String(err),
+        const parsed = TranslateOutSchema.safeParse(
+          JSON.parse(stripMarkdownFence(res.text)),
+        );
+        if (!parsed.success)
+          throw new PlanValidationError(
+            `Translate ${member.member_id} day ${dayIndex} failed validation: ${parsed.error.message.slice(0, 200)}`,
+            res.text,
           );
-          break;
+        for (const out of parsed.data) {
+          const meal = refs[out.i];
+          if (!meal) continue;
+          meal.recipe_name_translated = out.recipe_name;
+          meal.prep_steps_translated = out.steps;
+          meal.prep_steps_translated_locale = locale;
+          meal.ingredients_translated = meal.ingredients.map((g, k) => ({
+            ...g,
+            name_ar: out.ingredient_names[k] ?? g.name_ar,
+          }));
         }
+        break;
+      } catch (err) {
+        if (isRetryable(err) && attempt < MAX_RETRIES) {
+          attempt++;
+          await sleep(backoffMs(attempt));
+          continue;
+        }
+        // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
+        console.warn(
+          "[translateMealPlan]",
+          member.member_id,
+          "day",
+          dayIndex,
+          "translation failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+        break;
       }
+    }
+    await persist(`${member.member_id} day ${dayIndex}`);
+  };
+
+  // First visible unit, SEQUENTIAL: the first member's name + their today-first day,
+  // so the maid sees a complete first card within seconds. Then fan everything else
+  // out at TRANSLATE_CONCURRENCY, ordered today-first across members.
+  const first = members[0];
+  const firstDayIndex = order[0];
+  if (first) {
+    await translateName(first);
+    if (firstDayIndex !== undefined) await translateDay(first, firstDayIndex);
+  }
+
+  const jobs: Array<() => Promise<void>> = [];
+  for (let mi = 1; mi < members.length; mi++) {
+    jobs.push(() => translateName(members[mi]!));
+  }
+  for (const dayIndex of order) {
+    for (const member of members) {
+      if (member === first && dayIndex === firstDayIndex) continue; // already done
+      jobs.push(() => translateDay(member, dayIndex));
     }
   }
+  await mapWithConcurrency(jobs, TRANSLATE_CONCURRENCY, (job) => job());
 
   return {
     plan: { ...plan, members },

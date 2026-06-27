@@ -551,13 +551,46 @@ ${fb}
 }
 
 /**
+ * Durable taste preferences distilled from past feedback (WS5a). Soft guidance only —
+ * never overrides allergen/medical avoidance (those live in the roster). Emitted in
+ * the DYNAMIC prompt so prompt caching is unaffected.
+ */
+function preferencesText(context: PlanPromptContext): string {
+  const p = context.food_preferences;
+  if (!p) return "";
+  const loves = p.loves?.filter((s) => s.trim()) ?? [];
+  const avoids = p.avoids?.filter((s) => s.trim()) ?? [];
+  const notes = p.notes?.filter((s) => s.trim()) ?? [];
+  if (loves.length === 0 && avoids.length === 0 && notes.length === 0) return "";
+  const lines: string[] = [];
+  if (loves.length) lines.push(`تحبّ: ${loves.join("، ")}`);
+  if (avoids.length) lines.push(`تفضّل تجنّب: ${avoids.join("، ")}`);
+  if (notes.length) lines.push(`ملاحظات: ${notes.join("، ")}`);
+  return `\n\n# تفضيلات العميلة المتراكمة (إرشادية)
+راعي هذه التفضيلات قدر الإمكان دون كسر القواعد الصحية أو تجنّب الحساسية:
+${lines.join("\n")}`;
+}
+
+/**
  * Phase 1 — the dynamic part of the SKELETON call: compute per-member targets +
  * a week of dish NAMES only (no recipes). Small + fast; decides variety and
  * which meals are shared across the family (same recipe_name_ar = shared).
  */
+// Advisory anti-repetition block (WS4). Lists dishes from the client's recent plans
+// so the model varies week-to-week. Soft ("prefer different"), never a hard ban —
+// a hard exclusion could fight shared-meal grouping or exhaust a constrained cuisine.
+// Emitted in the DYNAMIC prompt only (never STATIC_SYSTEM) so prompt caching holds.
+function recentDishesText(recentDishes?: string[]): string {
+  if (!recentDishes || recentDishes.length === 0) return "";
+  return `\n\n# أطباق استُخدمت مؤخراً
+هذه أطباق ظهرت في خطط العميلة السابقة. نوّعي وابتعدي عنها قدر الإمكان لتفادي التكرار (ليست ممنوعة، لكن فضّلي أطباقاً مختلفة):
+${recentDishes.map((d) => `- ${d}`).join("\n")}`;
+}
+
 export function buildSkeletonPrompt(
   context: PlanPromptContext,
   targetMemberIds?: string[],
+  recentDishes?: string[],
 ): string {
   const count = targetMemberIds
     ? targetMemberIds.length
@@ -574,11 +607,11 @@ export function buildSkeletonPrompt(
 الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
 # أفراد الخطة المطلوبة الآن (استخدمي member_id بالضبط)
-${buildRoster(context, targetMemberIds)}${feedbackText(context)}
+${buildRoster(context, targetMemberIds)}${feedbackText(context)}${preferencesText(context)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
-ثم خطّطي **أسبوعاً كاملاً (7 أيام متتالية)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}
+ثم خطّطي **أسبوعاً كاملاً (7 أيام متتالية)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}${recentDishesText(recentDishes)}
 
 # الإخراج
 أرجعي JSON صالحاً فقط (لا نص قبله/بعده، لا أكواد محاطة). الشكل:
