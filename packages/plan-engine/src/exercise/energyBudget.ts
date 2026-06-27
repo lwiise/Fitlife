@@ -92,11 +92,27 @@ function computeTargetIntake(
   member: EnergyBudgetMember,
   bmr: number,
   tdee: number,
+  weeklyEEE: number,
+  intensityCeiling: ExerciseScreening["intensity_ceiling"],
   notes: string[],
 ): number {
-  const floor = Math.max(bmr, MEDICAL_MIN_INTAKE);
+  // Rule 2: gross hard floor — never below max(BMR, medical minimum).
+  let floor = Math.max(bmr, MEDICAL_MIN_INTAKE);
+  // Rule 3 (decided): energy-availability floor — for can-progress-to-vigorous
+  // members, net intake after weekly-averaged EEE must stay ≥ BMR (catches the
+  // active member whose NET intake goes too low even though gross clears the BMR
+  // floor). Both floors apply; the higher binds.
+  if (intensityCeiling === "can_progress_to_vigorous" && weeklyEEE > 0) {
+    const eaFloor = bmr + weeklyEEE / 7;
+    if (eaFloor > floor) {
+      floor = eaFloor;
+      notes.push(
+        `energy-availability floor active: net intake kept ≥ BMR (${round(floor)} kcal)`,
+      );
+    }
+  }
 
-  // Rule 3: pregnant / lactating → NO deficit ever, regardless of stated goal.
+  // Rule 4: pregnant / lactating → NO deficit ever, regardless of stated goal.
   if (member.member_type === "pregnant") {
     const inc = pregnancyIncrement(member.trimester);
     notes.push(`pregnant — no deficit; +${inc} kcal (trimester ${member.trimester ?? "?"})`);
@@ -115,7 +131,7 @@ function computeTargetIntake(
       intake = tdee - FAT_LOSS_DEFICIT;
       if (intake < floor) {
         notes.push(`deficit clamped to floor (${round(floor)} kcal)`);
-        intake = floor; // Rule 2: never below max(BMR, medical minimum)
+        intake = floor; // Rule 2/3: never below the binding floor
       }
       break;
     case "muscle_gain":
@@ -136,6 +152,8 @@ export function computeEnergyBudget(
   const verdict = screening ?? exerciseProfile?.screening ?? null;
   const intensity_mode = verdict?.intensity_mode ?? "hr_zones";
   const intensity_ceiling = verdict?.intensity_ceiling ?? "light_moderate";
+  // Surfaced so 2c can WITHHOLD the exercise plan for a flagged member.
+  const clearance_required = verdict?.clearance_required ?? false;
 
   const bmr = mifflinStJeor(
     member.sex,
@@ -144,7 +162,7 @@ export function computeEnergyBudget(
     member.age,
   );
 
-  // Rule 4: children are portion-based — no calorie target, no EEE coupling.
+  // Rule 5: children are portion-based — no calorie target, no EEE coupling.
   if (member.member_type === "child") {
     notes.push("child — portion-based, no calorie target; exercise is play");
     return {
@@ -155,6 +173,7 @@ export function computeEnergyBudget(
       target_intake: null,
       intensity_mode,
       intensity_ceiling,
+      clearance_required,
       notes,
     };
   }
@@ -173,11 +192,21 @@ export function computeEnergyBudget(
     baselineMaintenance = bmr * activityFactor(member.activity_level);
     weeklyEEE = 0;
   }
-  // Additive (not a coarse PAL bump) so re-sync recomputes transparently. EEE is
-  // averaged over the week → Rule 1: targetIntake is one weekly-stable value, it
-  // never spikes on a training day.
+  // Rule 1 (decided): "fueling, not a ledger". EEE is averaged into the weekly TDEE
+  // (additive, not a coarse PAL bump → re-sync recomputes transparently), and the
+  // deficit is taken off that EEE-inclusive TDEE — so more prescribed activity raises
+  // the target (the member is fueled accordingly). targetIntake is ONE weekly-stable
+  // value: it never spikes on a training day, and there is no daily burn/eat ledger.
+  // (The companion "no burn/eat math shown in the UI" rule lives in the Phase-3 UI.)
   const tdee = baselineMaintenance + weeklyEEE / 7;
-  const targetIntake = computeTargetIntake(member, bmr, tdee, notes);
+  const targetIntake = computeTargetIntake(
+    member,
+    bmr,
+    tdee,
+    weeklyEEE,
+    intensity_ceiling,
+    notes,
+  );
 
   return {
     bmr: round(bmr),
@@ -187,6 +216,7 @@ export function computeEnergyBudget(
     target_intake: round(targetIntake),
     intensity_mode,
     intensity_ceiling,
+    clearance_required,
     notes,
   };
 }

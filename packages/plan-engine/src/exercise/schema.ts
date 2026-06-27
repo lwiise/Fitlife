@@ -32,6 +32,9 @@ export const EnergyBudgetSchema = z.object({
   target_intake: z.number().nullable(),
   intensity_mode: IntensityModeSchema,
   intensity_ceiling: IntensityCeilingSchema,
+  // Decided: a raised clearance flag WITHHOLDS the exercise plan (2c reads this) —
+  // a "needs doctor sign-off" state, not a warning. The meal plan is unaffected.
+  clearance_required: z.boolean(),
   notes: z.array(z.string()),
 });
 export type EnergyBudget = z.infer<typeof EnergyBudgetSchema>;

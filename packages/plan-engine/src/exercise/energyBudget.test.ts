@@ -129,3 +129,54 @@ describe("intensity helpers", () => {
     expect(rpeForBand("vigorous")).toEqual({ low: 14, high: 17 });
   });
 });
+
+describe("computeEnergyBudget — decided refinements", () => {
+  it("Rule 3: energy-availability floor keeps net intake ≥ BMR for an active fat-loss member", () => {
+    const profile: ExerciseProfile = {
+      availability_days: "3-4",
+      session_minutes: 30,
+      preferred_types: ["cardio"],
+      screening: { intensity_ceiling: "can_progress_to_vigorous", clearance_required: false, intensity_mode: "hr_zones" },
+    };
+    // BMR(35,60,162,F)=1276.5; EEE = 4×MET(cycling,vig)=9.5×60×0.5 = 1140
+    // deficit would land at TDEE−400 = 1422 < EA floor (BMR + 1140/7 = 1439) → clamped
+    const b = computeEnergyBudget(
+      adult({ age: 35, weight_kg: 60, height_cm: 162, primary_goal: "fat_loss" }),
+      profile,
+    );
+    expect(b.weekly_eee).toBe(1140);
+    expect(b.target_intake).toBe(1439);
+    // net intake after weekly-averaged EEE is held at ~BMR (±rounding)
+    expect(Math.abs(b.target_intake! - b.weekly_eee / 7 - b.bmr)).toBeLessThan(2);
+    expect(b.notes.some((n) => n.includes("energy-availability floor"))).toBe(true);
+  });
+
+  it("clearance_required passes through from the screening verdict", () => {
+    const profile: ExerciseProfile = {
+      availability_days: "1-2",
+      session_minutes: 15,
+      preferred_types: ["walking"],
+      screening: { intensity_ceiling: "light_moderate", clearance_required: true, intensity_mode: "rpe" },
+    };
+    expect(computeEnergyBudget(adult(), profile).clearance_required).toBe(true);
+    expect(computeEnergyBudget(adult(), null).clearance_required).toBe(false);
+  });
+
+  it("Rule 1: more prescribed activity raises the (single, weekly) maintenance target — fueled, not a ledger", () => {
+    const base = adult({ sex: "male", age: 30, weight_kg: 80, height_cm: 180, primary_goal: "body_recomposition" });
+    const light: ExerciseProfile = {
+      availability_days: "1-2", session_minutes: 15, preferred_types: ["walking"],
+      screening: { intensity_ceiling: "light_moderate", clearance_required: false, intensity_mode: "hr_zones" },
+    };
+    const heavy: ExerciseProfile = {
+      availability_days: "5+", session_minutes: 45, preferred_types: ["cardio"],
+      screening: { intensity_ceiling: "can_progress_to_vigorous", clearance_required: false, intensity_mode: "hr_zones" },
+    };
+    const a = computeEnergyBudget(base, light);
+    const z = computeEnergyBudget(base, heavy);
+    expect(z.weekly_eee).toBeGreaterThan(a.weekly_eee);
+    expect(z.target_intake!).toBeGreaterThan(a.target_intake!); // fueled accordingly
+    expect(typeof z.target_intake).toBe("number"); // one weekly scalar, no per-day field
+    expect(z.target_intake).toBe(z.tdee); // maintenance = weekly TDEE
+  });
+});
