@@ -6,7 +6,11 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
-import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
+import {
+  planHasContent,
+  MEMBER_GEN_MAX_ATTEMPTS,
+  type ExerciseProfile,
+} from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -17,6 +21,7 @@ import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
+import { WorkoutSelfHeal } from "./WorkoutSelfHeal";
 import { SubscriptionSelfHeal } from "./SubscriptionSelfHeal";
 
 export const metadata = {
@@ -118,6 +123,39 @@ export default async function PlanPage({
   // Mom's one-time post-generation exercise opt-in has already been shown/answered.
   const exercisePromptShown = !!profile?.exercise_prompt_shown_at;
 
+  // An opted-in member is "eligible" for a workout when they have availability set,
+  // aren't a child, and aren't clearance-withheld. If such a member is in the plan
+  // but has no entry in plan_data.workouts, lazily self-heal it (covers plans made
+  // before the workout-attach shipped + the post-gen banner opt-in path).
+  const eligibleForWorkout = (
+    ep: unknown,
+    memberType: string | null | undefined,
+  ): boolean => {
+    const p = ep as ExerciseProfile | null;
+    return (
+      !!p?.availability_days &&
+      memberType !== "child" &&
+      !p.screening?.clearance_required
+    );
+  };
+  const planWorkoutIds = new Set(
+    (latest?.plan_data?.workouts ?? []).map((w) => w.member_id),
+  );
+  const planMemberIdSet = new Set(
+    (latest?.plan_data?.members ?? []).map((m) => m.member_id),
+  );
+  const missingWorkout =
+    (planMemberIdSet.has("mom") &&
+      eligibleForWorkout(profile?.exercise_profile, profile?.member_type) &&
+      !planWorkoutIds.has("mom")) ||
+    familyMembers.some(
+      (m) =>
+        m.role !== "housekeeper" &&
+        planMemberIdSet.has(m.id) &&
+        eligibleForWorkout(m.exercise_profile, m.member_type) &&
+        !planWorkoutIds.has(m.id),
+    );
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -205,6 +243,7 @@ export default async function PlanPage({
         {latest?.status === "ready" && latest.plan_data && (
           <>
             {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
+            {planReady && missingWorkout && <WorkoutSelfHeal />}
             <PlanViewer
               plan={latest.plan_data}
               planId={latest.id}

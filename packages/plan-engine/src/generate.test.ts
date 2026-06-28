@@ -17,6 +17,7 @@ import { generateMealPlan, resyncSharedMeals } from "./generate";
 import type { PlanPromptContext } from "./buildContext";
 import type { MealPlan, Day, Meal, DaySlice, PlanSkeleton } from "./schema";
 import { MealPlanSchema, DaySliceSchema, PlanSkeletonSchema } from "./schema";
+import type { ExerciseProfile } from "./exercise/types";
 
 const mockedStream = vi.mocked(streamAnthropic);
 
@@ -58,7 +59,10 @@ function makeCompleteMember(memberId: string, name: string): MealPlan["members"]
   };
 }
 
-function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
+function makeContext(opts?: {
+  extraMember?: boolean;
+  momExercise?: ExerciseProfile;
+}): PlanPromptContext {
   const family_members: PlanPromptContext["family_members"] = [];
   if (opts?.extraMember) {
     family_members.push({
@@ -109,6 +113,7 @@ function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
       high_risk_pregnancy: false,
       consulted_doctor: false,
       meal_mode: "shared",
+      exercise_profile: opts?.momExercise ?? null,
     },
     family_members,
     family_wide: {
@@ -1014,5 +1019,80 @@ describe("generateMealPlan — partial scope regenerate", () => {
       .days.find((d) => d.day_index === 0)!
       .meals.find((m) => m.slot === "breakfast")!;
     expect(childDay0.meals.find((m) => m.slot === "breakfast")!).toEqual(origChildBf);
+  });
+});
+
+// Reproduces the reported "opted in but no exercise plan" — a FRESH solo plan for an
+// opted-in healthy mom must attach a WorkoutPlan to plan_data, whether or not the
+// model emitted `training` (the deterministic fallback covers model variance).
+describe("generateMealPlan — exercise workout attaches on opt-in", () => {
+  const HEALTHY_EXERCISE: ExerciseProfile = {
+    availability_days: "3-4",
+    session_minutes: 30,
+    preferred_types: ["walking"],
+    resting_hr: 60,
+    screening: {
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      intensity_mode: "hr_zones",
+    },
+  };
+
+  it("skeleton OMITS training → deterministic fallback attaches mom's workout", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: null,
+    });
+    expect(plan.workouts).toBeDefined();
+    expect(plan.workouts!.map((w) => w.member_id)).toEqual(["mom"]);
+    expect(plan.workouts![0]!.days).toHaveLength(7);
+    const dbg = plan.exercise_debug as { mom_has_profile: boolean; workouts: number };
+    expect(dbg.mom_has_profile).toBe(true);
+    expect(dbg.workouts).toBe(1);
+  });
+
+  it("skeleton EMITS training → mom's workout attaches", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) => {
+      const base = streamReturns(systemPrompt);
+      if (!/day_index=/.test(systemPrompt)) {
+        const sk = JSON.parse(base.text) as PlanSkeleton;
+        const mom = sk.members.find((m) => m.member_id === "mom");
+        if (mom)
+          mom.training = {
+            sessions: [
+              { day_index: 1, modality: "walking", band: "moderate", duration_min: 30 },
+              { day_index: 4, modality: "walking", band: "moderate", duration_min: 30 },
+            ],
+          };
+        return { ...base, text: JSON.stringify(sk) };
+      }
+      return base;
+    });
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: null,
+    });
+    expect(plan.workouts!.map((w) => w.member_id)).toEqual(["mom"]);
+    const sessions = plan.workouts![0]!.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(2);
+    expect((plan.exercise_debug as { workouts: number }).workouts).toBe(1);
+  });
+
+  it("meals-only mom (no exercise_profile) → no workouts attached", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext(),
+      existingPlan: null,
+    });
+    expect(plan.workouts).toBeUndefined();
+    expect((plan.exercise_debug as { workouts: number }).workouts).toBe(0);
   });
 });
