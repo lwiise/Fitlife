@@ -14,7 +14,6 @@ import type { UserGoal } from "@/lib/plans/goalMapping";
 import type { step1Schema, step2Schema } from "../schema";
 import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
-import { MomExerciseWizard } from "../exercise/MomExerciseWizard";
 import { saveMomProfile, saveProfileStep } from "../actions";
 
 const TOTAL_STEPS = 8;
@@ -90,9 +89,6 @@ export function MomWizard() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(1);
-  // After her profile saves, she goes through the inline exercise opt-in before the
-  // add-family popup (instead of jumping straight to /onboarding/members).
-  const [phase, setPhase] = useState<"profile" | "exercise">("profile");
 
   const [identity, setIdentity] = useState<Identity>();
   const [physical, setPhysical] = useState<Physical>();
@@ -156,9 +152,9 @@ export function MomWizard() {
         setError(result.error);
         return;
       }
-      // Hand off to the inline exercise opt-in; it routes to the add-family popup
-      // once she opts in (and saves) or declines.
-      setPhase("exercise");
+      // The exercise opt-in now lives on the members route (before the add-family
+      // popup), so every user — fresh or resuming — sees it before generation.
+      router.push("/onboarding/members");
     });
   };
 
@@ -167,28 +163,6 @@ export function MomWizard() {
     if (doctorNeeded) goNext();
     else submit();
   };
-
-  // Profile saved → run the exercise opt-in inline, reusing the meal-wizard answers
-  // she just gave (never re-asked), then continue to the add-family popup.
-  if (phase === "exercise" && identity && physical && userGoal) {
-    return (
-      <MomExerciseWizard
-        includeOptIn
-        onComplete={() => router.push("/onboarding/members")}
-        reused={{
-          member_type:
-            pregStatus === "pregnant" || pregStatus === "lactating"
-              ? pregStatus
-              : "adult",
-          age: new Date().getFullYear() - identity.birth_year,
-          activity_level: physical.activity_level,
-          conditions,
-          goalIsSpecific:
-            userGoal === "build_muscle" || userGoal === "athletic",
-        }}
-      />
-    );
-  }
 
   return (
     <main className="min-h-screen bg-brand-surface">

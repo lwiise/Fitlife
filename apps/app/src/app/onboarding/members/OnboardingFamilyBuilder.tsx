@@ -6,6 +6,10 @@ import { MemberWizard } from "@/app/family/add/MemberWizard";
 import { PregLactSwitch } from "@/app/family/add/PregLactSwitch";
 import { HousekeeperForm } from "@/app/family/add/HousekeeperForm";
 import { CheckRow, StepperRow } from "@/app/family/add/FamilyComposerControls";
+import {
+  MomExerciseWizard,
+  type MomExerciseReused,
+} from "@/app/onboarding/exercise/MomExerciseWizard";
 import { finishOnboardingToSubscription } from "@/app/onboarding/actions";
 
 // One step of the guided sequence. Husband and maid are singular; the rest carry a count.
@@ -17,15 +21,26 @@ type Task =
   | { kind: "maid" };
 
 /**
- * The onboarding family builder. Reached after mom finishes her profile. She first
- * SELECTS who's in the household (no navigation on tap), then a single CTA walks her
- * through each selected member's details in order — husband → adults → children →
- * pregnant/lactating → maid — and only at the very end finalizes onboarding and
- * generates the whole family at once. Each member is saved as it's completed;
- * generation stays deferred until the sequence ends.
+ * The onboarding family builder. Reached after mom finishes her profile. It first
+ * offers Mom the EXERCISE opt-in (the universal step before generation, so it shows
+ * for fresh and resuming users alike), then she SELECTS who's in the household (no
+ * navigation on tap), then a single CTA walks her through each selected member's
+ * details in order — husband → adults → children → pregnant/lactating → maid — and
+ * only at the very end finalizes onboarding and generates the whole family at once.
+ * Each member is saved as it's completed; generation stays deferred until the end.
  */
-export function OnboardingFamilyBuilder() {
-  const [phase, setPhase] = useState<"select" | "fill" | "finalizing">("select");
+export function OnboardingFamilyBuilder({
+  momReused,
+  momHasExercise,
+}: {
+  momReused: MomExerciseReused;
+  momHasExercise: boolean;
+}) {
+  // Mom who already opted in (profile saved) skips the opt-in; everyone else sees it
+  // first, before the "select" popup and before any generation.
+  const [phase, setPhase] = useState<
+    "exercise" | "select" | "fill" | "finalizing"
+  >(momHasExercise ? "select" : "exercise");
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
   const [, startTransition] = useTransition();
@@ -65,6 +80,21 @@ export function OnboardingFamilyBuilder() {
     if (index + 1 >= queue.length) finalize();
     else setIndex(index + 1);
   };
+
+  if (phase === "exercise") {
+    // Full-screen overlay (same pattern as "fill") so it covers the roster page.
+    // includeOptIn asks first; declining saves nothing (the /plan banner stays as a
+    // fallback) and either path advances to the household "select" popup.
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-brand-surface">
+        <MomExerciseWizard
+          includeOptIn
+          reused={momReused}
+          onComplete={() => setPhase("select")}
+        />
+      </div>
+    );
+  }
 
   if (phase === "finalizing") {
     return (
