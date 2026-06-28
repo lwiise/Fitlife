@@ -9,7 +9,10 @@ import {
   useExerciseProfile,
   buildExerciseProfile,
 } from "@/components/exercise/useExerciseProfile";
-import { exercisePrescriptionSteps } from "@/components/exercise/exerciseSteps";
+import {
+  EXERCISE_OPT_IN,
+  exercisePrescriptionSteps,
+} from "@/components/exercise/exerciseSteps";
 import { ExerciseStepView } from "@/components/exercise/ExerciseStepView";
 import { saveMomExerciseProfile } from "@/app/onboarding/actions";
 
@@ -23,21 +26,37 @@ export interface MomExerciseReused {
 }
 
 /**
- * Mom's dedicated POST-generation exercise screen. She's already opted in (arrived
- * from the /plan banner), so we run just the prescription/safety steps for her
- * member type — clearance reuses the doctor-consult she already did during meal
- * onboarding. Phase 1: persist her ExerciseProfile, then back to /plan (no regen).
+ * Mom's exercise screen, shared by two entry points:
+ *   - POST-generation (`/onboarding/exercise`, default props): she already opted in
+ *     from the /plan banner, so we run just the prescription/safety steps and return
+ *     to /plan.
+ *   - INLINE during onboarding (`includeOptIn`): prepend the opt-in question before
+ *     the prescription steps, then `onComplete()` routes onward (e.g. the add-family
+ *     popup). If she declines, nothing is saved (the /plan banner stays as a fallback).
+ * Clearance reuses the doctor-consult she already did during meal onboarding.
+ * Phase 1: persist her ExerciseProfile (no regen).
  */
-export function MomExerciseWizard({ reused }: { reused: MomExerciseReused }) {
+export function MomExerciseWizard({
+  reused,
+  includeOptIn = false,
+  onComplete,
+}: {
+  reused: MomExerciseReused;
+  includeOptIn?: boolean;
+  onComplete?: () => void;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  // Pre-opted-in so exercisePrescriptionSteps yields the real steps.
-  const ex = useExerciseProfile({ optedIn: true });
+  // Post-gen arrives already opted in; the onboarding entry asks first.
+  const ex = useExerciseProfile(includeOptIn ? undefined : { optedIn: true });
   const prefersReduced = useReducedMotion();
 
-  const steps = exercisePrescriptionSteps(
+  // After save (or decline): onboarding routes onward, post-gen returns to /plan.
+  const done = onComplete ?? (() => router.push("/plan"));
+
+  const prescriptionSteps = exercisePrescriptionSteps(
     {
       member_type: reused.member_type,
       goalIsSpecific: reused.goalIsSpecific,
@@ -49,6 +68,11 @@ export function MomExerciseWizard({ reused }: { reused: MomExerciseReused }) {
     },
     ex.state,
   );
+  // Onboarding prepends the opt-in question; post-gen jumps straight to prescription.
+  // `prescriptionSteps` is empty until she opts in, so the list grows on "أكل + تمارين".
+  const steps = includeOptIn
+    ? [EXERCISE_OPT_IN, ...prescriptionSteps]
+    : prescriptionSteps;
   const total = steps.length;
   const key = steps[Math.min(step, total - 1)];
   const isFinalStep = step === total - 1;
@@ -66,7 +90,9 @@ export function MomExerciseWizard({ reused }: { reused: MomExerciseReused }) {
       conditions: reused.conditions,
     });
     if (!profile) {
-      router.push("/plan");
+      // Declined (or nothing to save): do NOT stamp exercise_prompt_shown_at, so the
+      // /plan banner can still offer exercise later as a fallback.
+      done();
       return;
     }
     startTransition(async () => {
@@ -75,7 +101,7 @@ export function MomExerciseWizard({ reused }: { reused: MomExerciseReused }) {
         setError(result.error);
         return;
       }
-      router.push("/plan");
+      done();
     });
   };
 
@@ -87,7 +113,7 @@ export function MomExerciseWizard({ reused }: { reused: MomExerciseReused }) {
 
   if (!key) {
     // No steps to collect (defensive) — nothing to do.
-    router.push("/plan");
+    done();
     return null;
   }
 
@@ -146,7 +172,7 @@ export function MomExerciseWizard({ reused }: { reused: MomExerciseReused }) {
 
         <button
           type="button"
-          onClick={step > 0 ? goBack : () => router.push("/plan")}
+          onClick={step > 0 ? goBack : done}
           disabled={isPending}
           className="mt-6 inline-flex items-center gap-1 px-3 py-2 min-h-[44px] -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
         >
