@@ -98,7 +98,12 @@ export default async function OnboardingMembersPage() {
 
       <OnboardingFamilyBuilder
         momReused={momReused}
-        momHasExercise={!!profile.exercise_profile}
+        // "Answered" = she already opted in (has a profile) OR already saw the prompt
+        // (declined / dismissed, which stamps exercise_prompt_shown_at). Either way the
+        // onboarding exercise phase is skipped so returning here doesn't re-ask.
+        momExerciseAnswered={
+          !!profile.exercise_profile || !!profile.exercise_prompt_shown_at
+        }
       />
     </main>
   );

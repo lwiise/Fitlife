@@ -1142,20 +1142,116 @@ describe("generateMealPlan — exercise workout attaches on opt-in", () => {
     expect(adult.days).toHaveLength(7);
   });
 
-  it("REGEN: a carried-over opted-in mom keeps her workout (not dropped from skeleton)", async () => {
-    // Regenerate only member-2; mom is carried over (NOT re-skeletoned). The fallback
-    // must still attach mom's workout — guards the prior regen-drop bug.
+  // A distinctive prior workout for mom: 2 resistance sessions @45min. HEALTHY_EXERCISE's
+  // deterministic default is 3 walking sessions @30min — so the two are easy to tell apart,
+  // which is what proves "carried (tailored)" vs "overwritten (default)".
+  const TAILORED_MOM_WORKOUT = {
+    member_id: "mom",
+    budget: {
+      bmr: 1400,
+      baseline_maintenance: 1900,
+      weekly_eee: 600,
+      tdee: 2000,
+      target_intake: 1600,
+      intensity_mode: "hr_zones",
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      notes: [],
+    },
+    days: [0, 1, 2, 3, 4, 5, 6].map((day_index) =>
+      day_index === 1 || day_index === 4
+        ? {
+            day_index,
+            entry: {
+              kind: "session",
+              exercise_type: "resistance",
+              band: "moderate",
+              duration_min: 45,
+            },
+          }
+        : { day_index, entry: { kind: "rest" } },
+    ),
+  };
+
+  const existingPlanWithTailoredWorkout = (): MealPlan =>
+    MealPlanSchema.parse({
+      week_start_date: "2026-06-06",
+      members: [makeCompleteMember("mom", "أم محمد")],
+      methodology_notes_ar: "ملاحظات",
+      safety_disclaimer_ar: "تنبيه",
+      days_total: DAY_INDICES.length,
+      generating: false,
+      workouts: [TAILORED_MOM_WORKOUT],
+    });
+
+  it("REGEN: a carried-over mom keeps her TAILORED workout (not overwritten by the default)", async () => {
+    // Regenerate only member-2; mom is carried over (NOT re-skeletoned). Her existing
+    // tailored workout (2×45 resistance) must survive — recomputing would replace it with
+    // the generic default (3×30 walking). Guards the regen-OVERWRITE bug (distinct from
+    // the earlier regen-drop: the workout was present but silently genericized).
     mockedStream.mockImplementation(async ({ systemPrompt }) =>
       streamReturns(systemPrompt),
     );
-    const context = makeContext({ extraMember: true, momExercise: HEALTHY_EXERCISE });
-    const existingPlan = makeExistingPlan([makeCompleteMember("mom", "أم محمد")]);
     const { plan } = await generateMealPlan({
       anthropicApiKey: "test-key",
-      context,
-      existingPlan,
+      context: makeContext({ extraMember: true, momExercise: HEALTHY_EXERCISE }),
+      existingPlan: existingPlanWithTailoredWorkout(),
       onlyMemberId: "member-2",
     });
-    expect(plan.workouts?.map((w) => w.member_id)).toContain("mom");
+    const mom = plan.workouts!.find((w) => w.member_id === "mom")!;
+    const sessions = mom.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(2); // tailored 2 sessions, NOT the 3-session default
+    expect(sessions[0]!.entry).toMatchObject({
+      exercise_type: "resistance",
+      duration_min: 45,
+    });
+  });
+
+  it("FAST PATH: an all-complete run carries existing workouts through untouched", async () => {
+    // No member needs regeneration → generateMealPlan returns via the fast path (a
+    // deferred-member drain / translate-only run lands here). It must carry
+    // plan_data.workouts — dropping them used to wipe every member's exercise plan.
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: existingPlanWithTailoredWorkout(),
+    });
+    const mom = plan.workouts!.find((w) => w.member_id === "mom")!;
+    expect(mom.days.filter((d) => d.entry.kind === "session")).toHaveLength(2);
+  });
+
+  it("a malformed skeleton training block never blocks the meal plan (exercise decoupled)", async () => {
+    // The model emits an INVALID training block (bad band + non-positive duration). It must
+    // NOT fail the skeleton parse (which would leave the household with NO meal plan); the
+    // member degrades to the deterministic fallback instead.
+    mockedStream.mockImplementation(async ({ systemPrompt }) => {
+      const base = streamReturns(systemPrompt);
+      if (!/day_index=/.test(systemPrompt)) {
+        const sk = JSON.parse(base.text) as PlanSkeleton;
+        const mom = sk.members.find((m) => m.member_id === "mom");
+        if (mom)
+          (mom as unknown as { training: unknown }).training = {
+            sessions: [
+              { day_index: 1, modality: "walking", band: "EXTREME", duration_min: -5 },
+            ],
+          };
+        return { ...base, text: JSON.stringify(sk) };
+      }
+      return base;
+    });
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: null,
+    });
+    // Meals survived…
+    expect(
+      plan.members.find((m) => m.member_id === "mom")!.days.length,
+    ).toBeGreaterThan(0);
+    // …and mom still got a fallback workout (training degraded to undefined → default).
+    expect(plan.workouts!.map((w) => w.member_id)).toContain("mom");
   });
 });

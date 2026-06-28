@@ -60,8 +60,16 @@ export function defaultTrainingFromProfile(
 export function buildWorkoutsFromSkeleton(
   context: PlanPromptContext,
   skeleton: PlanSkeleton,
+  existingWorkouts?: WorkoutPlan[] | null,
 ): WorkoutPlan[] {
   const byId = new Map(skeleton.members.map((m) => [m.member_id, m]));
+  // Workouts already on the plan, keyed by member. A single-member add/regen/drain
+  // only re-skeletons the targeted member; every other opted-in member is "carried"
+  // and must keep their PRIOR (possibly model-tailored) workout rather than be
+  // recomputed into a generic default.
+  const existingById = new Map(
+    (existingWorkouts ?? []).map((w) => [w.member_id, w]),
+  );
   const out: WorkoutPlan[] = [];
 
   const build = (
@@ -70,32 +78,54 @@ export function buildWorkoutsFromSkeleton(
     profile: ExerciseProfile | null | undefined,
   ) => {
     if (!profile || !profile.availability_days || member.member_type === "child") return;
-    const budget = computeEnergyBudget(member, profile, profile.screening);
-    const emitted = byId.get(member_id)?.training ?? null;
 
-    // The model proposes WHICH sessions. Respect a real `withheld` (clearance unmet).
-    // But if it emitted no sessions for an opted-in, non-clearance member, synthesize
-    // a deterministic schedule so she always gets a plan (this also covers a carried-
-    // over member who wasn't re-skeletoned this run).
-    const emittedHasSessions =
-      !!emitted && !emitted.withheld && (emitted.sessions?.length ?? 0) > 0;
-    const training: SkeletonTraining | null = emitted?.withheld
-      ? emitted
-      : emittedHasSessions
+    // Carry verbatim: this run didn't re-skeleton this member, and they already have
+    // a workout. Recomputing here would overwrite their model-tailored sessions with
+    // a deterministic default. Only members IN this run's skeleton (or first-timers
+    // with no workout yet) get (re)computed below.
+    if (!byId.has(member_id)) {
+      const prior = existingById.get(member_id);
+      if (prior) {
+        out.push(prior);
+        return;
+      }
+    }
+
+    // Exercise is non-critical: one member's bad computation (NaN MET, malformed
+    // session) must never throw out of generateMealPlan and fail the meal plan. On
+    // failure, fall back to any prior workout for this member, else skip them.
+    try {
+      const budget = computeEnergyBudget(member, profile, profile.screening);
+      const emitted = byId.get(member_id)?.training ?? null;
+
+      // The model proposes WHICH sessions. Respect a real `withheld` (clearance unmet).
+      // But if it emitted no sessions for an opted-in, non-clearance member, synthesize
+      // a deterministic schedule so she always gets a plan (this also covers a carried-
+      // over member who wasn't re-skeletoned this run and has no prior workout).
+      const emittedHasSessions =
+        !!emitted && !emitted.withheld && (emitted.sessions?.length ?? 0) > 0;
+      const training: SkeletonTraining | null = emitted?.withheld
         ? emitted
-        : budget.clearance_required
-          ? null // needs clearance but model didn't withhold → still no program
-          : defaultTrainingFromProfile(profile);
+        : emittedHasSessions
+          ? emitted
+          : budget.clearance_required
+            ? null // needs clearance but model didn't withhold → still no program
+            : defaultTrainingFromProfile(profile);
 
-    const wp = assembleWorkoutPlan(member_id, training, {
-      weight_kg: member.weight_kg,
-      age: member.age,
-      resting_hr: profile.resting_hr ?? null,
-      intensity_mode: budget.intensity_mode,
-      intensity_ceiling: budget.intensity_ceiling,
-      budget,
-    });
-    if (wp) out.push(wp); // null = withheld / no sessions
+      const wp = assembleWorkoutPlan(member_id, training, {
+        weight_kg: member.weight_kg,
+        age: member.age,
+        resting_hr: profile.resting_hr ?? null,
+        intensity_mode: budget.intensity_mode,
+        intensity_ceiling: budget.intensity_ceiling,
+        budget,
+      });
+      if (wp) out.push(wp); // null = withheld / no sessions
+    } catch (e) {
+      console.warn("[plan-generate] workout build failed for", member_id, e);
+      const prior = existingById.get(member_id);
+      if (prior) out.push(prior);
+    }
   };
 
   const mom = context.mom;

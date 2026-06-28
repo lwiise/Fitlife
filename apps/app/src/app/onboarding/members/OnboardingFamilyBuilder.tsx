@@ -31,16 +31,18 @@ type Task =
  */
 export function OnboardingFamilyBuilder({
   momReused,
-  momHasExercise,
+  momExerciseAnswered,
 }: {
   momReused: MomExerciseReused;
-  momHasExercise: boolean;
+  momExerciseAnswered: boolean;
 }) {
-  // Mom who already opted in (profile saved) skips the opt-in; everyone else sees it
-  // first, before the "select" popup and before any generation.
+  // Mom who already answered the opt-in (opted in OR declined — both persist) skips
+  // it; everyone else sees it first, before the "select" popup and any generation.
+  // Gating on persisted state means returning to this page mid-onboarding never
+  // re-asks (a bare decline used to save nothing → forced through the wizard again).
   const [phase, setPhase] = useState<
     "exercise" | "select" | "fill" | "finalizing"
-  >(momHasExercise ? "select" : "exercise");
+  >(momExerciseAnswered ? "select" : "exercise");
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
   const [, startTransition] = useTransition();
@@ -83,8 +85,9 @@ export function OnboardingFamilyBuilder({
 
   if (phase === "exercise") {
     // Full-screen overlay (same pattern as "fill") so it covers the roster page.
-    // includeOptIn asks first; declining saves nothing (the /plan banner stays as a
-    // fallback) and either path advances to the household "select" popup.
+    // includeOptIn asks first; the wizard persists EITHER an opted-in profile OR a
+    // declined-stamp (exercise_prompt_shown_at) so this phase never re-shows, and
+    // either path advances to the household "select" popup.
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-brand-surface">
         <MomExerciseWizard

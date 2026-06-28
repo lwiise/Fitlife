@@ -237,7 +237,11 @@ export const SkeletonMemberSchema = z.object({
   macros_target: MacrosSchema,
   days: z.array(SkeletonDaySchema).min(1).max(7),
   // Phase 2: present only for opted-in members; absent for meals-only.
-  training: SkeletonTrainingSchema.optional(),
+  // `.catch(undefined)` keeps exercise from ever blocking meals: a malformed
+  // training block degrades to undefined (the member then falls to the deterministic
+  // `defaultTrainingFromProfile`) instead of failing the WHOLE skeleton parse, which
+  // would leave an opted-in household with no meal plan at all.
+  training: SkeletonTrainingSchema.optional().catch(undefined),
 });
 export const PlanSkeletonSchema = z.object({
   members: z.array(SkeletonMemberSchema).min(1),

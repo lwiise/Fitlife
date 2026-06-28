@@ -14,7 +14,10 @@ import {
   exercisePrescriptionSteps,
 } from "@/components/exercise/exerciseSteps";
 import { ExerciseStepView } from "@/components/exercise/ExerciseStepView";
-import { saveMomExerciseProfile } from "@/app/onboarding/actions";
+import {
+  saveMomExerciseProfile,
+  dismissExercisePrompt,
+} from "@/app/onboarding/actions";
 
 // Reused meal-profile fields (read from mom's saved profile) — never re-asked.
 export interface MomExerciseReused {
@@ -90,8 +93,18 @@ export function MomExerciseWizard({
       conditions: reused.conditions,
     });
     if (!profile) {
-      // Declined (or nothing to save): do NOT stamp exercise_prompt_shown_at, so the
-      // /plan banner can still offer exercise later as a fallback.
+      // Declined (or nothing to save). During onboarding (includeOptIn), stamp
+      // exercise_prompt_shown_at so the opt-in is recorded as answered — otherwise
+      // returning to /onboarding/members re-asks on every visit. (Post-gen entry has
+      // no decline path: she already opted in to reach it.) The /plan banner stays the
+      // fallback for existing/pre-feature users, whose flag is still null.
+      if (includeOptIn) {
+        startTransition(async () => {
+          await dismissExercisePrompt();
+          done();
+        });
+        return;
+      }
       done();
       return;
     }

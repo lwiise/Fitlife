@@ -6,6 +6,7 @@ import {
 import type { PlanPromptContext } from "../buildContext";
 import type { PlanSkeleton } from "../schema";
 import type { ExerciseProfile } from "./types";
+import { WorkoutPlanSchema, type WorkoutPlan } from "./schema";
 
 function ctx(profile: ExerciseProfile | null): PlanPromptContext {
   return {
@@ -126,6 +127,58 @@ describe("buildWorkoutsFromSkeleton", () => {
     expect(
       buildWorkoutsFromSkeleton(ctx(needsClearance), skeleton(undefined)),
     ).toHaveLength(0);
+  });
+
+  // A distinctive prior workout: 2 resistance sessions @45min. The deterministic default
+  // for `optedIn` ("3-4") is 3 walking sessions @30min — so the two are easy to tell apart.
+  const priorMomWorkout: WorkoutPlan = WorkoutPlanSchema.parse({
+    member_id: "mom",
+    budget: {
+      bmr: 1400,
+      baseline_maintenance: 1900,
+      weekly_eee: 600,
+      tdee: 2000,
+      target_intake: 1600,
+      intensity_mode: "hr_zones",
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      notes: [],
+    },
+    days: [0, 1, 2, 3, 4, 5, 6].map((day_index) =>
+      day_index === 1 || day_index === 4
+        ? {
+            day_index,
+            entry: {
+              kind: "session",
+              exercise_type: "resistance",
+              band: "moderate",
+              duration_min: 45,
+            },
+          }
+        : { day_index, entry: { kind: "rest" } },
+    ),
+  });
+
+  it("carries a prior workout VERBATIM for a member not re-skeletoned this run", () => {
+    // Single-member regen: the carried member is absent from THIS run's skeleton. Her
+    // prior (model-tailored) workout must be carried unchanged, NOT recomputed into the
+    // generic default — guards the regen-overwrite bug.
+    const out = buildWorkoutsFromSkeleton(ctx(optedIn), { members: [] }, [
+      priorMomWorkout,
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toBe(priorMomWorkout); // same reference → carried verbatim
+  });
+
+  it("recomputes (does NOT carry) a member who IS in this run's skeleton", () => {
+    // mom is being regenerated this run → her skeleton drives a fresh computation; the
+    // prior workout is intentionally replaced (3 default sessions, not the prior 2).
+    const out = buildWorkoutsFromSkeleton(ctx(optedIn), skeleton(undefined), [
+      priorMomWorkout,
+    ]);
+    expect(out).toHaveLength(1);
+    const sessions = out[0]!.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(3);
   });
 });
 

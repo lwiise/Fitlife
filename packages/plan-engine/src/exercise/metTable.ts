@@ -41,7 +41,11 @@ export function selectMet(
       : ["light", "moderate"];
   const t = allowed.includes(tier) ? tier : "moderate";
   const row = MET_TABLE[m];
-  return row[t] ?? row.moderate ?? row.light!;
+  // Sparse rows: a modality may define only one band (e.g. high_impact_aerobics has
+  // only `vigorous`). When the clamped tier isn't present, fall through ANY defined
+  // band so we never return undefined → NaN kcal → a schema-parse crash. The final
+  // numeric default is a safe generic moderate MET (defensive; should be unreachable).
+  return row[t] ?? row.moderate ?? row.light ?? row.vigorous ?? 3.0;
 }
 
 export { MET_TABLE };

@@ -1029,6 +1029,10 @@ export async function generateMealPlan(params: {
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
       days_total: familyDayIndices.length || members[0]?.days.length || 7,
       generating: false,
+      // Carry workouts through the fast path — a deferred-member drain / translate-only
+      // run reaches here, and dropping plan_data.workouts would wipe every member's
+      // exercise plan (self-heal would then only restore generic defaults).
+      ...(existingPlan.workouts ? { workouts: existingPlan.workouts } : {}),
     });
     if (onProgress)
       await Promise.resolve(onProgress(plan, { readyDays: 0, totalDays: 0 }));
@@ -1825,7 +1829,17 @@ export async function generateMealPlan(params: {
   // 2e: attach each opted-in member's deterministic WorkoutPlan (rides in plan_data;
   // no model call, no migration). Empty for meal-only households → plan unchanged.
   // Meal targets are NOT altered here — meal generation stays byte-identical.
-  const workouts = buildWorkoutsFromSkeleton(context, skeleton);
+  // `existingPlan?.workouts` is passed so a single-member regen carries the OTHER
+  // members' tailored workouts instead of recomputing them into generic defaults.
+  // Wrapped because exercise is non-critical: a workout-side error must never fail
+  // an otherwise-good meal plan — on failure we keep any prior workouts.
+  let workouts = existingPlan?.workouts ?? [];
+  try {
+    workouts = buildWorkoutsFromSkeleton(context, skeleton, existingPlan?.workouts);
+  } catch (e) {
+    console.warn("[plan-generate] workout attach failed — keeping meals", e);
+    workouts = existingPlan?.workouts ?? [];
+  }
   return {
     plan: {
       ...plan,

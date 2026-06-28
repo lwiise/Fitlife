@@ -403,7 +403,13 @@ export async function saveMomExerciseProfile(
   return { ok: true };
 }
 
-/** Mom chose "meals only" on the /plan exercise prompt — record it so it won't reappear. */
+/**
+ * Record that Mom answered the exercise opt-in with "no" (declined). Stamps the
+ * one-time `exercise_prompt_shown_at` so the prompt won't reappear — used by both the
+ * /plan "meals only" banner AND the in-onboarding decline (so returning to
+ * /onboarding/members doesn't re-ask). Existing/pre-feature users keep a null flag, so
+ * the /plan banner still surfaces for them.
+ */
 export async function dismissExercisePrompt(): Promise<ActionResult> {
   const supabase = await createClient();
   const {
