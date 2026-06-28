@@ -91,7 +91,22 @@ Before building ANY section, you must:
 - apps/web (the old standalone landing app) has been REMOVED — it was dead code; the landing is served from apps/app/src/marketing
 - Old fitlife-landing.netlify.app site is decommissioned
 
-**Database migration baseline**: Production Supabase has migrations 00001 through 00007 applied (verified 06/09/2026 — 00007 `meal_mode` column confirmed present via a read-only REST probe of `family_members`). Migration 00005 added per-member fields (member_type, sex, allergies, dislikes, trimester, school_meal_handling, picky_eater) and family-wide preferences (cuisine, dietary_restrictions, cooking_methods, meal_out_frequency). Migration 00006 added `chat_messages`; 00007 added `family_members.meal_mode` ('shared' default / 'independent'). Migrations are applied MANUALLY (no CI/Netlify runner) — when adding a migration, apply it to prod yourself.
+**Database migration baseline**: Production Supabase has migrations 00001 through 00012 applied (verified 2026-06-28 against prod — objects confirmed present: admin_users, admin_audit_log, family_members.meal_mode, profiles.exercise_profile, profiles.exercise_prompt_shown_at). Migrations are applied MANUALLY (no CI/Netlify runner) — when adding a migration, apply it to prod yourself.
+
+Applied migrations:
+- 00001–00004  initial schema + RLS policies + plan_generations audit + subscriptions trial (00001–00007 verified 06/09/2026)
+- 00005  per-member fields (member_type, sex, allergies, dislikes, trimester, school_meal_handling, picky_eater) + family-wide preferences (cuisine, dietary_restrictions, cooking_methods, meal_out_frequency)
+- 00006  chat_messages
+- 00007  family_members.meal_mode ('shared' default / 'independent')
+- 00008  admin_users
+- 00009  profiles_meal_mode
+- 00010  admin_audit_log
+- 00011  admin_audit_account_actions
+- 00012  exercise_profile (exercise_profile jsonb on profiles + family_members; exercise_prompt_shown_at on profiles)
+
+Number reservations (avoid collision):
+- 00013  reserved — meal-personalization branch
+- 00014  reserved — exercise workout storage (not yet written)
 
 **Onboarding restructure (Prompt 1.8c)**: 5 family-wide questions → Mom's 8 personal questions → sequential per-member additions with branched wizards (adult/child/pregnant/lactating). Solo plans hide member tabs.
 
