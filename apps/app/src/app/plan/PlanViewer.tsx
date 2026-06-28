@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, HeartPulse } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { WorkoutDayCard } from "./WorkoutDayCard";
@@ -51,6 +51,7 @@ export function PlanViewer({
   hideExport = false,
   housekeeperLocale,
   locale,
+  withheldMemberIds = [],
 }: {
   plan: MealPlan;
   planId: string;
@@ -70,6 +71,9 @@ export function PlanViewer({
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
+  // Members who opted into exercise but are WITHHELD pending doctor sign-off
+  // (pregnant/lactating/medical) — they get no workout; show a clearance note.
+  withheldMemberIds?: string[];
 }) {
   const router = useRouter();
   const prefersReduced = useReducedMotion();
@@ -190,13 +194,15 @@ export function PlanViewer({
   const isSolo = plan.members.length === 1;
 
   // Exercise plan (rides in plan_data.workouts). Arabic view only — the translated
-  // housekeeper view stays meals-only. The meals/exercise toggle appears only when
-  // ≥1 member has a generated workout.
+  // housekeeper view stays meals-only. The meals/exercise toggle appears when a
+  // member has a generated workout OR is withheld pending doctor sign-off.
   const [view, setView] = useState<"meals" | "exercise">("meals");
   const workouts = plan.workouts ?? [];
-  const hasWorkouts = !translated && workouts.length > 0;
-  const exerciseView = hasWorkouts && view === "exercise";
+  const hasExercise =
+    !translated && (workouts.length > 0 || withheldMemberIds.length > 0);
+  const exerciseView = hasExercise && view === "exercise";
   const activeWorkout = workouts.find((w) => w.member_id === activeMemberId);
+  const activeIsWithheld = withheldMemberIds.includes(activeMemberId);
   const activeWorkoutDay = activeWorkout?.days.find(
     (d) => d.day_index === activeDayIndex,
   );
@@ -410,8 +416,8 @@ export function PlanViewer({
       </div>
       )}
 
-      {/* Meals / Exercise toggle — only when a workout was generated (Arabic view). */}
-      {hasWorkouts && (
+      {/* Meals / Exercise toggle — when a workout exists or one is withheld (Arabic view). */}
+      {hasExercise && (
         <div
           className="flex w-fit rounded-full bg-white border border-brand-ink/10 p-1"
           role="group"
@@ -443,30 +449,9 @@ export function PlanViewer({
         </div>
       )}
 
-      {/* Member summary tiles — macros for meals, training summary for exercise */}
-      {exerciseView ? (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-            <p className="text-brand-ink-muted text-xs">أيام التمرين</p>
-            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-              {workoutSessionDays}
-              <span className="text-brand-ink-muted text-xs ms-1">في الأسبوع</span>
-            </p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-            <p className="text-brand-ink-muted text-xs">أقصى شدّة</p>
-            <p className="font-bold text-brand-ink text-sm mt-1.5 leading-snug">
-              {activeWorkout ? ceilingLabel(activeWorkout.budget.intensity_ceiling) : "—"}
-            </p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-            <p className="text-brand-ink-muted text-xs">مقياس الشدّة</p>
-            <p className="font-bold text-brand-ink text-sm mt-1.5 leading-snug">
-              {activeWorkout ? modeLabel(activeWorkout.budget.intensity_mode) : "—"}
-            </p>
-          </div>
-        </div>
-      ) : (
+      {/* Member summary tiles — macros for meals, training summary for exercise.
+          A withheld member has no workout → skip the tiles (the note shows below). */}
+      {!exerciseView ? (
         <div className="grid grid-cols-4 gap-2">
           <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
             <p className="text-brand-ink-muted text-xs">{t.daily_calories}</p>
@@ -496,7 +481,29 @@ export function PlanViewer({
             </p>
           </div>
         </div>
-      )}
+      ) : activeWorkout ? (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">أيام التمرين</p>
+            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+              {workoutSessionDays}
+              <span className="text-brand-ink-muted text-xs ms-1">في الأسبوع</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">أقصى شدّة</p>
+            <p className="font-bold text-brand-ink text-sm mt-1.5 leading-snug">
+              {activeWorkout ? ceilingLabel(activeWorkout.budget.intensity_ceiling) : "—"}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">مقياس الشدّة</p>
+            <p className="font-bold text-brand-ink text-sm mt-1.5 leading-snug">
+              {activeWorkout ? modeLabel(activeWorkout.budget.intensity_mode) : "—"}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Generation progress — real "day N of M" while the plan streams in.
           Hidden once the viewed member is complete (ready === total) so a full
@@ -535,7 +542,8 @@ export function PlanViewer({
         </div>
       )}
 
-      {/* Day tabs */}
+      {/* Day tabs (in the exercise view, only for a member who has a workout) */}
+      {(!exerciseView || !!activeWorkout) && (
       <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
@@ -571,6 +579,7 @@ export function PlanViewer({
           );
         })}
       </div>
+      )}
 
       {/* Day total pill */}
       {!exerciseView && activeDay && (
@@ -607,6 +616,13 @@ export function PlanViewer({
           >
             {activeWorkoutDay ? (
               <WorkoutDayCard entry={activeWorkoutDay.entry} />
+            ) : activeIsWithheld ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 py-8 px-4 text-center">
+                <HeartPulse className="size-6 text-brand-purple-900" aria-hidden="true" />
+                <p className="text-brand-ink text-sm font-medium leading-relaxed max-w-sm">
+                  صحتكِ أولاً. بمجرد موافقة طبيبكِ، نضيفها لكِ تلقائياً.
+                </p>
+              </div>
             ) : (
               <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
                 ما في خطة تمارين

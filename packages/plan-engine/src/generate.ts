@@ -1826,31 +1826,10 @@ export async function generateMealPlan(params: {
   // no model call, no migration). Empty for meal-only households → plan unchanged.
   // Meal targets are NOT altered here — meal generation stays byte-identical.
   const workouts = buildWorkoutsFromSkeleton(context, skeleton);
-  // TEMP diagnostic — UNCONDITIONAL so any generation shows it; the marker confirms
-  // this code version actually ran (a null/absent debug ⇒ stale deploy, not a bug).
-  const exerciseDebug = {
-    marker: "exdbg-v2",
-    mom_has_profile: !!context.mom.exercise_profile,
-    family_with_profile: context.family_members.filter((m) => !!m.exercise_profile)
-      .length,
-    has_program: householdHasExerciseProgram(
-      context,
-      needsSkeleton.map((b) => b.member_id),
-    ),
-    needs_skeleton_ids: needsSkeleton.map((b) => b.member_id),
-    skeleton_members: skeleton.members.map((m) => ({
-      id: m.member_id,
-      has_training: !!m.training,
-      sessions: m.training?.sessions?.length ?? 0,
-      withheld: !!m.training?.withheld,
-    })),
-    workouts: workouts.length,
-  };
   return {
     plan: {
       ...plan,
       ...(workouts.length > 0 ? { workouts } : {}),
-      exercise_debug: exerciseDebug,
     },
     usage: {
       input_tokens: totalIn,

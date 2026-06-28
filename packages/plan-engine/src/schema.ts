@@ -180,9 +180,6 @@ export const MealPlanSchema = z.object({
   // Phase 2: per-member workout plans, present only when ≥1 member opted into
   // exercise. Rides in the plan_data jsonb (no migration); meals-only plans omit it.
   workouts: z.array(WorkoutPlanSchema).optional(),
-  // TEMP diagnostic breadcrumb (remove after 2e is verified) — records why workouts
-  // did/didn't attach: the gate, whether the skeleton emitted `training`, the count.
-  exercise_debug: z.unknown().optional(),
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 

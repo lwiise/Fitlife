@@ -156,6 +156,34 @@ export default async function PlanPage({
         !planWorkoutIds.has(m.id),
     );
 
+  // Opted-in members WITHHELD pending doctor sign-off (pregnant/lactating/medical):
+  // they get no workout by design → the exercise view shows a clearance note.
+  const withheldForWorkout = (
+    ep: unknown,
+    memberType: string | null | undefined,
+  ): boolean => {
+    const p = ep as ExerciseProfile | null;
+    return (
+      !!p?.availability_days &&
+      memberType !== "child" &&
+      !!p.screening?.clearance_required
+    );
+  };
+  const withheldMemberIds = [
+    ...(planMemberIdSet.has("mom") &&
+    withheldForWorkout(profile?.exercise_profile, profile?.member_type)
+      ? ["mom"]
+      : []),
+    ...familyMembers
+      .filter(
+        (m) =>
+          m.role !== "housekeeper" &&
+          planMemberIdSet.has(m.id) &&
+          withheldForWorkout(m.exercise_profile, m.member_type),
+      )
+      .map((m) => m.id),
+  ];
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -251,6 +279,7 @@ export default async function PlanPage({
               updatedAt={latest.updated_at}
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
+              withheldMemberIds={withheldMemberIds}
             />
           </>
         )}

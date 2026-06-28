@@ -1050,9 +1050,6 @@ describe("generateMealPlan — exercise workout attaches on opt-in", () => {
     expect(plan.workouts).toBeDefined();
     expect(plan.workouts!.map((w) => w.member_id)).toEqual(["mom"]);
     expect(plan.workouts![0]!.days).toHaveLength(7);
-    const dbg = plan.exercise_debug as { mom_has_profile: boolean; workouts: number };
-    expect(dbg.mom_has_profile).toBe(true);
-    expect(dbg.workouts).toBe(1);
   });
 
   it("skeleton EMITS training → mom's workout attaches", async () => {
@@ -1080,7 +1077,6 @@ describe("generateMealPlan — exercise workout attaches on opt-in", () => {
     expect(plan.workouts!.map((w) => w.member_id)).toEqual(["mom"]);
     const sessions = plan.workouts![0]!.days.filter((d) => d.entry.kind === "session");
     expect(sessions).toHaveLength(2);
-    expect((plan.exercise_debug as { workouts: number }).workouts).toBe(1);
   });
 
   it("meals-only mom (no exercise_profile) → no workouts attached", async () => {
@@ -1093,6 +1089,22 @@ describe("generateMealPlan — exercise workout attaches on opt-in", () => {
       existingPlan: null,
     });
     expect(plan.workouts).toBeUndefined();
-    expect((plan.exercise_debug as { workouts: number }).workouts).toBe(0);
+  });
+
+  it("REGEN: a carried-over opted-in mom keeps her workout (not dropped from skeleton)", async () => {
+    // Regenerate only member-2; mom is carried over (NOT re-skeletoned). The fallback
+    // must still attach mom's workout — guards the prior regen-drop bug.
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const context = makeContext({ extraMember: true, momExercise: HEALTHY_EXERCISE });
+    const existingPlan = makeExistingPlan([makeCompleteMember("mom", "أم محمد")]);
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context,
+      existingPlan,
+      onlyMemberId: "member-2",
+    });
+    expect(plan.workouts?.map((w) => w.member_id)).toContain("mom");
   });
 });
