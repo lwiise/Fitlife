@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildWorkoutsFromSkeleton } from "./buildWorkouts";
+import {
+  buildWorkoutsFromSkeleton,
+  defaultTrainingFromProfile,
+} from "./buildWorkouts";
 import type { PlanPromptContext } from "../buildContext";
 import type { PlanSkeleton } from "../schema";
 import type { ExerciseProfile } from "./types";
@@ -88,11 +91,16 @@ describe("buildWorkoutsFromSkeleton", () => {
     expect(out[0]!.days).toHaveLength(7);
   });
 
-  it("opted-in but the skeleton emitted no training → no workout", () => {
-    expect(buildWorkoutsFromSkeleton(ctx(optedIn), skeleton(undefined))).toHaveLength(0);
+  it("opted-in, non-clearance, no emitted training → deterministic fallback workout", () => {
+    // Model variance: skeleton omitted `training` → she still gets a real plan.
+    const out = buildWorkoutsFromSkeleton(ctx(optedIn), skeleton(undefined));
+    expect(out).toHaveLength(1);
+    expect(out[0]!.days).toHaveLength(7);
+    const sessions = out[0]!.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(3); // availability "3-4" → 3 sessions/week
   });
 
-  it("clearance withheld → no workout", () => {
+  it("clearance withheld (explicit) → no workout", () => {
     const withheld: ExerciseProfile = {
       ...optedIn,
       screening: {
@@ -104,5 +112,59 @@ describe("buildWorkoutsFromSkeleton", () => {
     expect(
       buildWorkoutsFromSkeleton(ctx(withheld), skeleton({ withheld: true })),
     ).toHaveLength(0);
+  });
+
+  it("clearance required but model didn't withhold → still no fallback", () => {
+    const needsClearance: ExerciseProfile = {
+      ...optedIn,
+      screening: {
+        intensity_ceiling: "light_moderate",
+        clearance_required: true,
+        intensity_mode: "rpe",
+      },
+    };
+    expect(
+      buildWorkoutsFromSkeleton(ctx(needsClearance), skeleton(undefined)),
+    ).toHaveLength(0);
+  });
+});
+
+describe("defaultTrainingFromProfile", () => {
+  const base: ExerciseProfile = {
+    availability_days: "3-4",
+    session_minutes: 30,
+    preferred_types: ["strength"],
+    screening: {
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      intensity_mode: "hr_zones",
+    },
+  };
+
+  it("maps availability to session count (1-2→2, 3-4→3, 5+→4)", () => {
+    expect(defaultTrainingFromProfile({ ...base, availability_days: "1-2" }).sessions).toHaveLength(2);
+    expect(defaultTrainingFromProfile({ ...base, availability_days: "3-4" }).sessions).toHaveLength(3);
+    expect(defaultTrainingFromProfile({ ...base, availability_days: "5+" }).sessions).toHaveLength(4);
+  });
+
+  it("uses the top preference's modality, chosen duration, and a safe moderate band", () => {
+    const t = defaultTrainingFromProfile(base);
+    expect(t.sessions!.every((s) => s.modality === "resistance")).toBe(true);
+    expect(t.sessions!.every((s) => s.duration_min === 30)).toBe(true);
+    expect(t.sessions!.every((s) => s.band === "moderate")).toBe(true);
+  });
+
+  it("defaults modality to walking and duration to 30 when unset", () => {
+    const t = defaultTrainingFromProfile({ availability_days: "1-2" });
+    expect(t.sessions!.every((s) => s.modality === "walking")).toBe(true);
+    expect(t.sessions!.every((s) => s.duration_min === 30)).toBe(true);
+  });
+
+  it("spreads sessions across distinct days (0-6)", () => {
+    const days = defaultTrainingFromProfile({ ...base, availability_days: "5+" }).sessions!.map(
+      (s) => s.day_index,
+    );
+    expect(new Set(days).size).toBe(days.length);
+    expect(days.every((d) => d >= 0 && d <= 6)).toBe(true);
   });
 });
