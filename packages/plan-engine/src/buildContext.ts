@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
+import type { ExerciseProfile } from "./exercise/types";
 
 // Accepts any Supabase client shape — the app's <Database>-typed cookie client
 // or the plain service-role admin client. The engine queries untyped.
@@ -49,6 +50,10 @@ export interface PlanPromptContextMom {
   consulted_doctor: boolean;
   // 'shared' = eats the family's shared meals (default); 'independent' = own dishes.
   meal_mode: "shared" | "independent";
+  // Opt-in exercise (Phase 2): the persisted exercise_profile jsonb incl. the
+  // computed screening verdict; null for meals-only. Consumed only on the
+  // exercise-generation path — the meal-only path ignores it.
+  exercise_profile?: ExerciseProfile | null;
 }
 
 export interface PlanPromptContextMember {
@@ -76,6 +81,8 @@ export interface PlanPromptContextMember {
   preferred_language: string;
   // 'shared' = eats the family's shared meals (default); 'independent' = own dishes.
   meal_mode: "shared" | "independent";
+  // Opt-in exercise (Phase 2); null for meals-only. See PlanPromptContextMom.
+  exercise_profile?: ExerciseProfile | null;
 }
 
 export interface PlanPromptContextFamilyWide {
@@ -236,6 +243,7 @@ export async function buildPlanContext(
     high_risk_pregnancy: !!profile.high_risk_pregnancy,
     consulted_doctor: profile.consulted_doctor,
     meal_mode: profile.meal_mode === "independent" ? "independent" : "shared",
+    exercise_profile: (profile.exercise_profile as ExerciseProfile | null) ?? null,
   };
 
   const family_members: PlanPromptContextMember[] = (family ?? []).map(
@@ -266,6 +274,7 @@ export async function buildPlanContext(
         is_child: memberType === "child" || (age != null && age < 18),
         preferred_language: m.preferred_language as string,
         meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
+        exercise_profile: (m.exercise_profile as ExerciseProfile | null) ?? null,
       };
     },
   );

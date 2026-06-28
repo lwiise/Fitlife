@@ -69,6 +69,9 @@ export type {
 } from "./exercise/schema";
 export { computeEnergyBudget, computeHrZones, rpeForBand } from "./exercise/energyBudget";
 export { selectMet, MET_TABLE } from "./exercise/metTable";
+export { assembleWorkoutPlan } from "./exercise/assembleWorkout";
+export type { WorkoutAssemblyParams } from "./exercise/assembleWorkout";
+export { buildWorkoutsFromSkeleton } from "./exercise/buildWorkouts";
 
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";

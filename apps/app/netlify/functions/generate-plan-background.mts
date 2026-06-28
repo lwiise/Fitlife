@@ -21,6 +21,7 @@ import type {
   PlanPromptContext,
   PlanPromptContextMember,
 } from "../../../../packages/plan-engine/src/buildContext";
+import type { ExerciseProfile } from "../../../../packages/plan-engine/src/exercise/types";
 
 type Activity =
   | "sedentary"
@@ -283,6 +284,7 @@ async function buildContextViaFetch(
       is_child: memberType === "child" || (age != null && age < 18),
       preferred_language: m.preferred_language as string,
       meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
+      exercise_profile: (m.exercise_profile ?? null) as ExerciseProfile | null,
     };
   });
 
@@ -319,6 +321,7 @@ async function buildContextViaFetch(
       // Mirror buildContext.ts — mom's meal_mode was missing here, leaving it
       // undefined on the prod context (PlanPromptContextMom requires it).
       meal_mode: profile.meal_mode === "independent" ? "independent" : "shared",
+      exercise_profile: (profile.exercise_profile ?? null) as ExerciseProfile | null,
     },
     family_members,
     family_wide: {
