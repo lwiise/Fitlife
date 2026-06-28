@@ -115,6 +115,8 @@ export default async function PlanPage({
     !!latest.plan_data &&
     planHasContent(latest.plan_data) &&
     !latest.in_progress;
+  // Mom's one-time post-generation exercise opt-in has already been shown/answered.
+  const exercisePromptShown = !!profile?.exercise_prompt_shown_at;
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -137,7 +139,10 @@ export default async function PlanPage({
 
       <div className="container-app py-8 md:py-12">
         <Suspense fallback={null}>
-          <PlanOnboardingBanner planReady={planReady} />
+          <PlanOnboardingBanner
+            planReady={planReady}
+            exercisePromptShown={exercisePromptShown}
+          />
         </Suspense>
 
         {/* Keep a continuous "preparing" indicator for queued members — while the

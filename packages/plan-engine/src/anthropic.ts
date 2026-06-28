@@ -24,6 +24,10 @@ export async function streamAnthropic(params: {
   // as a cached system block so repeated parallel calls only pay ~10% input
   // cost for it after the first. Optional; plain string if omitted.
   systemStatic?: string;
+  // Optional SECOND ephemeral-cached block (Anthropic allows up to 4 cache
+  // breakpoints) — used to inject SAFE_EXERCISE_PROTOCOLS on the exercise-generation
+  // path only, gated to opted-in households. Meal-only callers omit it → unchanged.
+  systemStaticExtra?: string;
   userMessage?: string;
   // Multi-turn conversation (chat). When provided, used as the request `messages`
   // verbatim; otherwise a single user turn is built from `userMessage`. Existing
@@ -45,6 +49,7 @@ export async function streamAnthropic(params: {
     maxTokens,
     systemPrompt,
     systemStatic,
+    systemStaticExtra,
     userMessage = "أنشئي الخطة الآن.",
     messages,
     onText,
@@ -63,6 +68,16 @@ export async function streamAnthropic(params: {
           text: systemStatic,
           cache_control: { type: "ephemeral" },
         },
+        // Gated 2nd cached block (exercise path only); absent for meal-only calls.
+        ...(systemStaticExtra
+          ? [
+              {
+                type: "text",
+                text: systemStaticExtra,
+                cache_control: { type: "ephemeral" },
+              },
+            ]
+          : []),
         { type: "text", text: systemPrompt },
       ]
     : systemPrompt;

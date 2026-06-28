@@ -20,7 +20,10 @@ import {
   buildDayPrompt,
   buildTranslatePrompt,
   buildNameTranslatePrompt,
+  householdHasExerciseProgram,
 } from "./systemPrompt";
+import { SAFE_EXERCISE_PROTOCOLS } from "./exerciseProtocols";
+import { buildWorkoutsFromSkeleton } from "./exercise/buildWorkouts";
 import {
   MealPlanSchema,
   PlanSkeletonSchema,
@@ -1142,12 +1145,21 @@ export async function generateMealPlan(params: {
     // the old fixed 16000, which threw and failed the WHOLE generation.
     const skeletonCap = skeletonMaxTokens(needsSkeleton.length);
     const skeletonTimeout = bigCallTimeoutMs(needsSkeleton.length, false);
+    // Gate the SAFE_EXERCISE_PROTOCOLS 2nd cache block to the exercise path only —
+    // absent for meal-only households, so their system array is byte-identical.
+    const skeletonExerciseBlock = householdHasExerciseProgram(
+      context,
+      needsSkeleton.map((b) => b.member_id),
+    )
+      ? SAFE_EXERCISE_PROTOCOLS
+      : undefined;
     const runSkeleton = (maxTokens: number) =>
       streamAnthropic({
         apiKey: anthropicApiKey,
         model: SKELETON_MODEL,
         maxTokens,
         systemStatic: STATIC_SYSTEM,
+        systemStaticExtra: skeletonExerciseBlock,
         systemPrompt: skeletonSystemPrompt,
         timeoutMs: skeletonTimeout,
       });
@@ -1810,8 +1822,12 @@ export async function generateMealPlan(params: {
     }
   }
 
+  // 2e: attach each opted-in member's deterministic WorkoutPlan (rides in plan_data;
+  // no model call, no migration). Empty for meal-only households → plan unchanged.
+  // Meal targets are NOT altered here — meal generation stays byte-identical.
+  const workouts = buildWorkoutsFromSkeleton(context, skeleton);
   return {
-    plan,
+    plan: workouts.length > 0 ? { ...plan, workouts } : plan,
     usage: {
       input_tokens: totalIn,
       output_tokens: totalOut,

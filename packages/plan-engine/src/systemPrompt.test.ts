@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildDayPrompt, buildSkeletonPrompt } from "./systemPrompt";
+import {
+  buildDayPrompt,
+  buildSkeletonPrompt,
+  householdHasExerciseProgram,
+} from "./systemPrompt";
 import type { PlanPromptContext } from "./buildContext";
 import type { PlanSkeleton } from "./schema";
+import type { ExerciseProfile } from "./exercise/types";
 
 function makeMomContext(mealMode: "shared" | "independent"): PlanPromptContext {
   return {
@@ -153,5 +158,96 @@ describe("buildDayPrompt — token-lean output contract", () => {
     );
     expect(hkPrompt).not.toContain("recipe_name_translated");
     expect(hkPrompt).not.toContain("ترجمة الوصفة للخادمة");
+  });
+});
+
+// 2c — the exercise section is APPENDED only for opted-in members, so a meal-only
+// household's skeleton prompt is byte-identical to before (no "# التمارين").
+describe("buildSkeletonPrompt — exercise section (2c)", () => {
+  const optedIn: ExerciseProfile = {
+    availability_days: "3-4",
+    session_minutes: 30,
+    preferred_types: ["walking", "strength"],
+    setting: "home",
+    equipment: ["none"],
+    msk_regions: ["knee"],
+    screening: {
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      intensity_mode: "hr_zones",
+    },
+  };
+  const momWith = (profile: ExerciseProfile | null): PlanPromptContext => {
+    const c = makeMomContext("shared");
+    return { ...c, mom: { ...c.mom, exercise_profile: profile } };
+  };
+
+  it("meal-only household: no exercise section (byte-identical path)", () => {
+    const ctx = makeMomContext("shared");
+    expect(householdHasExerciseProgram(ctx)).toBe(false);
+    expect(buildSkeletonPrompt(ctx)).not.toContain("# التمارين");
+  });
+
+  it("opted-in member: emits the section + constraints + training output field", () => {
+    const ctx = momWith(optedIn);
+    expect(householdHasExerciseProgram(ctx)).toBe(true);
+    const prompt = buildSkeletonPrompt(ctx);
+    expect(prompt).toContain("# التمارين");
+    expect(prompt).toContain("member_id=mom");
+    expect(prompt).toContain("3-4"); // availability surfaced
+    expect(prompt).toContain("training?:"); // output-shape addendum
+    expect(prompt).not.toContain("withheld: true");
+  });
+
+  it("clearance member: withholds the program instead of a schedule", () => {
+    const ctx = momWith({
+      ...optedIn,
+      screening: {
+        intensity_ceiling: "light_moderate",
+        clearance_required: true,
+        intensity_mode: "rpe",
+      },
+    });
+    const prompt = buildSkeletonPrompt(ctx);
+    expect(prompt).toContain("withheld: true");
+    expect(prompt).toContain("يحتاج موافقة طبيب");
+  });
+
+  it("opted-in CHILD is excluded (play only, no prescribed schedule)", () => {
+    const c = makeMomContext("shared");
+    const ctx: PlanPromptContext = {
+      ...c,
+      mom: { ...c.mom, exercise_profile: null },
+      family_members: [
+        {
+          id: "kid-1",
+          name: "خالد",
+          role: "son",
+          member_type: "child",
+          sex: "male",
+          age: 9,
+          height_cm: 130,
+          weight_kg: 30,
+          activity_level: "active",
+          primary_goal: null,
+          dietary_restrictions: [],
+          medical_conditions: [],
+          allergies: [],
+          dislikes: [],
+          trimester: null,
+          months_postpartum: null,
+          high_risk_pregnancy: false,
+          school_meal_handling: null,
+          picky_eater: false,
+          consulted_doctor: false,
+          is_child: true,
+          preferred_language: "ar",
+          meal_mode: "shared",
+          exercise_profile: { availability_days: "3-4", screening: null },
+        },
+      ],
+    };
+    expect(householdHasExerciseProgram(ctx)).toBe(false);
+    expect(buildSkeletonPrompt(ctx)).not.toContain("# التمارين");
   });
 });
