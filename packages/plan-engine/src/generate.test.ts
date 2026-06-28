@@ -62,6 +62,7 @@ function makeCompleteMember(memberId: string, name: string): MealPlan["members"]
 function makeContext(opts?: {
   extraMember?: boolean;
   momExercise?: ExerciseProfile;
+  adultMemberExercise?: ExerciseProfile;
 }): PlanPromptContext {
   const family_members: PlanPromptContext["family_members"] = [];
   if (opts?.extraMember) {
@@ -89,6 +90,34 @@ function makeContext(opts?: {
       is_child: true,
       preferred_language: "ar",
       meal_mode: "shared",
+    });
+  }
+  if (opts?.adultMemberExercise) {
+    family_members.push({
+      id: "adult-2",
+      name: "نورة",
+      role: "sister",
+      member_type: "adult",
+      sex: "female",
+      age: 30,
+      height_cm: 160,
+      weight_kg: 65,
+      activity_level: "moderate",
+      primary_goal: "fat_loss",
+      dietary_restrictions: [],
+      medical_conditions: [],
+      allergies: [],
+      dislikes: [],
+      trimester: null,
+      months_postpartum: null,
+      high_risk_pregnancy: false,
+      school_meal_handling: null,
+      picky_eater: false,
+      consulted_doctor: false,
+      is_child: false,
+      preferred_language: "ar",
+      meal_mode: "shared",
+      exercise_profile: opts.adultMemberExercise,
     });
   }
   return {
@@ -1089,6 +1118,28 @@ describe("generateMealPlan — exercise workout attaches on opt-in", () => {
       existingPlan: null,
     });
     expect(plan.workouts).toBeUndefined();
+  });
+
+  it("a family ADULT who opts in also gets a workout (whole household, not just mom)", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({
+        momExercise: HEALTHY_EXERCISE,
+        adultMemberExercise: HEALTHY_EXERCISE,
+      }),
+      existingPlan: null,
+    });
+    expect([...(plan.workouts ?? [])].map((w) => w.member_id).sort()).toEqual([
+      "adult-2",
+      "mom",
+    ]);
+    // The family member's workout keys on their member id — the same id PlanViewer's
+    // member tab + the page's missing/withheld checks use, so it renders for them too.
+    const adult = plan.workouts!.find((w) => w.member_id === "adult-2")!;
+    expect(adult.days).toHaveLength(7);
   });
 
   it("REGEN: a carried-over opted-in mom keeps her workout (not dropped from skeleton)", async () => {
