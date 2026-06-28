@@ -568,6 +568,13 @@ export function buildSkeletonPrompt(
     ? "هذه خطة لفرد واحد، لا تشارك."
     : "عندما تكون الوجبة نفسها مشتركة بين أكثر من فرد، استخدمي **نفس** recipe_name_ar لهم حتى نوسّعها لاحقاً كوصفة عائلة واحدة بحصص مختلفة. مَن وُسم بـ(وجبات مستقلة) في القائمة أعطيه أطباقاً بأسماء مختلفة عن البقية.";
 
+  // When the household has an opted-in exercise member, declare `training` in the
+  // FORMAL output type (not only the appended section) — otherwise the model follows
+  // the type spec and omits it. Empty for meal-only → the output type stays identical.
+  const trainingTypeField = householdHasExerciseProgram(context, targetMemberIds)
+    ? `\n      training?: { withheld?: boolean; sessions?: Array<{ day_index: number; modality: string; band: "light"|"moderate"|"vigorous"; duration_min: number }> };  // للمشتركين بالتمارين فقط`
+    : "";
+
   return `# سياق العائلة
 
 ملخص العائلة: ${context.composition_summary}${familyWideText(context)}
@@ -596,7 +603,7 @@ type Skeleton = {
       day_index: number;                   // 0..6 (0 = أول يوم في الخطة)
       day_name_ar: string;
       meals: Array<{ slot: "breakfast"|"lunch"|"dinner"|"snack"; slot_name_ar: string; recipe_name_ar: string }>;
-    }>;
+    }>;${trainingTypeField}
   }>;
 };
 \`\`\`${exerciseSkeletonSection(context, targetMemberIds)}`;
