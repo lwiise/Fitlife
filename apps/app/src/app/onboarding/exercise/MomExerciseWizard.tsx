@@ -158,8 +158,14 @@ export function MomExerciseWizard({
               stepKey={key}
               ex={ex}
               onNext={advanceOrSubmit}
-              primaryLabel={isFinalStep ? "احفظي خطة التمارين" : "التالي"}
-              isPending={isPending && isFinalStep}
+              primaryLabel={
+                // "Save" only when she's actually opted in AND on the last step.
+                // On the opt-in step (or when declining) it just advances onward.
+                isFinalStep && ex.state.optedIn === true
+                  ? "احفظي خطة التمارين"
+                  : "التالي"
+              }
+              isPending={isPending && isFinalStep && ex.state.optedIn === true}
             />
           </motion.div>
         </AnimatePresence>
