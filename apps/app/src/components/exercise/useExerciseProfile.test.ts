@@ -64,6 +64,19 @@ describe("exerciseStateFromProfile ⇄ buildExerciseProfile round-trip", () => {
     expect(rebuilt!.screening).not.toBeNull();
   });
 
+  it("re-seeds the 'none' symptom sentinel when the stored list is empty", () => {
+    // buildExerciseProfile strips 'none' before persisting (→ symptoms:[]), so the
+    // adapter re-adds it; otherwise the symptom step would re-open blank.
+    const state = exerciseStateFromProfile(adultProfile) as ExerciseState;
+    expect(state.symptoms).toEqual(["none"]);
+  });
+
+  it("preserves real stored symptoms", () => {
+    const withSymptoms: ExerciseProfile = { ...adultProfile, symptoms: ["chest_pain"] };
+    const state = exerciseStateFromProfile(withSymptoms) as ExerciseState;
+    expect(state.symptoms).toEqual(["chest_pain"]);
+  });
+
   it("round-trips a child's free-text activities", () => {
     const childProfile: ExerciseProfile = {
       child_activities: "كرة قدم مرتين بالأسبوع",

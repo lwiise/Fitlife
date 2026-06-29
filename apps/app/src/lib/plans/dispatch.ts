@@ -44,6 +44,32 @@ export type DispatchResult =
   // everyone from scratch since the in-progress plan isn't "ready" to carry over).
   | { ok: false; kind: "busy" };
 
+// Is a meal generation currently in flight (a fresh plan_generations 'started' row)?
+// The exercise-only patch must check this BEFORE writing: a running bg generation
+// read the prior plan at its start and re-attaches its workouts on completion, so an
+// inline workout patch landing mid-run would be silently reverted. Lighter than the
+// main busy-guard (no stale-row reclassify — the full-regen path owns that).
+async function hasLiveGeneration(
+  supabase: ServerClient,
+  userId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("plan_generations")
+    .select("started_at")
+    .eq("user_id", userId)
+    .eq("status", "started")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .returns<{ started_at: string }[]>();
+  const live = data?.[0];
+  if (!live) return false;
+  const startedMs = Date.parse(live.started_at);
+  const ageMin = Number.isNaN(startedMs)
+    ? Infinity
+    : (Date.now() - startedMs) / 60_000;
+  return ageMin < STALE_GENERATION_MIN;
+}
+
 /**
  * Shared plan-generation dispatch used by both the public route (full rate
  * limit) and trusted server actions (`bypassRateLimit` for onboarding + family
@@ -104,12 +130,20 @@ export async function triggerPlanGeneration(params: {
   // ── Exercise-domain regen (deterministic, model-free) ──────────────────────
   // A workout-only edit. Recompute the target's energy budget and compare it to the
   // budget baked into her current workout. If the MEAL math is unchanged → patch just
-  // her workout in place (no quota, no busy-guard, no plan row, no model) and return.
-  // If it moved → auto-promote to a full "both" regen (her meals are now stale) by
-  // falling through with the domain forced to "both". Placed first so a true
-  // exercise-only patch never trips the meal busy-guard / rate limit.
+  // her workout in place (no plan row, no model) and return. If it moved → auto-promote
+  // to a full "both" regen (her meals are now stale) by falling through with the domain
+  // forced to "both". It still gates on an active subscription + an in-flight run, but
+  // skips the per-member weekly QUOTA (the patch is deterministic and free).
   let effectiveRegenDomain: RegenDomain | undefined = regenDomain;
   if (regenDomain === "exercise" && regenerateMemberId) {
+    // The patch mutates the saved plan, so it still requires an active subscription —
+    // but not the per-member 3/week quota (it costs nothing to recompute).
+    const exAccess = await canGenerateForFamilyChange(userId);
+    if (!exAccess.allowed) return { ok: false, kind: "access", access: exAccess };
+    // Don't patch while a generation is in flight — that run would re-attach its
+    // (pre-edit) workouts on completion and clobber this write. Ask the user to wait.
+    if (await hasLiveGeneration(supabase, userId)) return { ok: false, kind: "busy" };
+
     let exContext;
     try {
       exContext = await buildPlanContext(supabase, userId);

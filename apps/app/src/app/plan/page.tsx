@@ -210,7 +210,13 @@ export default async function PlanPage({
             ? ctx.mom.exercise_profile
             : ctx.family_members.find((fm) => fm.id === w.member_id)
                 ?.exercise_profile;
-        if (!member || !ep) continue;
+        // Match dispatch's authority exactly: a member whose budget can't be
+        // recomputed is treated as CHANGED (the server promotes), so the preview
+        // shows the note rather than diverging into a silent meal refresh.
+        if (!member || !ep) {
+          map[w.member_id] = true;
+          continue;
+        }
         map[w.member_id] = mealBudgetChanged(
           w.budget,
           computeEnergyBudget(member, ep, ep.screening),

@@ -137,7 +137,11 @@ export function exerciseStateFromProfile(
     equipment: p.equipment ?? [],
     hrMeds: p.hr_meds ?? null,
     restingHr: p.resting_hr != null ? String(p.resting_hr) : "",
-    symptoms: p.symptoms ?? [],
+    // A stored empty symptoms list means she answered "none" — buildExerciseProfile
+    // strips the "none" sentinel before persisting. Re-seed it so the symptom step
+    // re-opens with "none" selected, not blank. (For a member who never saw the step,
+    // the value is inert — the step doesn't render in edit mode for her either.)
+    symptoms: p.symptoms && p.symptoms.length > 0 ? p.symptoms : ["none"],
     deliveryType: p.delivery_type ?? null,
     pelvicFloor: p.pelvic_floor_issues ?? null,
     childActivities: p.child_activities ?? "",

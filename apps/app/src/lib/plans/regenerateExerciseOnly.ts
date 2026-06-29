@@ -38,12 +38,18 @@ export async function regenerateExerciseOnly(args: {
   const { supabase, userId, memberId, context, priorPlanId, priorPlan } = args;
 
   const existing = priorPlan.workouts ?? [];
+  // Only members actually in this plan get a workout. buildWorkoutsFromSkeleton
+  // iterates the WHOLE family context (no tier cap here), so a non-target opted-in
+  // member with no prior workout — e.g. a tier-DEFERRED member who isn't in the meal
+  // plan — would otherwise get a synthesized default attached. Guard on plan members,
+  // same as ensurePlanWorkouts, so the patch never adds an orphan workout.
+  const planMemberIds = new Set((priorPlan.members ?? []).map((m) => m.member_id));
   const rebuilt = buildWorkoutsFromSkeleton(context, { members: [] }, existing, [
     memberId,
-  ]);
-  // Replace wholesale: `rebuilt` carries every non-target member verbatim and either
-  // re-derives or drops the target. Setting it directly (vs. the attach's "omit when
-  // empty") is what lets a now-withheld member's workout actually disappear.
+  ]).filter((w) => planMemberIds.has(w.member_id));
+  // Replace wholesale: `rebuilt` carries every in-plan non-target member verbatim and
+  // either re-derives or drops the target. Setting it directly (vs. the attach's "omit
+  // when empty") is what lets a now-withheld member's workout actually disappear.
   const nextPlan: MealPlan = { ...priorPlan, workouts: rebuilt };
 
   const { error } = await supabase
