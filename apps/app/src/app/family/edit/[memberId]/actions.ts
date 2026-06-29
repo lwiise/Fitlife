@@ -5,9 +5,10 @@ import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
 import { hasGateCondition } from "@/lib/plans/medicalConditions";
+import type { ExerciseProfile } from "@/lib/exercise/types";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
@@ -224,5 +225,42 @@ export async function updateMemberHealth(
   }
   revalidatePath("/family");
   revalidatePath(`/family/edit/${memberId}`);
+  return { ok: true };
+}
+
+// ── Section 3: Exercise inputs ────────────────────────────────────────────
+// Narrow update of ONLY the exercise_profile column (the assembled ExerciseProfile,
+// screening already recomputed client-side by buildExerciseProfile). Mirrors the
+// other member sub-actions: own-slice update, no full-row rebuild, no regen — the
+// owner applies it from /plan's regen domain picker. The profile is built + screened
+// in the client wizard; the gate it encodes (clearance_required) is enforced at
+// generation, so there's no doctor-consult gate to re-check here.
+export async function updateMemberExercise(
+  memberId: string,
+  profile: ExerciseProfile,
+): Promise<SaveResult> {
+  const loaded = await loadMember(memberId);
+  if (!loaded.ok) return loaded;
+  const { userId } = loaded;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("family_members")
+    .update({
+      exercise_profile: profile as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", memberId)
+    .eq("user_id", userId);
+
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "member-edit-exercise", userId },
+    });
+    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+  }
+  revalidatePath("/family");
+  revalidatePath(`/family/edit/${memberId}`);
+  revalidatePath("/plan");
   return { ok: true };
 }

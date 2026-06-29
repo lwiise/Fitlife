@@ -24,6 +24,7 @@ import {
 } from "./systemPrompt";
 import { SAFE_EXERCISE_PROTOCOLS } from "./exerciseProtocols";
 import { buildWorkoutsFromSkeleton } from "./exercise/buildWorkouts";
+import type { RegenDomain } from "./exercise/regenDomain";
 import {
   MealPlanSchema,
   PlanSkeletonSchema,
@@ -850,6 +851,14 @@ export async function generateMealPlan(params: {
   //                  recompute on the shared ones).
   // Requires existingPlan + regenerateMemberId. Out-of-scope meals are kept exactly.
   regenScope?: "individual" | "shared" | "both";
+  // Orthogonal DOMAIN axis (meals vs workout), distinct from regenScope (meal-area).
+  //   'both' (default) → today's behavior: meals regenerate AND workouts recompute
+  //          from the fresh skeleton.
+  //   'meals'          → regenerate meals but carry every member's workout verbatim
+  //          (an empty workout-skeleton → the bug-#2 carry guard fires for all).
+  // 'exercise' never reaches here — dispatch runs it inline (regenerateExerciseOnly)
+  // without the model, so it's not a value this function handles.
+  regenDomain?: RegenDomain;
   // Shared-group regenerate: the run rebuilds MULTIPLE members together (a member
   // switched back to Shared re-merges with the group), so don't pin
   // generating_member_id to regenerateMemberId — leave it unset so the UI shows them
@@ -877,6 +886,7 @@ export async function generateMealPlan(params: {
     onlyMemberId,
     regenerateMemberId,
     regenScope,
+    regenDomain,
     suppressTargetedMember,
     onProgress,
   } = params;
@@ -1835,7 +1845,13 @@ export async function generateMealPlan(params: {
   // an otherwise-good meal plan — on failure we keep any prior workouts.
   let workouts = existingPlan?.workouts ?? [];
   try {
-    workouts = buildWorkoutsFromSkeleton(context, skeleton, existingPlan?.workouts);
+    // domain 'meals': carry workouts verbatim (empty skeleton → byId empty → every
+    // member hits the carry-verbatim branch) so a meals-only regen never genericizes
+    // a tailored workout (the bug-#2 trap, which re-appears because the regenerated
+    // member IS in the meal skeleton). 'both'/undefined uses the real skeleton.
+    const workoutSkeleton: PlanSkeleton =
+      regenDomain === "meals" ? { members: [] } : skeleton;
+    workouts = buildWorkoutsFromSkeleton(context, workoutSkeleton, existingPlan?.workouts);
   } catch (e) {
     console.warn("[plan-generate] workout attach failed — keeping meals", e);
     workouts = existingPlan?.workouts ?? [];
@@ -1870,6 +1886,7 @@ export async function runMealPlanGeneration(params: {
   onlyMemberId?: string;
   regenerateMemberId?: string;
   regenScope?: "individual" | "shared" | "both";
+  regenDomain?: RegenDomain;
   suppressTargetedMember?: boolean;
 }): Promise<GenerateResult> {
   const {
@@ -1882,6 +1899,7 @@ export async function runMealPlanGeneration(params: {
     onlyMemberId,
     regenerateMemberId,
     regenScope,
+    regenDomain,
     suppressTargetedMember,
   } = params;
   const startMs = Date.now();
@@ -1899,6 +1917,7 @@ export async function runMealPlanGeneration(params: {
       onlyMemberId,
       regenerateMemberId,
       regenScope,
+      regenDomain,
       suppressTargetedMember,
       // Persist progressively; flip "ready" on the first emit (the shell) so the
       // plan opens showing all days loading and they fill in 1→7.

@@ -17,10 +17,14 @@ export function ProfileEditedBanner() {
   const [showNudge, setShowNudge] = useState(false);
 
   useEffect(() => {
-    const editedParam = params.get("edited"); // 'health' | 'family'
+    const editedParam = params.get("edited"); // 'health' | 'family' | 'exercise'
     const savedParam = params.get("saved"); // '1'
 
-    if (editedParam === "health" || editedParam === "family") {
+    if (
+      editedParam === "health" ||
+      editedParam === "family" ||
+      editedParam === "exercise"
+    ) {
       sessionStorage.setItem(STORAGE_KEY, String(Date.now()));
       // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs UI from URL params with sessionStorage/replaceState side effects; params stable, no loop
       setShowNudge(true);

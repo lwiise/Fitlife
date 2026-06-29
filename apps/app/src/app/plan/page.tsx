@@ -8,9 +8,14 @@ import {
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import {
   planHasContent,
+  buildPlanContext,
+  energyBudgetMemberFromContext,
+  computeEnergyBudget,
+  mealBudgetChanged,
   MEMBER_GEN_MAX_ATTEMPTS,
   type ExerciseProfile,
 } from "@fitlife/plan-engine";
+import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -184,6 +189,41 @@ export default async function PlanPage({
       .map((m) => m.id),
   ];
 
+  // ── Regen DOMAIN picker data (meals / exercise / both) ────────────────────
+  // Offer the picker only for members who already have a workout to regenerate
+  // independently of their meals. For each, precompute whether their CURRENT
+  // exercise inputs would move the calorie math vs. the budget baked into that
+  // workout — so "exercise only" can preview the auto-promote note before submit.
+  // This mirrors dispatch's authoritative check (same shared helpers), so preview
+  // and server agree; the server still re-checks on submit.
+  const domainPickerMemberIds = [...planWorkoutIds];
+  let budgetChangedByMember: Record<string, boolean> = {};
+  if (profile && latest?.status === "ready" && planWorkoutIds.size > 0) {
+    try {
+      const supabase = await createClient();
+      const ctx = await buildPlanContext(supabase, profile.id);
+      const map: Record<string, boolean> = {};
+      for (const w of latest.plan_data?.workouts ?? []) {
+        const member = energyBudgetMemberFromContext(ctx, w.member_id);
+        const ep =
+          w.member_id === "mom"
+            ? ctx.mom.exercise_profile
+            : ctx.family_members.find((fm) => fm.id === w.member_id)
+                ?.exercise_profile;
+        if (!member || !ep) continue;
+        map[w.member_id] = mealBudgetChanged(
+          w.budget,
+          computeEnergyBudget(member, ep, ep.screening),
+        );
+      }
+      budgetChangedByMember = map;
+    } catch {
+      // buildPlanContext can throw on a gated/incomplete profile — fall back to no
+      // preview (the picker still works; the server decides promotion on submit).
+      budgetChangedByMember = {};
+    }
+  }
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -280,6 +320,8 @@ export default async function PlanPage({
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
               withheldMemberIds={withheldMemberIds}
+              domainPickerMemberIds={domainPickerMemberIds}
+              budgetChangedByMember={budgetChangedByMember}
             />
           </>
         )}

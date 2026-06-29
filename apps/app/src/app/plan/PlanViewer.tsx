@@ -52,6 +52,8 @@ export function PlanViewer({
   housekeeperLocale,
   locale,
   withheldMemberIds = [],
+  domainPickerMemberIds = [],
+  budgetChangedByMember = {},
 }: {
   plan: MealPlan;
   planId: string;
@@ -74,6 +76,12 @@ export function PlanViewer({
   // Members who opted into exercise but are WITHHELD pending doctor sign-off
   // (pregnant/lactating/medical) — they get no workout; show a clearance note.
   withheldMemberIds?: string[];
+  // Members for whom the regen DOMAIN picker (meals/exercise/both) is offered —
+  // i.e. they have an exercise plan to regenerate independently of their meals.
+  domainPickerMemberIds?: string[];
+  // Per-member: would an exercise edit move the calorie math (so "exercise only"
+  // auto-promotes to "both")? Drives the inline promote note. Server re-checks.
+  budgetChangedByMember?: Record<string, boolean>;
 }) {
   const router = useRouter();
   const prefersReduced = useReducedMotion();
@@ -203,6 +211,10 @@ export function PlanViewer({
   const exerciseView = hasExercise && view === "exercise";
   const activeWorkout = workouts.find((w) => w.member_id === activeMemberId);
   const activeIsWithheld = withheldMemberIds.includes(activeMemberId);
+  // Regen domain picker (meals/exercise/both) — offered only for a member with an
+  // exercise plan; the promote note shows if her edit moved the calorie math.
+  const activeCanPickDomain = domainPickerMemberIds.includes(activeMemberId);
+  const activeBudgetChanged = budgetChangedByMember[activeMemberId] ?? false;
   const activeWorkoutDay = activeWorkout?.days.find(
     (d) => d.day_index === activeDayIndex,
   );
@@ -350,6 +362,8 @@ export function PlanViewer({
               memberId={activeMember.member_id}
               memberName={activeMember.member_name_ar}
               hasSharedMeals={activeMemberHasShared}
+              canPickDomain={activeCanPickDomain}
+              budgetChanged={activeBudgetChanged}
               locale={locale}
             />
           )}
@@ -701,6 +715,8 @@ export function PlanViewer({
                   memberId={activeMember.member_id}
                   memberName={activeMember.member_name_ar}
                   hasSharedMeals={activeMemberHasShared}
+                  canPickDomain={activeCanPickDomain}
+                  budgetChanged={activeBudgetChanged}
                   locale={locale}
                 />
               )}

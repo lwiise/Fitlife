@@ -116,6 +116,34 @@ export function buildExerciseProfile(
   };
 }
 
+// Inverse of buildExerciseProfile: seed the raw-answer state from a PERSISTED
+// ExerciseProfile so the edit wizard pre-fills with what was saved. `optedIn` is
+// forced true (the edit entry only appears for opted-in members; this page edits,
+// never removes, the opt-in). Note the snake_case→camelCase rename and the
+// resting_hr number→string conversion (the NumberField is string-backed).
+export function exerciseStateFromProfile(
+  p: ExerciseProfile,
+): Partial<ExerciseState> {
+  return {
+    optedIn: true,
+    focus: p.focus ?? null,
+    mskRegions: p.msk_regions ?? [],
+    mskNotes: p.msk_notes ?? "",
+    availabilityDays: p.availability_days ?? null,
+    sessionMinutes: p.session_minutes ?? null,
+    preferredTypes: p.preferred_types ?? [],
+    dislikedTypes: p.disliked_types ?? [],
+    setting: p.setting ?? null,
+    equipment: p.equipment ?? [],
+    hrMeds: p.hr_meds ?? null,
+    restingHr: p.resting_hr != null ? String(p.resting_hr) : "",
+    symptoms: p.symptoms ?? [],
+    deliveryType: p.delivery_type ?? null,
+    pelvicFloor: p.pelvic_floor_issues ?? null,
+    childActivities: p.child_activities ?? "",
+  };
+}
+
 export function useExerciseProfile(initial?: Partial<ExerciseState>) {
   const [state, setState] = useState<ExerciseState>({ ...EMPTY, ...initial });
 

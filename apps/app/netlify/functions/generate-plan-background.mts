@@ -370,6 +370,10 @@ export default async (req: Request): Promise<Response> => {
     // Literal partial regenerate scope (regenerate-scope dialog). With this set,
     // the carried prior plan is kept WHOLE (target not stripped).
     regenScope?: "individual" | "shared" | "both";
+    // Domain axis (meals vs workout). dispatch resolves a true exercise-only edit
+    // inline (and promotes a budget-moving one to "both"), so the bg fn only ever
+    // sees "meals" (carry workouts) or "both"/undefined (today's behavior).
+    regenDomain?: "meals" | "exercise" | "both";
     // Tier cap: when the family exceeds the plan limit, the allow-list of non-mom
     // beneficiary ids to generate this run (mom is always included). Others defer.
     limitMemberIds?: string[];
@@ -509,6 +513,7 @@ export default async (req: Request): Promise<Response> => {
       onlyMemberId: body.onlyMemberId,
       regenerateMemberId: body.regenerateMemberId,
       regenScope: body.regenScope,
+      regenDomain: body.regenDomain,
       // Shared-group regen rebuilds multiple members → don't pin the loader to one.
       suppressTargetedMember:
         !!body.regenerateSharedGroup && !!body.regenerateMemberId,

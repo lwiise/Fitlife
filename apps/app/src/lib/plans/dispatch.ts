@@ -8,15 +8,21 @@ import {
   runMealPlanTranslation,
   hasPendingGeneration,
   prepareSharedGroupRegen,
+  computeEnergyBudget,
+  energyBudgetMemberFromContext,
+  mealBudgetChanged,
+  resolveRegenDomain,
   MEMBER_GEN_MAX_ATTEMPTS,
   OnboardingIncompleteError,
   MedicalGateError,
   PlanValidationError,
   type MealPlan,
   type LocaleCode,
+  type RegenDomain,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
+import { regenerateExerciseOnly } from "@/lib/plans/regenerateExerciseOnly";
 import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
@@ -72,6 +78,11 @@ export async function triggerPlanGeneration(params: {
   // the full prior plan (the target is NOT stripped) so it can splice the
   // out-of-scope meals back and recompute any co-sharers.
   regenScope?: "individual" | "shared" | "both";
+  // Orthogonal DOMAIN axis (meals vs workout), distinct from regenScope (meal-area).
+  // 'meals' regenerates meals but carries workouts; 'exercise' rebuilds ONLY the
+  // target's workout (here, model-free) — auto-promoting to 'both' if the edit moved
+  // her energy budget (stale meals); 'both'/undefined is today's full behavior.
+  regenDomain?: RegenDomain;
   // Manual regeneration: the user's "what's wrong / what to improve" feedback,
   // layered into the generation prompt (methodology/cookbook still take precedence).
   feedback?: string;
@@ -86,8 +97,70 @@ export async function triggerPlanGeneration(params: {
     regenerateSharedGroup,
     independentRegen,
     regenScope,
+    regenDomain,
     feedback,
   } = params;
+
+  // ── Exercise-domain regen (deterministic, model-free) ──────────────────────
+  // A workout-only edit. Recompute the target's energy budget and compare it to the
+  // budget baked into her current workout. If the MEAL math is unchanged → patch just
+  // her workout in place (no quota, no busy-guard, no plan row, no model) and return.
+  // If it moved → auto-promote to a full "both" regen (her meals are now stale) by
+  // falling through with the domain forced to "both". Placed first so a true
+  // exercise-only patch never trips the meal busy-guard / rate limit.
+  let effectiveRegenDomain: RegenDomain | undefined = regenDomain;
+  if (regenDomain === "exercise" && regenerateMemberId) {
+    let exContext;
+    try {
+      exContext = await buildPlanContext(supabase, userId);
+    } catch (err) {
+      if (err instanceof OnboardingIncompleteError) return { ok: false, kind: "onboarding" };
+      if (err instanceof MedicalGateError) return { ok: false, kind: "medical" };
+      console.error("[triggerPlanGeneration] exercise-domain context build failed", err);
+      Sentry.captureException(err, {
+        tags: { area: "plan-generation", step: "exercise-context", userId },
+      });
+      return { ok: false, kind: "server" };
+    }
+
+    const profile =
+      regenerateMemberId === "mom"
+        ? (exContext.mom.exercise_profile ?? null)
+        : (exContext.family_members.find((m) => m.id === regenerateMemberId)
+            ?.exercise_profile ?? null);
+    const member = energyBudgetMemberFromContext(exContext, regenerateMemberId);
+
+    const prior = await getLatestPlan(userId);
+    const priorPlan = prior?.status === "ready" ? (prior.plan_data ?? null) : null;
+    const priorBudget =
+      priorPlan?.workouts?.find((w) => w.member_id === regenerateMemberId)?.budget ??
+      null;
+    const nextBudget =
+      member && profile ? computeEnergyBudget(member, profile, profile.screening) : null;
+
+    // No prior workout/budget, or we can't recompute (opted out / missing data) →
+    // treat as changed and promote: the safe default is never to silently leave
+    // stale meals behind.
+    const budgetChanged =
+      !priorBudget || !nextBudget || mealBudgetChanged(priorBudget, nextBudget);
+    const resolved = resolveRegenDomain("exercise", budgetChanged);
+
+    if (resolved.domain === "exercise" && !resolved.promoted) {
+      if (!prior || !priorPlan) return { ok: false, kind: "dispatch" };
+      const res = await regenerateExerciseOnly({
+        supabase,
+        userId,
+        memberId: regenerateMemberId,
+        context: exContext,
+        priorPlanId: prior.id,
+        priorPlan,
+      });
+      return res.ok
+        ? { ok: true, mealPlanId: res.mealPlanId, status: "ready" }
+        : { ok: false, kind: "dispatch" };
+    }
+    effectiveRegenDomain = "both"; // promoted — fall through to the normal full regen
+  }
 
   // A manual per-member regenerate (regenerateMemberId, not a bypass family change)
   // is gated by that member's OWN weekly quota (3/week), separate from the shared
@@ -277,6 +350,7 @@ export async function triggerPlanGeneration(params: {
         onlyMemberId,
         regenerateMemberId,
         regenScope,
+        regenDomain: effectiveRegenDomain,
         suppressTargetedMember: sharedGroupRegen,
       });
       return { ok: true, mealPlanId, status: "ready" };
@@ -323,6 +397,7 @@ export async function triggerPlanGeneration(params: {
           regenerateMemberId,
           regenerateSharedGroup: sharedGroupRegen,
           regenScope,
+          regenDomain: effectiveRegenDomain,
           limitMemberIds,
         }),
       },

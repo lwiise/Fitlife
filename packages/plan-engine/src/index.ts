@@ -71,7 +71,12 @@ export { computeEnergyBudget, computeHrZones, rpeForBand } from "./exercise/ener
 export { selectMet, MET_TABLE } from "./exercise/metTable";
 export { assembleWorkoutPlan } from "./exercise/assembleWorkout";
 export type { WorkoutAssemblyParams } from "./exercise/assembleWorkout";
-export { buildWorkoutsFromSkeleton } from "./exercise/buildWorkouts";
+export {
+  buildWorkoutsFromSkeleton,
+  energyBudgetMemberFromContext,
+} from "./exercise/buildWorkouts";
+export { mealBudgetChanged, resolveRegenDomain } from "./exercise/regenDomain";
+export type { RegenDomain } from "./exercise/regenDomain";
 
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";

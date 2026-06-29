@@ -404,6 +404,41 @@ export async function saveMomExerciseProfile(
 }
 
 /**
+ * Edit Mom's exercise inputs AFTER opt-in (the /profile/exercise hub page). Same
+ * write as saveMomExerciseProfile but deliberately does NOT touch
+ * `exercise_prompt_shown_at` — that's the one-time "was she ever prompted?" marker,
+ * already set when she first opted in; an edit must not re-stamp it. The rebuilt
+ * profile carries a freshly recomputed screening verdict (buildExerciseProfile runs
+ * computeExerciseScreening), so a changed answer can raise/lower clearance. No regen
+ * here — she applies it from /plan via the regen domain picker.
+ */
+export async function updateMomExerciseProfile(
+  profile: ExerciseProfile,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ exercise_profile: profile as unknown as Json })
+    .eq("id", user.id);
+
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "profile", step: "updateMomExerciseProfile", userId: user.id },
+    });
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/plan");
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
+/**
  * Record that Mom answered the exercise opt-in with "no" (declined). Stamps the
  * one-time `exercise_prompt_shown_at` so the prompt won't reappear — used by both the
  * /plan "meals only" banner AND the in-onboarding decline (so returning to

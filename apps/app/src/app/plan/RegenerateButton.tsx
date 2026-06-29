@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
-import type { LocaleCode } from "@fitlife/plan-engine";
+import type { LocaleCode, RegenDomain } from "@fitlife/plan-engine";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getPlanActionStrings } from "@/lib/plans/locales";
 
@@ -14,6 +14,8 @@ export function RegenerateButton({
   memberId,
   memberName,
   hasSharedMeals = false,
+  canPickDomain = false,
+  budgetChanged = false,
   locale,
 }: {
   className?: string;
@@ -23,6 +25,13 @@ export function RegenerateButton({
   // When the member shares meals, offer a scope chooser (individual / shared /
   // both). When false, a plain confirm (nothing to scope).
   hasSharedMeals?: boolean;
+  // When the member has an exercise plan, offer the DOMAIN chooser (meals only /
+  // exercise only / both). The meal-area scope chooser then becomes a sub-question.
+  canPickDomain?: boolean;
+  // Whether an exercise edit moved this member's calorie math — so picking
+  // "exercise only" would auto-promote to "both". Drives the inline promote note.
+  // The server re-checks authoritatively; this is a pre-submit preview.
+  budgetChanged?: boolean;
   locale?: LocaleCode;
 }) {
   const router = useRouter();
@@ -33,10 +42,12 @@ export function RegenerateButton({
   const [issues, setIssues] = useState("");
   const [improvements, setImprovements] = useState("");
   const [scope, setScope] = useState<RegenScope>("both");
+  const [domain, setDomain] = useState<RegenDomain>("both");
 
   function openDialog() {
     setErrorMessage(null);
     setScope("both");
+    setDomain("both");
     setConfirmOpen(true);
   }
 
@@ -46,7 +57,14 @@ export function RegenerateButton({
     setIssues("");
     setImprovements("");
     setScope("both");
+    setDomain("both");
   }
+
+  // "exercise only" carries no meal-area scope; meals stay untouched (unless the
+  // budget moved, in which case the server auto-promotes to "both").
+  const scopePickerShown =
+    !!memberId && hasSharedMeals && domain !== "exercise";
+  const showPromoteNote = canPickDomain && domain === "exercise" && budgetChanged;
 
   function handleConfirm() {
     setErrorMessage(null);
@@ -59,8 +77,11 @@ export function RegenerateButton({
             issues: issues.trim(),
             improvements: improvements.trim(),
             ...(memberId ? { memberId } : {}),
-            // Only meaningful when the member has shared meals to scope.
-            ...(memberId && hasSharedMeals ? { scope } : {}),
+            // Meal-area scope only when meals are actually regenerating (not
+            // exercise-only) and there are shared meals to scope.
+            ...(scopePickerShown ? { scope } : {}),
+            // Domain only when the member has an exercise plan to choose from.
+            ...(canPickDomain && memberId ? { domain } : {}),
           }),
         });
         if (res.ok) {
@@ -86,6 +107,61 @@ export function RegenerateButton({
       hint: t.regen_scope_individual_hint,
     },
   ];
+
+  const domainOptions: { value: RegenDomain; label: string; hint: string }[] = [
+    { value: "both", label: t.regen_domain_both, hint: t.regen_domain_both_hint },
+    { value: "meals", label: t.regen_domain_meals, hint: t.regen_domain_meals_hint },
+    {
+      value: "exercise",
+      label: t.regen_domain_exercise,
+      hint: t.regen_domain_exercise_hint,
+    },
+  ];
+
+  // One styled radio group — used for both the domain picker and the meal-area
+  // scope picker, so they stay visually identical.
+  const radioGroup = (
+    name: string,
+    title: string,
+    options: { value: string; label: string; hint: string }[],
+    value: string,
+    onChange: (v: string) => void,
+  ) => (
+    <fieldset>
+      <legend className="block text-sm font-bold text-brand-ink mb-2">{title}</legend>
+      <div className="space-y-2">
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <label
+              key={opt.value}
+              className={`flex items-start gap-3 min-h-11 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                selected
+                  ? "border-brand-purple-900 bg-brand-lavender/20"
+                  : "border-brand-ink/10 hover:border-brand-ink/20"
+              }`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={opt.value}
+                checked={selected}
+                onChange={() => onChange(opt.value)}
+                disabled={isPending}
+                className="mt-1 size-4 accent-brand-purple-900 flex-shrink-0"
+              />
+              <span className="flex-1">
+                <span className="block text-sm font-bold text-brand-ink">{opt.label}</span>
+                <span className="block text-xs text-brand-ink-muted leading-relaxed mt-0.5">
+                  {opt.hint}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 
   return (
     <div className={className}>
@@ -125,46 +201,25 @@ export function RegenerateButton({
         }}
       >
         <div className="space-y-4">
-          {memberId && hasSharedMeals && (
-            <fieldset>
-              <legend className="block text-sm font-bold text-brand-ink mb-2">
-                {t.regen_scope_title}
-              </legend>
-              <div className="space-y-2">
-                {scopeOptions.map((opt) => {
-                  const selected = scope === opt.value;
-                  return (
-                    <label
-                      key={opt.value}
-                      className={`flex items-start gap-3 min-h-11 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
-                        selected
-                          ? "border-brand-purple-900 bg-brand-lavender/20"
-                          : "border-brand-ink/10 hover:border-brand-ink/20"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="regen-scope"
-                        value={opt.value}
-                        checked={selected}
-                        onChange={() => setScope(opt.value)}
-                        disabled={isPending}
-                        className="mt-1 size-4 accent-brand-purple-900 flex-shrink-0"
-                      />
-                      <span className="flex-1">
-                        <span className="block text-sm font-bold text-brand-ink">
-                          {opt.label}
-                        </span>
-                        <span className="block text-xs text-brand-ink-muted leading-relaxed mt-0.5">
-                          {opt.hint}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+          {canPickDomain &&
+            radioGroup("regen-domain", t.regen_domain_title, domainOptions, domain, (v) =>
+              setDomain(v as RegenDomain),
+            )}
+
+          {showPromoteNote && (
+            <p className="rounded-xl border border-brand-lavender/60 bg-brand-lavender/20 px-3 py-2.5 text-xs text-brand-ink leading-relaxed">
+              {t.regen_domain_promote_note}
+            </p>
           )}
+
+          {scopePickerShown &&
+            radioGroup(
+              "regen-scope",
+              canPickDomain ? t.regen_scope_sub_title : t.regen_scope_title,
+              scopeOptions,
+              scope,
+              (v) => setScope(v as RegenScope),
+            )}
           <div>
             <label
               htmlFor="regen-issues"

@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   buildWorkoutsFromSkeleton,
   defaultTrainingFromProfile,
+  energyBudgetMemberFromContext,
 } from "./buildWorkouts";
-import type { PlanPromptContext } from "../buildContext";
+import { computeEnergyBudget } from "./energyBudget";
+import type { PlanPromptContext, PlanPromptContextMember } from "../buildContext";
 import type { PlanSkeleton } from "../schema";
 import type { ExerciseProfile } from "./types";
 import { WorkoutPlanSchema, type WorkoutPlan } from "./schema";
@@ -179,6 +181,138 @@ describe("buildWorkoutsFromSkeleton", () => {
     expect(out).toHaveLength(1);
     const sessions = out[0]!.days.filter((d) => d.entry.kind === "session");
     expect(sessions).toHaveLength(3);
+  });
+});
+
+// ── Scoped (exercise-only) regen: force-recompute one member, carry the rest ──
+
+const memberFixture: PlanPromptContextMember = {
+  id: "m1",
+  name: "نورة",
+  role: "daughter",
+  member_type: "adult",
+  sex: "female",
+  age: 22,
+  height_cm: 160,
+  weight_kg: 60,
+  activity_level: "moderate",
+  primary_goal: "fat_loss",
+  dietary_restrictions: [],
+  medical_conditions: [],
+  allergies: [],
+  dislikes: [],
+  trimester: null,
+  months_postpartum: null,
+  high_risk_pregnancy: false,
+  school_meal_handling: null,
+  picky_eater: false,
+  consulted_doctor: true,
+  is_child: false,
+  preferred_language: "ar",
+  meal_mode: "shared",
+  exercise_profile: optedIn,
+};
+
+function ctxWith(
+  momProfile: ExerciseProfile | null,
+  member: PlanPromptContextMember,
+): PlanPromptContext {
+  return { ...ctx(momProfile), family_members: [member] };
+}
+
+// Module-scoped priors for the cross-member scoped-regen tests. Both are 2 resistance
+// @45 (NOT the deterministic default for `optedIn` — 3 walking @30), so carry vs
+// recompute is unambiguous. `priorMomWorkout` above lives inside another describe.
+const distinctiveDays = (a: number, b: number) =>
+  [0, 1, 2, 3, 4, 5, 6].map((day_index) =>
+    day_index === a || day_index === b
+      ? {
+          day_index,
+          entry: {
+            kind: "session" as const,
+            exercise_type: "resistance" as const,
+            band: "moderate" as const,
+            duration_min: 45,
+          },
+        }
+      : { day_index, entry: { kind: "rest" as const } },
+  );
+const distinctiveBudget = {
+  bmr: 1300,
+  baseline_maintenance: 1700,
+  weekly_eee: 500,
+  tdee: 1800,
+  target_intake: 1450,
+  intensity_mode: "hr_zones",
+  intensity_ceiling: "light_moderate",
+  clearance_required: false,
+  notes: [],
+};
+const momPrior: WorkoutPlan = WorkoutPlanSchema.parse({
+  member_id: "mom",
+  budget: distinctiveBudget,
+  days: distinctiveDays(1, 4),
+});
+const priorMemberWorkout: WorkoutPlan = WorkoutPlanSchema.parse({
+  member_id: "m1",
+  budget: distinctiveBudget,
+  days: distinctiveDays(2, 5),
+});
+
+describe("buildWorkoutsFromSkeleton — forceRecomputeMemberIds (exercise-only)", () => {
+  it("recomputes the forced target with an empty skeleton, carries every other member verbatim", () => {
+    // Exercise-only on mom: empty skeleton, force ["mom"]. Mom is rebuilt from her
+    // profile (3 default walking sessions); the daughter — neither in skeleton nor
+    // forced — keeps her prior tailored workout (bug-#2 carry guarantee, scoped path).
+    const out = buildWorkoutsFromSkeleton(
+      ctxWith(optedIn, memberFixture),
+      { members: [] },
+      [momPrior, priorMemberWorkout],
+      ["mom"],
+    );
+    expect(out).toHaveLength(2);
+    const mom = out.find((w) => w.member_id === "mom")!;
+    const m1 = out.find((w) => w.member_id === "m1")!;
+    expect(mom.days.filter((d) => d.entry.kind === "session")).toHaveLength(3);
+    expect(m1).toBe(priorMemberWorkout); // same reference → carried verbatim
+  });
+
+  it("an edit that raises clearance withholds: the forced member is dropped, not carried", () => {
+    const withheld: ExerciseProfile = {
+      ...optedIn,
+      screening: {
+        intensity_ceiling: "light_moderate",
+        clearance_required: true,
+        intensity_mode: "rpe",
+      },
+    };
+    const out = buildWorkoutsFromSkeleton(
+      ctx(withheld),
+      { members: [] },
+      [momPrior],
+      ["mom"],
+    );
+    // Clearance now required → no program; the stale prior is NOT carried.
+    expect(out).toHaveLength(0);
+  });
+});
+
+describe("energyBudgetMemberFromContext", () => {
+  it("returns null for an unknown member id", () => {
+    expect(energyBudgetMemberFromContext(ctx(optedIn), "nope")).toBeNull();
+  });
+
+  it("dispatch-side budget matches the budget baked into the workout (no drift)", () => {
+    // The promotion check recomputes a member's budget via this shaper; it must equal
+    // the budget assembleWorkoutPlan stored on the workout, or it reports false changes.
+    const out = buildWorkoutsFromSkeleton(ctx(optedIn), skeleton(undefined));
+    const baked = out[0]!.budget;
+    const recomputed = computeEnergyBudget(
+      energyBudgetMemberFromContext(ctx(optedIn), "mom")!,
+      optedIn,
+      optedIn.screening,
+    );
+    expect(recomputed).toEqual(baked);
   });
 });
 
