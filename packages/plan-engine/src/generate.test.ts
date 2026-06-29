@@ -17,6 +17,7 @@ import { generateMealPlan, resyncSharedMeals } from "./generate";
 import type { PlanPromptContext } from "./buildContext";
 import type { MealPlan, Day, Meal, DaySlice, PlanSkeleton } from "./schema";
 import { MealPlanSchema, DaySliceSchema, PlanSkeletonSchema } from "./schema";
+import type { ExerciseProfile } from "./exercise/types";
 
 const mockedStream = vi.mocked(streamAnthropic);
 
@@ -58,7 +59,11 @@ function makeCompleteMember(memberId: string, name: string): MealPlan["members"]
   };
 }
 
-function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
+function makeContext(opts?: {
+  extraMember?: boolean;
+  momExercise?: ExerciseProfile;
+  adultMemberExercise?: ExerciseProfile;
+}): PlanPromptContext {
   const family_members: PlanPromptContext["family_members"] = [];
   if (opts?.extraMember) {
     family_members.push({
@@ -87,6 +92,34 @@ function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
       meal_mode: "shared",
     });
   }
+  if (opts?.adultMemberExercise) {
+    family_members.push({
+      id: "adult-2",
+      name: "نورة",
+      role: "sister",
+      member_type: "adult",
+      sex: "female",
+      age: 30,
+      height_cm: 160,
+      weight_kg: 65,
+      activity_level: "moderate",
+      primary_goal: "fat_loss",
+      dietary_restrictions: [],
+      medical_conditions: [],
+      allergies: [],
+      dislikes: [],
+      trimester: null,
+      months_postpartum: null,
+      high_risk_pregnancy: false,
+      school_meal_handling: null,
+      picky_eater: false,
+      consulted_doctor: false,
+      is_child: false,
+      preferred_language: "ar",
+      meal_mode: "shared",
+      exercise_profile: opts.adultMemberExercise,
+    });
+  }
   return {
     mom: {
       id: "user-1",
@@ -109,6 +142,7 @@ function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
       high_risk_pregnancy: false,
       consulted_doctor: false,
       meal_mode: "shared",
+      exercise_profile: opts?.momExercise ?? null,
     },
     family_members,
     family_wide: {
@@ -1014,5 +1048,304 @@ describe("generateMealPlan — partial scope regenerate", () => {
       .days.find((d) => d.day_index === 0)!
       .meals.find((m) => m.slot === "breakfast")!;
     expect(childDay0.meals.find((m) => m.slot === "breakfast")!).toEqual(origChildBf);
+  });
+});
+
+// Reproduces the reported "opted in but no exercise plan" — a FRESH solo plan for an
+// opted-in healthy mom must attach a WorkoutPlan to plan_data, whether or not the
+// model emitted `training` (the deterministic fallback covers model variance).
+describe("generateMealPlan — exercise workout attaches on opt-in", () => {
+  const HEALTHY_EXERCISE: ExerciseProfile = {
+    availability_days: "3-4",
+    session_minutes: 30,
+    preferred_types: ["walking"],
+    resting_hr: 60,
+    screening: {
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      intensity_mode: "hr_zones",
+    },
+  };
+
+  it("skeleton OMITS training → deterministic fallback attaches mom's workout", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: null,
+    });
+    expect(plan.workouts).toBeDefined();
+    expect(plan.workouts!.map((w) => w.member_id)).toEqual(["mom"]);
+    expect(plan.workouts![0]!.days).toHaveLength(7);
+  });
+
+  it("skeleton EMITS training → mom's workout attaches", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) => {
+      const base = streamReturns(systemPrompt);
+      if (!/day_index=/.test(systemPrompt)) {
+        const sk = JSON.parse(base.text) as PlanSkeleton;
+        const mom = sk.members.find((m) => m.member_id === "mom");
+        if (mom)
+          mom.training = {
+            sessions: [
+              { day_index: 1, modality: "walking", band: "moderate", duration_min: 30 },
+              { day_index: 4, modality: "walking", band: "moderate", duration_min: 30 },
+            ],
+          };
+        return { ...base, text: JSON.stringify(sk) };
+      }
+      return base;
+    });
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: null,
+    });
+    expect(plan.workouts!.map((w) => w.member_id)).toEqual(["mom"]);
+    const sessions = plan.workouts![0]!.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(2);
+  });
+
+  it("meals-only mom (no exercise_profile) → no workouts attached", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext(),
+      existingPlan: null,
+    });
+    expect(plan.workouts).toBeUndefined();
+  });
+
+  it("a family ADULT who opts in also gets a workout (whole household, not just mom)", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({
+        momExercise: HEALTHY_EXERCISE,
+        adultMemberExercise: HEALTHY_EXERCISE,
+      }),
+      existingPlan: null,
+    });
+    expect([...(plan.workouts ?? [])].map((w) => w.member_id).sort()).toEqual([
+      "adult-2",
+      "mom",
+    ]);
+    // The family member's workout keys on their member id — the same id PlanViewer's
+    // member tab + the page's missing/withheld checks use, so it renders for them too.
+    const adult = plan.workouts!.find((w) => w.member_id === "adult-2")!;
+    expect(adult.days).toHaveLength(7);
+  });
+
+  // A distinctive prior workout for mom: 2 resistance sessions @45min. HEALTHY_EXERCISE's
+  // deterministic default is 3 walking sessions @30min — so the two are easy to tell apart,
+  // which is what proves "carried (tailored)" vs "overwritten (default)".
+  const TAILORED_MOM_WORKOUT = {
+    member_id: "mom",
+    budget: {
+      bmr: 1400,
+      baseline_maintenance: 1900,
+      weekly_eee: 600,
+      tdee: 2000,
+      target_intake: 1600,
+      intensity_mode: "hr_zones",
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      notes: [],
+    },
+    days: [0, 1, 2, 3, 4, 5, 6].map((day_index) =>
+      day_index === 1 || day_index === 4
+        ? {
+            day_index,
+            entry: {
+              kind: "session",
+              exercise_type: "resistance",
+              band: "moderate",
+              duration_min: 45,
+            },
+          }
+        : { day_index, entry: { kind: "rest" } },
+    ),
+  };
+
+  const existingPlanWithTailoredWorkout = (): MealPlan =>
+    MealPlanSchema.parse({
+      week_start_date: "2026-06-06",
+      members: [makeCompleteMember("mom", "أم محمد")],
+      methodology_notes_ar: "ملاحظات",
+      safety_disclaimer_ar: "تنبيه",
+      days_total: DAY_INDICES.length,
+      generating: false,
+      workouts: [TAILORED_MOM_WORKOUT],
+    });
+
+  it("REGEN: a carried-over mom keeps her TAILORED workout (not overwritten by the default)", async () => {
+    // Regenerate only member-2; mom is carried over (NOT re-skeletoned). Her existing
+    // tailored workout (2×45 resistance) must survive — recomputing would replace it with
+    // the generic default (3×30 walking). Guards the regen-OVERWRITE bug (distinct from
+    // the earlier regen-drop: the workout was present but silently genericized).
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ extraMember: true, momExercise: HEALTHY_EXERCISE }),
+      existingPlan: existingPlanWithTailoredWorkout(),
+      onlyMemberId: "member-2",
+    });
+    const mom = plan.workouts!.find((w) => w.member_id === "mom")!;
+    const sessions = mom.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(2); // tailored 2 sessions, NOT the 3-session default
+    expect(sessions[0]!.entry).toMatchObject({
+      exercise_type: "resistance",
+      duration_min: 45,
+    });
+  });
+
+  it("FAST PATH: an all-complete run carries existing workouts through untouched", async () => {
+    // No member needs regeneration → generateMealPlan returns via the fast path (a
+    // deferred-member drain / translate-only run lands here). It must carry
+    // plan_data.workouts — dropping them used to wipe every member's exercise plan.
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: existingPlanWithTailoredWorkout(),
+    });
+    const mom = plan.workouts!.find((w) => w.member_id === "mom")!;
+    expect(mom.days.filter((d) => d.entry.kind === "session")).toHaveLength(2);
+  });
+
+  it("a malformed skeleton training block never blocks the meal plan (exercise decoupled)", async () => {
+    // The model emits an INVALID training block (bad band + non-positive duration). It must
+    // NOT fail the skeleton parse (which would leave the household with NO meal plan); the
+    // member degrades to the deterministic fallback instead.
+    mockedStream.mockImplementation(async ({ systemPrompt }) => {
+      const base = streamReturns(systemPrompt);
+      if (!/day_index=/.test(systemPrompt)) {
+        const sk = JSON.parse(base.text) as PlanSkeleton;
+        const mom = sk.members.find((m) => m.member_id === "mom");
+        if (mom)
+          (mom as unknown as { training: unknown }).training = {
+            sessions: [
+              { day_index: 1, modality: "walking", band: "EXTREME", duration_min: -5 },
+            ],
+          };
+        return { ...base, text: JSON.stringify(sk) };
+      }
+      return base;
+    });
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({ momExercise: HEALTHY_EXERCISE }),
+      existingPlan: null,
+    });
+    // Meals survived…
+    expect(
+      plan.members.find((m) => m.member_id === "mom")!.days.length,
+    ).toBeGreaterThan(0);
+    // …and mom still got a fallback workout (training degraded to undefined → default).
+    expect(plan.workouts!.map((w) => w.member_id)).toContain("mom");
+  });
+
+  // ── regenDomain = "meals": regenerate meals, carry EVERY workout verbatim ──
+  // The bug-#2 trap re-appears on a meals-only regen: the regenerated member is IN
+  // the meal skeleton, so the workout attach (which keys off that skeleton) would
+  // recompute — genericizing her tailored workout. domain="meals" passes an EMPTY
+  // workout-skeleton so even the in-skeleton member carries her prior workout.
+  const tailoredWorkout = (member_id: string) => ({
+    member_id,
+    budget: {
+      bmr: 1400,
+      baseline_maintenance: 1900,
+      weekly_eee: 600,
+      tdee: 2000,
+      target_intake: 1600,
+      intensity_mode: "hr_zones",
+      intensity_ceiling: "light_moderate",
+      clearance_required: false,
+      notes: [],
+    },
+    days: [0, 1, 2, 3, 4, 5, 6].map((day_index) =>
+      day_index === 1 || day_index === 4
+        ? {
+            day_index,
+            entry: {
+              kind: "session",
+              exercise_type: "resistance",
+              band: "moderate",
+              duration_min: 45,
+            },
+          }
+        : { day_index, entry: { kind: "rest" } },
+    ),
+  });
+
+  // mom complete; adult-2's MEALS absent (→ she regenerates) but she has a prior
+  // TAILORED workout (2×45 resistance). Both opted in.
+  const existingPlanAdult2MealsStale = (): MealPlan =>
+    MealPlanSchema.parse({
+      week_start_date: "2026-06-06",
+      members: [makeCompleteMember("mom", "أم محمد")],
+      methodology_notes_ar: "ملاحظات",
+      safety_disclaimer_ar: "تنبيه",
+      days_total: DAY_INDICES.length,
+      generating: false,
+      workouts: [tailoredWorkout("mom"), tailoredWorkout("adult-2")],
+    });
+
+  it("domain='meals': the meal-regenerated member keeps her TAILORED workout", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({
+        momExercise: HEALTHY_EXERCISE,
+        adultMemberExercise: HEALTHY_EXERCISE,
+      }),
+      existingPlan: existingPlanAdult2MealsStale(),
+      onlyMemberId: "adult-2",
+      regenDomain: "meals",
+    });
+    // Her meals DID regenerate (full day set present)…
+    expect(
+      plan.members.find((m) => m.member_id === "adult-2")!.days,
+    ).toHaveLength(DAY_INDICES.length);
+    // …but her workout was carried verbatim (2×45 resistance), not recomputed.
+    const adult = plan.workouts!.find((w) => w.member_id === "adult-2")!;
+    const sessions = adult.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0]!.entry).toMatchObject({
+      exercise_type: "resistance",
+      duration_min: 45,
+    });
+  });
+
+  it("default domain: the SAME meal-regen recomputes her workout to the default (proves the swap)", async () => {
+    mockedStream.mockImplementation(async ({ systemPrompt }) =>
+      streamReturns(systemPrompt),
+    );
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext({
+        momExercise: HEALTHY_EXERCISE,
+        adultMemberExercise: HEALTHY_EXERCISE,
+      }),
+      existingPlan: existingPlanAdult2MealsStale(),
+      onlyMemberId: "adult-2",
+      // regenDomain omitted → "both": adult-2 is in the workout skeleton → recompute.
+    });
+    const adult = plan.workouts!.find((w) => w.member_id === "adult-2")!;
+    const sessions = adult.days.filter((d) => d.entry.kind === "session");
+    expect(sessions).toHaveLength(3); // HEALTHY_EXERCISE "3-4" → 3 walking default
+    expect(sessions[0]!.entry).toMatchObject({ exercise_type: "walking" });
   });
 });

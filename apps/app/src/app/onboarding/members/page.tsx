@@ -4,6 +4,8 @@ import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
+import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
+import type { MomExerciseReused } from "@/app/onboarding/exercise/MomExerciseWizard";
 import { Logo } from "@/components/Logo";
 import { OnboardingFamilyBuilder } from "./OnboardingFamilyBuilder";
 
@@ -25,6 +27,27 @@ export default async function OnboardingMembersPage() {
   const members = (await getCurrentUserFamilyMembers()).filter(
     (m) => m.role !== "housekeeper",
   );
+
+  // Mom's meal-profile answers, reused by the exercise opt-in (never re-asked).
+  // Mirrors the post-gen /onboarding/exercise page so both entry points agree.
+  const momMemberType: MomExerciseReused["member_type"] =
+    profile.member_type === "pregnant" || profile.member_type === "lactating"
+      ? profile.member_type
+      : "adult";
+  const momUserGoal = mapSaraGoalToUser(
+    (profile.primary_goal as SaraGoal | null) ?? "body_recomposition",
+  );
+  const momReused: MomExerciseReused = {
+    member_type: momMemberType,
+    age:
+      profile.birth_year && profile.birth_year > 0
+        ? new Date().getFullYear() - profile.birth_year
+        : 0,
+    activity_level: profile.activity_level,
+    conditions: profile.medical_conditions ?? [],
+    goalIsSpecific:
+      momUserGoal === "build_muscle" || momUserGoal === "athletic",
+  };
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -73,7 +96,15 @@ export default async function OnboardingMembersPage() {
         </div>
       </div>
 
-      <OnboardingFamilyBuilder />
+      <OnboardingFamilyBuilder
+        momReused={momReused}
+        // "Answered" = she already opted in (has a profile) OR already saw the prompt
+        // (declined / dismissed, which stamps exercise_prompt_shown_at). Either way the
+        // onboarding exercise phase is skipped so returning here doesn't re-ask.
+        momExerciseAnswered={
+          !!profile.exercise_profile || !!profile.exercise_prompt_shown_at
+        }
+      />
     </main>
   );
 }

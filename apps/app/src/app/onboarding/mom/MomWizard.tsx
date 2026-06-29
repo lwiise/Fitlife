@@ -152,6 +152,8 @@ export function MomWizard() {
         setError(result.error);
         return;
       }
+      // The exercise opt-in now lives on the members route (before the add-family
+      // popup), so every user — fresh or resuming — sees it before generation.
       router.push("/onboarding/members");
     });
   };

@@ -54,6 +54,7 @@ async function handleGenerate(req: Request) {
     improvements?: string;
     memberId?: string;
     scope?: "individual" | "shared" | "both";
+    domain?: "meals" | "exercise" | "both";
   };
   const issues = body.issues?.trim();
   const improvements = body.improvements?.trim();
@@ -74,6 +75,14 @@ async function handleGenerate(req: Request) {
     (body.scope === "individual" || body.scope === "shared" || body.scope === "both")
       ? body.scope
       : undefined;
+  // The regen-DOMAIN picker (meals / exercise / both) — only meaningful per member
+  // (it's shown only for a member with an exercise_profile). Dispatch decides whether
+  // an "exercise" request runs true exercise-only or auto-promotes to "both".
+  const domain =
+    memberId &&
+    (body.domain === "meals" || body.domain === "exercise" || body.domain === "both")
+      ? body.domain
+      : undefined;
 
   const result = await triggerPlanGeneration({
     supabase,
@@ -90,6 +99,7 @@ async function handleGenerate(req: Request) {
           carryOver: true,
           regenerateMemberId: memberId,
           ...(scope ? { regenScope: scope } : {}),
+          ...(domain ? { regenDomain: domain } : {}),
         }
       : {}),
   });

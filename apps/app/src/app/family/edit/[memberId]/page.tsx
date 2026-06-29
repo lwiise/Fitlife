@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserRound, HeartPulse, ChevronLeft } from "lucide-react";
+import { UserRound, HeartPulse, Dumbbell, ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import type { ExerciseProfile } from "@/lib/exercise/types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
@@ -133,6 +134,24 @@ export default async function EditMemberPage({
       .filter(Boolean)
       .join("، ") || "أضيفي التفاصيل الصحية";
 
+  // Exercise card — shown only once the member opted in (has an exercise_profile).
+  // A child's profile holds only free-text activities; adults carry the prescription.
+  const exerciseProfile = m.exercise_profile as unknown as ExerciseProfile | null;
+  const exerciseSummary = exerciseProfile
+    ? type === "child"
+      ? exerciseProfile.child_activities?.trim() || "أنشطة الطفل"
+      : [
+          exerciseProfile.availability_days
+            ? `${exerciseProfile.availability_days} أيام`
+            : null,
+          exerciseProfile.session_minutes
+            ? `${exerciseProfile.session_minutes} دقيقة`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("، ") || "خطة التمارين الحالية"
+    : null;
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -175,6 +194,14 @@ export default async function EditMemberPage({
             summary={healthSummary}
             icon={HeartPulse}
           />
+          {exerciseSummary && (
+            <SectionCard
+              href={`/family/edit/${memberId}/exercise`}
+              title="خطة التمارين"
+              summary={exerciseSummary}
+              icon={Dumbbell}
+            />
+          )}
         </div>
 
         <div className="rounded-2xl bg-white/60 border border-brand-ink/5 px-4 py-3">

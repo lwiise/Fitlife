@@ -3,6 +3,7 @@
 // and render at /plan.
 
 import { z } from "zod";
+import { WorkoutPlanSchema } from "./exercise/schema";
 
 // ─── Locales ───────────────────────────────────────────────────────────
 // The 7 languages a household's housekeeper may read recipes in. Source of
@@ -176,6 +177,9 @@ export const MealPlanSchema = z.object({
   // button) — persisted so the weekly per-member regen quota can be counted from
   // plan_data. Absent on new plans, member-adds, and drains.
   regenerated_for: z.string().optional(),
+  // Phase 2: per-member workout plans, present only when ≥1 member opted into
+  // exercise. Rides in the plan_data jsonb (no migration); meals-only plans omit it.
+  workouts: z.array(WorkoutPlanSchema).optional(),
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 
@@ -204,6 +208,25 @@ export const SkeletonDaySchema = z.object({
   day_name_ar: z.string().min(1),
   meals: z.array(SkeletonMealSchema).min(1),
 });
+// Phase 2 (2c): the sparse weekly training schedule the skeleton emits per opted-in
+// member. Optional + lenient → meal-only skeletons (no `training`) parse unchanged.
+// Only training days are listed (rest = absent). The model proposes the sessions;
+// code computes the energy (2d/2e). `withheld` = clearance unmet → no program emitted.
+export const SkeletonTrainingSchema = z.object({
+  withheld: z.boolean().optional(),
+  sessions: z
+    .array(
+      z.object({
+        day_index: z.number().int().min(0).max(6),
+        modality: z.string(),
+        band: z.enum(["light", "moderate", "vigorous"]),
+        duration_min: z.number().int().positive(),
+      }),
+    )
+    .optional(),
+});
+export type SkeletonTraining = z.infer<typeof SkeletonTrainingSchema>;
+
 export const SkeletonMemberSchema = z.object({
   member_id: z.string().min(1),
   member_name_ar: z.string().optional(),
@@ -213,6 +236,12 @@ export const SkeletonMemberSchema = z.object({
   daily_calories_target: z.number(),
   macros_target: MacrosSchema,
   days: z.array(SkeletonDaySchema).min(1).max(7),
+  // Phase 2: present only for opted-in members; absent for meals-only.
+  // `.catch(undefined)` keeps exercise from ever blocking meals: a malformed
+  // training block degrades to undefined (the member then falls to the deterministic
+  // `defaultTrainingFromProfile`) instead of failing the WHOLE skeleton parse, which
+  // would leave an opted-in household with no meal plan at all.
+  training: SkeletonTrainingSchema.optional().catch(undefined),
 });
 export const PlanSkeletonSchema = z.object({
   members: z.array(SkeletonMemberSchema).min(1),

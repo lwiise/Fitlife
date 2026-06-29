@@ -18,6 +18,17 @@ import {
   type FamilyMemberInput,
   type MemberType,
 } from "@/app/onboarding/actions";
+import { CARDIO_MED_CONDITION_SLUGS } from "@/lib/exercise/constants";
+import {
+  useExerciseProfile,
+  buildExerciseProfile,
+} from "@/components/exercise/useExerciseProfile";
+import {
+  EXERCISE_OPT_IN,
+  exercisePrescriptionSteps,
+  isExerciseStep,
+} from "@/components/exercise/exerciseSteps";
+import { ExerciseStepView } from "@/components/exercise/ExerciseStepView";
 
 const GOALS: { value: UserGoal; label: string }[] = [
   { value: "lose_weight", label: "نزول الوزن" },
@@ -260,6 +271,9 @@ export function MemberWizard({
   const [mealMode, setMealMode] = useState<"shared" | "independent">(
     initial?.meal_mode ?? "shared",
   );
+  // Appended opt-in exercise steps (housekeeper is never reached here). Reuses
+  // age/sex/activity/goal/conditions from the meal state above — never re-asks.
+  const ex = useExerciseProfile();
 
   const toggleCondition = (slug: string) =>
     setConditions((s) => (s.includes(slug) ? s.filter((c) => c !== slug) : [...s, slug]));
@@ -281,20 +295,47 @@ export function MemberWizard({
     }
   }, [type, role]);
 
+  const memberAge =
+    birthYear && Number(birthYear) > 0
+      ? new Date().getFullYear() - Number(birthYear)
+      : 0;
+  const exerciseSymptoms = ex.state.symptoms.filter((s) => s && s !== "none");
+
   const doctorNeeded = useMemo(() => {
     if (type === "pregnant" || type === "lactating") return true;
     if (type === "adult")
-      return hasGateCondition(conditions) || otherCondition.trim().length > 0;
+      return (
+        hasGateCondition(conditions) ||
+        otherCondition.trim().length > 0 ||
+        // An exercise symptom (ACSM 2.1) also gates on the same doctor step.
+        (ex.state.optedIn === true && exerciseSymptoms.length > 0)
+      );
     // child: free-text chronic condition requires consult
     return otherCondition.trim().length > 0;
-  }, [type, conditions, otherCondition]);
+  }, [type, conditions, otherCondition, ex.state.optedIn, exerciseSymptoms.length]);
 
-  const steps = useMemo(
-    () => (doctorNeeded ? [...baseSteps, "doctor"] : baseSteps),
-    [baseSteps, doctorNeeded],
+  // Appended after the meal steps: the opt-in, then (only if opted in) the
+  // per-type prescription/safety steps; the shared doctor step stays last.
+  const exerciseSteps = exercisePrescriptionSteps(
+    {
+      member_type: type,
+      goalIsSpecific: userGoal === "build_muscle" || userGoal === "athletic",
+      age: memberAge,
+      hasCardioCondition: conditions.some((c) => CARDIO_MED_CONDITION_SLUGS.has(c)),
+      hasAnyCondition: conditions.length > 0 || otherCondition.trim().length > 0,
+    },
+    ex.state,
   );
+
+  const steps: string[] = [
+    ...baseSteps,
+    EXERCISE_OPT_IN,
+    ...exerciseSteps,
+    ...(doctorNeeded ? ["doctor"] : []),
+  ];
   const total = steps.length;
-  const key = steps[step]!;
+  const key = steps[Math.min(step, total - 1)]!;
+  const isFinalStep = step === total - 1;
 
   const goNext = () => {
     setError(null);
@@ -334,6 +375,14 @@ export function MemberWizard({
     trimester: type === "pregnant" ? trimester : null,
     high_risk_pregnancy: type === "pregnant" ? highRisk === true : false,
     months_postpartum: type === "lactating" ? (monthsPP ? Number(monthsPP) : null) : null,
+    // Null unless the member opted into exercise; screening computed from the
+    // reused meal fields (age/activity/conditions), never re-asked.
+    exercise_profile: buildExerciseProfile(ex.state, {
+      member_type: type,
+      age: memberAge,
+      activity_level: activity,
+      conditions,
+    }),
   });
 
   // Clear the form for the next member in a multi-member batch (add-mode only, so
@@ -357,6 +406,7 @@ export function MemberWizard({
     setFeedingMode("");
     setConsultedDoctor(false);
     setMealMode("shared");
+    ex.reset();
     setError(null);
     setStep(0);
     setMemberIndex((i) => i + 1);
@@ -437,13 +487,14 @@ export function MemberWizard({
     else submit();
   };
 
-  const isLastBeforeDoctor = step === baseSteps.length - 1;
   // More members of this type still to collect → the final action continues to
   // the next one rather than finishing.
   const moreToCome = memberIndex + 1 < count;
   const finalLabel = moreToCome ? "التالي" : (terminalLabel ?? "أنشئي الخطة");
-  const nextLabel =
-    isLastBeforeDoctor && !doctorNeeded ? finalLabel : "التالي";
+  // Meal steps are never final now (the exercise opt-in always follows), so they
+  // read "التالي"; only the true last step (doctor / last exercise step / opt-in
+  // when meals-only) shows the finishing label.
+  const nextLabel = isFinalStep ? finalLabel : "التالي";
 
   if (upgrade) {
     return (
@@ -920,6 +971,16 @@ export function MemberWizard({
                   {finalLabel}
                 </PrimaryButton>
               </>
+            )}
+
+            {isExerciseStep(key) && (
+              <ExerciseStepView
+                stepKey={key}
+                ex={ex}
+                onNext={advanceOrSubmit}
+                primaryLabel={nextLabel}
+                isPending={isPending && isFinalStep}
+              />
             )}
           </motion.div>
         </AnimatePresence>

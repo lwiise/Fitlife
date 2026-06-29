@@ -6,7 +6,16 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
-import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
+import {
+  planHasContent,
+  buildPlanContext,
+  energyBudgetMemberFromContext,
+  computeEnergyBudget,
+  mealBudgetChanged,
+  MEMBER_GEN_MAX_ATTEMPTS,
+  type ExerciseProfile,
+} from "@fitlife/plan-engine";
+import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -17,6 +26,7 @@ import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
+import { WorkoutSelfHeal } from "./WorkoutSelfHeal";
 import { SubscriptionSelfHeal } from "./SubscriptionSelfHeal";
 
 export const metadata = {
@@ -115,6 +125,110 @@ export default async function PlanPage({
     !!latest.plan_data &&
     planHasContent(latest.plan_data) &&
     !latest.in_progress;
+  // Mom's one-time post-generation exercise opt-in has already been shown/answered.
+  const exercisePromptShown = !!profile?.exercise_prompt_shown_at;
+
+  // An opted-in member is "eligible" for a workout when they have availability set,
+  // aren't a child, and aren't clearance-withheld. If such a member is in the plan
+  // but has no entry in plan_data.workouts, lazily self-heal it (covers plans made
+  // before the workout-attach shipped + the post-gen banner opt-in path).
+  const eligibleForWorkout = (
+    ep: unknown,
+    memberType: string | null | undefined,
+  ): boolean => {
+    const p = ep as ExerciseProfile | null;
+    return (
+      !!p?.availability_days &&
+      memberType !== "child" &&
+      !p.screening?.clearance_required
+    );
+  };
+  const planWorkoutIds = new Set(
+    (latest?.plan_data?.workouts ?? []).map((w) => w.member_id),
+  );
+  const planMemberIdSet = new Set(
+    (latest?.plan_data?.members ?? []).map((m) => m.member_id),
+  );
+  const missingWorkout =
+    (planMemberIdSet.has("mom") &&
+      eligibleForWorkout(profile?.exercise_profile, profile?.member_type) &&
+      !planWorkoutIds.has("mom")) ||
+    familyMembers.some(
+      (m) =>
+        m.role !== "housekeeper" &&
+        planMemberIdSet.has(m.id) &&
+        eligibleForWorkout(m.exercise_profile, m.member_type) &&
+        !planWorkoutIds.has(m.id),
+    );
+
+  // Opted-in members WITHHELD pending doctor sign-off (pregnant/lactating/medical):
+  // they get no workout by design → the exercise view shows a clearance note.
+  const withheldForWorkout = (
+    ep: unknown,
+    memberType: string | null | undefined,
+  ): boolean => {
+    const p = ep as ExerciseProfile | null;
+    return (
+      !!p?.availability_days &&
+      memberType !== "child" &&
+      !!p.screening?.clearance_required
+    );
+  };
+  const withheldMemberIds = [
+    ...(planMemberIdSet.has("mom") &&
+    withheldForWorkout(profile?.exercise_profile, profile?.member_type)
+      ? ["mom"]
+      : []),
+    ...familyMembers
+      .filter(
+        (m) =>
+          m.role !== "housekeeper" &&
+          planMemberIdSet.has(m.id) &&
+          withheldForWorkout(m.exercise_profile, m.member_type),
+      )
+      .map((m) => m.id),
+  ];
+
+  // ── Regen DOMAIN picker data (meals / exercise / both) ────────────────────
+  // Offer the picker only for members who already have a workout to regenerate
+  // independently of their meals. For each, precompute whether their CURRENT
+  // exercise inputs would move the calorie math vs. the budget baked into that
+  // workout — so "exercise only" can preview the auto-promote note before submit.
+  // This mirrors dispatch's authoritative check (same shared helpers), so preview
+  // and server agree; the server still re-checks on submit.
+  const domainPickerMemberIds = [...planWorkoutIds];
+  let budgetChangedByMember: Record<string, boolean> = {};
+  if (profile && latest?.status === "ready" && planWorkoutIds.size > 0) {
+    try {
+      const supabase = await createClient();
+      const ctx = await buildPlanContext(supabase, profile.id);
+      const map: Record<string, boolean> = {};
+      for (const w of latest.plan_data?.workouts ?? []) {
+        const member = energyBudgetMemberFromContext(ctx, w.member_id);
+        const ep =
+          w.member_id === "mom"
+            ? ctx.mom.exercise_profile
+            : ctx.family_members.find((fm) => fm.id === w.member_id)
+                ?.exercise_profile;
+        // Match dispatch's authority exactly: a member whose budget can't be
+        // recomputed is treated as CHANGED (the server promotes), so the preview
+        // shows the note rather than diverging into a silent meal refresh.
+        if (!member || !ep) {
+          map[w.member_id] = true;
+          continue;
+        }
+        map[w.member_id] = mealBudgetChanged(
+          w.budget,
+          computeEnergyBudget(member, ep, ep.screening),
+        );
+      }
+      budgetChangedByMember = map;
+    } catch {
+      // buildPlanContext can throw on a gated/incomplete profile — fall back to no
+      // preview (the picker still works; the server decides promotion on submit).
+      budgetChangedByMember = {};
+    }
+  }
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -137,7 +251,10 @@ export default async function PlanPage({
 
       <div className="container-app py-8 md:py-12">
         <Suspense fallback={null}>
-          <PlanOnboardingBanner planReady={planReady} />
+          <PlanOnboardingBanner
+            planReady={planReady}
+            exercisePromptShown={exercisePromptShown}
+          />
         </Suspense>
 
         {/* Keep a continuous "preparing" indicator for queued members — while the
@@ -200,6 +317,7 @@ export default async function PlanPage({
         {latest?.status === "ready" && latest.plan_data && (
           <>
             {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
+            {planReady && missingWorkout && <WorkoutSelfHeal />}
             <PlanViewer
               plan={latest.plan_data}
               planId={latest.id}
@@ -207,6 +325,9 @@ export default async function PlanPage({
               updatedAt={latest.updated_at}
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
+              withheldMemberIds={withheldMemberIds}
+              domainPickerMemberIds={domainPickerMemberIds}
+              budgetChangedByMember={budgetChangedByMember}
             />
           </>
         )}

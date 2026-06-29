@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, HeartPulse } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
+import { WorkoutDayCard } from "./WorkoutDayCard";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
@@ -50,6 +51,9 @@ export function PlanViewer({
   hideExport = false,
   housekeeperLocale,
   locale,
+  withheldMemberIds = [],
+  domainPickerMemberIds = [],
+  budgetChangedByMember = {},
 }: {
   plan: MealPlan;
   planId: string;
@@ -69,8 +73,18 @@ export function PlanViewer({
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
+  // Members who opted into exercise but are WITHHELD pending doctor sign-off
+  // (pregnant/lactating/medical) — they get no workout; show a clearance note.
+  withheldMemberIds?: string[];
+  // Members for whom the regen DOMAIN picker (meals/exercise/both) is offered —
+  // i.e. they have an exercise plan to regenerate independently of their meals.
+  domainPickerMemberIds?: string[];
+  // Per-member: would an exercise edit move the calorie math (so "exercise only"
+  // auto-promotes to "both")? Drives the inline promote note. Server re-checks.
+  budgetChangedByMember?: Record<string, boolean>;
 }) {
   const router = useRouter();
+  const prefersReduced = useReducedMotion();
   const translated = !!locale && locale !== "ar";
   const t = getPlanStrings(locale ?? "ar");
   const dir = translated ? getLocaleInfo(locale).direction : undefined;
@@ -186,6 +200,29 @@ export function PlanViewer({
   );
 
   const isSolo = plan.members.length === 1;
+
+  // Exercise plan (rides in plan_data.workouts). Arabic view only — the translated
+  // housekeeper view stays meals-only. The meals/exercise toggle appears when a
+  // member has a generated workout OR is withheld pending doctor sign-off.
+  const [view, setView] = useState<"meals" | "exercise">("meals");
+  const workouts = plan.workouts ?? [];
+  const hasExercise =
+    !translated && (workouts.length > 0 || withheldMemberIds.length > 0);
+  const exerciseView = hasExercise && view === "exercise";
+  const activeWorkout = workouts.find((w) => w.member_id === activeMemberId);
+  const activeIsWithheld = withheldMemberIds.includes(activeMemberId);
+  // Regen domain picker (meals/exercise/both) — offered only for a member with an
+  // exercise plan; the promote note shows if her edit moved the calorie math.
+  const activeCanPickDomain = domainPickerMemberIds.includes(activeMemberId);
+  const activeBudgetChanged = budgetChangedByMember[activeMemberId] ?? false;
+  const activeWorkoutDay = activeWorkout?.days.find(
+    (d) => d.day_index === activeDayIndex,
+  );
+  const workoutSessionDays =
+    activeWorkout?.days.filter((d) => d.entry.kind === "session").length ?? 0;
+  const ceilingLabel = (c: string) =>
+    c === "can_progress_to_vigorous" ? "حتى القوي" : "خفيف–متوسط";
+  const modeLabel = (m: string) => (m === "rpe" ? "مجهود محسوس" : "نبض القلب");
 
   // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
   // Scope all loading UI to that member so a different member's empty/failed day
@@ -325,6 +362,8 @@ export function PlanViewer({
               memberId={activeMember.member_id}
               memberName={activeMember.member_name_ar}
               hasSharedMeals={activeMemberHasShared}
+              canPickDomain={activeCanPickDomain}
+              budgetChanged={activeBudgetChanged}
               locale={locale}
             />
           )}
@@ -391,41 +430,99 @@ export function PlanViewer({
       </div>
       )}
 
-      {/* Member summary tiles */}
-      <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.daily_calories}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.daily_calories_target}
-          </p>
+      {/* Meals / Exercise toggle — when a workout exists or one is withheld (Arabic view). */}
+      {hasExercise && (
+        <div
+          className="flex w-fit rounded-full bg-white border border-brand-ink/10 p-1"
+          role="group"
+          aria-label="نوع الخطة"
+        >
+          {(
+            [
+              ["meals", "الأكل"],
+              ["exercise", "التمارين"],
+            ] as const
+          ).map(([key, label]) => {
+            const active = (key === "exercise") === exerciseView;
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setView(key)}
+                className={`min-h-11 px-5 rounded-full text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                  active
+                    ? "bg-brand-purple-900 text-white"
+                    : "text-brand-ink-muted hover:text-brand-ink"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.protein}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.macros_target.protein_g}
-            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
-          </p>
+      )}
+
+      {/* Member summary tiles — macros for meals, training summary for exercise.
+          A withheld member has no workout → skip the tiles (the note shows below). */}
+      {!exerciseView ? (
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">{t.daily_calories}</p>
+            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+              {activeMember.daily_calories_target}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">{t.protein}</p>
+            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+              {activeMember.macros_target.protein_g}
+              <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">{t.carbs}</p>
+            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+              {activeMember.macros_target.carbs_g}
+              <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">{t.fat}</p>
+            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+              {activeMember.macros_target.fat_g}
+              <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
+            </p>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.carbs}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.macros_target.carbs_g}
-            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
-          </p>
+      ) : activeWorkout ? (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">أيام التمرين</p>
+            <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+              {workoutSessionDays}
+              <span className="text-brand-ink-muted text-xs ms-1">في الأسبوع</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">أقصى شدّة</p>
+            <p className="font-bold text-brand-ink text-sm mt-1.5 leading-snug">
+              {activeWorkout ? ceilingLabel(activeWorkout.budget.intensity_ceiling) : "—"}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+            <p className="text-brand-ink-muted text-xs">مقياس الشدّة</p>
+            <p className="font-bold text-brand-ink text-sm mt-1.5 leading-snug">
+              {activeWorkout ? modeLabel(activeWorkout.budget.intensity_mode) : "—"}
+            </p>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.fat}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.macros_target.fat_g}
-            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
-          </p>
-        </div>
-      </div>
+      ) : null}
 
       {/* Generation progress — real "day N of M" while the plan streams in.
           Hidden once the viewed member is complete (ready === total) so a full
           bar never sits there spinning. */}
-      {memberIsGenerating && !preparingStalled && genProgress.ready < genProgress.total && (
+      {!exerciseView && memberIsGenerating && !preparingStalled && genProgress.ready < genProgress.total && (
         <div className="bg-white rounded-2xl border border-brand-ink/5 px-4 py-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-brand-ink font-bold text-sm leading-relaxed">
@@ -459,7 +556,8 @@ export function PlanViewer({
         </div>
       )}
 
-      {/* Day tabs */}
+      {/* Day tabs (in the exercise view, only for a member who has a workout) */}
+      {(!exerciseView || !!activeWorkout) && (
       <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
@@ -495,9 +593,10 @@ export function PlanViewer({
           );
         })}
       </div>
+      )}
 
       {/* Day total pill */}
-      {activeDay && (
+      {!exerciseView && activeDay && (
         <div className="inline-flex flex-wrap items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
           <span className="text-brand-ink-muted text-xs">{t.day_total}:</span>
           <span className="font-bold text-brand-ink text-sm tabular-nums">
@@ -518,7 +617,37 @@ export function PlanViewer({
         </div>
       )}
 
+      {/* Exercise day (session or rest) for the active member */}
+      {exerciseView && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`ex-${activeMemberId}-${activeDayIndex}`}
+            initial={{ opacity: 0, y: prefersReduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: prefersReduced ? 0 : -8 }}
+            transition={{ duration: prefersReduced ? 0 : 0.2 }}
+            className="space-y-3"
+          >
+            {activeWorkoutDay ? (
+              <WorkoutDayCard entry={activeWorkoutDay.entry} />
+            ) : activeIsWithheld ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 py-8 px-4 text-center">
+                <HeartPulse className="size-6 text-brand-purple-900" aria-hidden="true" />
+                <p className="text-brand-ink text-sm font-medium leading-relaxed max-w-sm">
+                  صحتكِ أولاً. بمجرد موافقة طبيبكِ، نضيفها لكِ تلقائياً.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
+                ما في خطة تمارين
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      )}
+
       {/* Meal list */}
+      {!exerciseView && (
       <AnimatePresence mode="wait">
         <motion.div
           key={`${activeMemberId}-${activeDayIndex}`}
@@ -586,6 +715,8 @@ export function PlanViewer({
                   memberId={activeMember.member_id}
                   memberName={activeMember.member_name_ar}
                   hasSharedMeals={activeMemberHasShared}
+                  canPickDomain={activeCanPickDomain}
+                  budgetChanged={activeBudgetChanged}
                   locale={locale}
                 />
               )}
@@ -597,6 +728,7 @@ export function PlanViewer({
           )}
         </motion.div>
       </AnimatePresence>
+      )}
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserRound, HeartPulse, Utensils, ChevronLeft } from "lucide-react";
+import { UserRound, HeartPulse, Utensils, Dumbbell, ChevronLeft } from "lucide-react";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
+import type { ExerciseProfile } from "@/lib/exercise/types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { SettingsLink } from "@/components/SettingsLink";
@@ -84,6 +85,21 @@ export default async function ProfilePage() {
       .filter(Boolean)
       .join("، ") || "أضيفي تفاصيلك الصحية";
 
+  // Exercise card — shown only once she's opted in (has an exercise_profile).
+  const exerciseProfile = profile.exercise_profile as unknown as ExerciseProfile | null;
+  const exerciseSummary = exerciseProfile
+    ? [
+        exerciseProfile.availability_days
+          ? `${exerciseProfile.availability_days} أيام`
+          : null,
+        exerciseProfile.session_minutes
+          ? `${exerciseProfile.session_minutes} دقيقة`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("، ") || "خطة تمارينك الحالية"
+    : null;
+
   const cuisineLabel = labelFor(CUISINES, profile.cuisine_preference);
   const dietaryCount = asStringArray(profile.family_dietary_restrictions).filter(
     (d) => d !== "halal",
@@ -143,6 +159,14 @@ export default async function ProfilePage() {
             summary={healthSummary}
             icon={HeartPulse}
           />
+          {exerciseSummary && (
+            <SectionCard
+              href="/profile/exercise"
+              title="خطة التمارين"
+              summary={exerciseSummary}
+              icon={Dumbbell}
+            />
+          )}
           <SectionCard
             href="/profile/family-preferences"
             title="تفضيلات العائلة"

@@ -16,7 +16,8 @@ import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS, type MealPlan } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
-import type { Database } from "@/lib/supabase/database.types";
+import type { ExerciseProfile } from "@/lib/exercise/types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 
 type ProfileUpdates = Partial<{
   display_name: string;
@@ -339,7 +340,7 @@ export async function finishOnboardingToSubscription(): Promise<void> {
     const { triggered } = await syncFamilyPlanAfterSubscribe().catch(() => ({
       triggered: false,
     }));
-    redirect(triggered ? "/plan" : "/dashboard");
+    redirect(triggered ? "/plan?onboarding=exercise" : "/dashboard");
   }
 
   redirect("/pricing?from=onboarding");
@@ -363,7 +364,99 @@ export async function generateSoloAndContinue(): Promise<void> {
   // Full run → tier cap (trial starter = 1) yields a mom-only plan; any extra
   // members defer until a covering subscription unlocks the whole-family regen.
   await runFamilyGeneration(supabase, user.id);
-  redirect("/plan");
+  // ?onboarding=exercise surfaces the post-"aha" exercise opt-in on /plan (gated on
+  // planReady + the one-time exercise_prompt_shown_at flag in PlanOnboardingBanner).
+  redirect("/plan?onboarding=exercise");
+}
+
+/**
+ * Mom's POST-generation exercise opt-in (Phase 1). She sees her ready meal plan
+ * first, then opts in from the /plan banner → the dedicated /onboarding/exercise
+ * screen assembles her ExerciseProfile (reusing her saved profile fields) and calls
+ * this to persist it + stamp the one-time prompt flag. Collection only — no regen.
+ */
+export async function saveMomExerciseProfile(
+  profile: ExerciseProfile,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      exercise_profile: profile as unknown as Json,
+      exercise_prompt_shown_at: new Date().toISOString(),
+    })
+    .eq("id", user.id);
+
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "onboarding", step: "saveMomExerciseProfile", userId: user.id },
+    });
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/plan");
+  return { ok: true };
+}
+
+/**
+ * Edit Mom's exercise inputs AFTER opt-in (the /profile/exercise hub page). Same
+ * write as saveMomExerciseProfile but deliberately does NOT touch
+ * `exercise_prompt_shown_at` — that's the one-time "was she ever prompted?" marker,
+ * already set when she first opted in; an edit must not re-stamp it. The rebuilt
+ * profile carries a freshly recomputed screening verdict (buildExerciseProfile runs
+ * computeExerciseScreening), so a changed answer can raise/lower clearance. No regen
+ * here — she applies it from /plan via the regen domain picker.
+ */
+export async function updateMomExerciseProfile(
+  profile: ExerciseProfile,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ exercise_profile: profile as unknown as Json })
+    .eq("id", user.id);
+
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "profile", step: "updateMomExerciseProfile", userId: user.id },
+    });
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/plan");
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
+/**
+ * Record that Mom answered the exercise opt-in with "no" (declined). Stamps the
+ * one-time `exercise_prompt_shown_at` so the prompt won't reappear — used by both the
+ * /plan "meals only" banner AND the in-onboarding decline (so returning to
+ * /onboarding/members doesn't re-ask). Existing/pre-feature users keep a null flag, so
+ * the /plan banner still surfaces for them.
+ */
+export async function dismissExercisePrompt(): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  await supabase
+    .from("profiles")
+    .update({ exercise_prompt_shown_at: new Date().toISOString() })
+    .eq("id", user.id);
+  return { ok: true };
 }
 
 /**
@@ -659,6 +752,10 @@ export interface FamilyMemberInput {
   high_risk_pregnancy?: boolean;
   // lactating
   months_postpartum?: number | null;
+  // Opt-in exercise (Phase 1): null unless the member opted in. Collected in the
+  // wizard; persisted to the exercise_profile jsonb column once migration 00012 is
+  // applied + types regenerated (see buildMemberRow / task #5).
+  exercise_profile?: ExerciseProfile | null;
 }
 
 type AddMemberResult =
@@ -711,6 +808,8 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     school_meal_handling:
       input.member_type === "child" ? (input.school_meal_handling ?? null) : null,
     picky_eater: input.member_type === "child" ? !!input.picky_eater : false,
+    // Opt-in exercise: null unless the member opted in (jsonb column, migration 00012).
+    exercise_profile: (input.exercise_profile ?? null) as Json,
   };
 }
 

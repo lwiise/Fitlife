@@ -4,6 +4,7 @@ import {
   type PlanPromptContextMember,
 } from "./buildContext";
 import type { PlanSkeleton, LocaleCode } from "./schema";
+import type { ExerciseProfile } from "./exercise/types";
 import { DAY_NAMES_AR } from "./dates";
 
 /**
@@ -567,6 +568,13 @@ export function buildSkeletonPrompt(
     ? "هذه خطة لفرد واحد، لا تشارك."
     : "عندما تكون الوجبة نفسها مشتركة بين أكثر من فرد، استخدمي **نفس** recipe_name_ar لهم حتى نوسّعها لاحقاً كوصفة عائلة واحدة بحصص مختلفة. مَن وُسم بـ(وجبات مستقلة) في القائمة أعطيه أطباقاً بأسماء مختلفة عن البقية.";
 
+  // When the household has an opted-in exercise member, declare `training` in the
+  // FORMAL output type (not only the appended section) — otherwise the model follows
+  // the type spec and omits it. Empty for meal-only → the output type stays identical.
+  const trainingTypeField = householdHasExerciseProgram(context, targetMemberIds)
+    ? `\n      training?: { withheld?: boolean; sessions?: Array<{ day_index: number; modality: string; band: "light"|"moderate"|"vigorous"; duration_min: number }> };  // للمشتركين بالتمارين فقط`
+    : "";
+
   return `# سياق العائلة
 
 ملخص العائلة: ${context.composition_summary}${familyWideText(context)}
@@ -595,10 +603,92 @@ type Skeleton = {
       day_index: number;                   // 0..6 (0 = أول يوم في الخطة)
       day_name_ar: string;
       meals: Array<{ slot: "breakfast"|"lunch"|"dinner"|"snack"; slot_name_ar: string; recipe_name_ar: string }>;
-    }>;
+    }>;${trainingTypeField}
   }>;
 };
-\`\`\``;
+\`\`\`${exerciseSkeletonSection(context, targetMemberIds)}`;
+}
+
+// ── Phase 2 (2c): gated exercise section appended to the skeleton prompt ──────
+// Built only for members who opted into a training program (exercise_profile with
+// availability; children excluded — play only). Empty string ⇒ the meal-only
+// skeleton prompt is byte-identical to before. Function declarations hoist, so
+// buildSkeletonPrompt above can call these.
+
+interface ExerciseTarget {
+  member_id: string;
+  name: string;
+  profile: ExerciseProfile;
+  clearance: boolean;
+}
+
+function optedInExerciseTargets(
+  context: PlanPromptContext,
+  targetMemberIds?: string[],
+): ExerciseTarget[] {
+  const wanted = targetMemberIds ? new Set(targetMemberIds) : null;
+  const out: ExerciseTarget[] = [];
+  const consider = (
+    member_id: string,
+    name: string,
+    profile: ExerciseProfile | null | undefined,
+    memberType: string,
+  ) => {
+    if (wanted && !wanted.has(member_id)) return;
+    if (!profile || !profile.availability_days) return; // not opted into a program
+    if (memberType === "child") return; // kids: play only, no prescribed schedule
+    out.push({
+      member_id,
+      name,
+      profile,
+      clearance: profile.screening?.clearance_required ?? false,
+    });
+  };
+  consider(
+    "mom",
+    context.mom.display_name ?? "العميلة",
+    context.mom.exercise_profile,
+    context.mom.member_type,
+  );
+  for (const m of context.family_members) {
+    if (m.role === "housekeeper") continue;
+    consider(m.id, m.name, m.exercise_profile, m.member_type);
+  }
+  return out;
+}
+
+/** True when ≥1 targeted beneficiary opted into a training program — gates both the
+ *  skeleton's exercise section AND the SAFE_EXERCISE_PROTOCOLS cache block. */
+export function householdHasExerciseProgram(
+  context: PlanPromptContext,
+  targetMemberIds?: string[],
+): boolean {
+  return optedInExerciseTargets(context, targetMemberIds).length > 0;
+}
+
+function exerciseSkeletonSection(
+  context: PlanPromptContext,
+  targetMemberIds?: string[],
+): string {
+  const targets = optedInExerciseTargets(context, targetMemberIds);
+  if (targets.length === 0) return "";
+  const list = (a?: unknown[]) =>
+    Array.isArray(a) && a.length ? a.join("/") : "—";
+  const lines = targets.map((t) => {
+    if (t.clearance) {
+      return `- ${t.name} (member_id=${t.member_id}): يحتاج موافقة طبيب قبل التمرين — لا تُصدري برنامجاً، اجعلي training = { withheld: true }.`;
+    }
+    const p = t.profile;
+    return `- ${t.name} (member_id=${t.member_id}): أيام متاحة ${p.availability_days ?? "—"}، ${p.session_minutes ?? "—"} دقيقة/جلسة، يفضّل [${list(p.preferred_types)}]، يتجنّب [${list(p.disliked_types)}]، المكان ${p.setting ?? "—"}، الأدوات [${list(p.equipment)}]، إصابات [${list(p.msk_regions)}]، سقف الشدّة ${p.screening?.intensity_ceiling ?? "light_moderate"}، نمط الشدّة ${p.screening?.intensity_mode ?? "hr_zones"}.`;
+  });
+  return `
+
+# التمارين (للأفراد المشتركين فقط — التزمي بـ«بروتوكولات التمارين الآمنة»)
+لكل فرد مشترك أدناه، خطّطي **جدول تمارين أسبوعياً متفرّقاً**: 3-5 أيام جلسات والباقي راحة. اقترحي الجلسات فقط (النوع، الشدّة، المدة) ضمن سقف الشدّة والإصابات والمتاح؛ الكود يحسب الطاقة. لا تتجاوزي السقف مهما كان الهدف. الأطفال لا يحصلون على جدول.
+${lines.join("\n")}
+
+أضيفي لكل فرد مشترك (وفقط لهم) الحقل training في مخرجات JSON:
+training?: { withheld?: boolean; sessions?: Array<{ day_index: number; modality: string; band: "light"|"moderate"|"vigorous"; duration_min: number }> }`;
 }
 
 /**

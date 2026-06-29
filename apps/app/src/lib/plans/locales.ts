@@ -456,6 +456,19 @@ export interface PlanActionStrings {
   regen_scope_shared_hint: string;
   regen_scope_individual: string;
   regen_scope_individual_hint: string;
+  // Domain picker (meals vs workout) — shown only for a member with an exercise
+  // plan. When it's shown, the meal-area scope picker above becomes a sub-question
+  // (regen_scope_sub_title). The promote note appears when "exercise only" is
+  // chosen but the edit moved the calorie math (it auto-promotes to both).
+  regen_domain_title: string;
+  regen_domain_both: string;
+  regen_domain_both_hint: string;
+  regen_domain_meals: string;
+  regen_domain_meals_hint: string;
+  regen_domain_exercise: string;
+  regen_domain_exercise_hint: string;
+  regen_domain_promote_note: string;
+  regen_scope_sub_title: string;
 }
 
 export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
@@ -476,6 +489,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "نجدد الأطباق اللي يشاركها مع العائلة — وتنعكس على بقية المشاركين",
     regen_scope_individual: "الأطباق الخاصة به",
     regen_scope_individual_hint: "نجدد وجباته الفردية فقط، والمشتركة تبقى كما هي",
+    regen_domain_title: "ايش تبين نجدد؟",
+    regen_domain_both: "الوجبات والتمارين",
+    regen_domain_both_hint: "نجدد خطة الأكل وخطة التمارين",
+    regen_domain_meals: "الوجبات فقط",
+    regen_domain_meals_hint: "نجدد خطة الأكل، وخطة التمارين تبقى كما هي",
+    regen_domain_exercise: "التمارين فقط",
+    regen_domain_exercise_hint: "نجدد خطة التمارين، والوجبات تبقى كما هي",
+    regen_domain_promote_note: "بنحدّث وجباتكِ أيضًا لأن نشاطكِ تغيّر",
+    regen_scope_sub_title: "أي وجبات نجدد؟",
   },
   en: {
     meal_mode_label: "Meal type",
@@ -494,6 +516,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "Regenerate the dishes shared with the family — co-sharers update too",
     regen_scope_individual: "Their own dishes",
     regen_scope_individual_hint: "Regenerate only their individual meals; shared meals stay",
+    regen_domain_title: "What would you like to refresh?",
+    regen_domain_both: "Meals and exercise",
+    regen_domain_both_hint: "Regenerate both the meal plan and the workout",
+    regen_domain_meals: "Meals only",
+    regen_domain_meals_hint: "Regenerate the meal plan; the workout stays as is",
+    regen_domain_exercise: "Exercise only",
+    regen_domain_exercise_hint: "Regenerate the workout; the meals stay as is",
+    regen_domain_promote_note: "We'll refresh your meals too, since your activity changed",
+    regen_scope_sub_title: "Which meals?",
   },
   tl: {
     meal_mode_label: "Uri ng pagkain",
@@ -512,6 +543,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "Gawing bago ang mga pagkaing kasalo ng pamilya — maa-update din sila",
     regen_scope_individual: "Sariling pagkain niya",
     regen_scope_individual_hint: "Gawing bago lang ang indibidwal na pagkain; mananatili ang magkakasama",
+    regen_domain_title: "Ano ang gusto mong i-refresh?",
+    regen_domain_both: "Pagkain at ehersisyo",
+    regen_domain_both_hint: "Gawing bago ang plano ng pagkain at ang ehersisyo",
+    regen_domain_meals: "Pagkain lang",
+    regen_domain_meals_hint: "Gawing bago ang pagkain; mananatili ang ehersisyo",
+    regen_domain_exercise: "Ehersisyo lang",
+    regen_domain_exercise_hint: "Gawing bago ang ehersisyo; mananatili ang pagkain",
+    regen_domain_promote_note: "I-re-refresh din namin ang iyong pagkain dahil nagbago ang iyong aktibidad",
+    regen_scope_sub_title: "Aling pagkain?",
   },
   id: {
     meal_mode_label: "Jenis makanan",
@@ -530,6 +570,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "Buat ulang hidangan yang dibagi dengan keluarga — yang lain ikut diperbarui",
     regen_scope_individual: "Hidangan sendiri",
     regen_scope_individual_hint: "Buat ulang hanya makanan individunya; yang bersama tetap",
+    regen_domain_title: "Apa yang ingin diperbarui?",
+    regen_domain_both: "Makanan dan olahraga",
+    regen_domain_both_hint: "Buat ulang rencana makan dan latihan",
+    regen_domain_meals: "Makanan saja",
+    regen_domain_meals_hint: "Buat ulang rencana makan; latihan tetap",
+    regen_domain_exercise: "Olahraga saja",
+    regen_domain_exercise_hint: "Buat ulang latihan; makanan tetap",
+    regen_domain_promote_note: "Kami juga memperbarui makananmu karena aktivitasmu berubah",
+    regen_scope_sub_title: "Makanan yang mana?",
   },
   bn: {
     meal_mode_label: "খাবারের ধরন",
@@ -548,6 +597,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "পরিবারের সাথে ভাগ করা খাবার নতুন করা — অন্যরাও হালনাগাদ হবে",
     regen_scope_individual: "তার নিজের খাবার",
     regen_scope_individual_hint: "শুধু তার একক খাবার নতুন করা; ভাগ করা খাবার অপরিবর্তিত থাকে",
+    regen_domain_title: "আপনি কী নতুন করতে চান?",
+    regen_domain_both: "খাবার ও ব্যায়াম",
+    regen_domain_both_hint: "খাবার ও ব্যায়াম দুটোই নতুন করে তৈরি",
+    regen_domain_meals: "শুধু খাবার",
+    regen_domain_meals_hint: "খাবার নতুন করা; ব্যায়াম অপরিবর্তিত থাকে",
+    regen_domain_exercise: "শুধু ব্যায়াম",
+    regen_domain_exercise_hint: "ব্যায়াম নতুন করা; খাবার অপরিবর্তিত থাকে",
+    regen_domain_promote_note: "আপনার কার্যকলাপ বদলেছে বলে আমরা আপনার খাবারও হালনাগাদ করব",
+    regen_scope_sub_title: "কোন খাবার?",
   },
   am: {
     meal_mode_label: "የምግብ ዓይነት",
@@ -566,6 +624,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "ከቤተሰብ ጋር የሚጋሩ ምግቦችን እናድሳለን — ሌሎቹም ይዘምናሉ",
     regen_scope_individual: "የራሱ ምግቦች",
     regen_scope_individual_hint: "የግል ምግቦቹን ብቻ እናድሳለን፤ የጋራዎቹ እንዳሉ ይቆያሉ",
+    regen_domain_title: "ምን እንዲታደስ ይፈልጋሉ?",
+    regen_domain_both: "ምግብና የአካል ብቃት",
+    regen_domain_both_hint: "የምግብና የልምምድ እቅድ ሁለቱንም እናድሳለን",
+    regen_domain_meals: "ምግብ ብቻ",
+    regen_domain_meals_hint: "የምግብ እቅድ እናድሳለን፤ ልምምዱ እንዳለ ይቆያል",
+    regen_domain_exercise: "ልምምድ ብቻ",
+    regen_domain_exercise_hint: "ልምምዱን እናድሳለን፤ ምግቡ እንዳለ ይቆያል",
+    regen_domain_promote_note: "እንቅስቃሴዎ ስለተቀየረ ምግብዎንም እናድሳለን",
+    regen_scope_sub_title: "የትኞቹ ምግቦች?",
   },
   ur: {
     meal_mode_label: "کھانے کی قسم",
@@ -584,6 +651,15 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "خاندان کے ساتھ مشترکہ کھانے دوبارہ بنائیں — باقی بھی اپ ڈیٹ ہوں گے",
     regen_scope_individual: "ان کے اپنے کھانے",
     regen_scope_individual_hint: "صرف ان کے انفرادی کھانے دوبارہ بنائیں؛ مشترکہ ویسے ہی رہیں گے",
+    regen_domain_title: "آپ کیا تازہ کرنا چاہتی ہیں؟",
+    regen_domain_both: "کھانے اور ورزش",
+    regen_domain_both_hint: "کھانے اور ورزش دونوں دوبارہ بنائیں",
+    regen_domain_meals: "صرف کھانے",
+    regen_domain_meals_hint: "کھانے دوبارہ بنائیں؛ ورزش ویسے ہی رہے گی",
+    regen_domain_exercise: "صرف ورزش",
+    regen_domain_exercise_hint: "ورزش دوبارہ بنائیں؛ کھانے ویسے ہی رہیں گے",
+    regen_domain_promote_note: "آپ کی سرگرمی بدل گئی ہے اس لیے ہم آپ کے کھانے بھی تازہ کریں گے",
+    regen_scope_sub_title: "کون سے کھانے؟",
   },
 };
 
