@@ -5,9 +5,12 @@ import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/supabase/database.types";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
 import { hasGateCondition } from "@/lib/plans/medicalConditions";
 import { triggerPlanTranslation } from "@/lib/plans/dispatch";
+import { rescreenExerciseProfile } from "@/lib/exercise/rescreen";
+import type { ExerciseProfile } from "@/lib/exercise/types";
 
 export type SaveResult = { ok: true } | { ok: false; error: string };
 
@@ -39,9 +42,35 @@ export async function saveMomPersonalInfo(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
 
+  // A birth-year change shifts age, which can flip the HR-zones vs RPE prescription —
+  // re-derive screening from the new age + the stored health inputs (not on this form).
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("member_type, activity_level, medical_conditions, exercise_profile")
+    .eq("id", user.id)
+    .single();
+  const rescreened = prof?.exercise_profile
+    ? rescreenExerciseProfile(prof.exercise_profile as ExerciseProfile | null, {
+        member_type: (prof.member_type ?? "adult") as
+          | "adult"
+          | "child"
+          | "pregnant"
+          | "lactating",
+        age: parsed.data.birth_year ? currentYear - parsed.data.birth_year : 0,
+        activity_level: prof.activity_level,
+        conditions: prof.medical_conditions ?? [],
+      })
+    : undefined;
+
   const { error } = await supabase
     .from("profiles")
-    .update({ ...parsed.data, updated_at: new Date().toISOString() })
+    .update({
+      ...parsed.data,
+      ...(rescreened !== undefined
+        ? { exercise_profile: rescreened as unknown as Json }
+        : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", user.id);
 
   if (error) {
@@ -123,6 +152,23 @@ export async function saveMomHealthInfo(
     conditions,
   });
 
+  // Re-derive the stored exercise screening from the new health inputs (a new gating
+  // condition, changed activity, or a pregnancy change must withhold/cap the workout
+  // at the next generation). birth_year isn't on this form, so read it for age.
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("birth_year, exercise_profile")
+    .eq("id", user.id)
+    .single();
+  const rescreened = prof?.exercise_profile
+    ? rescreenExerciseProfile(prof.exercise_profile as ExerciseProfile | null, {
+        member_type: memberType,
+        age: prof.birth_year ? currentYear - prof.birth_year : 0,
+        activity_level: data.activity_level,
+        conditions,
+      })
+    : undefined;
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -139,6 +185,9 @@ export async function saveMomHealthInfo(
       medical_conditions: conditions,
       consulted_doctor: data.consulted_doctor,
       meal_mode: data.meal_mode,
+      ...(rescreened !== undefined
+        ? { exercise_profile: rescreened as unknown as Json }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", user.id);

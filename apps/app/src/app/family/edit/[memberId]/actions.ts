@@ -9,6 +9,7 @@ import type { Database, Json } from "@/lib/supabase/database.types";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
 import { hasGateCondition } from "@/lib/plans/medicalConditions";
 import type { ExerciseProfile } from "@/lib/exercise/types";
+import { rescreenExerciseProfile } from "@/lib/exercise/rescreen";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
@@ -87,6 +88,21 @@ export async function updateMemberPersonal(
         : "daughter"
       : member.role;
 
+  // A birth-year change shifts age, which can flip the HR-zones vs RPE prescription,
+  // so re-derive screening (preserving the unchanged exercise answers + health inputs).
+  const rescreened = member.exercise_profile
+    ? rescreenExerciseProfile(member.exercise_profile as ExerciseProfile | null, {
+        member_type: (member.member_type ?? "adult") as
+          | "adult"
+          | "child"
+          | "pregnant"
+          | "lactating",
+        age: data.birth_year ? currentYear - data.birth_year : 0,
+        activity_level: member.activity_level,
+        conditions: member.medical_conditions ?? [],
+      })
+    : undefined;
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("family_members")
@@ -97,6 +113,9 @@ export async function updateMemberPersonal(
       height_cm: data.height_cm,
       weight_kg: data.weight_kg,
       role,
+      ...(rescreened !== undefined
+        ? { exercise_profile: rescreened as unknown as Json }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", memberId)
@@ -196,6 +215,18 @@ export async function updateMemberHealth(
     });
   }
 
+  // A health edit changes the screening inputs (conditions, activity), so re-derive
+  // the stored exercise screening — otherwise a newly-added gating condition wouldn't
+  // withhold/cap the workout at the next generation. No-op when there's no profile.
+  const rescreened = member.exercise_profile
+    ? rescreenExerciseProfile(member.exercise_profile as ExerciseProfile | null, {
+        member_type: type,
+        age: member.birth_year ? currentYear - member.birth_year : 0,
+        activity_level: data.activity_level,
+        conditions,
+      })
+    : undefined;
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("family_members")
@@ -212,6 +243,9 @@ export async function updateMemberHealth(
       months_postpartum: isLact ? (data.months_postpartum ?? null) : null,
       school_meal_handling: isChild ? (data.school_meal_handling ?? null) : null,
       picky_eater: isChild ? data.picky_eater : false,
+      ...(rescreened !== undefined
+        ? { exercise_profile: rescreened as unknown as Json }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", memberId)
