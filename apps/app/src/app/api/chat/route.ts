@@ -106,6 +106,10 @@ export async function POST(request: Request) {
           systemStatic: CHAT_SYSTEM_STATIC,
           systemPrompt,
           messages: history,
+          // Must finish under the route's maxDuration (60s): the engine
+          // default (240s) would let the platform kill a stalled stream with
+          // the usage-audit row below never written.
+          timeoutMs: 55_000,
           onText: (delta) => controller.enqueue(encoder.encode(delta)),
         });
         // Audit-only write: rate-limit source + model-aware cost. No content.

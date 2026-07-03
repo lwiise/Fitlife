@@ -21,6 +21,11 @@ export async function proxy(request: NextRequest) {
   // able to read them before signing up).
   const isPublicRoute =
     pathname === "/" || pathname === "/privacy" || pathname === "/terms";
+  // The admin login form must render for logged-out operators. NOT in
+  // isPublicRoute: the page still needs the refreshed session so it can
+  // bounce already-signed-in admins to /admin and show non-admins the denied
+  // state — it is only exempt from the login redirect below.
+  const isAdminLogin = pathname === "/admin/login";
 
   // Public pages + static assets need no session: skip the Supabase getUser()
   // round-trip entirely so these (statically prerendered) routes aren't gated
@@ -35,7 +40,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isAuthRoute && !isAdminLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect_to", pathname);
