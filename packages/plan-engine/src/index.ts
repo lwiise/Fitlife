@@ -14,6 +14,7 @@ export {
   translateMealPlan,
   runMealPlanTranslation,
   hasPendingGeneration,
+  generationAlreadySettled,
 } from "./generate";
 export type { GenerateResult } from "./generate";
 

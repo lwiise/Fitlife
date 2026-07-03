@@ -2088,6 +2088,27 @@ export function hasPendingGeneration(params: {
   return familyMemberIds.some((id) => !inPlan.has(id));
 }
 
+/**
+ * True when a generate invocation for this meal_plans row should NO-OP: the
+ * row is terminal ('failed'/'archived'), already emitting ('ready' — another
+ * invocation is or was streaming), missing entirely, or its DISPATCH
+ * plan_generations row (the oldest one for the id — translation audit rows
+ * share meal_plan_id but are inserted later) already reached a terminal
+ * status. Fresh dispatch state ('generating' + 'started') returns false.
+ * A missing generation row alone does not block: the run terminalizes
+ * meal_plans regardless. Used by the background function as an idempotency
+ * guard against replays / duplicate invocations.
+ */
+export function generationAlreadySettled(params: {
+  mealPlanStatus: string | null | undefined;
+  dispatchGenStatus: string | null | undefined;
+}): boolean {
+  const { mealPlanStatus, dispatchGenStatus } = params;
+  if (mealPlanStatus == null) return true; // row missing/deleted
+  if (mealPlanStatus !== "generating") return true; // failed/ready/archived
+  return dispatchGenStatus === "completed" || dispatchGenStatus === "failed";
+}
+
 // ─── Translation pass (housekeeper) ──────────────────────────────────────
 // Translates an EXISTING plan's meals into `locale` without regenerating any
 // meal content. Fills recipe_name_translated / ingredients_translated /

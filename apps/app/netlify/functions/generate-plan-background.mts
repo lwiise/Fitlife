@@ -12,6 +12,7 @@ import {
   generateMealPlan,
   translateMealPlan,
   hasPendingGeneration,
+  generationAlreadySettled,
   prepareSharedGroupRegen,
 } from "../../../../packages/plan-engine/src/generate";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
@@ -439,6 +440,42 @@ const handler = async (req: Request): Promise<Response> => {
       // Non-fatal: leave the plan as-is (maid view falls back to Arabic).
       return new Response("Translate failed", { status: 200 });
     }
+  }
+
+  // Idempotency guard: a replayed/duplicate invocation for a row that is
+  // already terminal, already streaming ('ready'), or whose dispatch
+  // generation row finished must not burn a second full Anthropic run.
+  // Oldest plan_generations row = the dispatch row (translation audit rows
+  // share meal_plan_id but are inserted later, already 'completed').
+  try {
+    const planRow = await sbSelectOne(
+      supabaseUrl,
+      expected,
+      "meal_plans",
+      `id=eq.${mealPlanId}&select=status`,
+    );
+    const genRows = await sbSelectMany(
+      supabaseUrl,
+      expected,
+      "plan_generations",
+      `meal_plan_id=eq.${mealPlanId}&select=status&order=created_at.asc&limit=1`,
+    );
+    if (
+      generationAlreadySettled({
+        mealPlanStatus: (planRow?.status as string | undefined) ?? null,
+        dispatchGenStatus: (genRows[0]?.status as string | undefined) ?? null,
+      })
+    ) {
+      console.log(
+        "[generate-plan-background] duplicate/settled invocation — no-op",
+        { userId, mealPlanId },
+      );
+      return new Response("Already settled", { status: 200 });
+    }
+  } catch (guardErr) {
+    // The guard is best-effort: if the probe itself fails, proceed — the run
+    // would rather risk a duplicate than drop a legitimate generation.
+    console.error("[generate-plan-background] idempotency probe failed", guardErr);
   }
 
   const startMs = Date.now();
