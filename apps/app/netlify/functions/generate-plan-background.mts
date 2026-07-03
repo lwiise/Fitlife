@@ -333,7 +333,7 @@ async function buildContextViaFetch(
 }
 
 // ─── Handler ───────────────────────────────────────────────────────────────
-export default async (req: Request): Promise<Response> => {
+const handler = async (req: Request): Promise<Response> => {
   const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -676,3 +676,5 @@ export default async (req: Request): Promise<Response> => {
 
   return new Response(JSON.stringify({ ok: true }), { status: 200 });
 };
+
+export default handler;
