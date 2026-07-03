@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fmtMetricValue, fmtMoney, fmtMoneyFromSar } from "./format";
+import {
+  fmtBucketLabel,
+  fmtDate,
+  fmtMetricValue,
+  fmtMoney,
+  fmtMoneyFromSar,
+  fmtMonth,
+} from "./format";
 
 describe("fmtMoney", () => {
   it("caps USD at 2 decimals (no raw floats like $1.6395)", () => {
@@ -59,5 +66,24 @@ describe("fmtMetricValue currency", () => {
 
   it("leaves count units currency-independent", () => {
     expect(fmtMetricValue(1234, "count", "en", "usd")).toBe("1,234");
+  });
+});
+
+// All admin bucketing is UTC (timeseries startOfUtc*, cohorts monthKey), so
+// the formatters pin timeZone: "UTC". These use 21:00–24:00 UTC edge
+// timestamps: on any UTC+N runtime an unpinned formatter would roll the
+// calendar day/month forward and desync labels from bucket boundaries.
+describe("date formatters are pinned to UTC", () => {
+  it("fmtDate keeps the UTC calendar day near midnight", () => {
+    expect(fmtDate("2026-01-01T23:30:00Z", "en")).toBe("Jan 1, 2026");
+  });
+
+  it("fmtBucketLabel keeps a day bucket's own date", () => {
+    expect(fmtBucketLabel("2026-01-31T23:00:00Z", "day", "en")).toMatch(/31/);
+    expect(fmtBucketLabel("2026-01-31T23:00:00Z", "day", "en")).toMatch(/Jan/);
+  });
+
+  it("fmtMonth does not roll a late-month timestamp into the next month", () => {
+    expect(fmtMonth("2026-01-31T23:30:00Z", "en")).toMatch(/Jan/);
   });
 });

@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_ID: process.env.COMMIT_REF ?? "dev",
   },
 
-  transpilePackages: ["@fitlife/ui", "@fitlife/config", "@fitlife/plan-engine"],
+  transpilePackages: ["@fitlife/config", "@fitlife/plan-engine"],
 
   // @react-pdf/renderer is loaded dynamically (ssr:false) by DownloadPDFButton,
   // but Turbopack still tries to resolve its imports during SSR compilation.

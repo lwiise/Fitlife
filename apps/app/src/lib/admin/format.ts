@@ -93,11 +93,17 @@ export function fmtSignedPct(
   }).format(n / 100);
 }
 
+// Date formatters pin timeZone: "UTC" because ALL admin bucketing is UTC-based
+// (timeseries.ts startOfUtc*, cohorts/insights monthKey via Date.UTC). Pinning
+// keeps labels aligned with bucket boundaries on any runtime TZ (prod Netlify
+// is UTC; dev machines aren't). Riyadh-day accounting would require changing
+// buckets AND labels together — deliberate product follow-up, not done here.
 export function fmtMonth(iso: string | null | undefined, locale: AdminLocale): string {
   if (!iso) return "—";
   return new Intl.DateTimeFormat(TAG[locale], {
     month: "short",
     year: "2-digit",
+    timeZone: "UTC",
   }).format(new Date(iso));
 }
 
@@ -107,6 +113,7 @@ export function fmtDate(iso: string | null | undefined, locale: AdminLocale): st
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   }).format(new Date(iso));
 }
 
@@ -126,7 +133,9 @@ export function fmtBucketLabel(
       : granularity === "month"
         ? { month: "short" }
         : { day: "numeric", month: "short" };
-  return new Intl.DateTimeFormat(TAG[locale], opts).format(new Date(iso));
+  return new Intl.DateTimeFormat(TAG[locale], { ...opts, timeZone: "UTC" }).format(
+    new Date(iso),
+  );
 }
 
 /**

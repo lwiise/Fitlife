@@ -250,10 +250,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Exponential backoff with full jitter. attempt is 1-based (first retry = 1).
 const MAX_RETRIES = 5;
-function backoffMs(attempt: number): number {
-  const base = 800 * 2 ** (attempt - 1); // 800, 1600, 3200
-  return base + Math.floor(Math.random() * 400); // jitter avoids thundering herd
-}
 
 /**
  * How long to wait before a day-call retry. Honors the server's Retry-After
@@ -2207,7 +2203,9 @@ export async function translateMealPlan(params: {
         } catch (err) {
           if (isRetryable(err) && nameAttempt < MAX_RETRIES) {
             nameAttempt++;
-            await sleep(backoffMs(nameAttempt));
+            const nameRetryAfter =
+          err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
+        await sleep(retryWaitMs(nameAttempt, nameRetryAfter));
             continue;
           }
           // Non-fatal: maid view falls back to the Arabic name.
@@ -2305,7 +2303,9 @@ export async function translateMealPlan(params: {
         } catch (err) {
           if (isRetryable(err) && attempt < MAX_RETRIES) {
             attempt++;
-            await sleep(backoffMs(attempt));
+            const dayRetryAfter =
+          err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
+        await sleep(retryWaitMs(attempt, dayRetryAfter));
             continue;
           }
           // Non-fatal: leave this day untranslated (maid view falls back to Arabic).
