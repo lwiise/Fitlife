@@ -8,6 +8,34 @@ Classification: **CONFIRMED** (traced/reproducible) · **SUSPECTED** (looks wron
 
 ---
 
+## 2026-07-03 pass — deep engineering scan (post-admin-panel)
+
+Scope: everything landed since the 05-29 pass (~116 commits, dominated by the /admin panel, migrations 00008–00011, chat, meal_mode). Three parallel deep scans (backend/admin/billing · engine/background-function/dispatch · frontend/config/migrations), findings re-verified first-hand before fixing. **No S0 found** — RLS (admin tables deny-all by design), HMAC, secret handling, admin gating, and service-role double-filtering all check out. Baseline was fully green before the pass (type-check, lint, 262 tests, build).
+
+### Fixed this pass
+
+- **[S1 · CONFIRMED] Generation-dispatch TOCTOU race.** The busy-guard (`dispatch.ts`) read `plan_generations status='started'` then acted; nothing at the DB backed it, and `DeferredMemberDrain` polls every 2.5 s on BOTH /plan and /dashboard — two tabs or poll-vs-refresh lag ran TWO full generations (2× Anthropic spend, competing plans). **Fix:** migration `00012` partial unique index (one `started` row per user, with defensive dedup); `createPlanRows` maps 23505 → archives its placeholder (not `failed` — that would flash the failure UI over the healthy run) and throws `GenerationInFlightError`; dispatch maps it to the existing `busy`; the drain client latches after `fired||busy` and resets when server `generating` flips. Code degrades byte-identically until 00012 is applied to prod (manual!).
+- **[S1 · CONFIRMED] Background function not idempotent.** A replayed/duplicate invocation re-ran a full generation. **Fix:** pure `generationAlreadySettled` predicate + SDK-free probe at the top of generate mode → `200 "Already settled"` no-op; probe failure is non-fatal (never drops a legit run).
+- **[S1 · CONFIRMED] `/api/checkout` had no already-subscribed guard** — an active subscriber completing a second checkout got a SECOND live LS subscription (webhook tracks only the newest; the first keeps billing, uncancellable from the UI; masked today by test-mode variant IDs). **Fix:** `hasLiveLemonsqueezySubscription` (active/trialing unexpired, or past_due, AND carrying an LS id) → 409 with Arabic message; trials (no LS id) and lapsed/cancelled/expired still check out.
+- **[S1 · CONFIRMED] Destructive admin actions proceeded when the audit write failed** (`logAdminAccess` swallows errors; delete ran an irreversible PDPL erasure regardless). **Fix:** `logAdminAccessRequired` returns `{ok}` + Sentry; deactivate/reactivate/delete audit FIRST and abort with a `?error=audit_failed` banner (ar/en) when the trail can't be written. View logging stays best-effort.
+- **[S1 · CONFIRMED] `generate-plan-background.mts` was never type-checked** (tsconfig `**/*.ts` doesn't match `.mts`; esbuild strips types unchecked). **Fix:** added to the app tsconfig include — a type error there now fails CI. Also fixed the anonymous-default-export lint warning (lint is 0-warning now).
+- **[S2 · CONFIRMED] `/admin/login` unreachable when logged out** — the proxy bounced it to the consumer `/auth/login`, contradicting the page's own public contract. **Fix:** exempted from the unauthenticated redirect only (still gets session refresh so signed-in admins bounce to /admin).
+- **[S2 · CONFIRMED] RTL violation in the vendored marketing button** — physical `pl-/pr-` keyed to *logical* `inline-start/end` icon slots (wrong side under RTL; variants currently dormant). **Fix:** `ps-/pe-`.
+- **[S2] No route-level loading states** on dashboard/plan/plan-history/profile/settings/subscription/chat. **Fix:** static RSC `loading.tsx` skeletons mirroring each page's chrome (logical utilities; reduced-motion already handled globally).
+- **[S2] Chat stream timeout (240 s engine default) outlived the route's `maxDuration=60`** — platform-killed turns lost their usage-audit row. **Fix:** `timeoutMs: 55_000`.
+- **[S3] Cleanup batch:** deleted dead `getCurrentUserMealPlan`/`getCurrentUserSubscription` (the latter filtered on the obsolete `on_trial` status — a trap if rewired); translation retry loops now use `retryWaitMs` (honor `Retry-After`) like the day loop, `backoffMs` deleted; admin date formatters pinned `timeZone:"UTC"` to match the UTC bucketing (+ edge-timestamp regression tests); `@fitlife/config` exports map gained `./pricing`; dead `@fitlife/ui` package removed entirely (dep + transpilePackages too); `shadcn` CLI → devDependencies; vitest got the CI's placeholder `NEXT_PUBLIC_*` env so server-module tests run.
+
+### Flagged — needs ops/product action (NOT coded)
+
+1. **Apply migration 00012 to prod** (manual, no runner). Until applied, the race fix is dormant and behavior is unchanged.
+2. **Verify 00008–00011 are applied to prod.** CLAUDE.md's verified baseline stops at 00007. The admin panel fails closed without 00008/00010/00011, but **`saveMomHealthInfo` writes `profiles.meal_mode` (00009) — if missing, every mom health-profile save fails.** Probe read-only (same method as the 00007 check), e.g. `GET /rest/v1/admin_users?select=user_id&limit=1` with the service key.
+3. **Admin roles unenforced** (`support` can delete accounts) — documented v1 choice in 00008; restrict destructive actions to `super_admin` when product decides.
+4. **Concurrent same-locale translations** can duplicate-write `plan_data` (converges correct, wastes Haiku spend) — best-effort 25 s dedup accepted.
+5. **Chat accepts client-supplied `assistant` history** and free-text household fields are interpolated into prompts — self-scoped (RLS-bounded context, schema-validated output); optional hardening later.
+6. Pre-existing: LS variant IDs still test-mode; deploy-strategy ops recommendation stands.
+
+---
+
 ## Fixed this pass
 
 ### [S1 · CONFIRMED] Cost logging hardcoded to Opus rates
