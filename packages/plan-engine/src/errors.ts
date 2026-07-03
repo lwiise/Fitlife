@@ -38,6 +38,19 @@ export class AnthropicCallError extends Error {
   }
 }
 
+/**
+ * Another generation is already in flight for this user: the plan_generations
+ * 'started' insert hit the partial unique index from migration 00012. The
+ * dispatcher maps this to its existing "busy" result. Never thrown while the
+ * index is not applied (no 23505 can fire), so code degrades gracefully.
+ */
+export class GenerationInFlightError extends Error {
+  constructor() {
+    super("Another generation is already in flight");
+    this.name = "GenerationInFlightError";
+  }
+}
+
 export class PlanValidationError extends Error {
   constructor(message: string, public rawResponse?: string) {
     super(message);

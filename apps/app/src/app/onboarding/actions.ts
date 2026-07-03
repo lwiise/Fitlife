@@ -453,12 +453,20 @@ export async function finalizeOnboarding(): Promise<void> {
  * Terminates: a fired drain flips status to "generating" (blocks re-fire) and
  * seeds the pending members (pending → empty).
  */
-export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
+/**
+ * Returns { fired } when a generation was dispatched, and { busy } when one is
+ * already in flight — either way the caller (DeferredMemberDrain) should stop
+ * dispatching and just keep refreshing until the server state advances.
+ */
+export async function drainDeferredMembers(): Promise<{
+  fired: boolean;
+  busy: boolean;
+}> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { fired: false };
+  if (!user) return { fired: false, busy: false };
 
   const [profileRes, latest, membersRes] = await Promise.all([
     supabase
@@ -479,7 +487,7 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
       >(),
   ]);
 
-  if (!profileRes.data?.onboarding_completed_at) return { fired: false };
+  if (!profileRes.data?.onboarding_completed_at) return { fired: false, busy: false };
   // Need a ready plan WITH real content — never seed the carry-over off an empty
   // shell (status flips to 'ready' on the first emit while still generating).
   if (
@@ -487,7 +495,7 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
     !latest.plan_data ||
     !planHasContent(latest.plan_data)
   )
-    return { fired: false };
+    return { fired: false, busy: false };
 
   const additionOrder = Array.isArray(profileRes.data?.member_addition_order)
     ? (profileRes.data.member_addition_order as string[])
@@ -497,7 +505,7 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
     members: membersRes.data ?? [],
     additionOrder,
   });
-  if (!nextId) return { fired: false };
+  if (!nextId) return { fired: false, busy: false };
 
   // An already-in-plan member only missing a failed day is finished alone (no
   // shared-meal impact). An ABSENT (new) member that SHARES the family menu rebuilds
@@ -516,7 +524,7 @@ export async function drainDeferredMembers(): Promise<{ fired: boolean }> {
         ? await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId })
         : await runFamilyGeneration(supabase, user.id, { regenerateSharedGroup: true });
   }
-  return { fired: gen.ok };
+  return { fired: gen.ok, busy: !gen.ok && gen.kind === "busy" };
 }
 
 /**

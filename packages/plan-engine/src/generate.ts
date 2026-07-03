@@ -35,7 +35,11 @@ import {
   type PerMemberPortion,
   type LocaleCode,
 } from "./schema";
-import { PlanValidationError, AnthropicCallError } from "./errors";
+import {
+  PlanValidationError,
+  AnthropicCallError,
+  GenerationInFlightError,
+} from "./errors";
 import {
   getBeneficiaries,
   type PlanPromptContext,
@@ -172,6 +176,29 @@ export async function createPlanRows(
       started_at: new Date().toISOString(),
     });
   if (insertGenError) {
+    // 23505 = the partial unique index from migration 00012: another 'started'
+    // row already exists for this user, i.e. we lost a dispatch race. Archive
+    // (NOT fail) our placeholder — a 'failed' row would become the user's
+    // latest plan and flash the failure UI over the healthy in-flight run,
+    // and DELETE has no RLS policy for the user-scoped client.
+    if ((insertGenError as { code?: string }).code === "23505") {
+      const { error: archiveError } = await supabase
+        .from("meal_plans")
+        .update({
+          status: "archived",
+          error_message: "superseded: another generation was already in flight",
+        })
+        .eq("id", mealPlanId);
+      if (archiveError) {
+        // Rare double-failure: the orphan 'generating' row is reclassified by
+        // the reader's 15-min staleness guard; nothing more to do here.
+        console.error(
+          "[createPlanRows] failed to archive raced placeholder",
+          archiveError.message,
+        );
+      }
+      throw new GenerationInFlightError();
+    }
     await supabase
       .from("meal_plans")
       .update({ status: "failed", error_message: "audit row insert failed" })

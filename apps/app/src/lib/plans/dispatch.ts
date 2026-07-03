@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import {
   buildPlanContext,
   createPlanRows,
+  GenerationInFlightError,
   runMealPlanGeneration,
   runMealPlanTranslation,
   hasPendingGeneration,
@@ -257,6 +258,10 @@ export async function triggerPlanGeneration(params: {
   try {
     mealPlanId = await createPlanRows(supabase, userId);
   } catch (err) {
+    // Lost a dispatch race: the 00012 unique index rejected a second live
+    // 'started' row. Same outcome as the busy-guard above, discovered at
+    // insert time instead of read time.
+    if (err instanceof GenerationInFlightError) return { ok: false, kind: "busy" };
     console.error("[triggerPlanGeneration] createPlanRows failed", err);
     Sentry.captureException(err, {
       tags: { area: "plan-generation", step: "create-rows", userId },
