@@ -103,6 +103,25 @@ export function isPastDue(sub: SubscriptionRow): boolean {
 }
 
 /**
+ * True when the user already holds a LIVE Lemonsqueezy subscription — a new
+ * checkout would create a SECOND LS subscription that keeps billing while our
+ * single subscriptions row points at the newer one (orphaned, uncancellable
+ * from the UI). Tier changes go through /api/subscription/change, which swaps
+ * the variant on the EXISTING LS subscription instead.
+ *
+ * past_due counts as live: the LS sub is recoverable by paying — a second
+ * checkout would orphan it. Internal trials never carry an LS id, so trial
+ * users still check out normally; cancelled/expired/lapsed rows fall through
+ * (starting a fresh subscription is the correct recovery there).
+ */
+export function hasLiveLemonsqueezySubscription(
+  sub: SubscriptionRow | null,
+): boolean {
+  if (!sub?.lemonsqueezy_subscription_id) return false;
+  return isSubscriptionActive(sub) || isPastDue(sub);
+}
+
+/**
  * Maximum number of beneficiaries the tier allows (Mom + family_members,
  * excluding the housekeeper). null means unlimited.
  */

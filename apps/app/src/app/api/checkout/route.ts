@@ -3,6 +3,10 @@ import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { createCheckout } from "@lemonsqueezy/lemonsqueezy.js";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getCurrentSubscription,
+  hasLiveLemonsqueezySubscription,
+} from "@/lib/subscription/state";
 import { env, getLemonsqueezyStoreId } from "@/lib/env";
 import { setupLemonsqueezy } from "@/lib/lemonsqueezy/client";
 import { getVariantId } from "@fitlife/config";
@@ -43,6 +47,18 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "طلب غير صالح" },
       { status: 400 },
+    );
+  }
+
+  // An active subscriber must change tiers via /api/subscription/change (which
+  // updates the EXISTING LS subscription). A second checkout would create a
+  // second live LS subscription that keeps billing after our row points at
+  // the newer one.
+  const currentSub = await getCurrentSubscription(user.id);
+  if (hasLiveLemonsqueezySubscription(currentSub)) {
+    return NextResponse.json(
+      { error: "عندك اشتراك نشط بالفعل — غيّري الباقة من صفحة الاشتراك" },
+      { status: 409 },
     );
   }
 
