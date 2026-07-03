@@ -1,5 +1,6 @@
 import "server-only";
 
+import * as Sentry from "@sentry/nextjs";
 import type { Json } from "@/lib/supabase/database.types";
 import { adminDb } from "@/lib/admin/db";
 
@@ -46,4 +47,37 @@ export async function logAdminAccess(params: {
       error: error.message,
     });
   }
+}
+
+/**
+ * REQUIRED audit write for DESTRUCTIVE account actions (deactivate/delete):
+ * unlike logAdminAccess this reports failure instead of swallowing it, so the
+ * caller can ABORT the action — PDPL: no destructive act without a trail.
+ */
+export async function logAdminAccessRequired(params: {
+  adminUserId: string;
+  subscriberId?: string | null;
+  action: AdminAuditAction;
+  detail?: Json | null;
+}): Promise<{ ok: boolean }> {
+  const admin = adminDb();
+  const { error } = await admin.from("admin_audit_log").insert({
+    admin_user_id: params.adminUserId,
+    subscriber_id: params.subscriberId ?? null,
+    action: params.action,
+    detail: params.detail ?? null,
+  });
+
+  if (error) {
+    console.error("[admin-audit] REQUIRED audit write failed — action aborted", {
+      action: params.action,
+      subscriberId: params.subscriberId ?? null,
+      error: error.message,
+    });
+    Sentry.captureException(new Error(`admin audit write failed: ${error.message}`), {
+      tags: { area: "admin-audit", action: params.action },
+    });
+    return { ok: false };
+  }
+  return { ok: true };
 }

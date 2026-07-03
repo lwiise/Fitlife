@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
 import { adminDb } from "@/lib/admin/db";
-import { logAdminAccess } from "@/lib/admin/audit";
+import { logAdminAccessRequired } from "@/lib/admin/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { eraseUserAccount } from "@/lib/account/erase";
 import { ADMIN_CURRENCY_COOKIE, ADMIN_LOCALE_COOKIE } from "@/lib/admin/locale";
@@ -79,18 +79,23 @@ export async function setSubscriberActive(formData: FormData) {
   if (!UUID_RE.test(userId)) redirect("/admin");
   if (await isTargetAdmin(userId)) redirect(`/admin/subscribers/${userId}`);
 
-  const { error } = await createAdminClient().auth.admin.updateUserById(userId, {
-    ban_duration: active ? "none" : "876000h", // ~100 years = "deactivated"
-  });
-  if (error) throw error;
-
-  await logAdminAccess({
+  // Audit BEFORE acting: if the trail can't be written, the action must not
+  // happen (PDPL). The row therefore records INTENT — if GoTrue then errors,
+  // an audit row exists for an action that didn't complete; acceptable, since
+  // the alternative (act first) can't abort an unauditable action.
+  const audit = await logAdminAccessRequired({
     adminUserId: admin.userId,
     subscriberId: userId,
     action: active
       ? "reactivate_subscriber_account"
       : "deactivate_subscriber_account",
   });
+  if (!audit.ok) redirect(`/admin/subscribers/${userId}?error=audit_failed`);
+
+  const { error } = await createAdminClient().auth.admin.updateUserById(userId, {
+    ban_duration: active ? "none" : "876000h", // ~100 years = "deactivated"
+  });
+  if (error) throw error;
 
   redirect(`/admin/subscribers/${userId}`);
 }
@@ -117,13 +122,15 @@ export async function deleteSubscriberAccount(formData: FormData) {
   }
 
   // Log BEFORE erasing — the audit FK is `on delete set null`, so the row survives
-  // (de-identified) but `detail` preserves what was deleted.
-  await logAdminAccess({
+  // (de-identified) but `detail` preserves what was deleted. REQUIRED: an
+  // irreversible erasure with no audit trail must not happen — abort instead.
+  const audit = await logAdminAccessRequired({
     adminUserId: admin.userId,
     subscriberId: userId,
     action: "delete_subscriber_account",
     detail: { email: realEmail },
   });
+  if (!audit.ok) redirect(`/admin/subscribers/${userId}?error=audit_failed`);
 
   await eraseUserAccount(userId);
 

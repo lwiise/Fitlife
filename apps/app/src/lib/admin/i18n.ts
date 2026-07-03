@@ -147,6 +147,10 @@ const STRINGS = {
 
   // ── Account actions (danger zone) ──
   danger_zone: { ar: "منطقة الخطر", en: "Danger zone" },
+  audit_write_failed: {
+    ar: "تعذّر تسجيل العملية في سجل التدقيق فتم إيقاف الإجراء. حاولي مرة أخرى.",
+    en: "Couldn't record the audit entry, so the action was aborted. Try again.",
+  },
   account_active: { ar: "الحساب نشط", en: "Account active" },
   account_deactivated: { ar: "الحساب معطّل", en: "Account deactivated" },
   deactivate_desc: {

@@ -40,11 +40,14 @@ import { AccountDangerZone } from "../../_components/AccountDangerZone";
 
 export default async function SubscriberDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ userId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const admin = await requireAdmin();
   const { userId } = await params;
+  const { error: actionError } = await searchParams;
 
   const detail = await loadSubscriberDetail(userId);
   if (!detail) notFound();
@@ -84,6 +87,14 @@ export default async function SubscriberDetailPage({
       </DetailHeader>
 
       <main className="container-app space-y-4 py-6">
+        {actionError === "audit_failed" ? (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-300 bg-red-50/40 p-4 text-sm font-medium text-red-800"
+          >
+            {t("audit_write_failed", locale)}
+          </div>
+        ) : null}
         <div className="grid gap-4 lg:grid-cols-2">
           <DetailCard title={t("section_account", locale)} icon={User}>
             <dl className="grid gap-x-6 sm:grid-cols-2">
