@@ -8,7 +8,10 @@
       "Bash(Get-ChildItem -Path public -Filter \"family-*\" -ErrorAction SilentlyContinue)",
       "Bash(Select-Object Name)",
       "Bash(git --no-pager log --oneline -4 main)",
-      "Bash(git rev-list *)"
+      "Bash(git rev-list *)",
+      "Bash(git push *)",
+      "Bash(echo \"push exit: $?\")",
+      "Bash(git stash *)"
     ]
   }
 }
