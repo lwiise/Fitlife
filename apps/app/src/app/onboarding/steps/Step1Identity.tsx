@@ -30,7 +30,7 @@ export function Step1Identity({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <header>
         <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-          أهلاً، كيف اسمك؟
+          أهلاً بكِ، ما اسمك؟
         </h2>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
           نسوي حسابك الشخصي عشان نحضّر لكِ خطة على مقاسك.
