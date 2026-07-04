@@ -16,6 +16,19 @@ import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS, type MealPlan } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
+import {
+  activityLevelFrom,
+  type DayNature,
+  type ExerciseDays,
+  type ExerciseType,
+} from "@/lib/plans/activityLevel";
+import {
+  momProfileInputSchema,
+  familyMemberInputSchema,
+  familyWideInputSchema,
+  profileStepSchema,
+  VALIDATION_ERROR_AR,
+} from "./serverSchemas";
 import type { Database } from "@/lib/supabase/database.types";
 
 type ProfileUpdates = Partial<{
@@ -24,6 +37,10 @@ type ProfileUpdates = Partial<{
   height_cm: number;
   weight_kg: number;
   activity_level: string;
+  day_nature: string;
+  exercise_days: string;
+  exercise_type: string | null;
+  target_weight_kg: number | null;
   primary_goal: string;
   cuisine_preference: string;
   dietary_restrictions: string[];
@@ -55,9 +72,13 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
     return { ok: false, error: "Not authenticated" };
   }
 
+  // The update object goes straight into a profiles UPDATE — strict whitelist.
+  const parsed = profileStepSchema.safeParse(updates);
+  if (!parsed.success) return { ok: false, error: VALIDATION_ERROR_AR };
+
   const { error } = await supabase
     .from("profiles")
-    .update(updates)
+    .update(parsed.data)
     .eq("id", user.id);
 
   if (error) {
@@ -189,6 +210,10 @@ export async function saveFamilyWidePreferences(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "Not authenticated" };
 
+  if (!familyWideInputSchema.safeParse(input).success) {
+    return { ok: false, error: VALIDATION_ERROR_AR };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -215,7 +240,20 @@ export interface MomProfileInput {
   birth_year: number;
   height_cm: number;
   weight_kg: number;
-  activity_level: string;
+  // Legacy direct level; when day_nature + exercise_days are present the
+  // server derives activity_level from them instead (never trusts a client-
+  // computed level).
+  activity_level?: string;
+  day_nature?: DayNature;
+  exercise_days?: ExerciseDays;
+  exercise_type?: ExerciseType | null;
+  target_weight_kg?: number | null;
+  water_cups?: number | null;
+  sleep_hours?: number | null;
+  medications?: string[];
+  supplements?: string[];
+  nausea_foods?: string[];
+  notes?: string | null;
   user_goal: UserGoal;
   pregnancy_status: "none" | "pregnant" | "lactating";
   trimester?: number;
@@ -247,6 +285,10 @@ export async function saveMomProfile(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
+  if (!momProfileInputSchema.safeParse(input).success) {
+    return { ok: false, error: VALIDATION_ERROR_AR };
+  }
+
   const isPregnant = input.pregnancy_status === "pregnant";
   const isLactating = input.pregnancy_status === "lactating";
   const memberType = isPregnant ? "pregnant" : isLactating ? "lactating" : "adult";
@@ -262,6 +304,14 @@ export async function saveMomProfile(
     conditions,
   });
 
+  // Derive the canonical level from the concrete answers when available
+  // (never trust a client-computed level); legacy clients still send the
+  // level directly.
+  const derivedActivity =
+    input.day_nature && input.exercise_days
+      ? activityLevelFrom(input.day_nature, input.exercise_days)
+      : (input.activity_level ?? null);
+
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("profiles")
@@ -270,7 +320,17 @@ export async function saveMomProfile(
       birth_year: input.birth_year,
       height_cm: input.height_cm,
       weight_kg: input.weight_kg,
-      activity_level: input.activity_level,
+      activity_level: derivedActivity,
+      day_nature: input.day_nature ?? null,
+      exercise_days: input.exercise_days ?? null,
+      exercise_type: input.exercise_type ?? null,
+      target_weight_kg: input.target_weight_kg ?? null,
+      water_cups: input.water_cups ?? null,
+      sleep_hours: input.sleep_hours ?? null,
+      medications: input.medications ?? [],
+      supplements: input.supplements ?? [],
+      nausea_foods: isPregnant ? (input.nausea_foods ?? []) : [],
+      notes: input.notes?.trim() || null,
       sex: "female",
       member_type: memberType,
       primary_goal: primaryGoal,
@@ -659,14 +719,26 @@ export interface FamilyMemberInput {
   consulted_doctor: boolean;
   // Shared family meals (default) vs the member's own independent dishes.
   meal_mode?: "shared" | "independent";
+  // Coach questionnaire (00013) — adults; pregnant/lactating get the safe
+  // subset (meds/supplements/water); children none.
+  day_nature?: DayNature;
+  exercise_days?: ExerciseDays;
+  exercise_type?: ExerciseType | null;
+  target_weight_kg?: number | null;
+  water_cups?: number | null;
+  sleep_hours?: number | null;
+  medications?: string[];
+  supplements?: string[];
   // child
   school_meal_handling?: string | null;
   picky_eater?: boolean;
   // pregnant
   trimester?: number | null;
   high_risk_pregnancy?: boolean;
+  nausea_foods?: string[];
   // lactating
   months_postpartum?: number | null;
+  feeding_mode?: "exclusive" | "mixed" | "formula" | null;
 }
 
 type AddMemberResult =
@@ -694,6 +766,13 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     });
   }
 
+  const isAdult = input.member_type === "adult";
+  // Derive the canonical level from the concrete answers when available.
+  const activityLevel =
+    isAdult && input.day_nature && input.exercise_days
+      ? activityLevelFrom(input.day_nature, input.exercise_days)
+      : (input.activity_level ?? null);
+
   return {
     user_id: userId,
     name: input.name,
@@ -703,7 +782,7 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     birth_year: input.birth_year,
     height_cm: input.height_cm ?? null,
     weight_kg: input.weight_kg ?? null,
-    activity_level: input.activity_level ?? null,
+    activity_level: activityLevel,
     primary_goal: primaryGoal,
     preferred_language: input.preferred_language ?? "ar",
     meal_mode: input.meal_mode ?? "shared",
@@ -719,6 +798,22 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     school_meal_handling:
       input.member_type === "child" ? (input.school_meal_handling ?? null) : null,
     picky_eater: input.member_type === "child" ? !!input.picky_eater : false,
+    // Coach questionnaire (00013). Supplements now land in their OWN column —
+    // the old lactating wizard folded them into medical_conditions via
+    // other_condition (data corruption, fixed with the wizard in the same
+    // release). Children get none of these.
+    target_weight_kg: isAdult ? (input.target_weight_kg ?? null) : null,
+    day_nature: isAdult ? (input.day_nature ?? null) : null,
+    exercise_days: isAdult ? (input.exercise_days ?? null) : null,
+    exercise_type: isAdult ? (input.exercise_type ?? null) : null,
+    sleep_hours: isAdult ? (input.sleep_hours ?? null) : null,
+    water_cups: input.member_type === "child" ? null : (input.water_cups ?? null),
+    medications: input.member_type === "child" ? [] : (input.medications ?? []),
+    supplements: input.member_type === "child" ? [] : (input.supplements ?? []),
+    nausea_foods:
+      input.member_type === "pregnant" ? (input.nausea_foods ?? []) : [],
+    feeding_mode:
+      input.member_type === "lactating" ? (input.feeding_mode ?? null) : null,
   };
 }
 
@@ -732,6 +827,10 @@ export async function addFamilyMember(
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  if (!familyMemberInputSchema.safeParse(input).success) {
+    return { ok: false, error: VALIDATION_ERROR_AR };
+  }
 
   // Next display_order = current max + 1.
   const { data: existingRows } = await supabase
@@ -980,6 +1079,10 @@ export async function updateFamilyMember(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
+  if (!familyMemberInputSchema.safeParse(input).success) {
+    return { ok: false, error: VALIDATION_ERROR_AR };
+  }
+
   const { data: beforeRow } = await supabase
     .from("family_members")
     .select("*")
@@ -1011,6 +1114,12 @@ export async function updateFamilyMember(
     before.primary_goal !== row.primary_goal ||
     before.member_type !== row.member_type ||
     before.meal_mode !== row.meal_mode ||
+    before.activity_level !== row.activity_level ||
+    Number(before.target_weight_kg ?? 0) !== Number(row.target_weight_kg ?? 0) ||
+    before.feeding_mode !== row.feeding_mode ||
+    JSON.stringify(before.medications ?? []) !== JSON.stringify(row.medications) ||
+    JSON.stringify(before.supplements ?? []) !== JSON.stringify(row.supplements) ||
+    JSON.stringify(before.nausea_foods ?? []) !== JSON.stringify(row.nausea_foods) ||
     JSON.stringify(before.medical_conditions ?? []) !==
       JSON.stringify(row.medical_conditions);
 
