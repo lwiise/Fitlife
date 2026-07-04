@@ -284,6 +284,16 @@ async function buildContextViaFetch(
       is_child: memberType === "child" || (age != null && age < 18),
       preferred_language: m.preferred_language as string,
       meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
+      target_weight_kg: (m.target_weight_kg as number | null) ?? null,
+      day_nature: (m.day_nature as string | null) ?? null,
+      exercise_days: (m.exercise_days as string | null) ?? null,
+      exercise_type: (m.exercise_type as string | null) ?? null,
+      water_cups: (m.water_cups as number | null) ?? null,
+      sleep_hours: (m.sleep_hours as number | null) ?? null,
+      medications: asStrings(m.medications),
+      supplements: asStrings(m.supplements),
+      nausea_foods: asStrings(m.nausea_foods),
+      feeding_mode: (m.feeding_mode as string | null) ?? null,
     };
   });
 
@@ -320,6 +330,16 @@ async function buildContextViaFetch(
       // Mirror buildContext.ts — mom's meal_mode was missing here, leaving it
       // undefined on the prod context (PlanPromptContextMom requires it).
       meal_mode: profile.meal_mode === "independent" ? "independent" : "shared",
+      target_weight_kg: (profile.target_weight_kg as number | null) ?? null,
+      day_nature: (profile.day_nature as string | null) ?? null,
+      exercise_days: (profile.exercise_days as string | null) ?? null,
+      exercise_type: (profile.exercise_type as string | null) ?? null,
+      water_cups: (profile.water_cups as number | null) ?? null,
+      sleep_hours: (profile.sleep_hours as number | null) ?? null,
+      medications: asStrings(profile.medications),
+      supplements: asStrings(profile.supplements),
+      nausea_foods: asStrings(profile.nausea_foods),
+      notes: (profile.notes as string | null) ?? null,
     },
     family_members,
     family_wide: {

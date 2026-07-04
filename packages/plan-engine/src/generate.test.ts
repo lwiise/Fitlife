@@ -85,6 +85,16 @@ function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
       is_child: true,
       preferred_language: "ar",
       meal_mode: "shared",
+      target_weight_kg: null,
+      day_nature: null,
+      exercise_days: null,
+      exercise_type: null,
+      water_cups: null,
+      sleep_hours: null,
+      medications: [],
+      supplements: [],
+      nausea_foods: [],
+      feeding_mode: null,
     });
   }
   return {
@@ -109,6 +119,16 @@ function makeContext(opts?: { extraMember?: boolean }): PlanPromptContext {
       high_risk_pregnancy: false,
       consulted_doctor: false,
       meal_mode: "shared",
+      target_weight_kg: null,
+      day_nature: null,
+      exercise_days: null,
+      exercise_type: null,
+      water_cups: null,
+      sleep_hours: null,
+      medications: [],
+      supplements: [],
+      nausea_foods: [],
+      notes: null,
     },
     family_members,
     family_wide: {
@@ -632,6 +652,16 @@ describe("generateMealPlan — regenerateMemberId name stamping", () => {
       is_child: true,
       preferred_language: "ar",
       meal_mode: "shared",
+      target_weight_kg: null,
+      day_nature: null,
+      exercise_days: null,
+      exercise_type: null,
+      water_cups: null,
+      sleep_hours: null,
+      medications: [],
+      supplements: [],
+      nausea_foods: [],
+      feeding_mode: null,
     });
     // Only mom is in the prior plan (defines the 3-day grid); member-2 + member-3
     // are absent → both incomplete.
@@ -757,6 +787,16 @@ describe("generateMealPlan — new shared member aligns to a shared peer", () =>
       is_child: true,
       preferred_language: "ar",
       meal_mode: "shared",
+      target_weight_kg: null,
+      day_nature: null,
+      exercise_days: null,
+      exercise_type: null,
+      water_cups: null,
+      sleep_hours: null,
+      medications: [],
+      supplements: [],
+      nausea_foods: [],
+      feeding_mode: null,
     });
 
     // Prior plan (member #0 = mom with her own independent dishes, member-2 with

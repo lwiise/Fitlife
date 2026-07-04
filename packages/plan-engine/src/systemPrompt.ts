@@ -90,12 +90,39 @@ const ROLE_LABELS_AR: Record<string, string> = {
   other_child: "طفل آخر",
 };
 
+// MOH-aligned bucket names — identical wording to the methodology's multiplier
+// table (خامل ×1.2 … عالي جداً ×1.9) so the model never has to infer the match.
 const ACTIVITY_LABELS_AR: Record<string, string> = {
-  sedentary: "قليلة الحركة",
-  light: "نشاط خفيف",
-  moderate: "نشاط متوسط",
-  active: "نشطة",
-  very_active: "نشطة جداً",
+  sedentary: "خامل (كثير الجلوس)",
+  light: "نشاط خفيف (1-3 أيام أسبوعياً)",
+  moderate: "نشاط متوسط (3-5 أيام أسبوعياً)",
+  active: "نشاط عالي (6-7 أيام أسبوعياً)",
+  very_active: "نشاط عالي جداً (تدريب مكثف/عمل بدني)",
+};
+
+const DAY_NATURE_LABELS_AR: Record<string, string> = {
+  desk: "مكتبية (جلوس معظم اليوم)",
+  moderate_movement: "حركة متوسطة",
+  physical_work: "عمل بدني",
+};
+
+const EXERCISE_DAYS_LABELS_AR: Record<string, string> = {
+  none: "لا رياضة",
+  d1_2: "رياضة 1-2 يوم أسبوعياً",
+  d3_5: "رياضة 3-5 أيام أسبوعياً",
+  d6_plus: "رياضة 6 أيام أو أكثر أسبوعياً",
+};
+
+const EXERCISE_TYPE_LABELS_AR: Record<string, string> = {
+  resistance: "مقاومة",
+  cardio: "كارديو",
+  mixed: "مقاومة وكارديو",
+};
+
+const FEEDING_MODE_LABELS_AR: Record<string, string> = {
+  exclusive: "طبيعية كاملة",
+  mixed: "مختلطة",
+  formula: "صناعية",
 };
 
 const GOAL_LABELS_AR: Record<string, string> = {
@@ -169,6 +196,35 @@ function describeMom(c: PlanPromptContext): string {
   if (m.dislikes.length > 0) {
     line += ` لا تحب: ${m.dislikes.join("، ")}.`;
   }
+  // Coach questionnaire (00013). Raw exercise answers ride with the derived
+  // level so the TDEE multiplier match is explicit, not inferred.
+  if (m.target_weight_kg != null) {
+    line += ` هدفها الوصول إلى ${m.target_weight_kg} كيلو — اجعلي وتيرة التغيير واقعية ومستدامة.`;
+  }
+  if (m.day_nature || m.exercise_days) {
+    const bits: string[] = [];
+    if (m.day_nature) bits.push(`طبيعة يومها ${labeled(DAY_NATURE_LABELS_AR, m.day_nature)}`);
+    if (m.exercise_days) {
+      const t = m.exercise_type ? ` (${labeled(EXERCISE_TYPE_LABELS_AR, m.exercise_type)})` : "";
+      bits.push(`${labeled(EXERCISE_DAYS_LABELS_AR, m.exercise_days)}${t}`);
+    }
+    line += ` ${bits.join("، ")} — مستوى النشاط أعلاه محتسب من ذلك.`;
+  }
+  if (m.medications.length > 0) {
+    line += ` تتناول أدوية: ${m.medications.join("، ")} — نسّقي توقيت الوجبات مع الدواء وفق قواعد الحالة الصحية، ولا تقدّمي أي نصيحة دوائية.`;
+  }
+  if (m.supplements.length > 0) {
+    line += ` تتناول مكملات: ${m.supplements.join("، ")} — راعيها في توزيع الوجبات (مثل فصل الحديد عن الكالسيوم).`;
+  }
+  if (m.nausea_foods.length > 0) {
+    line += ` أطعمة تسبب لها الغثيان حالياً: ${m.nausea_foods.join("، ")} — تجنّبيها مؤقتاً في هذه الخطة.`;
+  }
+  if (m.water_cups != null) {
+    line += ` تشرب نحو ${m.water_cups} أكواب ماء يومياً${m.water_cups < 8 ? " — شجّعيها بلطف على الزيادة ضمن الخطة" : ""}.`;
+  }
+  if (m.sleep_hours != null) {
+    line += ` تنام نحو ${m.sleep_hours} ساعات${m.sleep_hours < 7 ? " — راعي وجبات مسائية خفيفة تدعم نوماً أفضل" : ""}.`;
+  }
   line += ` تفضل مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
   // meal_mode is discretionary: 'shared' is the default (cook once, split), so it
   // needs no instruction. Only flag 'independent' — and it must be surfaced HERE,
@@ -214,6 +270,45 @@ function describeMember(member: PlanPromptContextMember): string {
   }
   if (member.member_type === "lactating") {
     line += ` مرضعة (مرّ ${member.months_postpartum ?? "غير محدد"} شهر على الولادة) — طبّقي قواعد الرضاعة.`;
+    if (member.feeding_mode) {
+      line += ` طريقة الرضاعة: ${labeled(FEEDING_MODE_LABELS_AR, member.feeding_mode)}${
+        member.feeding_mode === "exclusive"
+          ? " — احتياج سعرات الرضاعة كامل."
+          : " — عدّلي إضافة سعرات الرضاعة بما يناسب."
+      }`;
+    }
+  }
+  // Coach questionnaire (00013) — masculine default phrasing like the rest of
+  // the member block; nausea only ever arrives on pregnant members.
+  if (member.target_weight_kg != null) {
+    line += ` هدفه الوصول إلى ${member.target_weight_kg} كيلو — اجعلي وتيرة التغيير واقعية ومستدامة.`;
+  }
+  if (member.day_nature || member.exercise_days) {
+    const bits: string[] = [];
+    if (member.day_nature)
+      bits.push(`طبيعة يومه ${labeled(DAY_NATURE_LABELS_AR, member.day_nature)}`);
+    if (member.exercise_days) {
+      const t = member.exercise_type
+        ? ` (${labeled(EXERCISE_TYPE_LABELS_AR, member.exercise_type)})`
+        : "";
+      bits.push(`${labeled(EXERCISE_DAYS_LABELS_AR, member.exercise_days)}${t}`);
+    }
+    line += ` ${bits.join("، ")} — مستوى النشاط أعلاه محتسب من ذلك.`;
+  }
+  if (member.medications.length > 0) {
+    line += ` يتناول أدوية: ${member.medications.join("، ")} — نسّقي توقيت الوجبات مع الدواء وفق قواعد الحالة الصحية، ولا تقدّمي أي نصيحة دوائية.`;
+  }
+  if (member.supplements.length > 0) {
+    line += ` يتناول مكملات: ${member.supplements.join("، ")} — راعيها في توزيع الوجبات.`;
+  }
+  if (member.nausea_foods.length > 0) {
+    line += ` أطعمة تسبب لها الغثيان حالياً: ${member.nausea_foods.join("، ")} — تجنّبيها مؤقتاً في هذه الخطة.`;
+  }
+  if (member.water_cups != null) {
+    line += ` يشرب نحو ${member.water_cups} أكواب ماء يومياً.`;
+  }
+  if (member.sleep_hours != null) {
+    line += ` ينام نحو ${member.sleep_hours} ساعات.`;
   }
   // Children: portion-based planning only — never BMR/TDEE.
   if (member.is_child) {
@@ -512,6 +607,16 @@ function buildRoster(
                 is_child: false,
                 preferred_language: "ar",
                 meal_mode: "shared",
+                target_weight_kg: null,
+                day_nature: null,
+                exercise_days: null,
+                exercise_type: null,
+                water_cups: null,
+                sleep_hours: null,
+                medications: [],
+                supplements: [],
+                nausea_foods: [],
+                feeding_mode: null,
               },
             );
       return `- member_id="${b.member_id}" — ${desc}`;
@@ -551,6 +656,19 @@ ${fb}
 }
 
 /**
+ * The mom's free "anything else" questionnaire note. SKELETON-only (like
+ * feedback): targets/structure are decided there, and day prompts repeat 7×.
+ * Methodology still takes precedence.
+ */
+function momNotesText(context: PlanPromptContext): string {
+  const n = context.mom.notes?.trim();
+  if (!n) return "";
+  return `\n\n# ملاحظات إضافية من العميلة (من الاستبيان)
+${n}
+راعيها قدر الإمكان مع الحفاظ على منهجيتك والقواعد الصحية.`;
+}
+
+/**
  * Phase 1 — the dynamic part of the SKELETON call: compute per-member targets +
  * a week of dish NAMES only (no recipes). Small + fast; decides variety and
  * which meals are shared across the family (same recipe_name_ar = shared).
@@ -574,7 +692,7 @@ export function buildSkeletonPrompt(
 الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
 # أفراد الخطة المطلوبة الآن (استخدمي member_id بالضبط)
-${buildRoster(context, targetMemberIds)}${feedbackText(context)}
+${buildRoster(context, targetMemberIds)}${momNotesText(context)}${feedbackText(context)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
@@ -644,6 +762,17 @@ export function buildDayPrompt(
       if (allergies.length) constraints.push(`حساسية (تجنّب تام): ${allergies.join("، ")}`);
       if (dislikes.length) constraints.push(`لا يحب: ${dislikes.join("، ")}`);
       if (conditions.length) constraints.push(`حالات: ${conditions.join("، ")}`);
+      // Meds + nausea are per-meal-relevant (timing / temporary aversions), so
+      // they repeat in every day prompt; everything else questionnaire-related
+      // stays skeleton-only for token economy.
+      const medications =
+        sm.member_id === "mom" ? context.mom.medications : (ctxMember?.medications ?? []);
+      const nauseaFoods =
+        sm.member_id === "mom" ? context.mom.nausea_foods : (ctxMember?.nausea_foods ?? []);
+      if (medications.length)
+        constraints.push(`أدوية: ${medications.join("، ")} (نسّقي توقيت الوجبات؛ لا نصيحة دوائية)`);
+      if (nauseaFoods.length)
+        constraints.push(`غثيان من: ${nauseaFoods.join("، ")} (تجنّب مؤقت)`);
       const mealMode =
         sm.member_id === "mom" ? context.mom.meal_mode : ctxMember?.meal_mode;
       if (mealMode === "independent")

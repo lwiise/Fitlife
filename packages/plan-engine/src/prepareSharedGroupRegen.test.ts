@@ -70,6 +70,16 @@ const ctxMember = (
   is_child: true,
   preferred_language: "ar",
   meal_mode,
+  target_weight_kg: null,
+  day_nature: null,
+  exercise_days: null,
+  exercise_type: null,
+  water_cups: null,
+  sleep_hours: null,
+  medications: [],
+  supplements: [],
+  nausea_foods: [],
+  feeding_mode: null,
 });
 
 const makeCtx = (
@@ -97,6 +107,16 @@ const makeCtx = (
     high_risk_pregnancy: false,
     consulted_doctor: false,
     meal_mode: momMode,
+    target_weight_kg: null,
+    day_nature: null,
+    exercise_days: null,
+    exercise_type: null,
+    water_cups: null,
+    sleep_hours: null,
+    medications: [],
+    supplements: [],
+    nausea_foods: [],
+    notes: null,
   },
   family_members,
   family_wide: {

@@ -49,6 +49,19 @@ export interface PlanPromptContextMom {
   consulted_doctor: boolean;
   // 'shared' = eats the family's shared meals (default); 'independent' = own dishes.
   meal_mode: "shared" | "independent";
+  // Coach questionnaire (00013). Raw exercise answers ride along with the
+  // derived activity_level so the prompt can show both (deterministic TDEE).
+  target_weight_kg: number | null;
+  day_nature: string | null;
+  exercise_days: string | null;
+  exercise_type: string | null;
+  water_cups: number | null;
+  sleep_hours: number | null;
+  medications: string[];
+  supplements: string[];
+  nausea_foods: string[];
+  // Free "anything else" note — rendered in the SKELETON prompt only.
+  notes: string | null;
 }
 
 export interface PlanPromptContextMember {
@@ -76,6 +89,19 @@ export interface PlanPromptContextMember {
   preferred_language: string;
   // 'shared' = eats the family's shared meals (default); 'independent' = own dishes.
   meal_mode: "shared" | "independent";
+  // Coach questionnaire (00013).
+  target_weight_kg: number | null;
+  day_nature: string | null;
+  exercise_days: string | null;
+  exercise_type: string | null;
+  water_cups: number | null;
+  sleep_hours: number | null;
+  medications: string[];
+  supplements: string[];
+  nausea_foods: string[];
+  // Lactating only: 'exclusive' | 'mixed' | 'formula' — scales the lactation
+  // calorie addition.
+  feeding_mode: string | null;
 }
 
 export interface PlanPromptContextFamilyWide {
@@ -236,6 +262,16 @@ export async function buildPlanContext(
     high_risk_pregnancy: !!profile.high_risk_pregnancy,
     consulted_doctor: profile.consulted_doctor,
     meal_mode: profile.meal_mode === "independent" ? "independent" : "shared",
+    target_weight_kg: profile.target_weight_kg ?? null,
+    day_nature: profile.day_nature ?? null,
+    exercise_days: profile.exercise_days ?? null,
+    exercise_type: profile.exercise_type ?? null,
+    water_cups: profile.water_cups ?? null,
+    sleep_hours: profile.sleep_hours ?? null,
+    medications: toStringArray(profile.medications),
+    supplements: toStringArray(profile.supplements),
+    nausea_foods: toStringArray(profile.nausea_foods),
+    notes: profile.notes ?? null,
   };
 
   const family_members: PlanPromptContextMember[] = (family ?? []).map(
@@ -266,6 +302,16 @@ export async function buildPlanContext(
         is_child: memberType === "child" || (age != null && age < 18),
         preferred_language: m.preferred_language as string,
         meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
+        target_weight_kg: (m.target_weight_kg as number | null) ?? null,
+        day_nature: (m.day_nature as string | null) ?? null,
+        exercise_days: (m.exercise_days as string | null) ?? null,
+        exercise_type: (m.exercise_type as string | null) ?? null,
+        water_cups: (m.water_cups as number | null) ?? null,
+        sleep_hours: (m.sleep_hours as number | null) ?? null,
+        medications: toStringArray(m.medications),
+        supplements: toStringArray(m.supplements),
+        nausea_foods: toStringArray(m.nausea_foods),
+        feeding_mode: (m.feeding_mode as string | null) ?? null,
       };
     },
   );

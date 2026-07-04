@@ -83,6 +83,15 @@ export async function buildHouseholdContext(userId: string): Promise<string> {
         `- أطعمة لا تحبها: ${list(profile.dislikes)}`,
         `- قيود غذائية: ${strList(profile.dietary_restrictions)}`,
         `- حالات طبية: ${strList(profile.medical_conditions)}${profile.consulted_doctor ? " (راجعت الطبيب)" : ""}`,
+        profile.target_weight_kg != null
+          ? `- الوزن المستهدف: ${profile.target_weight_kg} كجم`
+          : "",
+        Array.isArray(profile.medications) && profile.medications.length > 0
+          ? `- أدوية: ${list(profile.medications)}`
+          : "",
+        Array.isArray(profile.supplements) && profile.supplements.length > 0
+          ? `- مكملات: ${list(profile.supplements)}`
+          : "",
         profile.is_pregnant
           ? `- الحمل: نعم${profile.pregnancy_trimester ? ` (الثلث ${profile.pregnancy_trimester})` : ""}`
           : "",

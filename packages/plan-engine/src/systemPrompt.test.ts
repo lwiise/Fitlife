@@ -26,6 +26,16 @@ function makeMomContext(mealMode: "shared" | "independent"): PlanPromptContext {
       high_risk_pregnancy: false,
       consulted_doctor: false,
       meal_mode: mealMode,
+      target_weight_kg: null,
+      day_nature: null,
+      exercise_days: null,
+      exercise_type: null,
+      water_cups: null,
+      sleep_hours: null,
+      medications: [],
+      supplements: [],
+      nausea_foods: [],
+      notes: null,
     },
     family_members: [],
     family_wide: {
@@ -153,5 +163,48 @@ describe("buildDayPrompt — token-lean output contract", () => {
     );
     expect(hkPrompt).not.toContain("recipe_name_translated");
     expect(hkPrompt).not.toContain("ترجمة الوصفة للخادمة");
+  });
+});
+
+// Coach questionnaire (00013) — placement contract: verbose lifestyle fields
+// appear in the SKELETON prompt; only meds + nausea repeat in day prompts.
+describe("coach questionnaire prompt threading", () => {
+  function enrichedContext(): PlanPromptContext {
+    const ctx = makeMomContext("shared");
+    ctx.mom.target_weight_kg = 65;
+    ctx.mom.day_nature = "desk";
+    ctx.mom.exercise_days = "d3_5";
+    ctx.mom.exercise_type = "resistance";
+    ctx.mom.water_cups = 4;
+    ctx.mom.sleep_hours = 5;
+    ctx.mom.medications = ["ميتفورمين"];
+    ctx.mom.supplements = ["حديد"];
+    ctx.mom.nausea_foods = ["بيض"];
+    ctx.mom.notes = "أفضل وجبات سريعة التحضير أيام الدوام";
+    return ctx;
+  }
+
+  it("skeleton prompt carries the full questionnaire clauses", () => {
+    const prompt = buildSkeletonPrompt(enrichedContext());
+    expect(prompt).toContain("65 كيلو");
+    expect(prompt).toContain("مكتبية");
+    expect(prompt).toContain("3-5 أيام");
+    expect(prompt).toContain("مقاومة");
+    expect(prompt).toContain("أدوية: ميتفورمين");
+    expect(prompt).toContain("مكملات: حديد");
+    expect(prompt).toContain("الغثيان");
+    expect(prompt).toContain("4 أكواب");
+    expect(prompt).toContain("5 ساعات");
+    expect(prompt).toContain("ملاحظات إضافية من العميلة");
+    expect(prompt).toContain("سريعة التحضير");
+  });
+
+  it("day prompt repeats only meds + nausea, not the lifestyle fields", () => {
+    const prompt = buildDayPrompt(enrichedContext(), skeleton, 0);
+    expect(prompt).toContain("أدوية: ميتفورمين");
+    expect(prompt).toContain("غثيان من: بيض");
+    expect(prompt).not.toContain("65 كيلو");
+    expect(prompt).not.toContain("أكواب");
+    expect(prompt).not.toContain("سريعة التحضير");
   });
 });
