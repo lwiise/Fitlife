@@ -55,6 +55,16 @@ export default async function HealthEditPage() {
         <HealthEditForm
           initial={{
             activity_level: profile.activity_level,
+            day_nature: profile.day_nature,
+            exercise_days: profile.exercise_days,
+            exercise_type: profile.exercise_type,
+            target_weight_kg: profile.target_weight_kg,
+            water_cups: profile.water_cups,
+            sleep_hours: profile.sleep_hours,
+            medications: asStringArray(profile.medications),
+            supplements: asStringArray(profile.supplements),
+            nausea_foods: asStringArray(profile.nausea_foods),
+            notes: profile.notes ?? "",
             user_goal: userGoal,
             pregnancy_status: pregnancyStatus,
             trimester: profile.pregnancy_trimester ?? null,

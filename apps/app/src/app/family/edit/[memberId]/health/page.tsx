@@ -87,6 +87,16 @@ export default async function MemberHealthEditPage({
           type={type}
           initial={{
             activity_level: m.activity_level,
+            day_nature: m.day_nature,
+            exercise_days: m.exercise_days,
+            exercise_type: m.exercise_type,
+            target_weight_kg: m.target_weight_kg,
+            water_cups: m.water_cups,
+            sleep_hours: m.sleep_hours,
+            medications: asStringArray(m.medications),
+            supplements: asStringArray(m.supplements),
+            nausea_foods: asStringArray(m.nausea_foods),
+            feeding_mode: m.feeding_mode,
             user_goal: userGoal,
             allergies: asStringArray(m.allergies),
             dislikes: asStringArray(m.dislikes),

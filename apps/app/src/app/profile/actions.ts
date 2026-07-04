@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
+import { activityLevelFrom } from "@/lib/plans/activityLevel";
 import { hasGateCondition } from "@/lib/plans/medicalConditions";
 import { triggerPlanTranslation } from "@/lib/plans/dispatch";
 
@@ -56,13 +57,22 @@ export async function saveMomPersonalInfo(
 
 // ── Section 2: Health & goals ─────────────────────────────────────────────
 const HealthSchema = z.object({
-  activity_level: z.enum([
-    "sedentary",
-    "light",
-    "moderate",
-    "active",
-    "very_active",
-  ]),
+  // Legacy direct level; when day_nature + exercise_days are present the level
+  // is DERIVED server-side (legacy rows keep their stored level until the
+  // exercise questions are answered).
+  activity_level: z
+    .enum(["sedentary", "light", "moderate", "active", "very_active"])
+    .optional(),
+  day_nature: z.enum(["desk", "moderate_movement", "physical_work"]).optional(),
+  exercise_days: z.enum(["none", "d1_2", "d3_5", "d6_plus"]).optional(),
+  exercise_type: z.enum(["resistance", "cardio", "mixed"]).nullish(),
+  target_weight_kg: z.number().min(20).max(300).nullish(),
+  water_cups: z.number().int().min(0).max(40).nullish(),
+  sleep_hours: z.number().min(2).max(16).nullish(),
+  medications: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  supplements: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  nausea_foods: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  notes: z.string().trim().max(500).nullish(),
   user_goal: z.enum([
     "lose_weight",
     "build_muscle",
@@ -83,6 +93,8 @@ const HealthSchema = z.object({
   // Shared family meals (default) vs your own independent dishes. Applied at the
   // next plan generation (like the rest of this form), not regenerated in place.
   meal_mode: z.enum(["shared", "independent"]),
+}).refine((v) => v.activity_level || (v.day_nature && v.exercise_days), {
+  message: "مستوى النشاط مطلوب",
 });
 
 export async function saveMomHealthInfo(
@@ -124,10 +136,25 @@ export async function saveMomHealthInfo(
     conditions,
   });
 
+  const derivedActivity =
+    data.day_nature && data.exercise_days
+      ? activityLevelFrom(data.day_nature, data.exercise_days)
+      : (data.activity_level ?? null);
+
   const { error } = await supabase
     .from("profiles")
     .update({
-      activity_level: data.activity_level,
+      activity_level: derivedActivity,
+      day_nature: data.day_nature ?? null,
+      exercise_days: data.exercise_days ?? null,
+      exercise_type: data.exercise_type ?? null,
+      target_weight_kg: data.target_weight_kg ?? null,
+      water_cups: data.water_cups ?? null,
+      sleep_hours: data.sleep_hours ?? null,
+      medications: data.medications ?? [],
+      supplements: data.supplements ?? [],
+      nausea_foods: data.pregnancy_status === "pregnant" ? (data.nausea_foods ?? []) : [],
+      notes: data.notes?.trim() || null,
       primary_goal: primaryGoal,
       member_type: memberType,
       is_pregnant: isPregnant,

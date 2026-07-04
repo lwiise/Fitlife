@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
+import { activityLevelFrom } from "@/lib/plans/activityLevel";
 import { hasGateCondition } from "@/lib/plans/medicalConditions";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
@@ -105,7 +106,7 @@ export async function updateMemberPersonal(
     Sentry.captureException(error, {
       tags: { area: "member-edit-personal", userId },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
   }
   revalidatePath("/family");
   revalidatePath(`/family/edit/${memberId}`);
@@ -140,6 +141,18 @@ const HealthSchema = z.object({
     .enum(["home_packed", "school_provided", "mixed"])
     .nullable(),
   picky_eater: z.boolean(),
+  // Coach questionnaire (00013) — per-type gating happens against the DB
+  // member_type below, never the client.
+  day_nature: z.enum(["desk", "moderate_movement", "physical_work"]).optional(),
+  exercise_days: z.enum(["none", "d1_2", "d3_5", "d6_plus"]).optional(),
+  exercise_type: z.enum(["resistance", "cardio", "mixed"]).nullish(),
+  target_weight_kg: z.number().min(20).max(300).nullish(),
+  water_cups: z.number().int().min(0).max(40).nullish(),
+  sleep_hours: z.number().min(2).max(16).nullish(),
+  medications: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  supplements: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  nausea_foods: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  feeding_mode: z.enum(["exclusive", "mixed", "formula"]).nullish(),
 });
 
 export async function updateMemberHealth(
@@ -180,7 +193,7 @@ export async function updateMemberHealth(
     (isAdult && (hasGateCondition(data.conditions) || !!other)) ||
     (isChild && !!other);
   if (doctorNeeded && !data.consulted_doctor) {
-    return { ok: false, error: "لازم تأكدي على استشارة الطبيب أولاً" };
+    return { ok: false, error: "يلزم تأكيد استشارة الطبيب أولاً" };
   }
 
   let primaryGoal: string | null;
@@ -196,11 +209,26 @@ export async function updateMemberHealth(
     });
   }
 
+  const derivedActivity =
+    isAdult && data.day_nature && data.exercise_days
+      ? activityLevelFrom(data.day_nature, data.exercise_days)
+      : data.activity_level;
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("family_members")
     .update({
-      activity_level: data.activity_level,
+      activity_level: derivedActivity,
+      day_nature: isAdult ? (data.day_nature ?? null) : null,
+      exercise_days: isAdult ? (data.exercise_days ?? null) : null,
+      exercise_type: isAdult ? (data.exercise_type ?? null) : null,
+      target_weight_kg: isAdult ? (data.target_weight_kg ?? null) : null,
+      sleep_hours: isAdult ? (data.sleep_hours ?? null) : null,
+      water_cups: isChild ? null : (data.water_cups ?? null),
+      medications: isChild ? [] : (data.medications ?? []),
+      supplements: isChild ? [] : (data.supplements ?? []),
+      nausea_foods: isPreg ? (data.nausea_foods ?? []) : [],
+      feeding_mode: isLact ? (data.feeding_mode ?? null) : null,
       primary_goal: primaryGoal,
       medical_conditions: conditions,
       allergies: data.allergies,
@@ -221,7 +249,7 @@ export async function updateMemberHealth(
     Sentry.captureException(error, {
       tags: { area: "member-edit-health", userId },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
   }
   revalidatePath("/family");
   revalidatePath(`/family/edit/${memberId}`);

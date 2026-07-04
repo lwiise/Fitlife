@@ -9,6 +9,16 @@ import {
   STABLE_CONDITIONS,
 } from "@/lib/plans/medicalConditions";
 import type { UserGoal } from "@/lib/plans/goalMapping";
+import {
+  activityLevelFrom,
+  ACTIVITY_LEVEL_LABELS,
+  DAY_NATURE_OPTIONS,
+  EXERCISE_DAYS_OPTIONS,
+  EXERCISE_TYPE_OPTIONS,
+  type DayNature,
+  type ExerciseDays,
+  type ExerciseType,
+} from "@/lib/plans/activityLevel";
 import { ACTIVITY_OPTIONS, GOALS } from "../labels";
 import { saveMomHealthInfo } from "../actions";
 
@@ -17,6 +27,16 @@ type ActivityValue = (typeof ACTIVITY_OPTIONS)[number]["value"];
 
 export type HealthInitial = {
   activity_level: string | null;
+  day_nature: string | null;
+  exercise_days: string | null;
+  exercise_type: string | null;
+  target_weight_kg: number | null;
+  water_cups: number | null;
+  sleep_hours: number | null;
+  medications: string[];
+  supplements: string[];
+  nausea_foods: string[];
+  notes: string;
   user_goal: UserGoal | undefined;
   pregnancy_status: PregStatus;
   trimester: number | null;
@@ -72,9 +92,31 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [activity, setActivity] = useState<ActivityValue | "">(
+  const [activity] = useState<ActivityValue | "">(
     (initial.activity_level as ActivityValue | null) ?? "",
   );
+  const [dayNature, setDayNature] = useState<DayNature | null>(
+    (initial.day_nature as DayNature | null) ?? null,
+  );
+  const [exerciseDays, setExerciseDays] = useState<ExerciseDays | null>(
+    (initial.exercise_days as ExerciseDays | null) ?? null,
+  );
+  const [exerciseType, setExerciseType] = useState<ExerciseType | null>(
+    (initial.exercise_type as ExerciseType | null) ?? null,
+  );
+  const [targetWeight, setTargetWeight] = useState(
+    initial.target_weight_kg != null ? String(initial.target_weight_kg) : "",
+  );
+  const [waterCups, setWaterCups] = useState(
+    initial.water_cups != null ? String(initial.water_cups) : "",
+  );
+  const [sleepHours, setSleepHours] = useState(
+    initial.sleep_hours != null ? String(initial.sleep_hours) : "",
+  );
+  const [medications, setMedications] = useState<string[]>(initial.medications);
+  const [supplements, setSupplements] = useState<string[]>(initial.supplements);
+  const [nauseaFoods, setNauseaFoods] = useState<string[]>(initial.nausea_foods);
+  const [notes, setNotes] = useState(initial.notes);
   const [userGoal, setUserGoal] = useState<UserGoal | "">(initial.user_goal ?? "");
   const [pregStatus, setPregStatus] = useState<PregStatus>(initial.pregnancy_status);
   const [trimester, setTrimester] = useState<number | null>(initial.trimester);
@@ -108,16 +150,31 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
 
   const submit = () => {
     setError(null);
-    if (!activity) return setError("اختاري مستوى نشاطك");
+    // Legacy rows keep their stored level until the exercise questions are
+    // answered; new saves require either the stored level or full answers.
+    if (!activity && !(dayNature && exerciseDays))
+      return setError("أكملي أسئلة النشاط");
+    if (dayNature && exerciseDays && exerciseDays !== "none" && !exerciseType)
+      return setError("اختاري نوع الرياضة");
     if (!userGoal) return setError("اختاري هدفك");
     if (pregStatus === "pregnant" && (trimester == null || highRisk == null))
       return setError("أكملي تفاصيل الحمل");
     if (pregStatus === "lactating" && !monthsPP)
-      return setError("اكتبي كم شهر مرّ على الولادة");
+      return setError("اكتبي كم شهراً مضى على الولادة");
 
     startTransition(async () => {
       const result = await saveMomHealthInfo({
-        activity_level: activity as ActivityValue,
+        activity_level: activity || undefined,
+        day_nature: dayNature ?? undefined,
+        exercise_days: exerciseDays ?? undefined,
+        exercise_type: exerciseDays === "none" ? null : exerciseType,
+        target_weight_kg: targetWeight ? Number(targetWeight) : null,
+        water_cups: waterCups ? Number(waterCups) : null,
+        sleep_hours: sleepHours ? Number(sleepHours) : null,
+        medications,
+        supplements,
+        nausea_foods: nauseaFoods,
+        notes: notes.trim() || null,
         user_goal: userGoal,
         pregnancy_status: pregStatus,
         trimester: pregStatus === "pregnant" ? trimester : null,
@@ -150,28 +207,90 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
       <section className="space-y-4">
         <GroupHeading>النشاط والهدف</GroupHeading>
 
-        <div>
-          <p className="text-sm font-bold text-brand-ink mb-2">مستوى نشاطك</p>
-          <div className="space-y-2">
-            {ACTIVITY_OPTIONS.map((opt) => {
-              const checked = activity === opt.value;
-              return (
-                <button
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-bold text-brand-ink mb-2">طبيعة يومك</p>
+            <div className="space-y-2">
+              {DAY_NATURE_OPTIONS.map((opt) => (
+                <OptionButton
                   key={opt.value}
-                  type="button"
-                  onClick={() => setActivity(opt.value)}
-                  aria-pressed={checked}
-                  className={`block w-full text-start rounded-2xl border-2 px-4 py-3 transition-colors min-h-[3rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                    checked
-                      ? "border-brand-purple-900 bg-brand-purple-900/5"
-                      : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
-                  }`}
+                  full
+                  active={dayNature === opt.value}
+                  onClick={() => setDayNature(opt.value)}
                 >
-                  <span className="block font-bold text-brand-ink text-sm">{opt.label}</span>
-                  <span className="block text-brand-ink-muted text-xs mt-0.5">{opt.sublabel}</span>
-                </button>
-              );
-            })}
+                  {opt.label}
+                  <span className="block text-xs font-medium text-brand-ink-muted mt-0.5">
+                    {opt.sublabel}
+                  </span>
+                </OptionButton>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-brand-ink mb-2">هل تمارسين الرياضة؟</p>
+            <div className="grid grid-cols-2 gap-2">
+              {EXERCISE_DAYS_OPTIONS.map((opt) => (
+                <OptionButton
+                  key={opt.value}
+                  active={exerciseDays === opt.value}
+                  onClick={() => {
+                    setExerciseDays(opt.value);
+                    if (opt.value === "none") setExerciseType(null);
+                  }}
+                >
+                  {opt.label}
+                </OptionButton>
+              ))}
+            </div>
+          </div>
+          {exerciseDays && exerciseDays !== "none" && (
+            <div>
+              <p className="text-sm font-bold text-brand-ink mb-2">نوع الرياضة</p>
+              <div className="grid grid-cols-3 gap-2">
+                {EXERCISE_TYPE_OPTIONS.map((opt) => (
+                  <OptionButton
+                    key={opt.value}
+                    active={exerciseType === opt.value}
+                    onClick={() => setExerciseType(opt.value)}
+                  >
+                    {opt.label}
+                  </OptionButton>
+                ))}
+              </div>
+            </div>
+          )}
+          {dayNature && exerciseDays ? (
+            <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-white border border-brand-ink/5 px-4 py-3">
+              مستوى نشاطك المحتسب:{" "}
+              <span className="font-bold text-brand-ink">
+                {ACTIVITY_LEVEL_LABELS[activityLevelFrom(dayNature, exerciseDays)]}
+              </span>
+            </p>
+          ) : activity ? (
+            <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-white border border-brand-ink/5 px-4 py-3">
+              مستواك الحالي المسجل:{" "}
+              <span className="font-bold text-brand-ink">
+                {ACTIVITY_OPTIONS.find((o) => o.value === activity)?.label ?? activity}
+              </span>
+              {" — "}أجيبي عن السؤالين أعلاه لتحديثه.
+            </p>
+          ) : null}
+          <div>
+            <label htmlFor="target-w" className="block text-sm font-bold text-brand-ink mb-2">
+              الوزن المستهدف (كجم، اختياري)
+            </label>
+            <input
+              id="target-w"
+              type="number"
+              inputMode="decimal"
+              dir="ltr"
+              min={20}
+              max={300}
+              step="0.1"
+              value={targetWeight}
+              onChange={(e) => setTargetWeight(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            />
           </div>
         </div>
 
@@ -197,7 +316,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         <GroupHeading>الحمل والرضاعة</GroupHeading>
         <div className="space-y-2">
           <OptionButton full active={pregStatus === "none"} onClick={() => setPregStatus("none")}>
-            لست حامل ولا مرضعة
+            لست حاملاً ولا مرضعة
           </OptionButton>
           <OptionButton full active={pregStatus === "pregnant"} onClick={() => setPregStatus("pregnant")}>
             حامل
@@ -220,7 +339,18 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               </div>
             </div>
             <div>
-              <p className="text-sm font-bold text-brand-ink mb-2">هل حملك يعتبر عالي الخطورة؟</p>
+              <p className="text-sm font-bold text-brand-ink mb-2">
+                أطعمة تسبب لكِ الغثيان حالياً (اختياري)
+              </p>
+              <ChipInput
+                value={nauseaFoods}
+                onChange={setNauseaFoods}
+                disabled={isPending}
+                placeholder="مثلاً: بيض، دجاج"
+              />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-brand-ink mb-2">هل حملك عالي الخطورة؟</p>
               <div className="grid grid-cols-2 gap-2">
                 <OptionButton active={highRisk === false} onClick={() => setHighRisk(false)}>
                   لا
@@ -236,7 +366,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         {pregStatus === "lactating" && (
           <div className="rounded-xl bg-white border border-brand-ink/5 p-4">
             <label htmlFor="months-pp" className="block text-sm font-bold text-brand-ink mb-2">
-              كم شهر مرّ على الولادة؟
+              كم شهراً مضى على الولادة؟
             </label>
             <input
               id="months-pp"
@@ -257,7 +387,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
       <section className="space-y-4">
         <GroupHeading>الحساسيات</GroupHeading>
         <div>
-          <p className="text-sm font-bold text-brand-ink mb-2">حساسية من أكل معين؟</p>
+          <p className="text-sm font-bold text-brand-ink mb-2">حساسية من طعام معين؟</p>
           <ChipInput
             value={allergies}
             onChange={setAllergies}
@@ -266,7 +396,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
           />
         </div>
         <div>
-          <p className="text-sm font-bold text-brand-ink mb-2">أكلات ما تحبينها شخصياً؟</p>
+          <p className="text-sm font-bold text-brand-ink mb-2">أطعمة لا تحبينها شخصياً؟</p>
           <ChipInput
             value={dislikes}
             onChange={setDislikes}
@@ -276,11 +406,87 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         </div>
       </section>
 
+      {/* الأدوية والمكملات */}
+      <section className="space-y-4">
+        <GroupHeading>الأدوية والمكملات</GroupHeading>
+        <div>
+          <p className="text-sm font-bold text-brand-ink mb-2">أدوية تستخدمينها بانتظام (اختياري)</p>
+          <ChipInput
+            value={medications}
+            onChange={setMedications}
+            disabled={isPending}
+            placeholder="مثلاً: ميتفورمين"
+          />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-brand-ink mb-2">مكملات غذائية (اختياري)</p>
+          <ChipInput
+            value={supplements}
+            onChange={setSupplements}
+            disabled={isPending}
+            placeholder="مثلاً: حديد، فيتامين د"
+          />
+        </div>
+      </section>
+
+      {/* نمط اليوم */}
+      <section className="space-y-4">
+        <GroupHeading>نمط اليوم</GroupHeading>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="water-c" className="block text-sm font-bold text-brand-ink mb-2">
+              أكواب الماء يومياً
+            </label>
+            <input
+              id="water-c"
+              type="number"
+              inputMode="numeric"
+              dir="ltr"
+              min={0}
+              max={40}
+              value={waterCups}
+              onChange={(e) => setWaterCups(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            />
+          </div>
+          <div>
+            <label htmlFor="sleep-h" className="block text-sm font-bold text-brand-ink mb-2">
+              ساعات النوم
+            </label>
+            <input
+              id="sleep-h"
+              type="number"
+              inputMode="numeric"
+              dir="ltr"
+              min={2}
+              max={16}
+              value={sleepHours}
+              onChange={(e) => setSleepHours(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="mom-notes" className="block text-sm font-bold text-brand-ink mb-2">
+            ملاحظات إضافية (اختياري)
+          </label>
+          <textarea
+            id="mom-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            maxLength={500}
+            rows={3}
+            className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+            placeholder="مثلاً: أفضّل وجبات سريعة التحضير أيام الدوام"
+          />
+        </div>
+      </section>
+
       {/* نمط الوجبات */}
       <section className="space-y-3">
         <GroupHeading>نمط الوجبات</GroupHeading>
         <p className="text-brand-ink-muted text-sm leading-relaxed">
-          تختارين تشاركين وجبات العائلة، أو تكون لك خطة بأطباق خاصة بك.
+          اختاري مشاركة وجبات العائلة، أو خطة مستقلة بأطباق خاصة بكِ.
         </p>
         <div className="space-y-2">
           <OptionButton
@@ -345,7 +551,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               className="mt-1 size-5 rounded accent-brand-purple-900"
             />
             <span className="text-brand-ink text-sm leading-relaxed font-medium">
-              أكدت أنني استشرت طبيبي قبل البدء بالخطة
+              أؤكد أنني استشرت طبيبي قبل البدء بالخطة
             </span>
           </label>
         )}
