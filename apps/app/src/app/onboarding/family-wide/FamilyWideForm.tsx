@@ -183,10 +183,10 @@ export function FamilyWideForm() {
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    هل عندكم أي قيود غذائية في العائلة؟
+                    هل لديكم أي قيود غذائية في العائلة؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري اللي ينطبق، أو تجاوزي.
+                    اختاري ما ينطبق، أو تجاوزي.
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
@@ -234,10 +234,10 @@ export function FamilyWideForm() {
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    ما طرق الطبخ المفضلة عندكم؟
+                    ما طرق الطبخ المفضلة لديكم؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري اللي ينطبق، أو تجاوزي.
+                    اختاري ما ينطبق، أو تجاوزي.
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">

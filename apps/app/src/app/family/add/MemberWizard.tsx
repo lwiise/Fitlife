@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
+import {
+  activityLevelFrom,
+  ACTIVITY_LEVEL_LABELS,
+  DAY_NATURE_OPTIONS,
+  EXERCISE_DAYS_OPTIONS,
+  EXERCISE_TYPE_OPTIONS,
+  type DayNature,
+  type ExerciseDays,
+  type ExerciseType,
+} from "@/lib/plans/activityLevel";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import {
   GATE_CONDITIONS,
@@ -26,14 +36,6 @@ const GOALS: { value: UserGoal; label: string }[] = [
   { value: "maintain_weight", label: "المحافظة على الوزن" },
   { value: "athletic", label: "تحسين الأداء الرياضي" },
   { value: "improve_health", label: "تحسين الحالة الصحية" },
-];
-
-const ADULT_ACTIVITY: { value: string; label: string }[] = [
-  { value: "sedentary", label: "قليلة الحركة" },
-  { value: "light", label: "نشاط خفيف" },
-  { value: "moderate", label: "نشاط متوسط" },
-  { value: "active", label: "نشط" },
-  { value: "very_active", label: "نشط جداً" },
 ];
 
 const CHILD_ACTIVITY: { value: string; label: string }[] = [
@@ -103,16 +105,16 @@ function physicalRangeError(
   weight: number | null | undefined,
 ): string | null {
   if (height != null && (height < 40 || height > 250))
-    return "الطول لازم يكون بين 40 و250 سم";
+    return "يجب أن يكون الطول بين 40 و250 سم";
   if (weight != null && (weight < 5 || weight > 300))
-    return "الوزن لازم يكون بين 5 و300 كجم";
+    return "يجب أن يكون الوزن بين 5 و300 كجم";
   return null;
 }
 
 function birthYearError(year: number): string | null {
   const thisYear = new Date().getFullYear();
   if (year < 1940 || year > thisYear)
-    return `سنة الميلاد لازم تكون بين 1940 و${thisYear}`;
+    return `يجب أن تكون سنة الميلاد بين 1940 و${thisYear}`;
   return null;
 }
 
@@ -245,6 +247,23 @@ export function MemberWizard({
   const [heightCm, setHeightCm] = useState(initial?.height_cm?.toString() ?? "");
   const [weightKg, setWeightKg] = useState(initial?.weight_kg?.toString() ?? "");
   const [activity, setActivity] = useState(initial?.activity_level ?? "");
+  const [dayNature, setDayNature] = useState<DayNature | null>(
+    (initial?.day_nature as DayNature | undefined) ?? null,
+  );
+  const [exerciseDays, setExerciseDays] = useState<ExerciseDays | null>(
+    (initial?.exercise_days as ExerciseDays | undefined) ?? null,
+  );
+  const [exerciseType, setExerciseType] = useState<ExerciseType | null>(
+    (initial?.exercise_type as ExerciseType | undefined) ?? null,
+  );
+  const [targetWeightKg, setTargetWeightKg] = useState(
+    initial?.target_weight_kg?.toString() ?? "",
+  );
+  const [waterCups, setWaterCups] = useState(initial?.water_cups?.toString() ?? "");
+  const [sleepHours, setSleepHours] = useState(initial?.sleep_hours?.toString() ?? "");
+  const [medications, setMedications] = useState<string[]>(initial?.medications ?? []);
+  const [supplements, setSupplements] = useState<string[]>(initial?.supplements ?? []);
+  const [nauseaFoods, setNauseaFoods] = useState<string[]>(initial?.nausea_foods ?? []);
   const [userGoal, setUserGoal] = useState<UserGoal | "">(initial?.user_goal ?? "");
   const [allergies, setAllergies] = useState<string[]>(initial?.allergies ?? []);
   const [conditions, setConditions] = useState<string[]>(initial?.conditions ?? []);
@@ -256,7 +275,7 @@ export function MemberWizard({
     initial?.high_risk_pregnancy ?? null,
   );
   const [monthsPP, setMonthsPP] = useState(initial?.months_postpartum?.toString() ?? "");
-  const [feedingMode, setFeedingMode] = useState("");
+  const [feedingMode, setFeedingMode] = useState(initial?.feeding_mode ?? "");
   const [consultedDoctor, setConsultedDoctor] = useState(!!initial?.consulted_doctor);
   const [mealMode, setMealMode] = useState<"shared" | "independent">(
     initial?.meal_mode ?? "shared",
@@ -269,16 +288,21 @@ export function MemberWizard({
   const baseSteps: string[] = useMemo(() => {
     switch (type) {
       case "adult":
-        // Husband is male by default — no gender question.
+        // Husband is male by default — no gender question. The abstract activity
+        // radio became the concrete exercise step (coach questionnaire).
         return role === "dad"
-          ? ["identity", "physical", "activity", "goal", "allergies", "mealMode", "medical"]
-          : ["identity", "sex", "physical", "activity", "goal", "allergies", "mealMode", "medical"];
+          ? ["identity", "physical", "exercise", "goal", "allergies", "medsSupps", "lifestyle", "mealMode", "medical"]
+          : ["identity", "sex", "physical", "exercise", "goal", "allergies", "medsSupps", "lifestyle", "mealMode", "medical"];
       case "child":
         return ["identity", "sex", "physical", "childActivity", "school", "picky", "allergies", "mealMode", "chronic"];
       case "pregnant":
-        return ["identity", "physical", "trimester", "highRisk", "pregConditions", "allergies", "mealMode", "nausea"];
+        // Safe subset: meds/supplements + water; no exercise/target/sleep. Nausea
+        // foods go to their OWN column (temporary aversions, not allergens).
+        return ["identity", "physical", "trimester", "highRisk", "pregConditions", "allergies", "nausea", "medsSupps", "water", "mealMode"];
       case "lactating":
-        return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "mealMode", "supplements"];
+        // The old free-text supplements step (which corrupted medical_conditions)
+        // is replaced by the structured medsSupps step.
+        return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "medsSupps", "water", "mealMode"];
     }
   }, [type, role]);
 
@@ -315,18 +339,35 @@ export function MemberWizard({
     sex: sex || null,
     height_cm: heightCm ? Number(heightCm) : null,
     weight_kg: weightKg ? Number(weightKg) : null,
-    activity_level: type === "child" ? activity || null : activity || null,
+    // Adults: the server re-derives from the raw answers; children keep their
+    // 3-level scale. Sent for display parity only.
+    activity_level:
+      type === "adult" && dayNature && exerciseDays
+        ? activityLevelFrom(dayNature, exerciseDays)
+        : activity || null,
+    day_nature: type === "adult" ? (dayNature ?? undefined) : undefined,
+    exercise_days: type === "adult" ? (exerciseDays ?? undefined) : undefined,
+    exercise_type:
+      type === "adult" && exerciseDays && exerciseDays !== "none"
+        ? exerciseType
+        : null,
+    target_weight_kg:
+      type === "adult" && targetWeightKg ? Number(targetWeightKg) : null,
+    water_cups: type === "child" ? null : waterCups ? Number(waterCups) : null,
+    sleep_hours: type === "adult" && sleepHours ? Number(sleepHours) : null,
+    medications: type === "child" ? [] : medications,
+    supplements: type === "child" ? [] : supplements,
+    nausea_foods: type === "pregnant" ? nauseaFoods : [],
+    feeding_mode:
+      type === "lactating" && feedingMode
+        ? (feedingMode as "exclusive" | "mixed" | "formula")
+        : null,
     user_goal: type === "adult" ? (userGoal as UserGoal) : undefined,
     allergies,
     // No per-member dislikes UI in this wizard, but preserve any existing ones on
     // edit instead of wiping them (the edit route passes initial.dislikes).
     dislikes: initial?.dislikes ?? [],
-    conditions:
-      type === "child"
-        ? []
-        : type === "pregnant" || type === "lactating"
-          ? conditions
-          : conditions,
+    conditions: type === "child" ? [] : conditions,
     other_condition: otherCondition.trim() || undefined,
     consulted_doctor: doctorNeeded ? consultedDoctor : false,
     meal_mode: mealMode,
@@ -346,6 +387,15 @@ export function MemberWizard({
     setHeightCm("");
     setWeightKg("");
     setActivity("");
+    setDayNature(null);
+    setExerciseDays(null);
+    setExerciseType(null);
+    setTargetWeightKg("");
+    setWaterCups("");
+    setSleepHours("");
+    setMedications([]);
+    setSupplements([]);
+    setNauseaFoods([]);
     setUserGoal("");
     setAllergies([]);
     setConditions([]);
@@ -455,11 +505,11 @@ export function MemberWizard({
               <Sparkles className="size-7 text-brand-purple-900" aria-hidden="true" />
             </div>
             <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
-              محتاجة باقة أكبر لإضافة أفراد
+              تحتاجين باقة أكبر لإضافة أفراد
             </h2>
             <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
               باقتك الحالية تكفي {upgrade.max}، وعائلتك صارت {upgrade.current}.
-              حفظنا بيانات {name}، ورقّي باقتك عشان نجهّز خطط العائلة المنسقة.
+              حفظنا بيانات {name}، رقّي باقتك لنجهّز خطط العائلة المنسقة.
             </p>
             <a
               href="/pricing"
@@ -486,7 +536,7 @@ export function MemberWizard({
         <p className="text-brand-ink font-bold text-lg">
           نحضّر خطة {name}…
         </p>
-        <p className="text-brand-ink-muted text-sm">قد تاخذ دقيقة</p>
+        <p className="text-brand-ink-muted text-sm">قد يستغرق الأمر دقيقة</p>
       </div>
     );
   }
@@ -547,7 +597,7 @@ export function MemberWizard({
                     الاسم وسنة الميلاد
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نحسب العمر منها عشان نخصّص الخطة.
+                    نحسب العمر منها لنخصّص الخطة.
                   </p>
                 </header>
                 <TextField id="m-name" label="الاسم" value={name} onChange={setName} placeholder="مثلاً: خالد" />
@@ -596,6 +646,15 @@ export function MemberWizard({
                 </header>
                 <NumberField id="m-h" label="الطول (سم)" value={heightCm} onChange={setHeightCm} placeholder="120" />
                 <NumberField id="m-w" label="الوزن (كجم)" value={weightKg} onChange={setWeightKg} placeholder="40" />
+                {type === "adult" && (
+                  <NumberField
+                    id="m-tw"
+                    label="الوزن المستهدف (كجم، اختياري)"
+                    value={targetWeightKg}
+                    onChange={setTargetWeightKg}
+                    placeholder="70"
+                  />
+                )}
                 <PrimaryButton
                   onClick={() => {
                     if (!heightCm || !weightKg) return setError("أكملي الطول والوزن");
@@ -609,20 +668,90 @@ export function MemberWizard({
               </>
             )}
 
-            {key === "activity" && (
+            {key === "exercise" && (
               <>
                 <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">مستوى النشاط</h2>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    طبيعة اليوم والنشاط
+                  </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    كل ما زاد نشاطه، زادت سعراته.
+                    نحتسب منها مستوى النشاط بدقة وفق معادلة السعرات.
                   </p>
                 </header>
-                <div className="space-y-2">
-                  {ADULT_ACTIVITY.map((a) => (
-                    <OptionButton key={a.value} full active={activity === a.value} onClick={() => setActivity(a.value)}>{a.label}</OptionButton>
+                <fieldset className="space-y-2">
+                  <legend className="block text-sm font-bold text-brand-ink mb-2">
+                    طبيعة اليوم
+                  </legend>
+                  {DAY_NATURE_OPTIONS.map((opt) => (
+                    <OptionButton
+                      key={opt.value}
+                      full
+                      active={dayNature === opt.value}
+                      onClick={() => setDayNature(opt.value)}
+                    >
+                      {opt.label}
+                      <span className="block text-xs font-medium text-brand-ink-muted mt-0.5">
+                        {opt.sublabel}
+                      </span>
+                    </OptionButton>
                   ))}
-                </div>
-                <PrimaryButton onClick={() => (activity ? goNext() : setError("اختاري مستوى النشاط"))}>التالي</PrimaryButton>
+                </fieldset>
+                <fieldset className="space-y-2">
+                  <legend className="block text-sm font-bold text-brand-ink mb-2">
+                    ممارسة الرياضة
+                  </legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {EXERCISE_DAYS_OPTIONS.map((opt) => (
+                      <OptionButton
+                        key={opt.value}
+                        active={exerciseDays === opt.value}
+                        onClick={() => {
+                          setExerciseDays(opt.value);
+                          if (opt.value === "none") setExerciseType(null);
+                        }}
+                      >
+                        {opt.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </fieldset>
+                {exerciseDays && exerciseDays !== "none" && (
+                  <fieldset className="space-y-2">
+                    <legend className="block text-sm font-bold text-brand-ink mb-2">
+                      نوع الرياضة
+                    </legend>
+                    <div className="grid grid-cols-3 gap-2">
+                      {EXERCISE_TYPE_OPTIONS.map((opt) => (
+                        <OptionButton
+                          key={opt.value}
+                          active={exerciseType === opt.value}
+                          onClick={() => setExerciseType(opt.value)}
+                        >
+                          {opt.label}
+                        </OptionButton>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
+                {dayNature && exerciseDays && (
+                  <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-white border border-brand-ink/5 px-4 py-3">
+                    مستوى النشاط المحتسب:{" "}
+                    <span className="font-bold text-brand-ink">
+                      {ACTIVITY_LEVEL_LABELS[activityLevelFrom(dayNature, exerciseDays)]}
+                    </span>
+                  </p>
+                )}
+                <PrimaryButton
+                  onClick={() => {
+                    if (!dayNature) return setError("اختاري طبيعة اليوم");
+                    if (!exerciseDays) return setError("حدّدي أيام الرياضة");
+                    if (exerciseDays !== "none" && !exerciseType)
+                      return setError("اختاري نوع الرياضة");
+                    goNext();
+                  }}
+                >
+                  التالي
+                </PrimaryButton>
               </>
             )}
 
@@ -680,9 +809,9 @@ export function MemberWizard({
             {key === "picky" && (
               <>
                 <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">هل الطفل صعب في الأكل؟</h2>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">هل الطفل انتقائي في الأكل؟</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نختار أطباق مألوفة ومحبّبة لو كان صعب.
+                    نختار أطباقاً مألوفة ومحبّبة إذا كان انتقائياً.
                   </p>
                 </header>
                 <div className="grid grid-cols-2 gap-2">
@@ -717,7 +846,7 @@ export function MemberWizard({
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">هل الحمل عالي الخطورة؟</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    لو عالي الخطورة، نطلب استشارة الطبيب.
+                    إذا كان عالي الخطورة، نطلب استشارة الطبيب.
                   </p>
                 </header>
                 <div className="grid grid-cols-2 gap-2">
@@ -731,7 +860,7 @@ export function MemberWizard({
             {key === "monthsPP" && (
               <>
                 <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">كم شهر مرّ على الولادة؟</h2>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">كم شهراً مضى على الولادة؟</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     احتياج الرضاعة يختلف حسب المرحلة.
                   </p>
@@ -763,7 +892,7 @@ export function MemberWizard({
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">أي حالة صحية؟</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري اللي ينطبق، أو تجاوزي.
+                    اختاري ما ينطبق، أو تجاوزي.
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
@@ -833,7 +962,7 @@ export function MemberWizard({
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الحالات الصحية</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري اللي ينطبق، أو تجاوزي.
+                    اختاري ما ينطبق، أو تجاوزي.
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
@@ -862,7 +991,7 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">أي حالة صحية مزمنة عند الطفل؟</h2>
-                  <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">اتركيها فارغة إذا ما فيه.</p>
+                  <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">اتركيها فارغة إن لم توجد.</p>
                 </header>
                 <TextField id="m-chronic" label="الحالة (اختياري)" value={otherCondition} onChange={setOtherCondition} placeholder="مثلاً: ربو" />
                 <PrimaryButton onClick={advanceOrSubmit} isPending={isPending && !doctorNeeded}>{nextLabel}</PrimaryButton>
@@ -872,25 +1001,83 @@ export function MemberWizard({
             {key === "nausea" && (
               <>
                 <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">أكلات تسبب لك غثيان حالياً؟</h2>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    أطعمة تسبب لها الغثيان حالياً؟
+                  </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نتجنب اللي يسبب لك غثيان، أو تجاوزي.
+                    نتجنبها مؤقتاً في خطتها حتى يزول الغثيان، أو تجاوزي.
                   </p>
                 </header>
-                <ChipInput value={allergies} onChange={setAllergies} disabled={isPending} placeholder="اكتبيها، أو تجاوزي" />
+                <ChipInput value={nauseaFoods} onChange={setNauseaFoods} disabled={isPending} placeholder="مثلاً: بيض، دجاج" />
                 <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
               </>
             )}
 
-            {key === "supplements" && (
+            {key === "medsSupps" && (
               <>
                 <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">تأخذين فيتامينات أو مكملات؟</h2>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    الأدوية والمكملات
+                  </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    معلومة تساعدنا نكمل خطتها، أو تجاوزي.
+                    ننسّق توقيت الوجبات معها. تجاوزي إن لم يوجد شيء.
                   </p>
                 </header>
-                <TextField id="m-supp" label="المكملات (اختياري)" value={otherCondition} onChange={setOtherCondition} placeholder="مثلاً: حديد، فيتامين د" />
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    أدوية مستخدمة بانتظام (اختياري)
+                  </p>
+                  <ChipInput
+                    value={medications}
+                    onChange={setMedications}
+                    disabled={isPending}
+                    placeholder="مثلاً: ميتفورمين"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    مكملات غذائية (اختياري)
+                  </p>
+                  <ChipInput
+                    value={supplements}
+                    onChange={setSupplements}
+                    disabled={isPending}
+                    placeholder="مثلاً: حديد، فيتامين د"
+                  />
+                </div>
+                <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
+              </>
+            )}
+
+            {key === "water" && (
+              <>
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    شرب الماء
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    كم كوب ماء تشرب يومياً تقريباً؟ اختياري.
+                  </p>
+                </header>
+                <NumberField id="m-water" label="عدد الأكواب (اختياري)" value={waterCups} onChange={setWaterCups} placeholder="8" />
+                <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
+              </>
+            )}
+
+            {key === "lifestyle" && (
+              <>
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    نمط اليوم
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    تفاصيل صغيرة تجعل الخطة أدق. كلها اختيارية.
+                  </p>
+                </header>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumberField id="m-water2" label="أكواب الماء يومياً" value={waterCups} onChange={setWaterCups} placeholder="8" />
+                  <NumberField id="m-sleep" label="ساعات النوم" value={sleepHours} onChange={setSleepHours} placeholder="7" />
+                </div>
                 <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
               </>
             )}
@@ -915,7 +1102,7 @@ export function MemberWizard({
                   </span>
                 </label>
                 <PrimaryButton
-                  onClick={() => (consultedDoctor ? submit() : setError("لازم تأكدي على استشارة الطبيب أولاً"))}
+                  onClick={() => (consultedDoctor ? submit() : setError("يلزم تأكيد استشارة الطبيب أولاً"))}
                   isPending={isPending}
                 >
                   {finalLabel}

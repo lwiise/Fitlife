@@ -67,7 +67,7 @@ export function HousekeeperForm({
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>
           <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-            الخدامة اللي تطبخ للعائلة
+            الخدامة التي تطبخ للعائلة
           </h2>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
             بنجهّز لها تعليمات الطبخ بلغتها. هي تنفّذ الوصفات وليست فرداً في الخطة.

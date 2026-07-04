@@ -157,7 +157,7 @@ export function OnboardingFamilyBuilder() {
             id="builder-title"
             className="font-extrabold text-2xl text-brand-ink leading-tight"
           >
-            مين معك في البيت؟
+            من معكِ في المنزل؟
           </h2>
           <p className="text-brand-ink-muted text-sm leading-relaxed">
             أضيفي عيلتك، ولكل واحد خطته — أطباق فردية أو مشتركة، بضغطة وحدة
