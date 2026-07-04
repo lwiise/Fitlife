@@ -96,26 +96,36 @@ export type Database = {
           birth_year: number | null
           consulted_doctor: boolean | null
           created_at: string
+          day_nature: string | null
           dietary_restrictions: string[] | null
           dislikes: Json | null
           display_order: number
+          exercise_days: string | null
+          exercise_type: string | null
+          feeding_mode: string | null
           height_cm: number | null
           high_risk_pregnancy: boolean | null
           id: string
           meal_mode: string
           medical_conditions: string[] | null
+          medications: Json | null
           member_type: string
           months_postpartum: number | null
           name: string
+          nausea_foods: Json | null
           picky_eater: boolean | null
           preferred_language: string
           primary_goal: string | null
           role: string
           school_meal_handling: string | null
           sex: string | null
+          sleep_hours: number | null
+          supplements: Json | null
+          target_weight_kg: number | null
           trimester: number | null
           updated_at: string
           user_id: string
+          water_cups: number | null
           weight_kg: number | null
         }
         Insert: {
@@ -124,26 +134,36 @@ export type Database = {
           birth_year?: number | null
           consulted_doctor?: boolean | null
           created_at?: string
+          day_nature?: string | null
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_order?: number
+          exercise_days?: string | null
+          exercise_type?: string | null
+          feeding_mode?: string | null
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
           meal_mode?: string
           medical_conditions?: string[] | null
+          medications?: Json | null
           member_type?: string
           months_postpartum?: number | null
           name: string
+          nausea_foods?: Json | null
           picky_eater?: boolean | null
           preferred_language?: string
           primary_goal?: string | null
           role: string
           school_meal_handling?: string | null
           sex?: string | null
+          sleep_hours?: number | null
+          supplements?: Json | null
+          target_weight_kg?: number | null
           trimester?: number | null
           updated_at?: string
           user_id: string
+          water_cups?: number | null
           weight_kg?: number | null
         }
         Update: {
@@ -152,26 +172,36 @@ export type Database = {
           birth_year?: number | null
           consulted_doctor?: boolean | null
           created_at?: string
+          day_nature?: string | null
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_order?: number
+          exercise_days?: string | null
+          exercise_type?: string | null
+          feeding_mode?: string | null
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
           meal_mode?: string
           medical_conditions?: string[] | null
+          medications?: Json | null
           member_type?: string
           months_postpartum?: number | null
           name?: string
+          nausea_foods?: Json | null
           picky_eater?: boolean | null
           preferred_language?: string
           primary_goal?: string | null
           role?: string
           school_meal_handling?: string | null
           sex?: string | null
+          sleep_hours?: number | null
+          supplements?: Json | null
+          target_weight_kg?: number | null
           trimester?: number | null
           updated_at?: string
           user_id?: string
+          water_cups?: number | null
           weight_kg?: number | null
         }
         Relationships: [
@@ -317,103 +347,181 @@ export type Database = {
           activity_level: string | null
           allergies: Json | null
           birth_year: number | null
+          breakfast_habit: string | null
           consulted_doctor: boolean
           cooking_methods: Json | null
+          cooking_time: string | null
           created_at: string
           cuisine_preference: string
+          day_nature: string | null
+          deep_dive_completed_at: string | null
           dietary_restrictions: string[] | null
           dislikes: Json | null
           display_name: string | null
+          exercise_days: string | null
+          exercise_duration: string | null
+          exercise_type: string | null
           family_dietary_restrictions: Json | null
           family_dislikes: Json | null
           family_wide_completed_at: string | null
+          food_budget: string | null
+          food_recall_24h: string | null
           has_medical_conditions: boolean
           height_cm: number | null
           high_risk_pregnancy: boolean | null
           id: string
+          intermittent_fasting: string | null
           is_pregnant: boolean
+          liked_foods: Json | null
           meal_mode: string
           meal_out_frequency: string | null
+          meals_per_day: number | null
           medical_conditions: string[] | null
+          medications: Json | null
           member_addition_order: Json | null
           member_type: string
           mom_profile_completed_at: string | null
           months_postpartum: number | null
+          nausea_foods: Json | null
+          notes: string | null
           onboarding_completed_at: string | null
           preferred_language: string
           pregnancy_trimester: number | null
+          previous_diets: string | null
           primary_goal: string | null
           sex: string | null
+          sleep_hours: number | null
+          sleep_quality: string | null
+          snacks_habit: string | null
+          steps_daily: number | null
+          stress_level: string | null
+          supplements: Json | null
+          target_weight_kg: number | null
           updated_at: string
+          waist_cm: number | null
+          water_cups: number | null
           weight_kg: number | null
+          who_cooks: string | null
         }
         Insert: {
           activity_level?: string | null
           allergies?: Json | null
           birth_year?: number | null
+          breakfast_habit?: string | null
           consulted_doctor?: boolean
           cooking_methods?: Json | null
+          cooking_time?: string | null
           created_at?: string
           cuisine_preference?: string
+          day_nature?: string | null
+          deep_dive_completed_at?: string | null
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_name?: string | null
+          exercise_days?: string | null
+          exercise_duration?: string | null
+          exercise_type?: string | null
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
+          food_budget?: string | null
+          food_recall_24h?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id: string
+          intermittent_fasting?: string | null
           is_pregnant?: boolean
+          liked_foods?: Json | null
           meal_mode?: string
           meal_out_frequency?: string | null
+          meals_per_day?: number | null
           medical_conditions?: string[] | null
+          medications?: Json | null
           member_addition_order?: Json | null
           member_type?: string
           mom_profile_completed_at?: string | null
           months_postpartum?: number | null
+          nausea_foods?: Json | null
+          notes?: string | null
           onboarding_completed_at?: string | null
           preferred_language?: string
           pregnancy_trimester?: number | null
+          previous_diets?: string | null
           primary_goal?: string | null
           sex?: string | null
+          sleep_hours?: number | null
+          sleep_quality?: string | null
+          snacks_habit?: string | null
+          steps_daily?: number | null
+          stress_level?: string | null
+          supplements?: Json | null
+          target_weight_kg?: number | null
           updated_at?: string
+          waist_cm?: number | null
+          water_cups?: number | null
           weight_kg?: number | null
+          who_cooks?: string | null
         }
         Update: {
           activity_level?: string | null
           allergies?: Json | null
           birth_year?: number | null
+          breakfast_habit?: string | null
           consulted_doctor?: boolean
           cooking_methods?: Json | null
+          cooking_time?: string | null
           created_at?: string
           cuisine_preference?: string
+          day_nature?: string | null
+          deep_dive_completed_at?: string | null
           dietary_restrictions?: string[] | null
           dislikes?: Json | null
           display_name?: string | null
+          exercise_days?: string | null
+          exercise_duration?: string | null
+          exercise_type?: string | null
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
+          food_budget?: string | null
+          food_recall_24h?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
           id?: string
+          intermittent_fasting?: string | null
           is_pregnant?: boolean
+          liked_foods?: Json | null
           meal_mode?: string
           meal_out_frequency?: string | null
+          meals_per_day?: number | null
           medical_conditions?: string[] | null
+          medications?: Json | null
           member_addition_order?: Json | null
           member_type?: string
           mom_profile_completed_at?: string | null
           months_postpartum?: number | null
+          nausea_foods?: Json | null
+          notes?: string | null
           onboarding_completed_at?: string | null
           preferred_language?: string
           pregnancy_trimester?: number | null
+          previous_diets?: string | null
           primary_goal?: string | null
           sex?: string | null
+          sleep_hours?: number | null
+          sleep_quality?: string | null
+          snacks_habit?: string | null
+          steps_daily?: number | null
+          stress_level?: string | null
+          supplements?: Json | null
+          target_weight_kg?: number | null
           updated_at?: string
+          waist_cm?: number | null
+          water_cups?: number | null
           weight_kg?: number | null
+          who_cooks?: string | null
         }
         Relationships: []
       }

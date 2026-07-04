@@ -588,7 +588,7 @@ type Skeleton = {
   methodology_notes_ar?: string;
   members: Array<{
     member_id: string;                     // كما هو أعلاه
-    primary_goal?: "fat_loss"|"muscle_gain"|"body_recomposition"|"athletic_performance"|"metabolic_health"|"digestive_health"|"pregnancy_lactation"|"posture_recovery";
+    primary_goal?: "fat_loss"|"muscle_gain"|"body_recomposition"|"athletic_performance"|"metabolic_health"|"digestive_health"|"pregnancy_lactation"|"posture_recovery"|"maintain"|"general_health";
     daily_calories_target: number;
     macros_target: { protein_g: number; carbs_g: number; fat_g: number };
     days: Array<{                          // 7 عناصر

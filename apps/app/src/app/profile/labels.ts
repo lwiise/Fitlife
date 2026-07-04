@@ -8,19 +8,20 @@ export const ACTIVITY_OPTIONS: Array<{
   label: string;
   sublabel: string;
 }> = [
-  { value: "sedentary", label: "قليلة الحركة", sublabel: "مكتبية، ما أتمرن" },
-  { value: "light", label: "خفيفة", sublabel: "مشي خفيف 1-2 مرات في الأسبوع" },
-  { value: "moderate", label: "متوسطة", sublabel: "تمارين 3-4 مرات في الأسبوع" },
-  { value: "active", label: "نشطة", sublabel: "تمارين 5 مرات أو أكثر" },
-  { value: "very_active", label: "نشطة جداً", sublabel: "رياضية محترفة" },
+  { value: "sedentary", label: "خامل", sublabel: "جلوس معظم اليوم دون رياضة" },
+  { value: "light", label: "نشاط خفيف", sublabel: "رياضة 1-3 أيام في الأسبوع" },
+  { value: "moderate", label: "نشاط متوسط", sublabel: "رياضة 3-5 أيام في الأسبوع" },
+  { value: "active", label: "نشاط عالي", sublabel: "رياضة 6-7 أيام في الأسبوع" },
+  { value: "very_active", label: "نشاط عالي جداً", sublabel: "تدريب مكثف أو عمل بدني" },
 ];
 
 export const GOALS: { value: UserGoal; label: string }[] = [
-  { value: "lose_weight", label: "نزول الوزن" },
-  { value: "maintain_health", label: "الحفاظ على الوزن وتحسين الصحة" },
-  { value: "build_muscle", label: "بناء عضل وزيادة قوة" },
+  { value: "lose_weight", label: "خسارة الدهون" },
+  { value: "build_muscle", label: "بناء كتلة عضلية" },
+  { value: "recomposition", label: "إعادة تشكيل الجسم (عضل أكثر ودهون أقل)" },
+  { value: "maintain_weight", label: "المحافظة على الوزن" },
   { value: "athletic", label: "تحسين الأداء الرياضي" },
-  { value: "manage_condition", label: "إدارة حالة صحية" },
+  { value: "improve_health", label: "تحسين الحالة الصحية" },
 ];
 
 export const CUISINES: { value: string; label: string }[] = [

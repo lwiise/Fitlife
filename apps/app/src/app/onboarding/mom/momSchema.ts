@@ -6,10 +6,11 @@ import { z } from "zod";
 export const momGoalSchema = z.object({
   user_goal: z.enum([
     "lose_weight",
-    "maintain_health",
     "build_muscle",
+    "recomposition",
+    "maintain_weight",
     "athletic",
-    "manage_condition",
+    "improve_health",
   ]),
 });
 

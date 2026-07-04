@@ -120,10 +120,11 @@ const HealthSchema = z.object({
   user_goal: z
     .enum([
       "lose_weight",
-      "maintain_health",
       "build_muscle",
+      "recomposition",
+      "maintain_weight",
       "athletic",
-      "manage_condition",
+      "improve_health",
     ])
     .optional(),
   allergies: z.array(z.string()),
@@ -188,7 +189,7 @@ export async function updateMemberHealth(
   } else if (isChild) {
     primaryGoal = null; // children: food-pyramid portions, no goal-based calories
   } else {
-    primaryGoal = mapUserGoalToSara(data.user_goal ?? "maintain_health", {
+    primaryGoal = mapUserGoalToSara(data.user_goal ?? "maintain_weight", {
       hasMedical,
       isPregnantOrLactating: false,
       conditions,

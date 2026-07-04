@@ -65,10 +65,11 @@ const HealthSchema = z.object({
   ]),
   user_goal: z.enum([
     "lose_weight",
-    "maintain_health",
     "build_muscle",
+    "recomposition",
+    "maintain_weight",
     "athletic",
-    "manage_condition",
+    "improve_health",
   ]),
   pregnancy_status: z.enum(["none", "pregnant", "lactating"]),
   trimester: z.number().int().min(1).max(3).nullable(),

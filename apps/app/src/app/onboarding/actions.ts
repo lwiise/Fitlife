@@ -687,7 +687,7 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
   } else if (input.member_type === "child") {
     primaryGoal = null; // children: food-pyramid portions, no goal-based calories
   } else {
-    primaryGoal = mapUserGoalToSara(input.user_goal ?? "maintain_health", {
+    primaryGoal = mapUserGoalToSara(input.user_goal ?? "maintain_weight", {
       hasMedical,
       isPregnantOrLactating: false,
       conditions,

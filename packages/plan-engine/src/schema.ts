@@ -128,6 +128,10 @@ export const PRIMARY_GOALS = [
   "digestive_health",
   "pregnancy_lactation",
   "posture_recovery",
+  // Promoted from the 00005 legacy list (coach questionnaire, 07/2026):
+  // first-class maintain-weight and condition-independent health goals.
+  "maintain",
+  "general_health",
 ] as const;
 
 export const MemberPlanSchema = z.object({

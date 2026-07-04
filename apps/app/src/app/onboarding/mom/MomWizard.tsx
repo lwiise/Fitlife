@@ -22,11 +22,12 @@ type Identity = z.infer<typeof step1Schema>;
 type Physical = z.infer<typeof step2Schema>;
 
 const GOALS: { value: UserGoal; label: string }[] = [
-  { value: "lose_weight", label: "نزول الوزن" },
-  { value: "maintain_health", label: "الحفاظ على الوزن وتحسين الصحة" },
-  { value: "build_muscle", label: "بناء عضل وزيادة قوة" },
+  { value: "lose_weight", label: "خسارة الدهون" },
+  { value: "build_muscle", label: "بناء كتلة عضلية" },
+  { value: "recomposition", label: "إعادة تشكيل الجسم (عضل أكثر ودهون أقل)" },
+  { value: "maintain_weight", label: "المحافظة على الوزن" },
   { value: "athletic", label: "تحسين الأداء الرياضي" },
-  { value: "manage_condition", label: "إدارة حالة صحية" },
+  { value: "improve_health", label: "تحسين الحالة الصحية" },
 ];
 
 function OptionButton({
