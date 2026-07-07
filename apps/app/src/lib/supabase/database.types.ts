@@ -127,6 +127,7 @@ export type Database = {
           user_id: string
           water_cups: number | null
           weight_kg: number | null
+          workout_profile: Json | null
         }
         Insert: {
           activity_level?: string | null
@@ -165,6 +166,7 @@ export type Database = {
           user_id: string
           water_cups?: number | null
           weight_kg?: number | null
+          workout_profile?: Json | null
         }
         Update: {
           activity_level?: string | null
@@ -203,6 +205,7 @@ export type Database = {
           user_id?: string
           water_cups?: number | null
           weight_kg?: number | null
+          workout_profile?: Json | null
         }
         Relationships: [
           {
@@ -281,11 +284,13 @@ export type Database = {
           id: string
           meal_plan_id: string | null
           model: string | null
+          plan_kind: string
           started_at: string
           status: string
           tokens_in: number | null
           tokens_out: number | null
           user_id: string
+          workout_plan_id: string | null
         }
         Insert: {
           ai_input_tokens?: number
@@ -300,11 +305,13 @@ export type Database = {
           id?: string
           meal_plan_id?: string | null
           model?: string | null
+          plan_kind?: string
           started_at?: string
           status?: string
           tokens_in?: number | null
           tokens_out?: number | null
           user_id: string
+          workout_plan_id?: string | null
         }
         Update: {
           ai_input_tokens?: number
@@ -319,11 +326,13 @@ export type Database = {
           id?: string
           meal_plan_id?: string | null
           model?: string | null
+          plan_kind?: string
           started_at?: string
           status?: string
           tokens_in?: number | null
           tokens_out?: number | null
           user_id?: string
+          workout_plan_id?: string | null
         }
         Relationships: [
           {
@@ -402,6 +411,7 @@ export type Database = {
           water_cups: number | null
           weight_kg: number | null
           who_cooks: string | null
+          workout_profile: Json | null
         }
         Insert: {
           activity_level?: string | null
@@ -462,6 +472,7 @@ export type Database = {
           water_cups?: number | null
           weight_kg?: number | null
           who_cooks?: string | null
+          workout_profile?: Json | null
         }
         Update: {
           activity_level?: string | null
@@ -522,6 +533,7 @@ export type Database = {
           water_cups?: number | null
           weight_kg?: number | null
           who_cooks?: string | null
+          workout_profile?: Json | null
         }
         Relationships: []
       }
@@ -601,6 +613,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_plans: {
+        Row: {
+          ai_generation_seconds: number | null
+          ai_input_tokens: number | null
+          ai_model: string | null
+          ai_output_tokens: number | null
+          created_at: string
+          error_message: string | null
+          generated_at: string | null
+          id: string
+          plan_data: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_generation_seconds?: number | null
+          ai_input_tokens?: number | null
+          ai_model?: string | null
+          ai_output_tokens?: number | null
+          created_at?: string
+          error_message?: string | null
+          generated_at?: string | null
+          id?: string
+          plan_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_generation_seconds?: number | null
+          ai_input_tokens?: number | null
+          ai_model?: string | null
+          ai_output_tokens?: number | null
+          created_at?: string
+          error_message?: string | null
+          generated_at?: string | null
+          id?: string
+          plan_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_plans_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
