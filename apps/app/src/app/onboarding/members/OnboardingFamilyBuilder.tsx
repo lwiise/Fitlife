@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Loader2, User, UserPlus, Baby, HeartPulse, ChefHat } from "lucide-react";
 import { MemberWizard } from "@/app/family/add/MemberWizard";
 import { PregLactSwitch } from "@/app/family/add/PregLactSwitch";
 import { HousekeeperForm } from "@/app/family/add/HousekeeperForm";
 import { CheckRow, StepperRow } from "@/app/family/add/FamilyComposerControls";
-import { finishOnboardingToSubscription } from "@/app/onboarding/actions";
+import { useRouter } from "next/navigation";
 
 // One step of the guided sequence. Husband and maid are singular; the rest carry a count.
 type Task =
@@ -28,7 +28,7 @@ export function OnboardingFamilyBuilder() {
   const [phase, setPhase] = useState<"select" | "fill" | "finalizing">("select");
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
-  const [, startTransition] = useTransition();
+  const router = useRouter();
 
   // Selection: husband/maid are checkmarks; the rest are 0-default steppers.
   const [husband, setHusband] = useState(false);
@@ -41,8 +41,10 @@ export function OnboardingFamilyBuilder() {
     (husband ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
 
   const finalize = () => {
+    // Meals questionnaire done → the plan-scope fork (meals only vs meals +
+    // workout) decides what happens before the subscription hand-off.
     setPhase("finalizing");
-    startTransition(() => finishOnboardingToSubscription());
+    router.push("/onboarding/plan-scope");
   };
 
   const start = () => {

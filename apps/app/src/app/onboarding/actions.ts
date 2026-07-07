@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
-import { triggerPlanGeneration, triggerPlanTranslation } from "@/lib/plans/dispatch";
+import { triggerPlanGeneration, triggerPlanTranslation ,
+  triggerWorkoutGeneration,
+} from "@/lib/plans/dispatch";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
 import {
   getCurrentSubscription,
@@ -456,6 +458,10 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
     return { triggered: false };
   }
 
+  // Combined generation: the workout companion fires regardless of what the
+  // meal decision below concludes (it is often a legitimate no-op re-poll).
+  await maybeTriggerWorkoutGeneration(supabase, user.id);
+
   const latest = await getLatestPlan(user.id);
   if (latest?.in_progress) return { triggered: false }; // already generating
 
@@ -478,7 +484,66 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
   }
 
   const gen = await runFamilyGeneration(supabase, user.id, { fullRegen: true });
+
+  // Combined generation: fire the workout companion too (no-op unless opted in).
+  await maybeTriggerWorkoutGeneration(supabase, user.id);
   return { triggered: gen.ok };
+}
+
+/**
+ * Combined-generation companion: after a meal generation hand-off, fire the
+ * workout generation too — iff anyone opted in (a non-null workout_profile
+ * exists on the mom or an eligible member) AND no workout plan is already
+ * ready or freshly in flight. Fired regardless of the meal result: the meal
+ * call is often a legitimate no-op on re-poll (already generating / roster
+ * covered), and tying workout to it would strand opted-in users. Idempotent:
+ * the 00014 per-kind unique index makes a double-fire lose cleanly (busy).
+ */
+async function maybeTriggerWorkoutGeneration(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<void> {
+  try {
+    const [{ data: prof }, { data: optedMembers }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("workout_profile")
+        .eq("id", userId)
+        .maybeSingle(),
+      supabase
+        .from("family_members")
+        .select("id")
+        .eq("user_id", userId)
+        .not("workout_profile", "is", null)
+        .limit(1),
+    ]);
+    const anyOptIn =
+      prof?.workout_profile != null || (optedMembers?.length ?? 0) > 0;
+    if (!anyOptIn) return;
+
+    const { data: existing } = await supabase
+      .from("workout_plans")
+      .select("id, status, updated_at")
+      .eq("user_id", userId)
+      .neq("status", "archived")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .returns<{ id: string; status: string; updated_at: string }[]>();
+    const row = existing?.[0];
+    if (row) {
+      if (row.status === "ready") return;
+      const ageMin = (Date.now() - Date.parse(row.updated_at)) / 60_000;
+      if (row.status === "generating" && ageMin < 15) return;
+    }
+
+    await triggerWorkoutGeneration({ supabase, userId });
+  } catch (err) {
+    // Never let the workout companion break the meal flow.
+    console.error("[maybeTriggerWorkoutGeneration] failed", err);
+    Sentry.captureException(err, {
+      tags: { area: "workout-generation", step: "companion-trigger", userId },
+    });
+  }
 }
 
 export async function finalizeOnboarding(): Promise<void> {

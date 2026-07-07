@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { DeepDiveBanner } from "./DeepDiveBanner";
+import { WorkoutOptInBanner } from "./WorkoutOptInBanner";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { TodaysMeals } from "./TodaysMeals";
 import {
@@ -78,10 +79,18 @@ export default async function DashboardPage() {
     !latestPlan?.in_progress &&
     beneficiaryCount === 0;
 
+  // Meals-only user with a ready plan → nudge the workout opt-in. One banner
+  // at a time: family > workout > deep-dive.
+  const showWorkoutOptIn =
+    !showAddFamily &&
+    planIsReady &&
+    !latestPlan?.in_progress &&
+    profile.workout_profile === null;
+
   // First plan ready + the optional deep-dive questionnaire not done → nudge.
-  // Family nudge wins when both apply (avoid stacking two banners).
   const showDeepDive =
     !showAddFamily &&
+    !showWorkoutOptIn &&
     planIsReady &&
     !latestPlan?.in_progress &&
     profile.deep_dive_completed_at === null;
@@ -154,6 +163,8 @@ export default async function DashboardPage() {
         )}
 
         {showAddFamily && <AddFamilyBanner />}
+
+        {showWorkoutOptIn && <WorkoutOptInBanner />}
 
         {showDeepDive && <DeepDiveBanner />}
 
