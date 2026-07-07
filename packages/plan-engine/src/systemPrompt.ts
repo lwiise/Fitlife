@@ -196,6 +196,9 @@ function describeMom(c: PlanPromptContext): string {
   if (m.dislikes.length > 0) {
     line += ` لا تحب: ${m.dislikes.join("، ")}.`;
   }
+  if (m.deep_dive && m.deep_dive.liked_foods.length > 0) {
+    line += ` تحب: ${m.deep_dive.liked_foods.join("، ")} — وظّفيها في الخطة.`;
+  }
   // Coach questionnaire (00013). Raw exercise answers ride with the derived
   // level so the TDEE multiplier match is explicit, not inferred.
   if (m.target_weight_kg != null) {
@@ -655,6 +658,76 @@ ${fb}
 طبّقي هذه الملاحظات قدر الإمكان مع الحفاظ على منهجيتك وأسلوب كتابك وبنية الوصفات والقواعد الصحية.`;
 }
 
+const DEEP_DIVE_LABELS: Array<{
+  key: keyof import("./buildContext").DeepDiveFields;
+  label: string;
+  map?: Record<string, string>;
+}> = [
+  { key: "waist_cm", label: "محيط الخصر (سم)" },
+  { key: "steps_daily", label: "متوسط الخطوات اليومية" },
+  {
+    key: "exercise_duration",
+    label: "مدة التمرين",
+    map: { lt30: "أقل من 30 دقيقة", m30_60: "30-60 دقيقة", gt60: "أكثر من 60 دقيقة" },
+  },
+  { key: "meals_per_day", label: "عدد الوجبات المفضل يومياً" },
+  { key: "snacks_habit", label: "وجبات خفيفة", map: { yes: "نعم", no: "لا" } },
+  {
+    key: "breakfast_habit",
+    label: "الإفطار",
+    map: { regular: "بانتظام", sometimes: "أحياناً", never: "لا تتناوله" },
+  },
+  {
+    key: "intermittent_fasting",
+    label: "صيام متقطع",
+    map: { yes: "نعم", no: "لا" },
+  },
+  { key: "food_recall_24h", label: "أكل آخر 24 ساعة" },
+  {
+    key: "sleep_quality",
+    label: "جودة النوم",
+    map: { excellent: "ممتازة", good: "جيدة", fair: "متوسطة", poor: "ضعيفة" },
+  },
+  {
+    key: "stress_level",
+    label: "مستوى التوتر",
+    map: { low: "منخفض", medium: "متوسط", high: "مرتفع" },
+  },
+  {
+    key: "who_cooks",
+    label: "من يطبخ غالباً",
+    map: { me: "هي بنفسها", family_member: "أحد أفراد الأسرة", cook: "طاهٍ/خدامة", delivery: "طلب خارجي غالباً" },
+  },
+  {
+    key: "cooking_time",
+    label: "وقت الطبخ المتاح يومياً",
+    map: { lt20: "أقل من 20 دقيقة", m20_40: "20-40 دقيقة", gt40: "أكثر من 40 دقيقة" },
+  },
+  { key: "previous_diets", label: "حميات سابقة (وما نجح/لم ينجح)" },
+  { key: "food_budget", label: "ميزانية الطعام" },
+];
+
+/**
+ * The mom's optional deep-dive lifestyle answers. SKELETON-only: they shape
+ * targets/meal-count/structure once; day prompts never repeat them.
+ * liked_foods renders inside describeMom instead (positive steer clause).
+ */
+function deepDiveText(context: PlanPromptContext): string {
+  const dd = context.mom.deep_dive;
+  if (!dd) return "";
+  const lines: string[] = [];
+  for (const { key, label, map } of DEEP_DIVE_LABELS) {
+    const v = dd[key];
+    if (v == null || v === "" || Array.isArray(v)) continue;
+    const rendered = typeof v === "string" && map ? (map[v] ?? v) : String(v);
+    lines.push(`- ${label}: ${rendered}`);
+  }
+  if (lines.length === 0) return "";
+  return `\n\n# نمط حياة العميلة (تفاصيل إضافية من الاستبيان)
+${lines.join("\n")}
+راعيها في توزيع الوجبات وأسلوب الطبخ والتنويع، مع بقاء المنهجية والقواعد الصحية أولاً.`;
+}
+
 /**
  * The mom's free "anything else" questionnaire note. SKELETON-only (like
  * feedback): targets/structure are decided there, and day prompts repeat 7×.
@@ -692,7 +765,7 @@ export function buildSkeletonPrompt(
 الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
 # أفراد الخطة المطلوبة الآن (استخدمي member_id بالضبط)
-${buildRoster(context, targetMemberIds)}${momNotesText(context)}${feedbackText(context)}
+${buildRoster(context, targetMemberIds)}${deepDiveText(context)}${momNotesText(context)}${feedbackText(context)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).

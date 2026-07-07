@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserRound, HeartPulse, Utensils, ChevronLeft } from "lucide-react";
+import { UserRound, HeartPulse, Utensils, ClipboardList, ChevronLeft } from "lucide-react";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { Logo } from "@/components/Logo";
@@ -142,6 +142,12 @@ export default async function ProfilePage() {
             title="الصحة والأهداف"
             summary={healthSummary}
             icon={HeartPulse}
+          />
+          <SectionCard
+            href="/profile/deep-dive"
+            title="أسئلة إضافية لخطة أدق"
+            summary="نمط يومك وعاداتك وتفضيلاتك — كلها اختيارية"
+            icon={ClipboardList}
           />
           <SectionCard
             href="/profile/family-preferences"

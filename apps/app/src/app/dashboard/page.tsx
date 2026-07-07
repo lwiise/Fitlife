@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
+import { DeepDiveBanner } from "./DeepDiveBanner";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { TodaysMeals } from "./TodaysMeals";
 import {
@@ -77,6 +78,14 @@ export default async function DashboardPage() {
     !latestPlan?.in_progress &&
     beneficiaryCount === 0;
 
+  // First plan ready + the optional deep-dive questionnaire not done → nudge.
+  // Family nudge wins when both apply (avoid stacking two banners).
+  const showDeepDive =
+    !showAddFamily &&
+    planIsReady &&
+    !latestPlan?.in_progress &&
+    profile.deep_dive_completed_at === null;
+
   // Members who exist but aren't in the current plan yet (e.g. added while a
   // tier upgrade was pending) → offer one-click generation, named for them.
   const planMemberIds = latestPlan?.member_ids ?? [];
@@ -145,6 +154,8 @@ export default async function DashboardPage() {
         )}
 
         {showAddFamily && <AddFamilyBanner />}
+
+        {showDeepDive && <DeepDiveBanner />}
 
         {onboardingDone && needsFamilyPlan && !pendingBlocked && (
           <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />

@@ -27,6 +27,28 @@ export const HIGH_RISK_MEDICAL_FLAGS = [
   "unexplained_symptoms",
 ];
 
+/**
+ * Optional post-onboarding "deep dive" lifestyle answers (all nullable; the
+ * screen is optional). Rendered as a compact skeleton-only block.
+ */
+export interface DeepDiveFields {
+  waist_cm: number | null;
+  steps_daily: number | null;
+  exercise_duration: string | null;
+  liked_foods: string[];
+  meals_per_day: number | null;
+  snacks_habit: string | null;
+  breakfast_habit: string | null;
+  intermittent_fasting: string | null;
+  food_recall_24h: string | null;
+  sleep_quality: string | null;
+  stress_level: string | null;
+  who_cooks: string | null;
+  cooking_time: string | null;
+  previous_diets: string | null;
+  food_budget: string | null;
+}
+
 export interface PlanPromptContextMom {
   id: string;
   display_name: string | null;
@@ -62,6 +84,8 @@ export interface PlanPromptContextMom {
   nausea_foods: string[];
   // Free "anything else" note — rendered in the SKELETON prompt only.
   notes: string | null;
+  // Optional deep-dive lifestyle block (mom only; skeleton-only rendering).
+  deep_dive?: DeepDiveFields;
 }
 
 export interface PlanPromptContextMember {
@@ -272,6 +296,23 @@ export async function buildPlanContext(
     supplements: toStringArray(profile.supplements),
     nausea_foods: toStringArray(profile.nausea_foods),
     notes: profile.notes ?? null,
+    deep_dive: {
+      waist_cm: profile.waist_cm ?? null,
+      steps_daily: profile.steps_daily ?? null,
+      exercise_duration: profile.exercise_duration ?? null,
+      liked_foods: toStringArray(profile.liked_foods),
+      meals_per_day: profile.meals_per_day ?? null,
+      snacks_habit: profile.snacks_habit ?? null,
+      breakfast_habit: profile.breakfast_habit ?? null,
+      intermittent_fasting: profile.intermittent_fasting ?? null,
+      food_recall_24h: profile.food_recall_24h ?? null,
+      sleep_quality: profile.sleep_quality ?? null,
+      stress_level: profile.stress_level ?? null,
+      who_cooks: profile.who_cooks ?? null,
+      cooking_time: profile.cooking_time ?? null,
+      previous_diets: profile.previous_diets ?? null,
+      food_budget: profile.food_budget ?? null,
+    },
   };
 
   const family_members: PlanPromptContextMember[] = (family ?? []).map(
