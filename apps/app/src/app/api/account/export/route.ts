@@ -35,7 +35,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const [profile, family, plans, subscription, generations] = await Promise.all(
+  const [profile, family, plans, workoutPlans, subscription, generations] = await Promise.all(
     [
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
       supabase
@@ -45,6 +45,11 @@ export async function GET() {
         .order("display_order", { ascending: true }),
       supabase
         .from("meal_plans")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("workout_plans")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
@@ -72,6 +77,7 @@ export async function GET() {
     profile: profile.data ?? null,
     family_members: family.data ?? [],
     meal_plans: plans.data ?? [],
+    workout_plans: workoutPlans.data ?? [],
     subscription: stripInternal(
       subscription.data as Record<string, unknown> | null,
     ),

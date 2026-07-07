@@ -15,6 +15,10 @@ import { EmptyState } from "./EmptyState";
 import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
+import { WorkoutViewer } from "./WorkoutViewer";
+import { WorkoutGeneratingState } from "./WorkoutGeneratingState";
+import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
+import Link from "next/link";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
 import { SubscriptionSelfHeal } from "./SubscriptionSelfHeal";
@@ -27,14 +31,18 @@ export const metadata = {
 export default async function PlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ member?: string }>;
+  searchParams: Promise<{ member?: string; view?: string }>;
 }) {
-  const [{ member }, profile, latest, familyMembers] = await Promise.all([
+  const [{ member, view }, profile, latest, familyMembers] = await Promise.all([
     searchParams,
     getCurrentUserProfile(),
     getCurrentUserLatestPlan(),
     getCurrentUserFamilyMembers(),
   ]);
+  // Workout plan (opt-in). The toggle renders only when a row exists; the
+  // meal view is untouched otherwise.
+  const workout = profile ? await getLatestWorkoutPlan(profile.id) : null;
+  const workoutView = view === "workout" && workout != null;
 
   const isOnboarded = !!profile?.onboarding_completed_at;
   // Members saved but not yet in the plan (deferred while a prior gen was in
@@ -187,17 +195,67 @@ export default async function PlanPage({
           </div>
         )}
 
-        {!latest && <EmptyState isOnboarded={isOnboarded} />}
+        {workout != null && (
+          <div
+            className="inline-flex rounded-full border border-brand-ink/10 bg-white p-1 mb-6"
+            role="tablist"
+            aria-label="نوع الخطة"
+          >
+            <Link
+              href="/plan"
+              role="tab"
+              aria-selected={!workoutView}
+              className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                !workoutView
+                  ? "bg-brand-ink text-white"
+                  : "text-brand-ink-muted hover:text-brand-ink"
+              }`}
+            >
+              الوجبات
+            </Link>
+            <Link
+              href="/plan?view=workout"
+              role="tab"
+              aria-selected={workoutView}
+              className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                workoutView
+                  ? "bg-brand-ink text-white"
+                  : "text-brand-ink-muted hover:text-brand-ink"
+              }`}
+            >
+              التمارين
+            </Link>
+          </div>
+        )}
 
-        {latest?.status === "generating" && (
+        {workoutView && workout && (
+          <>
+            {workout.status === "generating" && <WorkoutGeneratingState />}
+            {workout.status === "failed" && (
+              <div
+                role="alert"
+                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700 leading-relaxed"
+              >
+                {workout.error_message ?? "تعذّر إنشاء برنامج التمارين. عدّلي إجاباتك من الملف وحاولي مرة أخرى."}
+              </div>
+            )}
+            {workout.status === "ready" && workout.plan_data && (
+              <WorkoutViewer plan={workout.plan_data} />
+            )}
+          </>
+        )}
+
+        {!workoutView && !latest && <EmptyState isOnboarded={isOnboarded} />}
+
+        {!workoutView && latest?.status === "generating" && (
           <PlanGeneratingState planId={latest.id} name={generatingFor} />
         )}
 
-        {latest?.status === "failed" && (
+        {!workoutView && latest?.status === "failed" && (
           <PlanFailedState planId={latest.id} reason={latest.error_message} />
         )}
 
-        {latest?.status === "ready" && latest.plan_data && (
+        {!workoutView && latest?.status === "ready" && latest.plan_data && (
           <>
             {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
             <PlanViewer
