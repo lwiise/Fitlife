@@ -25,9 +25,17 @@ Scope: everything landed since the 05-29 pass (~116 commits, dominated by the /a
 - **[S2] Chat stream timeout (240 s engine default) outlived the route's `maxDuration=60`** — platform-killed turns lost their usage-audit row. **Fix:** `timeoutMs: 55_000`.
 - **[S3] Cleanup batch:** deleted dead `getCurrentUserMealPlan`/`getCurrentUserSubscription` (the latter filtered on the obsolete `on_trial` status — a trap if rewired); translation retry loops now use `retryWaitMs` (honor `Retry-After`) like the day loop, `backoffMs` deleted; admin date formatters pinned `timeZone:"UTC"` to match the UTC bucketing (+ edge-timestamp regression tests); `@fitlife/config` exports map gained `./pricing`; dead `@fitlife/ui` package removed entirely (dep + transpilePackages too); `shadcn` CLI → devDependencies; vitest got the CI's placeholder `NEXT_PUBLIC_*` env so server-module tests run.
 
+### Addendum (2026-07-07) — data-integrity fixes shipped with the Coach Sara questionnaire pass
+
+- **[S1 · CONFIRMED] Lactating supplements corrupted medical_conditions.** The wizard's supplements answer flowed through `other_condition` into `medical_conditions`, so the AI read "حديد، فيتامين د" as a medical condition. Now a structured `supplements` jsonb column (00013) + chips UI.
+- **[S2 · CONFIRMED] Feeding mode collected but never persisted** — `buildMemberRow` had no field. Now `family_members.feeding_mode` (00013), threaded to the prompt (scales the lactation calorie addition).
+- **[S2 · CONFIRMED] Pregnancy nausea foods stored as allergies.** Now a separate `nausea_foods` column rendered as TEMPORARY avoidance, distinct from the hard-avoid allergy clause. Existing rows keep old chips in `allergies` (over-strict, safe direction; no backfill).
+- **[S3] Activity-label mismatch closed deterministically**: `activity_level` is now derived in code (`lib/plans/activityLevel.ts`) from concrete answers, and `ACTIVITY_LABELS_AR` uses the exact MOH bucket wording the methodology's multiplier table uses.
+- Onboarding server actions were previously un-validated server-side (typed trust only); now zod-validated (`onboarding/serverSchemas.ts`), including a strict whitelist on the progressive `saveProfileStep` update object.
+
 ### Flagged — needs ops/product action (NOT coded)
 
-1. **Apply migration 00012 to prod** (manual, no runner). Until applied, the race fix is dormant and behavior is unchanged.
+1. **Apply migrations 00012 AND 00013 to prod** (manual, no runner). 00012: until applied, the race fix is dormant and behavior is unchanged. 00013: additive/nullable — the app runs before it's applied, but new questionnaire answers won't persist until it is.
 2. **Verify 00008–00011 are applied to prod.** CLAUDE.md's verified baseline stops at 00007. The admin panel fails closed without 00008/00010/00011, but **`saveMomHealthInfo` writes `profiles.meal_mode` (00009) — if missing, every mom health-profile save fails.** Probe read-only (same method as the 00007 check), e.g. `GET /rest/v1/admin_users?select=user_id&limit=1` with the service key.
 3. **Admin roles unenforced** (`support` can delete accounts) — documented v1 choice in 00008; restrict destructive actions to `super_admin` when product decides.
 4. **Concurrent same-locale translations** can duplicate-write `plan_data` (converges correct, wastes Haiku spend) — best-effort 25 s dedup accepted.
