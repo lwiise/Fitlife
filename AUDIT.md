@@ -33,6 +33,11 @@ Scope: everything landed since the 05-29 pass (~116 commits, dominated by the /a
 - **[S3] Activity-label mismatch closed deterministically**: `activity_level` is now derived in code (`lib/plans/activityLevel.ts`) from concrete answers, and `ACTIVITY_LABELS_AR` uses the exact MOH bucket wording the methodology's multiplier table uses.
 - Onboarding server actions were previously un-validated server-side (typed trust only); now zod-validated (`onboarding/serverSchemas.ts`), including a strict whitelist on the progressive `saveProfileStep` update object.
 
+### Addendum (2026-07-07) — workout feature notes
+- Workout generation audit rows live in `plan_generations` with `plan_kind='workout'`/`workout_plan_id` (meal_plan_id stays null, so the meal weekly quota is untouched). Admin cost TOTALS include workout spend automatically; the per-plan cost map in `lib/admin/detail.ts` keys on meal_plan_id and silently excludes workout rows — accepted v1 gap.
+- v1 ships no manual workout regenerate button, so no workout quota exists yet; add `canGenerateWorkoutPlan` before exposing one.
+- 00014 REPLACES 00012's in-flight lock (composite user_id+plan_kind). Apply 00014 before deploying workout dispatch.
+
 ### Flagged — needs ops/product action (NOT coded)
 
 1. **Apply migrations 00012 AND 00013 to prod** (manual, no runner). 00012: until applied, the race fix is dormant and behavior is unchanged. 00013: additive/nullable — the app runs before it's applied, but new questionnaire answers won't persist until it is.
