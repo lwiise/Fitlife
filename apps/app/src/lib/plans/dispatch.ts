@@ -4,6 +4,9 @@ import * as Sentry from "@sentry/nextjs";
 import {
   buildPlanContext,
   createPlanRows,
+  createWorkoutPlanRows,
+  runWorkoutPlanGeneration,
+  workoutTrainees,
   GenerationInFlightError,
   runMealPlanGeneration,
   runMealPlanTranslation,
@@ -18,6 +21,7 @@ import {
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
+import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
@@ -487,5 +491,144 @@ export async function triggerPlanTranslation(params: {
     Sentry.captureException(err, {
       tags: { area: "plan-translation", step: "dispatch-bg", userId },
     });
+  }
+}
+
+// ─── Workout generation (separate opt-in plan; meals-first fork) ────────────
+
+export type WorkoutDispatchResult =
+  | { ok: true; workoutPlanId: string; status: "started" | "ready" }
+  | { ok: false; kind: "busy" | "no_trainees" | "dispatch" };
+
+/**
+ * Dispatch a workout generation for every opted-in adult (workout_profile
+ * set). Mirrors triggerPlanGeneration's shape: per-kind busy-guard with the
+ * 15-min stale reclassifier, placeholder rows via createWorkoutPlanRows (the
+ * 00014 composite unique index is the authority), dev-inline / prod-bg fork.
+ * Subscription access is the caller's responsibility (both callers sit behind
+ * canGenerateForFamilyChange-gated meal flows).
+ */
+export async function triggerWorkoutGeneration(params: {
+  supabase: ServerClient;
+  userId: string;
+}): Promise<WorkoutDispatchResult> {
+  const { supabase, userId } = params;
+
+  const { data: liveGens } = await supabase
+    .from("plan_generations")
+    .select("id, started_at")
+    .eq("user_id", userId)
+    .eq("status", "started")
+    .eq("plan_kind", "workout")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .returns<{ id: string; started_at: string }[]>();
+  const live = liveGens?.[0];
+  if (live) {
+    const startedMs = Date.parse(live.started_at);
+    const ageMin = Number.isNaN(startedMs)
+      ? Infinity
+      : (Date.now() - startedMs) / 60_000;
+    if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
+    await supabase
+      .from("plan_generations")
+      .update({
+        status: "failed",
+        error_message: "stale workout generation reclassified",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", live.id);
+  }
+
+  let context;
+  try {
+    context = await buildPlanContext(supabase, userId);
+  } catch (err) {
+    console.error("[triggerWorkoutGeneration] context build failed", err);
+    Sentry.captureException(err, {
+      tags: { area: "workout-generation", step: "build-context", userId },
+    });
+    return { ok: false, kind: "dispatch" };
+  }
+  if (workoutTrainees(context).length === 0) {
+    return { ok: false, kind: "no_trainees" };
+  }
+
+  let workoutPlanId: string;
+  try {
+    workoutPlanId = await createWorkoutPlanRows(supabase, userId);
+  } catch (err) {
+    if (err instanceof GenerationInFlightError) return { ok: false, kind: "busy" };
+    console.error("[triggerWorkoutGeneration] createWorkoutPlanRows failed", err);
+    Sentry.captureException(err, {
+      tags: { area: "workout-generation", step: "create-rows", userId },
+    });
+    return { ok: false, kind: "dispatch" };
+  }
+
+  const weekStartDate = riyadhTodayISO();
+
+  // Development: no serverless timeout — run inline.
+  if (process.env.NODE_ENV === "development") {
+    try {
+      await runWorkoutPlanGeneration({
+        supabase,
+        anthropicApiKey: getAnthropicKey(),
+        workoutPlanId,
+        context,
+        weekStartDate,
+      });
+      return { ok: true, workoutPlanId, status: "ready" };
+    } catch (err) {
+      console.error("[triggerWorkoutGeneration] inline generation failed", {
+        userId,
+        errorName: err instanceof Error ? err.name : "Unknown",
+      });
+      Sentry.captureException(err, {
+        tags: { area: "workout-generation", step: "inline-generate", userId },
+      });
+      return { ok: false, kind: "dispatch" };
+    }
+  }
+
+  // Production: fire the background function (workout mode) and return.
+  try {
+    const res = await fetch(
+      `${env.NEXT_PUBLIC_APP_URL}/.netlify/functions/generate-plan-background`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-internal-secret": getSupabaseServiceRoleKey(),
+        },
+        body: JSON.stringify({ mode: "workout", userId, workoutPlanId, weekStartDate }),
+      },
+    );
+    if (!res.ok && res.status !== 202) {
+      const snippet = (await res.text().catch(() => "")).slice(0, 200);
+      throw new Error(
+        `background fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`,
+      );
+    }
+    return { ok: true, workoutPlanId, status: "started" };
+  } catch (err) {
+    console.error("[triggerWorkoutGeneration] dispatch failed", err);
+    Sentry.captureException(err, {
+      tags: { area: "workout-generation", step: "dispatch", userId },
+    });
+    await supabase
+      .from("workout_plans")
+      .update({ status: "failed", error_message: "dispatch failed" })
+      .eq("id", workoutPlanId);
+    await supabase
+      .from("plan_generations")
+      .update({
+        status: "failed",
+        error_message: "dispatch failed",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("workout_plan_id", workoutPlanId)
+      .eq("status", "started");
+    return { ok: false, kind: "dispatch" };
   }
 }

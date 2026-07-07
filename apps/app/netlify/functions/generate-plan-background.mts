@@ -15,6 +15,8 @@ import {
   generationAlreadySettled,
   prepareSharedGroupRegen,
 } from "../../../../packages/plan-engine/src/generate";
+import { runWorkoutPlanGeneration } from "../../../../packages/plan-engine/src/workout/generate";
+import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
@@ -83,6 +85,46 @@ async function sbUpdate(
     const text = await res.text().catch(() => "");
     throw new Error(`PostgREST update ${table} → ${res.status} ${text}`);
   }
+}
+
+/** Defensive jsonb parse — malformed workout_profile means "not opted in". */
+function parseWorkoutProfileLoose(v: unknown) {
+  if (v == null) return undefined;
+  const parsed = WorkoutProfileSchema.safeParse(v);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * Minimal SDK-free adapter exposing the tiny client surface
+ * runWorkoutPlanGeneration uses (from(t).update(v).eq(c, val), optional
+ * second .eq) over the existing PostgREST fetch helpers. Keeps the function
+ * bundle free of @supabase/supabase-js like the rest of this file.
+ */
+function makeFetchSupabase(base: string, serviceKey: string) {
+  return {
+    from(table: string) {
+      return {
+        update(values: Record<string, unknown>) {
+          const filters: string[] = [];
+          const runner = {
+            eq(col: string, val: string) {
+              filters.push(`${col}=eq.${encodeURIComponent(val)}`);
+              return {
+                ...runner,
+                then(resolve: (v: { error: null | { message: string } }) => void) {
+                  sbUpdate(base, serviceKey, table, filters.join("&"), values).then(
+                    () => resolve({ error: null }),
+                    (e) => resolve({ error: { message: String(e) } }),
+                  );
+                },
+              };
+            },
+          };
+          return runner;
+        },
+      };
+    },
+  } as never;
 }
 
 async function sbInsert(
@@ -294,6 +336,7 @@ async function buildContextViaFetch(
       supplements: asStrings(m.supplements),
       nausea_foods: asStrings(m.nausea_foods),
       feeding_mode: (m.feeding_mode as string | null) ?? null,
+      workout_profile: parseWorkoutProfileLoose(m.workout_profile),
     };
   });
 
@@ -340,6 +383,7 @@ async function buildContextViaFetch(
       supplements: asStrings(profile.supplements),
       nausea_foods: asStrings(profile.nausea_foods),
       notes: (profile.notes as string | null) ?? null,
+      workout_profile: parseWorkoutProfileLoose(profile.workout_profile),
       deep_dive: {
         waist_cm: (profile.waist_cm as number | null) ?? null,
         steps_daily: (profile.steps_daily as number | null) ?? null,
@@ -390,7 +434,9 @@ const handler = async (req: Request): Promise<Response> => {
     // Carry-over INTENT only. When true the fn re-reads the prior plan from the DB
     // (fetchPriorPlan) — the plan is no longer shipped in the body (payload limit).
     carryOver?: boolean;
-    mode?: "generate" | "translate";
+    mode?: "generate" | "translate" | "workout";
+    workoutPlanId?: string;
+    weekStartDate?: string;
     locale?: LocaleCode;
     feedback?: string;
     independentRegen?: boolean;
@@ -415,8 +461,68 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response("Bad request", { status: 400 });
   }
   const { userId, mealPlanId } = body;
-  if (!userId || !mealPlanId) {
-    return new Response("Missing userId or mealPlanId", { status: 400 });
+  // Mode-aware validation: workout runs carry workoutPlanId instead of
+  // mealPlanId; the meal/translate paths keep their original contract.
+  if (!userId || (body.mode === "workout" ? !body.workoutPlanId : !mealPlanId)) {
+    return new Response("Missing userId or plan id", { status: 400 });
+  }
+
+  // ── Workout mode: generate the opt-in exercise program ──
+  if (body.mode === "workout") {
+    const workoutPlanId = body.workoutPlanId!;
+    // Idempotency guard (same contract as the meal path): a replayed invoke
+    // for a settled row must not burn a second run. Oldest generation row for
+    // this workout_plan_id is the dispatch row.
+    try {
+      const planRow = await sbSelectOne(
+        supabaseUrl,
+        expected,
+        "workout_plans",
+        `id=eq.${workoutPlanId}&select=status`,
+      );
+      const genRows = await sbSelectMany(
+        supabaseUrl,
+        expected,
+        "plan_generations",
+        `workout_plan_id=eq.${workoutPlanId}&select=status&order=created_at.asc&limit=1`,
+      );
+      if (
+        generationAlreadySettled({
+          mealPlanStatus: (planRow?.status as string | undefined) ?? null,
+          dispatchGenStatus: (genRows[0]?.status as string | undefined) ?? null,
+        })
+      ) {
+        console.log(
+          "[generate-plan-background] duplicate/settled workout invocation — no-op",
+          { userId, workoutPlanId },
+        );
+        return new Response("Already settled", { status: 200 });
+      }
+    } catch (guardErr) {
+      console.error("[generate-plan-background] workout idempotency probe failed", guardErr);
+    }
+
+    try {
+      const context = await buildContextViaFetch(supabaseUrl, expected, userId);
+      const sb = makeFetchSupabase(supabaseUrl, expected);
+      await runWorkoutPlanGeneration({
+        supabase: sb,
+        anthropicApiKey: anthropicKey,
+        workoutPlanId,
+        context,
+        weekStartDate: body.weekStartDate ?? new Date().toISOString().slice(0, 10),
+      });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    } catch (err) {
+      // runWorkoutPlanGeneration already terminalized both rows on failure.
+      console.error("[generate-plan-background] workout generation failed", err);
+      return new Response("Workout generation failed", { status: 200 });
+    }
+  }
+
+  // Beyond this point every mode operates on the meal plan row.
+  if (!mealPlanId) {
+    return new Response("Missing mealPlanId", { status: 400 });
   }
 
   // ── Translate mode: translate the existing plan IN PLACE (no regen) ──
