@@ -236,7 +236,7 @@ async function mapWithConcurrency<T, R>(
  * A retryable Anthropic error: 429 (rate limit), 529 (overloaded), any 5xx, or a
  * transient stream error. 529 is matched both explicitly and via the 5xx branch.
  */
-function isRetryable(err: unknown): boolean {
+export function isRetryable(err: unknown): boolean {
   return (
     err instanceof AnthropicCallError &&
     (/Anthropic API (429|529|5\d\d)/.test(err.message) ||
@@ -249,7 +249,7 @@ function isRetryable(err: unknown): boolean {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Exponential backoff with full jitter. attempt is 1-based (first retry = 1).
-const MAX_RETRIES = 5;
+export const MAX_RETRIES = 5;
 
 /**
  * How long to wait before a day-call retry. Honors the server's Retry-After

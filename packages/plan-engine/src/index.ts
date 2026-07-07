@@ -60,3 +60,18 @@ export {
 } from "./constants";
 
 export * from "./errors";
+
+// ── Workout plans (separate opt-in program; meals-first fork) ───────────────
+export * from "./workout/schema";
+export {
+  WORKOUT_STATIC,
+  WORKOUT_METHODOLOGY,
+  buildWorkoutSkeletonPrompt,
+  buildWorkoutMemberPrompt,
+  workoutTrainees,
+} from "./workout/systemPrompt";
+export {
+  createWorkoutPlanRows,
+  generateWorkoutPlan,
+  runWorkoutPlanGeneration,
+} from "./workout/generate";

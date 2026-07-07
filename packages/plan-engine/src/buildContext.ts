@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
+import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
 
 // Accepts any Supabase client shape — the app's <Database>-typed cookie client
 // or the plain service-role admin client. The engine queries untyped.
@@ -86,6 +87,8 @@ export interface PlanPromptContextMom {
   notes: string | null;
   // Optional deep-dive lifestyle block (mom only; skeleton-only rendering).
   deep_dive?: DeepDiveFields;
+  // Workout opt-in answers (00014). undefined = not opted in / invalid shape.
+  workout_profile?: WorkoutProfile;
 }
 
 export interface PlanPromptContextMember {
@@ -126,6 +129,8 @@ export interface PlanPromptContextMember {
   // Lactating only: 'exclusive' | 'mixed' | 'formula' — scales the lactation
   // calorie addition.
   feeding_mode: string | null;
+  // Workout opt-in answers (00014). undefined = not opted in / invalid shape.
+  workout_profile?: WorkoutProfile;
 }
 
 export interface PlanPromptContextFamilyWide {
@@ -146,6 +151,13 @@ export interface PlanPromptContext {
   // The user's free-text feedback for a manual regeneration ("what's wrong /
   // what to improve"). Layered into the prompt as guidance. Undefined otherwise.
   user_feedback?: string;
+}
+
+/** Defensive jsonb parse — a malformed profile silently means "not opted in". */
+function parseWorkoutProfile(v: unknown): WorkoutProfile | undefined {
+  if (v == null) return undefined;
+  const parsed = WorkoutProfileSchema.safeParse(v);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function ageFromBirthYear(birthYear: number | null): number | null {
@@ -313,6 +325,7 @@ export async function buildPlanContext(
       previous_diets: profile.previous_diets ?? null,
       food_budget: profile.food_budget ?? null,
     },
+    workout_profile: parseWorkoutProfile(profile.workout_profile),
   };
 
   const family_members: PlanPromptContextMember[] = (family ?? []).map(
@@ -353,6 +366,7 @@ export async function buildPlanContext(
         supplements: toStringArray(m.supplements),
         nausea_foods: toStringArray(m.nausea_foods),
         feeding_mode: (m.feeding_mode as string | null) ?? null,
+        workout_profile: parseWorkoutProfile(m.workout_profile),
       };
     },
   );
