@@ -18,6 +18,7 @@ import {
   MemberWorkoutSchema,
   normalizeWorkoutSkeleton,
   normalizeMemberSessions,
+  normalizeExerciseIds,
   type WorkoutPlan,
   type MemberWorkout,
   type WorkoutSkeleton,
@@ -203,14 +204,23 @@ export async function generateWorkoutPlan(params: {
             res.text,
           );
         }
-        member = {
+        const withIds = normalizeExerciseIds({
           ...parsed.data,
           member_id: trainee.member_id,
           weekly_sessions: normalizeMemberSessions(
             parsed.data.weekly_sessions,
             trainee.profile.desired_days,
           ),
-        };
+        });
+        if (withIds.unknownIds.length > 0) {
+          // Log-only (mirrors the cookbook deviation guard): an off-catalog
+          // id loses its animation, never the run.
+          console.warn("[workout-generate] off-catalog exercise_id(s) nulled", {
+            member: trainee.member_id,
+            ids: withIds.unknownIds,
+          });
+        }
+        member = withIds.member;
         break;
       } catch (err) {
         const retryable = isRetryable(err) || err instanceof PlanValidationError;

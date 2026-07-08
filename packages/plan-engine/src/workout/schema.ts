@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EXERCISE_BY_ID } from "./exerciseCatalog";
 
 // ─── Workout questionnaire (the 7 opt-in answers) ──────────────────────────
 // Stored as profiles.workout_profile / family_members.workout_profile jsonb
@@ -50,6 +51,10 @@ export function splitForDays(days: 3 | 4 | 5 | 6): string {
 // ─── Generated plan shape (mirrors the meal plan's schema discipline) ──────
 
 export const WorkoutExerciseSchema = z.object({
+  // Catalog id (exerciseCatalog.ts) driving the form animation. Nullish so
+  // pre-catalog plans keep parsing; unknown ids are nulled post-parse by
+  // normalizeExerciseIds (log-only — never fails a run).
+  exercise_id: z.string().nullish(),
   name_ar: z.string().min(1),
   name_en: z.string().nullish(),
   target_muscles_ar: z.string().min(1),
@@ -61,6 +66,8 @@ export const WorkoutExerciseSchema = z.object({
   rir: z.string().nullish(),
   // Home substitution when the member trains in both locations.
   home_variant_ar: z.string().nullish(),
+  // Catalog id for the home substitution's animation (must be home_ok).
+  home_variant_id: z.string().nullish(),
   notes_ar: z.string().nullish(),
 });
 
@@ -163,6 +170,37 @@ export function normalizeMemberSessions<T extends { day_index: number }>(
   desiredDays: number | undefined,
 ): T[] {
   return normalizeSessionList(sessions, desiredDays);
+}
+
+/**
+ * Null out exercise/home-variant ids that aren't in the approved catalog so
+ * the viewer never requests a nonexistent animation file. Returns the count
+ * of unknown ids so the caller can log (non-fatal, mirrors the cookbook
+ * deviation guard's log-only stance).
+ */
+export function normalizeExerciseIds(member: MemberWorkout): {
+  member: MemberWorkout;
+  unknownIds: string[];
+} {
+  const unknownIds: string[] = [];
+  const check = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    if (EXERCISE_BY_ID.has(id)) return id;
+    unknownIds.push(id);
+    return null;
+  };
+  const normalized: MemberWorkout = {
+    ...member,
+    weekly_sessions: member.weekly_sessions.map((s) => ({
+      ...s,
+      exercises: s.exercises.map((ex) => ({
+        ...ex,
+        exercise_id: check(ex.exercise_id),
+        home_variant_id: check(ex.home_variant_id),
+      })),
+    })),
+  };
+  return { member: normalized, unknownIds };
 }
 
 function normalizeSessionList<T extends { day_index: number }>(
