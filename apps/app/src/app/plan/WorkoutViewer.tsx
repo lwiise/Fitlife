@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Dumbbell, Timer, Flame, ShieldCheck, TrendingUp } from "lucide-react";
-import type { WorkoutPlan, MemberWorkout } from "@fitlife/plan-engine";
+import { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Flame, ShieldCheck, TrendingUp, Moon } from "lucide-react";
+import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
 
+// Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
+// Date#getDay, where 0 = Sunday).
 const DAY_NAMES_AR = [
   "الأحد",
   "الاثنين",
@@ -14,57 +17,53 @@ const DAY_NAMES_AR = [
   "السبت",
 ];
 
-function SessionCard({ session, showHomeVariant }: {
-  session: MemberWorkout["weekly_sessions"][number];
-  showHomeVariant: boolean;
+function formatRest(restSeconds: number): string {
+  return restSeconds >= 60
+    ? `${Math.round(restSeconds / 30) / 2} د`
+    : `${restSeconds} ث`;
+}
+
+// Today if it's a training day, else the next training day (wrapping) — so the
+// viewer opens on actionable content, mirroring the meal viewer's today-first
+// default.
+function defaultDayIndex(member: MemberWorkout | undefined): number {
+  if (!member) return 0;
+  const trainingDays = new Set(member.weekly_sessions.map((s) => s.day_index));
+  const today = new Date().getDay();
+  for (let k = 0; k < 7; k++) {
+    const di = (today + k) % 7;
+    if (trainingDays.has(di)) return di;
+  }
+  return member.weekly_sessions[0]?.day_index ?? 0;
+}
+
+function SessionDetail({
+  session,
+  homeMode,
+}: {
+  session: WorkoutSession;
+  homeMode: boolean;
 }) {
-  const [homeMode, setHomeMode] = useState(false);
-  const hasVariants = session.exercises.some((e) => e.home_variant_ar);
-
+  const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets, 0);
   return (
-    <article className="rounded-2xl border border-brand-ink/5 bg-white overflow-hidden">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-brand-ink/5 bg-brand-surface/60">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="inline-flex items-center justify-center size-9 rounded-xl bg-brand-lavender/40 flex-shrink-0">
-            <Dumbbell className="size-4.5 text-brand-purple-900" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h3 className="font-bold text-brand-ink text-sm truncate">
-              {DAY_NAMES_AR[session.day_index] ?? `يوم ${session.day_index + 1}`} — {session.session_name_ar}
-            </h3>
-            <p className="text-brand-ink-muted text-xs flex items-center gap-1">
-              <Timer className="size-3" aria-hidden="true" />
-              نحو {session.duration_min} دقيقة
-            </p>
-          </div>
-        </div>
-        {showHomeVariant && hasVariants && (
-          <button
-            type="button"
-            onClick={() => setHomeMode((v) => !v)}
-            aria-pressed={homeMode}
-            className={`min-h-9 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-              homeMode
-                ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
-                : "border-brand-ink/10 bg-white text-brand-ink"
-            }`}
-          >
-            {homeMode ? "نسخة المنزل" : "نسخة النادي"}
-          </button>
-        )}
-      </header>
+    <>
+      <div className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5">
+        <p className="text-xs font-bold text-brand-ink-muted mb-1.5">الإحماء</p>
+        <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5 space-y-0.5">
+          {session.warmup_ar.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      </div>
 
-      <div className="px-4 py-3 space-y-3">
-        <div>
-          <p className="text-xs font-bold text-brand-ink-muted mb-1">الإحماء</p>
-          <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5">
-            {session.warmup_ar.map((w, i) => (
-              <li key={i}>{w}</li>
-            ))}
-          </ul>
+      <div className="rounded-2xl border border-brand-ink/5 bg-white overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-brand-ink/5">
+          <p className="font-bold text-brand-ink text-sm">{session.session_name_ar}</p>
+          <p className="text-brand-ink-muted text-xs tabular-nums">
+            {session.exercises.length} تمارين · {totalSets} مجموعة
+          </p>
         </div>
-
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto px-4 pb-1">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-brand-ink-muted text-xs border-b border-brand-ink/5">
@@ -99,48 +98,74 @@ function SessionCard({ session, showHomeVariant }: {
                     {ex.reps}
                   </td>
                   <td className="py-2.5 ps-2 text-center tabular-nums text-brand-ink-muted">
-                    {ex.rest_seconds >= 60
-                      ? `${Math.round(ex.rest_seconds / 30) / 2} د`
-                      : `${ex.rest_seconds} ث`}
+                    {formatRest(ex.rest_seconds)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        {session.cooldown_ar.length > 0 && (
-          <div>
-            <p className="text-xs font-bold text-brand-ink-muted mb-1">التهدئة</p>
-            <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5">
-              {session.cooldown_ar.map((c, i) => (
-                <li key={i}>{c}</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
-    </article>
+
+      {session.cooldown_ar.length > 0 && (
+        <div className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5">
+          <p className="text-xs font-bold text-brand-ink-muted mb-1.5">التهدئة</p>
+          <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5 space-y-0.5">
+            {session.cooldown_ar.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   );
 }
 
 /**
- * Read-only weekly workout program viewer: member tabs → session cards with
- * the exercise table (sets × reps, rest, RIR) and a home/gym variant toggle
- * when the member trains in both locations.
+ * Read-only weekly workout program viewer, mirroring the meal PlanViewer's
+ * structure: member tabs → summary tiles → 7-day tab grid → one day at a time
+ * (training session or rest state), with a home/gym variant toggle when the
+ * member's plan includes home variants.
  */
 export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
-  const [activeMemberId, setActiveMemberId] = useState(plan.members[0]?.member_id ?? "");
-  const active = plan.members.find((m) => m.member_id === activeMemberId) ?? plan.members[0];
-  if (!active) return null;
+  const [activeMemberId, setActiveMemberId] = useState(
+    plan.members[0]?.member_id ?? "",
+  );
+  const active =
+    plan.members.find((m) => m.member_id === activeMemberId) ?? plan.members[0];
+  const [activeDayIndex, setActiveDayIndex] = useState<number>(() =>
+    defaultDayIndex(plan.members[0]),
+  );
+  // Viewer-level so the choice survives switching days/members.
+  const [homeMode, setHomeMode] = useState(false);
 
-  const sorted = [...active.weekly_sessions].sort((a, b) => a.day_index - b.day_index);
+  const stats = useMemo(() => {
+    if (!active) return null;
+    const sessions = active.weekly_sessions;
+    const totalMin = sessions.reduce((sum, s) => sum + s.duration_min, 0);
+    const totalExercises = sessions.reduce((sum, s) => sum + s.exercises.length, 0);
+    return {
+      count: sessions.length,
+      avgMin: sessions.length > 0 ? Math.round(totalMin / sessions.length) : 0,
+      totalExercises,
+    };
+  }, [active]);
+
+  if (!active || !stats) return null;
+
+  const isSolo = plan.members.length === 1;
+  const activeSession = active.weekly_sessions.find(
+    (s) => s.day_index === activeDayIndex,
+  );
   const showHomeVariant = active.weekly_sessions.some((s) =>
     s.exercises.some((e) => e.home_variant_ar),
   );
+  const activeSets = activeSession
+    ? activeSession.exercises.reduce((sum, ex) => sum + ex.sets, 0)
+    : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {plan.safety_disclaimer_ar && (
         <p className="flex items-start gap-2 rounded-xl bg-brand-yellow/15 border border-brand-yellow/40 px-4 py-3 text-brand-ink text-sm leading-relaxed">
           <ShieldCheck className="size-4.5 flex-shrink-0 mt-0.5 text-brand-ink" aria-hidden="true" />
@@ -148,44 +173,161 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
         </p>
       )}
 
-      {plan.members.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="أفراد البرنامج">
-          {plan.members.map((m) => (
-            <button
-              key={m.member_id}
-              type="button"
-              role="tab"
-              aria-selected={m.member_id === active.member_id}
-              onClick={() => setActiveMemberId(m.member_id)}
-              className={`min-h-11 flex-shrink-0 rounded-full border-2 px-4 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                m.member_id === active.member_id
-                  ? "border-brand-purple-900 bg-brand-purple-900/5 text-brand-ink"
-                  : "border-brand-ink/10 bg-white text-brand-ink-muted hover:border-brand-ink/25"
-              }`}
-            >
-              {m.member_name_ar}
-            </button>
-          ))}
+      {/* Member tabs (hidden for a solo program) — same underline style as the meal viewer */}
+      {!isSolo && (
+        <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
+          <div className="flex gap-1 min-w-max">
+            {plan.members.map((m) => {
+              const isActive = m.member_id === active.member_id;
+              return (
+                <button
+                  key={m.member_id}
+                  type="button"
+                  onClick={() => setActiveMemberId(m.member_id)}
+                  aria-pressed={isActive}
+                  className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                    isActive
+                      ? "text-brand-purple-900"
+                      : "text-brand-ink-muted hover:text-brand-ink"
+                  }`}
+                >
+                  {m.member_id === "mom" && (
+                    <span className="text-brand-pink me-1">أنتِ ·</span>
+                  )}
+                  {m.member_name_ar}
+                  {isActive && (
+                    <motion.span
+                      layoutId="workout-member-tab-underline"
+                      className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
-        <span className="font-bold text-brand-ink text-sm">{active.split_name_ar}</span>
-        <span className="text-brand-ink-muted text-xs">
-          {active.weekly_sessions.length} جلسات أسبوعياً
-        </span>
+      {/* Member summary tiles */}
+      <div className="grid grid-cols-4 gap-2">
+        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+          <p className="text-brand-ink-muted text-xs">التقسيم</p>
+          <p className="font-extrabold text-brand-ink text-sm mt-1 leading-snug">
+            {active.split_name_ar}
+          </p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+          <p className="text-brand-ink-muted text-xs">جلسات الأسبوع</p>
+          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+            {stats.count}
+          </p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+          <p className="text-brand-ink-muted text-xs">متوسط الجلسة</p>
+          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+            {stats.avgMin}
+            <span className="text-brand-ink-muted text-xs ms-1">دقيقة</span>
+          </p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+          <p className="text-brand-ink-muted text-xs">تمارين الأسبوع</p>
+          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
+            {stats.totalExercises}
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {sorted.map((session) => (
-          <SessionCard
-            key={session.day_index}
-            session={session}
-            showHomeVariant={showHomeVariant}
-          />
-        ))}
+      {/* Day tabs — rest days stay visible but muted */}
+      <div className="grid grid-cols-7 gap-1.5">
+        {Array.from({ length: 7 }, (_, i) => {
+          const isTraining = active.weekly_sessions.some((s) => s.day_index === i);
+          const isActive = i === activeDayIndex;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setActiveDayIndex(i)}
+              aria-pressed={isActive}
+              className={`rounded-xl py-2.5 font-bold text-xs transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                isActive
+                  ? "bg-brand-purple-900 text-white"
+                  : isTraining
+                    ? "bg-brand-lavender/30 text-brand-purple-900 hover:bg-brand-lavender/50"
+                    : "bg-white text-brand-ink-muted/60 border border-brand-ink/5 hover:text-brand-ink-muted"
+              }`}
+            >
+              {DAY_NAMES_AR[i]}
+            </button>
+          );
+        })}
       </div>
 
+      {/* Session summary pill + home/gym toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {activeSession ? (
+          <div className="inline-flex flex-wrap items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
+            <span className="font-bold text-brand-ink text-sm">
+              {activeSession.session_name_ar}
+            </span>
+            <span className="text-brand-ink-muted/40">·</span>
+            <span className="text-brand-ink text-xs tabular-nums">
+              نحو {activeSession.duration_min} دقيقة
+            </span>
+            <span className="text-brand-ink-muted/40">·</span>
+            <span className="text-brand-ink text-xs tabular-nums">
+              {activeSession.exercises.length} تمارين
+            </span>
+            <span className="text-brand-ink-muted/40">·</span>
+            <span className="text-brand-ink text-xs tabular-nums">
+              {activeSets} مجموعة
+            </span>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
+            <span className="text-brand-ink-muted text-xs">يوم راحة</span>
+          </div>
+        )}
+        {showHomeVariant && (
+          <button
+            type="button"
+            onClick={() => setHomeMode((v) => !v)}
+            aria-pressed={homeMode}
+            className={`min-h-9 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+              homeMode
+                ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                : "border-brand-ink/10 bg-white text-brand-ink"
+            }`}
+          >
+            {homeMode ? "نسخة المنزل" : "نسخة النادي"}
+          </button>
+        )}
+      </div>
+
+      {/* Single-day content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${active.member_id}-${activeDayIndex}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-3"
+        >
+          {activeSession ? (
+            <SessionDetail session={activeSession} homeMode={homeMode} />
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Moon className="size-6 text-brand-purple-900 opacity-60" aria-hidden="true" />
+              <p className="text-brand-ink font-bold text-sm">يوم راحة واستشفاء</p>
+              <p className="text-brand-ink-muted text-sm leading-relaxed max-w-xs">
+                العضلات تنمو أثناء الراحة. مشي خفيف ونوم جيد يدعمان تقدّمك.
+              </p>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Program notes */}
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl border border-brand-ink/5 bg-white p-4">
           <p className="flex items-center gap-2 text-sm font-bold text-brand-ink mb-1.5">
