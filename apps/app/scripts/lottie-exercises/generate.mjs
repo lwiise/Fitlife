@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildLottie, fkDebug } from "./rig.mjs";
-import { ALL } from "./poses.mjs";
+import { ALL } from "./poses/index.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = join(here, "..", "..", "public", "lottie", "exercises");

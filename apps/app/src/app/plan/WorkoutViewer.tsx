@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Flame, ShieldCheck, TrendingUp, Moon } from "lucide-react";
+import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon } from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
+import { ExerciseLottie } from "./ExerciseLottie";
 
 // Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
 // Date#getDay, where 0 = Sunday).
@@ -45,6 +46,9 @@ function SessionDetail({
   homeMode: boolean;
 }) {
   const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets, 0);
+  // One form animation open at a time; remounting on member/day switch (the
+  // parent keys this subtree) resets it.
+  const [expanded, setExpanded] = useState<number | null>(null);
   return (
     <>
       <div className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5">
@@ -74,34 +78,85 @@ function SessionDetail({
               </tr>
             </thead>
             <tbody>
-              {session.exercises.map((ex, i) => (
-                <tr key={i} className="border-b border-brand-ink/5 last:border-0 align-top">
-                  <td className="py-2.5 pe-3">
-                    <span className="font-bold text-brand-ink block">
-                      {homeMode && ex.home_variant_ar ? ex.home_variant_ar : ex.name_ar}
-                    </span>
-                    <span className="text-brand-ink-muted text-xs block">
-                      {ex.target_muscles_ar}
-                      {ex.name_en && !homeMode ? ` · ${ex.name_en}` : ""}
-                    </span>
-                    {ex.rir && (
-                      <span className="text-brand-purple-900 text-xs block mt-0.5">{ex.rir}</span>
+              {session.exercises.map((ex, i) => {
+                const displayName = homeMode && ex.home_variant_ar ? ex.home_variant_ar : ex.name_ar;
+                // Home mode shows the home substitution's animation when the
+                // catalog knows it; older plans without ids simply don't expand.
+                const animId =
+                  homeMode && ex.home_variant_id ? ex.home_variant_id : (ex.exercise_id ?? null);
+                const isOpen = expanded === i;
+                return (
+                  <Fragment key={i}>
+                    <tr className="border-b border-brand-ink/5 last:border-0 align-top">
+                      <td className="py-1.5 pe-3">
+                        {animId ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(isOpen ? null : i)}
+                            aria-expanded={isOpen}
+                            className="flex items-start gap-1.5 w-full min-h-11 py-1 text-start rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                          >
+                            <ChevronDown
+                              className={`size-4 flex-shrink-0 mt-0.5 text-brand-purple-900 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                              aria-hidden="true"
+                            />
+                            <span className="min-w-0">
+                              <span className="font-bold text-brand-ink block">{displayName}</span>
+                              <span className="text-brand-ink-muted text-xs block">
+                                {ex.target_muscles_ar}
+                                {ex.name_en && !homeMode ? ` · ${ex.name_en}` : ""}
+                              </span>
+                              {ex.rir && (
+                                <span className="text-brand-purple-900 text-xs block mt-0.5">{ex.rir}</span>
+                              )}
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="block py-1">
+                            <span className="font-bold text-brand-ink block">{displayName}</span>
+                            <span className="text-brand-ink-muted text-xs block">
+                              {ex.target_muscles_ar}
+                              {ex.name_en && !homeMode ? ` · ${ex.name_en}` : ""}
+                            </span>
+                            {ex.rir && (
+                              <span className="text-brand-purple-900 text-xs block mt-0.5">{ex.rir}</span>
+                            )}
+                            {ex.notes_ar && (
+                              <span className="text-brand-ink-muted text-xs block mt-0.5">{ex.notes_ar}</span>
+                            )}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-2 text-center tabular-nums font-bold text-brand-ink">
+                        {ex.sets}
+                      </td>
+                      <td className="py-2.5 px-2 text-center tabular-nums text-brand-ink" dir="ltr">
+                        {ex.reps}
+                      </td>
+                      <td className="py-2.5 ps-2 text-center tabular-nums text-brand-ink-muted">
+                        {formatRest(ex.rest_seconds)}
+                      </td>
+                    </tr>
+                    {animId && isOpen && (
+                      <tr className="border-b border-brand-ink/5 last:border-0">
+                        <td colSpan={4} className="pb-4 pt-1">
+                          <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-brand-lavender/15 p-3">
+                            <div className="w-full max-w-56 sm:w-56 flex-shrink-0">
+                              <ExerciseLottie exerciseId={animId} label={displayName} />
+                            </div>
+                            <div className="flex-1 min-w-48">
+                              <p className="text-brand-pink font-bold text-xs mb-1.5">الأداء الصحيح</p>
+                              <p className="text-brand-ink text-sm leading-relaxed">
+                                {ex.notes_ar || ex.target_muscles_ar}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                    {ex.notes_ar && (
-                      <span className="text-brand-ink-muted text-xs block mt-0.5">{ex.notes_ar}</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 px-2 text-center tabular-nums font-bold text-brand-ink">
-                    {ex.sets}
-                  </td>
-                  <td className="py-2.5 px-2 text-center tabular-nums text-brand-ink" dir="ltr">
-                    {ex.reps}
-                  </td>
-                  <td className="py-2.5 ps-2 text-center tabular-nums text-brand-ink-muted">
-                    {formatRest(ex.rest_seconds)}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

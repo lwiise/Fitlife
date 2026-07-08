@@ -16,7 +16,12 @@ const player = await readFile(
   join(appDir, "node_modules", "lottie-web", "build", "player", "lottie_light.min.js"),
   "utf8",
 );
-const files = (await readdir(jsonDir)).filter((f) => f.endsWith(".json")).sort();
+// Optional 2nd arg: comma-separated ids to render (defaults to everything).
+const only = process.argv[3] ? new Set(process.argv[3].split(",")) : null;
+const files = (await readdir(jsonDir))
+  .filter((f) => f.endsWith(".json"))
+  .filter((f) => !only || only.has(f.replace(/\.json$/, "")))
+  .sort();
 const anims = await Promise.all(
   files.map(async (f) => ({ id: f.replace(/\.json$/, ""), data: await readFile(join(jsonDir, f), "utf8") })),
 );
