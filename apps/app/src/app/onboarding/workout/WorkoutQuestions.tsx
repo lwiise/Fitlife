@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import type { WorkoutProfile } from "@fitlife/plan-engine";
@@ -82,7 +82,7 @@ const STEPS = [
   {
     key: "shape",
     title: "شكل البرنامج",
-    description: "مناطق التركيز وعدد الأيام ومدة كل جلسة.",
+    description: "نبني البرنامج حول مناطق التركيز وعدد الأيام ومدة كل جلسة.",
     validate: (d: Draft): string | null => {
       if (d.focus_areas.length === 0) return "اختاري منطقة تركيز واحدة على الأقل";
       if (!d.desired_days) return "حدّدي أيام التدريب";
@@ -144,6 +144,31 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// Each screen's heading takes focus after navigation so keyboard and
+// screen-reader users hear the step change — the Next/Back buttons persist
+// outside AnimatePresence, so nothing else signals that the content swapped.
+function ScreenHeading({
+  children,
+  autoFocus,
+}: {
+  children: React.ReactNode;
+  autoFocus: boolean;
+}) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
+  return (
+    <h2
+      ref={ref}
+      tabIndex={-1}
+      className="font-extrabold text-3xl text-brand-ink leading-tight outline-none"
+    >
+      {children}
+    </h2>
+  );
+}
+
 export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
@@ -182,7 +207,11 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
   const toggleArr = <T,>(arr: T[], v: T): T[] =>
     arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 
+  // False on the initial screen so page load doesn't steal focus.
+  const [hasNavigated, setHasNavigated] = useState(false);
+
   const goTo = (p: number, s: number) => {
+    setHasNavigated(true);
     setPersonIndex(p);
     setStepIndex(s);
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
@@ -266,7 +295,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
           </span>
         </div>
         <div
-          className="h-1.5 bg-white rounded-full overflow-hidden"
+          className="h-1.5 bg-brand-ink/10 rounded-full overflow-hidden"
           role="progressbar"
           aria-label="تقدم أسئلة التمارين"
           aria-valuenow={screenNumber}
@@ -290,17 +319,16 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: reduceMotion ? 0 : -30 }}
           transition={{ duration: reduceMotion ? 0 : 0.25, ease: "easeOut" }}
-          className="space-y-5"
+          className="space-y-6"
         >
           {personIndex === -1 && (
             <>
               <header>
-                <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                <ScreenHeading autoFocus={hasNavigated}>
                   لمن خطة التمارين؟
-                </h2>
+                </ScreenHeading>
                 <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                  سبع إجابات قصيرة لكل فرد تكفي لبرنامج أسبوعي مفصّل. أزيلي من لا
-                  يرغب بخطة تمارين.
+                  سبع إجابات قصيرة لكل فرد تكفي لبرنامج أسبوعي مفصّل.
                 </p>
               </header>
               <div className="space-y-2">
@@ -330,12 +358,13 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
               <header>
                 {people.length > 1 && (
                   <p className="text-sm font-bold text-brand-purple-900 mb-1">
-                    {current.name} · {personIndex + 1} من {chosen.length}
+                    {current.name}
+                    {chosen.length > 1 && ` · ${personIndex + 1} من ${chosen.length}`}
                   </p>
                 )}
-                <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                <ScreenHeading autoFocus={hasNavigated}>
                   {stepDef.title}
-                </h2>
+                </ScreenHeading>
                 <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                   {stepDef.description}
                 </p>
@@ -447,7 +476,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
                     </div>
                   </Field>
 
-                  <Field label="هل توجد إصابة أو مشكلة تمنع بعض التمارين؟">
+                  <Field label="هل توجد إصابة أو مشكلة تمنع بعض التمارين؟ (يمكن اختيار أكثر من خيار)">
                     <div className="grid grid-cols-4 gap-2">
                       {INJURIES.map((o) => (
                         <OptionButton
@@ -467,6 +496,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
                         value={draft.injury_notes}
                         onChange={(e) => setDraft({ injury_notes: e.target.value })}
                         maxLength={300}
+                        aria-label="وضّحي الإصابة باختصار (اختياري)"
                         placeholder="وضّحي الإصابة باختصار (اختياري)"
                         className="mt-2 w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
                       />
@@ -502,7 +532,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
           type="button"
           onClick={back}
           disabled={isPending}
-          className="inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+          className="inline-flex items-center gap-1 min-h-11 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
         >
           <ChevronRight className="size-4" aria-hidden="true" />
           رجوع
