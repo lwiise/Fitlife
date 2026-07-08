@@ -17,6 +17,7 @@ import { PlanFailedState } from "./PlanFailedState";
 import { PlanViewer } from "./PlanViewer";
 import { WorkoutViewer } from "./WorkoutViewer";
 import { WorkoutGeneratingState } from "./WorkoutGeneratingState";
+import { RetryWorkoutButton } from "./RetryWorkoutButton";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
 import Link from "next/link";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
@@ -234,9 +235,14 @@ export default async function PlanPage({
             {workout.status === "failed" && (
               <div
                 role="alert"
-                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700 leading-relaxed"
+                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4"
               >
-                {workout.error_message ?? "تعذّر إنشاء برنامج التمارين. عدّلي إجاباتك من الملف وحاولي مرة أخرى."}
+                {/* Never surface the raw engine error (English/zod internals);
+                    it stays on the DB row for debugging. */}
+                <p className="text-sm text-red-700 leading-relaxed">
+                  تعذّر إنشاء برنامج التمارين. أعيدي المحاولة، أو عدّلي إجاباتك من الملف الشخصي.
+                </p>
+                <RetryWorkoutButton />
               </div>
             )}
             {workout.status === "ready" && workout.plan_data && (

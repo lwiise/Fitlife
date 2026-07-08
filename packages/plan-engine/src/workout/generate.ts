@@ -16,8 +16,11 @@ import {
   WorkoutPlanSchema,
   WorkoutSkeletonSchema,
   MemberWorkoutSchema,
+  normalizeWorkoutSkeleton,
+  normalizeMemberSessions,
   type WorkoutPlan,
   type MemberWorkout,
+  type WorkoutSkeleton,
 } from "./schema";
 import {
   WORKOUT_STATIC,
@@ -127,8 +130,15 @@ export async function generateWorkoutPlan(params: {
   let totalCost = 0;
 
   // ── Phase 1: skeleton ──
+  // Parse + validate INSIDE the retry loop: a malformed/invalid response is
+  // re-rolled like any transient failure (a fresh sample usually fixes shape
+  // issues), and a shape code can repair — an over-emitted week — is
+  // normalized rather than failed.
   const skeletonPrompt = buildWorkoutSkeletonPrompt(context);
-  let skeletonRaw = "";
+  const desiredDaysById = Object.fromEntries(
+    trainees.map((t) => [t.member_id, t.profile.desired_days]),
+  );
+  let skeleton: WorkoutSkeleton | null = null;
   for (let attempt = 1; ; attempt++) {
     try {
       const res = await streamAnthropic({
@@ -142,24 +152,26 @@ export async function generateWorkoutPlan(params: {
       totalIn += res.tokensIn;
       totalOut += res.tokensOut;
       totalCost += computeCostUsd(res.tokensIn, res.tokensOut, SKELETON_MODEL);
-      skeletonRaw = res.text;
+
+      const parsed = WorkoutSkeletonSchema.safeParse(
+        parseJson(res.text, "workout skeleton"),
+      );
+      if (!parsed.success) {
+        throw new PlanValidationError(
+          `workout skeleton failed validation: ${parsed.error.message}`,
+          res.text,
+        );
+      }
+      skeleton = normalizeWorkoutSkeleton(parsed.data, desiredDaysById);
       break;
     } catch (err) {
-      if (attempt >= MAX_RETRIES || !isRetryable(err)) throw err;
+      const retryable = isRetryable(err) || err instanceof PlanValidationError;
+      if (attempt >= MAX_RETRIES || !retryable) throw err;
       const ra = err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
       await sleep(retryWaitMs(attempt, ra));
     }
   }
-  const skeletonParsed = WorkoutSkeletonSchema.safeParse(
-    parseJson(skeletonRaw, "workout skeleton"),
-  );
-  if (!skeletonParsed.success) {
-    throw new PlanValidationError(
-      `workout skeleton failed validation: ${skeletonParsed.error.message}`,
-      skeletonRaw,
-    );
-  }
-  const skeleton = skeletonParsed.data;
+  if (!skeleton) throw new PlanValidationError("workout skeleton unavailable");
 
   // ── Phase 2: per-member weekly expansion ──
   const members: MemberWorkout[] = [];
@@ -191,7 +203,14 @@ export async function generateWorkoutPlan(params: {
             res.text,
           );
         }
-        member = { ...parsed.data, member_id: trainee.member_id };
+        member = {
+          ...parsed.data,
+          member_id: trainee.member_id,
+          weekly_sessions: normalizeMemberSessions(
+            parsed.data.weekly_sessions,
+            trainee.profile.desired_days,
+          ),
+        };
         break;
       } catch (err) {
         const retryable = isRetryable(err) || err instanceof PlanValidationError;
