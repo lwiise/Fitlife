@@ -50,6 +50,7 @@ function makeSoloContext(): PlanPromptContext {
       exercise_days: null,
       exercise_type: null,
       water_cups: null,
+      water_liters: null,
       sleep_hours: null,
       medications: [],
       supplements: [],

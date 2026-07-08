@@ -25,6 +25,7 @@ import type { step1Schema, step2Schema } from "../schema";
 import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
 import { saveMomProfile, saveProfileStep } from "../actions";
+import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 
 type Identity = z.infer<typeof step1Schema>;
 type Physical = z.infer<typeof step2Schema>;
@@ -180,7 +181,7 @@ export function MomWizard() {
   const [otherCondition, setOtherCondition] = useState("");
   const [medications, setMedications] = useState<string[]>([]);
   const [supplements, setSupplements] = useState<string[]>([]);
-  const [waterCups, setWaterCups] = useState<string>("");
+  const [waterLiters, setWaterLiters] = useState<WaterLiters | null>(null);
   const [sleepHours, setSleepHours] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [consultedDoctor, setConsultedDoctor] = useState(false);
@@ -232,7 +233,7 @@ export function MomWizard() {
         day_nature: dayNature,
         exercise_days: exerciseDays,
         exercise_type: exerciseDays === "none" ? null : exerciseType,
-        water_cups: waterCups ? Number(waterCups) : null,
+        water_liters: waterLiters,
         sleep_hours: sleepHours ? Number(sleepHours) : null,
         medications,
         supplements,
@@ -703,28 +704,34 @@ export function MomWizard() {
                     تفاصيل صغيرة تجعل الخطة أدق. كلها اختيارية.
                   </p>
                 </header>
-                <div className="grid grid-cols-2 gap-3">
-                  <NumberField
-                    id="water-cups"
-                    label="كم كوب ماء تشربين يومياً؟"
-                    unit="كوب"
-                    value={waterCups}
-                    onChange={setWaterCups}
-                    min={0}
-                    max={40}
-                    placeholder="8"
-                  />
-                  <NumberField
-                    id="sleep-hours"
-                    label="كم ساعة تنامين؟"
-                    unit="ساعة"
-                    value={sleepHours}
-                    onChange={setSleepHours}
-                    min={2}
-                    max={16}
-                    placeholder="7"
-                  />
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    كم لتر ماء تشربين يومياً؟
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {WATER_LITERS_OPTIONS.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={waterLiters === o.value}
+                        onClick={() =>
+                          setWaterLiters((cur) => (cur === o.value ? null : o.value))
+                        }
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
                 </div>
+                <NumberField
+                  id="sleep-hours"
+                  label="كم ساعة تنامين؟"
+                  unit="ساعة"
+                  value={sleepHours}
+                  onChange={setSleepHours}
+                  min={2}
+                  max={16}
+                  placeholder="7"
+                />
                 <div>
                   <label htmlFor="mom-notes" className="block text-sm font-bold text-brand-ink mb-2">
                     هل من شيء آخر تودّين إخبارنا به؟ (اختياري)

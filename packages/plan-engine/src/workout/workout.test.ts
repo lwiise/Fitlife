@@ -64,6 +64,7 @@ function makeContext(overrides?: {
       exercise_days: "d3_5",
       exercise_type: "mixed",
       water_cups: 6,
+      water_liters: null,
       sleep_hours: 7,
       medications: [],
       supplements: [],

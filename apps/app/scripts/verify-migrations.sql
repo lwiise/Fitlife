@@ -56,5 +56,9 @@ select * from (values
   ('00014 workout opt-in columns (profiles.workout_profile)',
     (select case when exists (select 1 from information_schema.columns
       where table_schema='public' and table_name='profiles' and column_name='workout_profile')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00015 water in liters (profiles.water_liters)',
+    (select case when exists (select 1 from information_schema.columns
+      where table_schema='public' and table_name='profiles' and column_name='water_liters')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);

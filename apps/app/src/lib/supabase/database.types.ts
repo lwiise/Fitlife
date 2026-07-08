@@ -126,6 +126,7 @@ export type Database = {
           updated_at: string
           user_id: string
           water_cups: number | null
+          water_liters: string | null
           weight_kg: number | null
           workout_profile: Json | null
         }
@@ -165,6 +166,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           water_cups?: number | null
+          water_liters?: string | null
           weight_kg?: number | null
           workout_profile?: Json | null
         }
@@ -204,6 +206,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           water_cups?: number | null
+          water_liters?: string | null
           weight_kg?: number | null
           workout_profile?: Json | null
         }
@@ -409,6 +412,7 @@ export type Database = {
           updated_at: string
           waist_cm: number | null
           water_cups: number | null
+          water_liters: string | null
           weight_kg: number | null
           who_cooks: string | null
           workout_profile: Json | null
@@ -470,6 +474,7 @@ export type Database = {
           updated_at?: string
           waist_cm?: number | null
           water_cups?: number | null
+          water_liters?: string | null
           weight_kg?: number | null
           who_cooks?: string | null
           workout_profile?: Json | null
@@ -531,6 +536,7 @@ export type Database = {
           updated_at?: string
           waist_cm?: number | null
           water_cups?: number | null
+          water_liters?: string | null
           weight_kg?: number | null
           who_cooks?: string | null
           workout_profile?: Json | null

@@ -20,6 +20,7 @@ import {
   type ExerciseType,
 } from "@/lib/plans/activityLevel";
 import { ACTIVITY_OPTIONS, GOALS } from "../labels";
+import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 import { saveMomHealthInfo } from "../actions";
 
 type PregStatus = "none" | "pregnant" | "lactating";
@@ -31,7 +32,7 @@ export type HealthInitial = {
   exercise_days: string | null;
   exercise_type: string | null;
   target_weight_kg: number | null;
-  water_cups: number | null;
+  water_liters: string | null;
   sleep_hours: number | null;
   medications: string[];
   supplements: string[];
@@ -107,8 +108,8 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
   const [targetWeight, setTargetWeight] = useState(
     initial.target_weight_kg != null ? String(initial.target_weight_kg) : "",
   );
-  const [waterCups, setWaterCups] = useState(
-    initial.water_cups != null ? String(initial.water_cups) : "",
+  const [waterLiters, setWaterLiters] = useState<WaterLiters | null>(
+    (initial.water_liters as WaterLiters | null) ?? null,
   );
   const [sleepHours, setSleepHours] = useState(
     initial.sleep_hours != null ? String(initial.sleep_hours) : "",
@@ -169,7 +170,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         exercise_days: exerciseDays ?? undefined,
         exercise_type: exerciseDays === "none" ? null : exerciseType,
         target_weight_kg: targetWeight ? Number(targetWeight) : null,
-        water_cups: waterCups ? Number(waterCups) : null,
+        water_liters: waterLiters,
         sleep_hours: sleepHours ? Number(sleepHours) : null,
         medications,
         supplements,
@@ -434,20 +435,20 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         <GroupHeading>نمط اليوم</GroupHeading>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="water-c" className="block text-sm font-bold text-brand-ink mb-2">
-              أكواب الماء يومياً
-            </label>
-            <input
-              id="water-c"
-              type="number"
-              inputMode="numeric"
-              dir="ltr"
-              min={0}
-              max={40}
-              value={waterCups}
-              onChange={(e) => setWaterCups(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-            />
+            <p className="text-sm font-bold text-brand-ink mb-2">كم لتر ماء يومياً؟</p>
+            <div className="grid grid-cols-2 gap-2">
+              {WATER_LITERS_OPTIONS.map((o) => (
+                <OptionButton
+                  key={o.value}
+                  active={waterLiters === o.value}
+                  onClick={() =>
+                    setWaterLiters((cur) => (cur === o.value ? null : o.value))
+                  }
+                >
+                  {o.label}
+                </OptionButton>
+              ))}
+            </div>
           </div>
           <div>
             <label htmlFor="sleep-h" className="block text-sm font-bold text-brand-ink mb-2">

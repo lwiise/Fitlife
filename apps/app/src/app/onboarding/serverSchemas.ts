@@ -29,7 +29,7 @@ const exerciseFields = {
 
 const lifestyleFields = {
   target_weight_kg: z.number().min(20).max(300).nullish(),
-  water_cups: z.number().int().min(0).max(40).nullish(),
+  water_liters: z.enum(["lt1", "l1_2", "l2_3", "gt3"]).nullish(),
   sleep_hours: z.number().min(2).max(16).nullish(),
   medications: chipArray.optional(),
   supplements: chipArray.optional(),

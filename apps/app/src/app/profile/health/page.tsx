@@ -59,7 +59,7 @@ export default async function HealthEditPage() {
             exercise_days: profile.exercise_days,
             exercise_type: profile.exercise_type,
             target_weight_kg: profile.target_weight_kg,
-            water_cups: profile.water_cups,
+            water_liters: profile.water_liters,
             sleep_hours: profile.sleep_hours,
             medications: asStringArray(profile.medications),
             supplements: asStringArray(profile.supplements),

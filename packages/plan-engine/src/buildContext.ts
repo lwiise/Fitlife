@@ -78,7 +78,9 @@ export interface PlanPromptContextMom {
   day_nature: string | null;
   exercise_days: string | null;
   exercise_type: string | null;
+  // Legacy (pre-00015) cups value — read-fallback only.
   water_cups: number | null;
+  water_liters: string | null;
   sleep_hours: number | null;
   medications: string[];
   supplements: string[];
@@ -121,7 +123,9 @@ export interface PlanPromptContextMember {
   day_nature: string | null;
   exercise_days: string | null;
   exercise_type: string | null;
+  // Legacy (pre-00015) cups value — read-fallback only.
   water_cups: number | null;
+  water_liters: string | null;
   sleep_hours: number | null;
   medications: string[];
   supplements: string[];
@@ -303,6 +307,7 @@ export async function buildPlanContext(
     exercise_days: profile.exercise_days ?? null,
     exercise_type: profile.exercise_type ?? null,
     water_cups: profile.water_cups ?? null,
+    water_liters: profile.water_liters ?? null,
     sleep_hours: profile.sleep_hours ?? null,
     medications: toStringArray(profile.medications),
     supplements: toStringArray(profile.supplements),
@@ -361,6 +366,7 @@ export async function buildPlanContext(
         exercise_days: (m.exercise_days as string | null) ?? null,
         exercise_type: (m.exercise_type as string | null) ?? null,
         water_cups: (m.water_cups as number | null) ?? null,
+        water_liters: (m.water_liters as string | null) ?? null,
         sleep_hours: (m.sleep_hours as number | null) ?? null,
         medications: toStringArray(m.medications),
         supplements: toStringArray(m.supplements),

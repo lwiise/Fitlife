@@ -250,7 +250,7 @@ export interface MomProfileInput {
   exercise_days?: ExerciseDays;
   exercise_type?: ExerciseType | null;
   target_weight_kg?: number | null;
-  water_cups?: number | null;
+  water_liters?: "lt1" | "l1_2" | "l2_3" | "gt3" | null;
   sleep_hours?: number | null;
   medications?: string[];
   supplements?: string[];
@@ -327,7 +327,7 @@ export async function saveMomProfile(
       exercise_days: input.exercise_days ?? null,
       exercise_type: input.exercise_type ?? null,
       target_weight_kg: input.target_weight_kg ?? null,
-      water_cups: input.water_cups ?? null,
+      water_liters: input.water_liters ?? null,
       sleep_hours: input.sleep_hours ?? null,
       medications: input.medications ?? [],
       supplements: input.supplements ?? [],
@@ -790,7 +790,7 @@ export interface FamilyMemberInput {
   exercise_days?: ExerciseDays;
   exercise_type?: ExerciseType | null;
   target_weight_kg?: number | null;
-  water_cups?: number | null;
+  water_liters?: "lt1" | "l1_2" | "l2_3" | "gt3" | null;
   sleep_hours?: number | null;
   medications?: string[];
   supplements?: string[];
@@ -872,7 +872,7 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     exercise_days: isAdult ? (input.exercise_days ?? null) : null,
     exercise_type: isAdult ? (input.exercise_type ?? null) : null,
     sleep_hours: isAdult ? (input.sleep_hours ?? null) : null,
-    water_cups: input.member_type === "child" ? null : (input.water_cups ?? null),
+    water_liters: input.member_type === "child" ? null : (input.water_liters ?? null),
     medications: input.member_type === "child" ? [] : (input.medications ?? []),
     supplements: input.member_type === "child" ? [] : (input.supplements ?? []),
     nausea_foods:

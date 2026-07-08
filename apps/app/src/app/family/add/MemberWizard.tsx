@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
+import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 import {
   activityLevelFrom,
   ACTIVITY_LEVEL_LABELS,
@@ -259,7 +260,9 @@ export function MemberWizard({
   const [targetWeightKg, setTargetWeightKg] = useState(
     initial?.target_weight_kg?.toString() ?? "",
   );
-  const [waterCups, setWaterCups] = useState(initial?.water_cups?.toString() ?? "");
+  const [waterLiters, setWaterLiters] = useState<WaterLiters | null>(
+    (initial?.water_liters as WaterLiters | undefined) ?? null,
+  );
   const [sleepHours, setSleepHours] = useState(initial?.sleep_hours?.toString() ?? "");
   const [medications, setMedications] = useState<string[]>(initial?.medications ?? []);
   const [supplements, setSupplements] = useState<string[]>(initial?.supplements ?? []);
@@ -353,7 +356,7 @@ export function MemberWizard({
         : null,
     target_weight_kg:
       type === "adult" && targetWeightKg ? Number(targetWeightKg) : null,
-    water_cups: type === "child" ? null : waterCups ? Number(waterCups) : null,
+    water_liters: type === "child" ? null : waterLiters,
     sleep_hours: type === "adult" && sleepHours ? Number(sleepHours) : null,
     medications: type === "child" ? [] : medications,
     supplements: type === "child" ? [] : supplements,
@@ -391,7 +394,7 @@ export function MemberWizard({
     setExerciseDays(null);
     setExerciseType(null);
     setTargetWeightKg("");
-    setWaterCups("");
+    setWaterLiters(null);
     setSleepHours("");
     setMedications([]);
     setSupplements([]);
@@ -1056,10 +1059,22 @@ export function MemberWizard({
                     شرب الماء
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    كم كوب ماء تشرب يومياً تقريباً؟ اختياري.
+                    كم لتر ماء تقريباً في اليوم؟ اختياري.
                   </p>
                 </header>
-                <NumberField id="m-water" label="عدد الأكواب (اختياري)" value={waterCups} onChange={setWaterCups} placeholder="8" />
+                <div className="grid grid-cols-2 gap-2">
+                  {WATER_LITERS_OPTIONS.map((o) => (
+                    <OptionButton
+                      key={o.value}
+                      active={waterLiters === o.value}
+                      onClick={() =>
+                        setWaterLiters((cur) => (cur === o.value ? null : o.value))
+                      }
+                    >
+                      {o.label}
+                    </OptionButton>
+                  ))}
+                </div>
                 <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
               </>
             )}
@@ -1074,10 +1089,23 @@ export function MemberWizard({
                     تفاصيل صغيرة تجعل الخطة أدق. كلها اختيارية.
                   </p>
                 </header>
-                <div className="grid grid-cols-2 gap-3">
-                  <NumberField id="m-water2" label="أكواب الماء يومياً" value={waterCups} onChange={setWaterCups} placeholder="8" />
-                  <NumberField id="m-sleep" label="ساعات النوم" value={sleepHours} onChange={setSleepHours} placeholder="7" />
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">كم لتر ماء يومياً؟</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {WATER_LITERS_OPTIONS.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={waterLiters === o.value}
+                        onClick={() =>
+                          setWaterLiters((cur) => (cur === o.value ? null : o.value))
+                        }
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
                 </div>
+                <NumberField id="m-sleep" label="ساعات النوم" value={sleepHours} onChange={setSleepHours} placeholder="7" />
                 <PrimaryButton onClick={advanceOrSubmit}>{nextLabel}</PrimaryButton>
               </>
             )}

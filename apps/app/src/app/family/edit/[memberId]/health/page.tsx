@@ -91,7 +91,7 @@ export default async function MemberHealthEditPage({
             exercise_days: m.exercise_days,
             exercise_type: m.exercise_type,
             target_weight_kg: m.target_weight_kg,
-            water_cups: m.water_cups,
+            water_liters: m.water_liters,
             sleep_hours: m.sleep_hours,
             medications: asStringArray(m.medications),
             supplements: asStringArray(m.supplements),

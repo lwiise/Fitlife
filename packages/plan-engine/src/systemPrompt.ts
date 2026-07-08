@@ -119,6 +119,13 @@ const EXERCISE_TYPE_LABELS_AR: Record<string, string> = {
   mixed: "مقاومة وكارديو",
 };
 
+const WATER_LITERS_LABELS_AR: Record<string, string> = {
+  lt1: "أقل من لتر",
+  l1_2: "1-2 لتر",
+  l2_3: "2-3 لترات",
+  gt3: "أكثر من 3 لترات",
+};
+
 const FEEDING_MODE_LABELS_AR: Record<string, string> = {
   exclusive: "طبيعية كاملة",
   mixed: "مختلطة",
@@ -222,7 +229,10 @@ function describeMom(c: PlanPromptContext): string {
   if (m.nausea_foods.length > 0) {
     line += ` أطعمة تسبب لها الغثيان حالياً: ${m.nausea_foods.join("، ")} — تجنّبيها مؤقتاً في هذه الخطة.`;
   }
-  if (m.water_cups != null) {
+  if (m.water_liters) {
+    const low = m.water_liters === "lt1" || m.water_liters === "l1_2";
+    line += ` تشرب ${labeled(WATER_LITERS_LABELS_AR, m.water_liters)} من الماء يومياً${low ? " — شجّعيها بلطف على الزيادة ضمن الخطة" : ""}.`;
+  } else if (m.water_cups != null) {
     line += ` تشرب نحو ${m.water_cups} أكواب ماء يومياً${m.water_cups < 8 ? " — شجّعيها بلطف على الزيادة ضمن الخطة" : ""}.`;
   }
   if (m.sleep_hours != null) {
@@ -307,7 +317,9 @@ function describeMember(member: PlanPromptContextMember): string {
   if (member.nausea_foods.length > 0) {
     line += ` أطعمة تسبب لها الغثيان حالياً: ${member.nausea_foods.join("، ")} — تجنّبيها مؤقتاً في هذه الخطة.`;
   }
-  if (member.water_cups != null) {
+  if (member.water_liters) {
+    line += ` يشرب ${labeled(WATER_LITERS_LABELS_AR, member.water_liters)} من الماء يومياً.`;
+  } else if (member.water_cups != null) {
     line += ` يشرب نحو ${member.water_cups} أكواب ماء يومياً.`;
   }
   if (member.sleep_hours != null) {
@@ -615,6 +627,7 @@ function buildRoster(
                 exercise_days: null,
                 exercise_type: null,
                 water_cups: null,
+                water_liters: null,
                 sleep_hours: null,
                 medications: [],
                 supplements: [],

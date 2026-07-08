@@ -31,6 +31,7 @@ function makeMomContext(mealMode: "shared" | "independent"): PlanPromptContext {
       exercise_days: null,
       exercise_type: null,
       water_cups: null,
+      water_liters: null,
       sleep_hours: null,
       medications: [],
       supplements: [],
@@ -175,7 +176,7 @@ describe("coach questionnaire prompt threading", () => {
     ctx.mom.day_nature = "desk";
     ctx.mom.exercise_days = "d3_5";
     ctx.mom.exercise_type = "resistance";
-    ctx.mom.water_cups = 4;
+    ctx.mom.water_liters = "l1_2";
     ctx.mom.sleep_hours = 5;
     ctx.mom.medications = ["ميتفورمين"];
     ctx.mom.supplements = ["حديد"];
@@ -193,10 +194,17 @@ describe("coach questionnaire prompt threading", () => {
     expect(prompt).toContain("أدوية: ميتفورمين");
     expect(prompt).toContain("مكملات: حديد");
     expect(prompt).toContain("الغثيان");
-    expect(prompt).toContain("4 أكواب");
+    expect(prompt).toContain("1-2 لتر");
     expect(prompt).toContain("5 ساعات");
     expect(prompt).toContain("ملاحظات إضافية من العميلة");
     expect(prompt).toContain("سريعة التحضير");
+  });
+
+  it("legacy cups value still renders when no liters band is set", () => {
+    const ctx = makeMomContext("shared");
+    ctx.mom.water_cups = 4;
+    const prompt = buildSkeletonPrompt(ctx);
+    expect(prompt).toContain("4 أكواب");
   });
 
   it("day prompt repeats only meds + nausea, not the lifestyle fields", () => {
@@ -204,7 +212,7 @@ describe("coach questionnaire prompt threading", () => {
     expect(prompt).toContain("أدوية: ميتفورمين");
     expect(prompt).toContain("غثيان من: بيض");
     expect(prompt).not.toContain("65 كيلو");
-    expect(prompt).not.toContain("أكواب");
+    expect(prompt).not.toContain("لتر");
     expect(prompt).not.toContain("سريعة التحضير");
   });
 });
