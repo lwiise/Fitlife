@@ -156,7 +156,7 @@ async function handleGenerate(req: Request) {
       );
     case "busy":
       return NextResponse.json(
-        { error: "خطتك لسه قيد التجهيز. انتظري لين تخلص ثم حاولي مرة ثانية" },
+        { error: "خطتك قيد التجهيز الآن", busy: true },
         { status: 409 },
       );
     case "dispatch":

@@ -68,7 +68,16 @@ export function RegenerateButton({
           router.refresh();
           return;
         }
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          busy?: boolean;
+        };
+        // Already generating → nothing to fix; close and let the page show it.
+        if (res.status === 409 || body.busy) {
+          closeDialog();
+          router.refresh();
+          return;
+        }
         // Keep the dialog open and surface the error inside it.
         setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
       } catch {

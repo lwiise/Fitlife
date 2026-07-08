@@ -398,10 +398,11 @@ export async function finishOnboardingToSubscription(): Promise<void> {
   // path: kick off the whole-family generation and land them on /plan.
   const sub = await getCurrentSubscription(user.id);
   if (sub && isSubscriptionActive(sub) && sub.lemonsqueezy_subscription_id) {
-    const { triggered } = await syncFamilyPlanAfterSubscribe().catch(() => ({
-      triggered: false,
-    }));
-    redirect(triggered ? "/plan" : "/dashboard");
+    // Always land on /plan: it renders every state correctly (progress while
+    // generating, the plan when ready, the retry UI on failure) — bouncing to
+    // the dashboard on a declined sync left users staring at "no plan yet".
+    await syncFamilyPlanAfterSubscribe().catch(() => ({ triggered: false }));
+    redirect("/plan");
   }
 
   redirect("/pricing?from=onboarding");
@@ -425,6 +426,8 @@ export async function generateSoloAndContinue(): Promise<void> {
   // Full run → tier cap (trial starter = 1) yields a mom-only plan; any extra
   // members defer until a covering subscription unlocks the whole-family regen.
   await runFamilyGeneration(supabase, user.id);
+  // Combined generation: fire the workout companion too (no-op unless opted in).
+  await maybeTriggerWorkoutGeneration(supabase, user.id);
   redirect("/plan");
 }
 
@@ -484,9 +487,6 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
   }
 
   const gen = await runFamilyGeneration(supabase, user.id, { fullRegen: true });
-
-  // Combined generation: fire the workout companion too (no-op unless opted in).
-  await maybeTriggerWorkoutGeneration(supabase, user.id);
   return { triggered: gen.ok };
 }
 

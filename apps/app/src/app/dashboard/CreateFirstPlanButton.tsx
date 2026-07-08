@@ -18,7 +18,15 @@ export function CreateFirstPlanButton() {
           router.push("/plan");
           return;
         }
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          busy?: boolean;
+        };
+        // Already generating → that IS the goal; show the progress screen.
+        if (res.status === 409 || body.busy) {
+          router.push("/plan");
+          return;
+        }
         setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
       } catch {
         setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
