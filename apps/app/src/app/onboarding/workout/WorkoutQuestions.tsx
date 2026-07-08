@@ -119,7 +119,10 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(people.map((p) => p.target)),
   );
-  const [personIndex, setPersonIndex] = useState(-1); // -1 = selection screen
+  // With a single eligible person there is nothing to pick — skip the
+  // selection screen and start directly on their questions.
+  const minIndex = people.length === 1 ? 0 : -1;
+  const [personIndex, setPersonIndex] = useState(minIndex); // -1 = selection screen
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
     Object.fromEntries(people.map((p) => [p.target, draftFrom(p.existing)])),
   );
@@ -191,11 +194,15 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
 
   const back = () => {
     setError(null);
-    setPersonIndex((i) => Math.max(i - 1, -1));
+    setPersonIndex((i) => Math.max(i - 1, minIndex));
   };
 
   const stepLabel =
-    personIndex === -1 ? "اختيار الأفراد" : `${current!.name} (${personIndex + 1}/${chosen.length})`;
+    personIndex === -1
+      ? "اختيار الأفراد"
+      : chosen.length > 1
+        ? `${current!.name} (${personIndex + 1}/${chosen.length})`
+        : "";
 
   return (
     <div className="space-y-6">
@@ -204,7 +211,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
           أسئلة خطة التمارين
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          سبع إجابات قصيرة تكفي لبرنامج أسبوعي مفصّل. {stepLabel}
+          سبع إجابات قصيرة تكفي لبرنامج أسبوعي مفصّل.{stepLabel ? ` ${stepLabel}` : ""}
         </p>
       </header>
 
@@ -387,7 +394,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
         {personIndex >= 0 && personIndex + 1 === chosen.length ? "حفظ ومتابعة" : "التالي"}
       </button>
 
-      {personIndex >= -1 && personIndex !== -1 && (
+      {personIndex > minIndex && (
         <button
           type="button"
           onClick={back}
