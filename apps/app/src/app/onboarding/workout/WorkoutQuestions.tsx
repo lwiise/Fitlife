@@ -271,7 +271,18 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
                         key={o.value}
                         active={draft.equipment.includes(o.value)}
                         onClick={() =>
-                          setDraft({ equipment: toggleArr(draft.equipment, o.value) })
+                          setDraft({
+                            // "بدون أدوات" contradicts real equipment: picking it
+                            // clears the rest; picking any equipment clears it.
+                            equipment: draft.equipment.includes(o.value)
+                              ? draft.equipment.filter((e) => e !== o.value)
+                              : o.value === "none"
+                                ? ["none"]
+                                : [
+                                    ...draft.equipment.filter((e) => e !== "none"),
+                                    o.value,
+                                  ],
+                          })
                         }
                       >
                         {o.label}
