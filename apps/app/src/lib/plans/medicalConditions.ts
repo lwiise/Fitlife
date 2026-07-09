@@ -20,6 +20,7 @@ export const GATE_CONDITIONS: ConditionOption[] = [
   { slug: "acute_digestive", label_ar: "اضطراب هضمي حاد" },
   { slug: "eating_disorder", label_ar: "اضطراب في الأكل" },
   { slug: "post_surgical", label_ar: "ما بعد عملية جراحية" },
+  { slug: "bariatric_surgery", label_ar: "جراحة سمنة سابقة" },
 ];
 
 // Stable / managed conditions — inform the plan, no gate.

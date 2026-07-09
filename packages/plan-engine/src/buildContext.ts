@@ -25,6 +25,7 @@ export const HIGH_RISK_MEDICAL_FLAGS = [
   "acute_digestive",
   "eating_disorder",
   "post_surgical",
+  "bariatric_surgery",
   "unexplained_symptoms",
 ];
 
@@ -34,6 +35,8 @@ export const HIGH_RISK_MEDICAL_FLAGS = [
  */
 export interface DeepDiveFields {
   waist_cm: number | null;
+  /** محيط الورك (00016) — optional so pre-00016 fixtures stay valid. */
+  hip_cm?: number | null;
   steps_daily: number | null;
   exercise_duration: string | null;
   liked_foods: string[];
@@ -87,6 +90,14 @@ export interface PlanPromptContextMom {
   nausea_foods: string[];
   // Free "anything else" note — rendered in the SKELETON prompt only.
   notes: string | null;
+  // Coach full-intake (00016) — all optional so older fixtures stay valid.
+  /** Hard exclusions (أطعمة لا تتناولها نهائياً) — enforced like allergies. */
+  never_eat_foods?: string[];
+  sleep_band?: string | null;
+  /** Lactation feeding mode for the account owner (exclusive/mixed/formula). */
+  feeding_mode?: string | null;
+  /** شهر الحمل 1-9; pregnancy_trimester stays the derived coarse value. */
+  pregnancy_month?: number | null;
   // Optional deep-dive lifestyle block (mom only; skeleton-only rendering).
   deep_dive?: DeepDiveFields;
   // Workout opt-in answers (00014). undefined = not opted in / invalid shape.
@@ -316,8 +327,13 @@ export async function buildPlanContext(
     supplements: toStringArray(profile.supplements),
     nausea_foods: toStringArray(profile.nausea_foods),
     notes: profile.notes ?? null,
+    never_eat_foods: toStringArray(profile.never_eat_foods),
+    sleep_band: profile.sleep_band ?? null,
+    feeding_mode: profile.feeding_mode ?? null,
+    pregnancy_month: profile.pregnancy_month ?? null,
     deep_dive: {
       waist_cm: profile.waist_cm ?? null,
+      hip_cm: profile.hip_cm ?? null,
       steps_daily: profile.steps_daily ?? null,
       exercise_duration: profile.exercise_duration ?? null,
       liked_foods: toStringArray(profile.liked_foods),

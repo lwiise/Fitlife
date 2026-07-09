@@ -161,9 +161,21 @@ const MEAL_OUT_LABELS_AR: Record<string, string> = {
 
 const CUISINE_LABELS_AR: Record<string, string> = {
   khaleeji: "خليجي تقليدي",
+  arabic: "عربي",
+  asian: "آسيوي",
+  western: "غربي",
+  varied: "متنوع",
+  // Legacy values (pre-00016 remap) — still resolvable until prod migrates.
   mixed: "خليط من الخليجي والعالمي",
   mediterranean: "متوسطي",
   international: "عالمي",
+};
+
+const SLEEP_BAND_LABELS_AR: Record<string, string> = {
+  lt5: "أقل من 5 ساعات",
+  h5_6: "5-6 ساعات",
+  h7_8: "7-8 ساعات",
+  gt8: "أكثر من 8 ساعات",
 };
 
 function labeled(map: Record<string, string>, key: string | null | undefined): string {
@@ -197,16 +209,26 @@ function describeMom(c: PlanPromptContext): string {
     line += g(" لا تعاني من حالات صحية.", " لا يعاني من حالات صحية.");
   }
   if (m.is_pregnant) {
-    line += ` حامل (الثلث ${m.pregnancy_trimester ?? "غير محدد"})${m.high_risk_pregnancy ? " — حمل عالي الخطورة" : ""} — طبّقي قواعد الحمل.`;
+    const stage =
+      m.pregnancy_month != null
+        ? `الشهر ${m.pregnancy_month}، الثلث ${m.pregnancy_trimester ?? "غير محدد"}`
+        : `الثلث ${m.pregnancy_trimester ?? "غير محدد"}`;
+    line += ` حامل (${stage})${m.high_risk_pregnancy ? " — حمل عالي الخطورة" : ""} — طبّقي قواعد الحمل.`;
   }
   if (m.months_postpartum != null) {
-    line += ` مرضعة (مرّ ${m.months_postpartum} شهر على الولادة) — طبّقي قواعد الرضاعة.`;
+    const feeding = m.feeding_mode
+      ? `${labeled(FEEDING_MODE_LABELS_AR, m.feeding_mode)}، `
+      : "";
+    line += ` مرضعة (${feeding}عمر الطفل ${m.months_postpartum} شهر) — طبّقي قواعد الرضاعة.`;
   }
   if (m.dietary_restrictions.length > 0) {
     line += ` قيود غذائية: ${m.dietary_restrictions.join("، ")}.`;
   }
   if (m.allergies.length > 0) {
     line += ` حساسية: ${m.allergies.join("، ")} — تجنّبيها تماماً.`;
+  }
+  if (m.never_eat_foods && m.never_eat_foods.length > 0) {
+    line += ` أطعمة ${g("لا تتناولها", "لا يتناولها")} نهائياً: ${m.never_eat_foods.join("، ")} — استبعديها تماماً مثل الحساسية.`;
   }
   if (m.dislikes.length > 0) {
     line += ` ${g("لا تحب", "لا يحب")}: ${m.dislikes.join("، ")}.`;
@@ -243,7 +265,10 @@ function describeMom(c: PlanPromptContext): string {
   } else if (m.water_cups != null) {
     line += ` ${g("تشرب", "يشرب")} نحو ${m.water_cups} أكواب ماء يومياً${m.water_cups < 8 ? ` — ${g("شجّعيها", "شجّعيه")} بلطف على الزيادة ضمن الخطة` : ""}.`;
   }
-  if (m.sleep_hours != null) {
+  if (m.sleep_band) {
+    const lowSleep = m.sleep_band === "lt5" || m.sleep_band === "h5_6";
+    line += ` ${g("تنام", "ينام")} ${labeled(SLEEP_BAND_LABELS_AR, m.sleep_band)} يومياً${lowSleep ? " — راعي وجبات مسائية خفيفة تدعم نوماً أفضل" : ""}.`;
+  } else if (m.sleep_hours != null) {
     line += ` ${g("تنام", "ينام")} نحو ${m.sleep_hours} ساعات${m.sleep_hours < 7 ? " — راعي وجبات مسائية خفيفة تدعم نوماً أفضل" : ""}.`;
   }
   line += ` ${g("تفضل", "يفضل")} مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
@@ -687,6 +712,7 @@ const DEEP_DIVE_LABELS: Array<{
   map?: Record<string, string>;
 }> = [
   { key: "waist_cm", label: "محيط الخصر (سم)" },
+  { key: "hip_cm", label: "محيط الورك (سم)" },
   { key: "steps_daily", label: "متوسط الخطوات اليومية" },
   {
     key: "exercise_duration",
@@ -848,7 +874,11 @@ export function buildDayPrompt(
 
       const constraints: string[] = [];
       const allergies =
-        sm.member_id === "mom" ? context.mom.allergies : (ctxMember?.allergies ?? []);
+        sm.member_id === "mom"
+          ? // never-eat foods are hard exclusions like allergies — they must
+            // repeat in every day prompt, not just the skeleton roster.
+            [...context.mom.allergies, ...(context.mom.never_eat_foods ?? [])]
+          : (ctxMember?.allergies ?? []);
       const dislikes =
         sm.member_id === "mom" ? context.mom.dislikes : (ctxMember?.dislikes ?? []);
       const conditions =

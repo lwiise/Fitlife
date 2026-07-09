@@ -265,6 +265,7 @@ async function buildContextViaFetch(
     "acute_digestive",
     "eating_disorder",
     "post_surgical",
+    "bariatric_surgery",
     "unexplained_symptoms",
   ];
   const hasHighRiskFlag = medicalConditions.some((c) =>
@@ -388,9 +389,14 @@ async function buildContextViaFetch(
       supplements: asStrings(profile.supplements),
       nausea_foods: asStrings(profile.nausea_foods),
       notes: (profile.notes as string | null) ?? null,
+      never_eat_foods: asStrings(profile.never_eat_foods),
+      sleep_band: (profile.sleep_band as string | null) ?? null,
+      feeding_mode: (profile.feeding_mode as string | null) ?? null,
+      pregnancy_month: (profile.pregnancy_month as number | null) ?? null,
       workout_profile: parseWorkoutProfileLoose(profile.workout_profile),
       deep_dive: {
         waist_cm: (profile.waist_cm as number | null) ?? null,
+        hip_cm: (profile.hip_cm as number | null) ?? null,
         steps_daily: (profile.steps_daily as number | null) ?? null,
         exercise_duration: (profile.exercise_duration as string | null) ?? null,
         liked_foods: asStrings(profile.liked_foods),
