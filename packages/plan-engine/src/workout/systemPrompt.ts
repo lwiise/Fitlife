@@ -1,5 +1,6 @@
 import type { PlanPromptContext, PlanPromptContextMember, PlanPromptContextMom } from "../buildContext";
 import { splitForDays, type WorkoutProfile, type WorkoutSkeleton } from "./schema";
+import { exerciseCatalogPromptBlock } from "./exerciseCatalog";
 
 // ─── Coach identity ─────────────────────────────────────────────────────────
 const WORKOUT_ROLE = `أنتِ "سارة"، مدربة لياقة معتمدة متخصصة في تدريب المقاومة للنساء والعائلات في الخليج. تصممين برامج تمارين أسبوعية دقيقة وآمنة وقابلة للتنفيذ في المنزل أو النادي، بلغة عربية فصحى واضحة ودافئة، دون مبالغة ودون وعود غير واقعية.`;
@@ -62,7 +63,9 @@ export const WORKOUT_METHODOLOGY = `# منهجية التدريب
 
 export const WORKOUT_STATIC = `${WORKOUT_ROLE}
 
-${WORKOUT_METHODOLOGY}`;
+${WORKOUT_METHODOLOGY}
+
+${exerciseCatalogPromptBlock()}`;
 
 // ─── Trainee description (reuses the meal context + workout answers) ───────
 
@@ -204,7 +207,8 @@ export function buildWorkoutSkeletonPrompt(context: PlanPromptContext): string {
 ${traineeRoster(trainees)}
 
 # المطلوب (المرحلة 1: هيكل الأسبوع فقط)
-لكل متدرب: أكّدي التقسيم الأسبوعي المناسب (التزمي بالموصى به ما لم تفرض السلامة غير ذلك)، وسمّي جلسات الأسبوع بأنماطها الحركية الرئيسية فقط — بدون تمارين مفصلة. day_index من 0 إلى 6 (0 = أول أيام الأسبوع)؛ وزّعي أيام الراحة بذكاء.
+لكل متدرب: أكّدي التقسيم الأسبوعي المناسب (التزمي بالموصى به ما لم تفرض السلامة غير ذلك)، وسمّي جلسات الأسبوع بأنماطها الحركية الرئيسية فقط — بدون تمارين مفصلة. day_index من 0 إلى 6 (0 = أول أيام الأسبوع).
+قيود صارمة: عدد الجلسات لكل متدرب يساوي أيام التدريب المرغوبة **بالضبط** — لا أكثر ولا أقل؛ لا تُدرجي أيام الراحة أو المشي كجلسات؛ لكل جلسة day_index فريد؛ أيام الراحة تُترك بلا جلسات.
 
 # الإخراج
 أرجعي JSON صالحاً فقط (لا نص قبله أو بعده). الشكل:
@@ -244,11 +248,11 @@ ${trainee ? describeTrainee(trainee) : `member_id="${memberId}"`}
 ${sessions}
 
 # المطلوب (المرحلة 2: تفصيل الأسبوع كاملاً لهذا المتدرب فقط)
-فصّلي كل جلسة: إحماء (RAMP مختصر)، التمارين بالترتيب (المركبة أولاً)، لكل تمرين: الاسم بالعربية (والإنجليزية إن شاع)، العضلات المستهدفة، المجموعات، التكرارات (مدى)، الراحة بالثواني، وملاحظة جهد RIR. ${
+فصّلي كل جلسة: إحماء (RAMP مختصر)، التمارين بالترتيب (المركبة أولاً)، لكل تمرين: exercise_id من الكتالوج المعتمد حصراً، الاسم بالعربية (والإنجليزية إن شاع)، العضلات المستهدفة، المجموعات، التكرارات (مدى)، الراحة بالثواني، وملاحظة جهد RIR. ${
     trainee?.profile.location === "both"
-      ? "أضيفي home_variant_ar بديلاً منزلياً لكل تمرين نادٍ."
+      ? "أضيفي home_variant_ar بديلاً منزلياً لكل تمرين نادٍ مع home_variant_id من الكتالوج (من تمارين المنزل)."
       : ""
-  } احترمي مدة الجلسة المختارة، وطبّقي قواعد السلامة الإلزامية حرفياً. أضيفي ملاحظات التدرّج، وملاحظة كارديو/خطوات بحسب هدف التغذية، وملاحظات السلامة إن وجدت.
+  } عدد الجلسات يساوي الجلسات المقررة أعلاه بالضبط — لا تضيفي جلسات راحة أو مشي. احترمي مدة الجلسة المختارة، وطبّقي قواعد السلامة الإلزامية حرفياً. أضيفي ملاحظات التدرّج، وملاحظة كارديو/خطوات بحسب هدف التغذية، وملاحظات السلامة إن وجدت.
 
 # الإخراج
 أرجعي JSON صالحاً فقط بهذا الشكل:
@@ -262,9 +266,10 @@ type MemberWorkout = {
     session_name_ar: string;
     warmup_ar: string[];
     exercises: Array<{
+      exercise_id: string; // من الكتالوج المعتمد حصراً
       name_ar: string; name_en?: string; target_muscles_ar: string;
       sets: number; reps: string; rest_seconds: number; rir?: string;
-      home_variant_ar?: string; notes_ar?: string;
+      home_variant_ar?: string; home_variant_id?: string; notes_ar?: string;
     }>;
     cooldown_ar: string[];
     duration_min: number;

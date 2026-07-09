@@ -15,7 +15,10 @@ import {
   generationAlreadySettled,
   prepareSharedGroupRegen,
 } from "../../../../packages/plan-engine/src/generate";
-import { runWorkoutPlanGeneration } from "../../../../packages/plan-engine/src/workout/generate";
+import {
+  runWorkoutPlanGeneration,
+  mealGenBlocksWorkout,
+} from "../../../../packages/plan-engine/src/workout/generate";
 import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
@@ -514,6 +517,51 @@ const handler = async (req: Request): Promise<Response> => {
       }
     } catch (guardErr) {
       console.error("[generate-plan-background] workout idempotency probe failed", guardErr);
+    }
+
+    // Meals-first sequencing: while a meal generation is live for this user,
+    // hold off so meals get the full API budget (the user's explicit priority
+    // — both plans share one Anthropic key). Capped: past the cap we proceed
+    // in the meal run's tail rather than never finishing; the workout itself
+    // takes ~1-3 min, well inside the 15-min function budget. No meal run
+    // (dashboard opt-in, retry) → the first check falls through instantly.
+    {
+      const WAIT_POLL_MS = 10_000;
+      const WAIT_MAX_MS = 8 * 60_000;
+      const waitStart = Date.now();
+      let waited = false;
+      for (;;) {
+        let mealGens: Array<{ status?: string; started_at?: string }> = [];
+        try {
+          mealGens = (await sbSelectMany(
+            supabaseUrl,
+            expected,
+            "plan_generations",
+            `user_id=eq.${userId}&status=eq.started&plan_kind=eq.meal&select=status,started_at&limit=1`,
+          )) as Array<{ status?: string; started_at?: string }>;
+        } catch (waitErr) {
+          // Probe failure must not stall the workout — proceed.
+          console.error("[generate-plan-background] meal-gen probe failed", waitErr);
+          break;
+        }
+        if (!mealGenBlocksWorkout(mealGens, Date.now())) break;
+        if (Date.now() - waitStart >= WAIT_MAX_MS) {
+          console.log(
+            "[generate-plan-background] meal generation still live after cap — proceeding in parallel tail",
+            { userId, workoutPlanId, waitedMs: Date.now() - waitStart },
+          );
+          break;
+        }
+        waited = true;
+        await new Promise((r) => setTimeout(r, WAIT_POLL_MS));
+      }
+      if (waited) {
+        console.log("[generate-plan-background] meals-first wait finished", {
+          userId,
+          workoutPlanId,
+          waitedMs: Date.now() - waitStart,
+        });
+      }
     }
 
     try {

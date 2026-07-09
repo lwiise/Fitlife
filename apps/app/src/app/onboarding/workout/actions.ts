@@ -116,3 +116,20 @@ export async function continueAfterWorkoutOptIn(): Promise<void> {
   await triggerWorkoutGeneration({ supabase, userId: user.id });
   redirect("/plan?view=workout");
 }
+
+/**
+ * Retry a failed workout generation from the plan page. Busy is success from
+ * the user's perspective (a run is live) — either way land on the progress
+ * view.
+ */
+export async function retryWorkoutGeneration(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
+
+  await triggerWorkoutGeneration({ supabase, userId: user.id });
+  revalidatePath("/plan");
+  redirect("/plan?view=workout");
+}

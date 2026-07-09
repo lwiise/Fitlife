@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  normalizeWorkoutSkeleton,
+  normalizeMemberSessions,
   WorkoutProfileSchema,
   WorkoutPlanSchema,
   WorkoutSkeletonSchema,
@@ -251,5 +253,64 @@ describe("workout prompts", () => {
     expect(prompt).toContain('member_id: "mom"');
     expect(prompt).toContain("علوي أ");
     expect(prompt).toContain("home_variant_ar");
+  });
+});
+
+// ─── Normalization — shape repairs must never fail a run ───────────────────
+
+function sk(days: number[]): Parameters<typeof normalizeWorkoutSkeleton>[0] {
+  return {
+    members: [
+      {
+        member_id: "mom",
+        member_name_ar: "أم محمد",
+        split_name_ar: "علوي/سفلي ×2",
+        sessions: days.map((d) => ({
+          day_index: d,
+          session_name_ar: `جلسة ${d}`,
+          main_patterns_ar: ["دفع"],
+        })),
+      },
+    ],
+    safety_disclaimer_ar: "تنبيه",
+  };
+}
+
+describe("normalizeWorkoutSkeleton", () => {
+  it("caps an over-emitted week at the trainee's desired days", () => {
+    const out = normalizeWorkoutSkeleton(sk([0, 1, 2, 3, 4, 5, 6]), { mom: 4 });
+    expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("dedupes duplicate day_index (keeps the first) and sorts", () => {
+    const out = normalizeWorkoutSkeleton(sk([3, 1, 3, 0, 1]), { mom: 6 });
+    expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([0, 1, 3]);
+  });
+
+  it("falls back to a 6-session cap when desired days is unknown", () => {
+    const out = normalizeWorkoutSkeleton(sk([0, 1, 2, 3, 4, 5, 6]), {});
+    expect(out.members[0]!.sessions).toHaveLength(6);
+  });
+
+  it("leaves a correct week untouched", () => {
+    const out = normalizeWorkoutSkeleton(sk([0, 2, 4]), { mom: 3 });
+    expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([0, 2, 4]);
+  });
+});
+
+describe("normalizeMemberSessions", () => {
+  it("caps expanded weekly sessions at desired days", () => {
+    const sessions = [0, 1, 2, 3, 4].map((d) => ({ day_index: d }));
+    expect(normalizeMemberSessions(sessions, 3).map((s) => s.day_index)).toEqual([
+      0, 1, 2,
+    ]);
+  });
+});
+
+describe("skeleton prompt count pinning", () => {
+  it("pins the session count and forbids rest-day sessions", () => {
+    const prompt = buildWorkoutSkeletonPrompt(makeContext());
+    expect(prompt).toContain("بالضبط");
+    expect(prompt).toContain("لا تُدرجي أيام الراحة");
   });
 });

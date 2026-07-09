@@ -16,8 +16,12 @@ import {
   WorkoutPlanSchema,
   WorkoutSkeletonSchema,
   MemberWorkoutSchema,
+  normalizeWorkoutSkeleton,
+  normalizeMemberSessions,
+  normalizeExerciseIds,
   type WorkoutPlan,
   type MemberWorkout,
+  type WorkoutSkeleton,
 } from "./schema";
 import {
   WORKOUT_STATIC,
@@ -95,6 +99,29 @@ export interface WorkoutGenerateResult {
   missingMembers: string[];
 }
 
+// Mirrors the app's STALE_GENERATION_MIN: a 'started' row older than this is a
+// hard-killed worker, not live work — it must not block anything.
+const MEAL_GEN_STALE_MIN = 15;
+
+/**
+ * Meals-first sequencing predicate: should a workout run hold off because a
+ * meal generation is live for this user? True iff any row is 'started' and
+ * younger than the stale threshold. Pure — the background function polls with
+ * it (10 s cadence, capped) so meals always get the full API budget first.
+ */
+export function mealGenBlocksWorkout(
+  rows: Array<{ status?: string | null; started_at?: string | null }>,
+  nowMs: number,
+): boolean {
+  return rows.some((row) => {
+    if (row.status !== "started") return false;
+    const startedMs = row.started_at ? Date.parse(row.started_at) : NaN;
+    // Unparseable started_at → treat as stale rather than blocking forever.
+    if (Number.isNaN(startedMs)) return false;
+    return nowMs - startedMs < MEAL_GEN_STALE_MIN * 60_000;
+  });
+}
+
 function parseJson<T>(raw: string, label: string): T {
   try {
     return JSON.parse(stripMarkdownFence(raw)) as T;
@@ -127,8 +154,15 @@ export async function generateWorkoutPlan(params: {
   let totalCost = 0;
 
   // ── Phase 1: skeleton ──
+  // Parse + validate INSIDE the retry loop: a malformed/invalid response is
+  // re-rolled like any transient failure (a fresh sample usually fixes shape
+  // issues), and a shape code can repair — an over-emitted week — is
+  // normalized rather than failed.
   const skeletonPrompt = buildWorkoutSkeletonPrompt(context);
-  let skeletonRaw = "";
+  const desiredDaysById = Object.fromEntries(
+    trainees.map((t) => [t.member_id, t.profile.desired_days]),
+  );
+  let skeleton: WorkoutSkeleton | null = null;
   for (let attempt = 1; ; attempt++) {
     try {
       const res = await streamAnthropic({
@@ -142,24 +176,26 @@ export async function generateWorkoutPlan(params: {
       totalIn += res.tokensIn;
       totalOut += res.tokensOut;
       totalCost += computeCostUsd(res.tokensIn, res.tokensOut, SKELETON_MODEL);
-      skeletonRaw = res.text;
+
+      const parsed = WorkoutSkeletonSchema.safeParse(
+        parseJson(res.text, "workout skeleton"),
+      );
+      if (!parsed.success) {
+        throw new PlanValidationError(
+          `workout skeleton failed validation: ${parsed.error.message}`,
+          res.text,
+        );
+      }
+      skeleton = normalizeWorkoutSkeleton(parsed.data, desiredDaysById);
       break;
     } catch (err) {
-      if (attempt >= MAX_RETRIES || !isRetryable(err)) throw err;
+      const retryable = isRetryable(err) || err instanceof PlanValidationError;
+      if (attempt >= MAX_RETRIES || !retryable) throw err;
       const ra = err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
       await sleep(retryWaitMs(attempt, ra));
     }
   }
-  const skeletonParsed = WorkoutSkeletonSchema.safeParse(
-    parseJson(skeletonRaw, "workout skeleton"),
-  );
-  if (!skeletonParsed.success) {
-    throw new PlanValidationError(
-      `workout skeleton failed validation: ${skeletonParsed.error.message}`,
-      skeletonRaw,
-    );
-  }
-  const skeleton = skeletonParsed.data;
+  if (!skeleton) throw new PlanValidationError("workout skeleton unavailable");
 
   // ── Phase 2: per-member weekly expansion ──
   const members: MemberWorkout[] = [];
@@ -191,7 +227,23 @@ export async function generateWorkoutPlan(params: {
             res.text,
           );
         }
-        member = { ...parsed.data, member_id: trainee.member_id };
+        const withIds = normalizeExerciseIds({
+          ...parsed.data,
+          member_id: trainee.member_id,
+          weekly_sessions: normalizeMemberSessions(
+            parsed.data.weekly_sessions,
+            trainee.profile.desired_days,
+          ),
+        });
+        if (withIds.unknownIds.length > 0) {
+          // Log-only (mirrors the cookbook deviation guard): an off-catalog
+          // id loses its animation, never the run.
+          console.warn("[workout-generate] off-catalog exercise_id(s) nulled", {
+            member: trainee.member_id,
+            ids: withIds.unknownIds,
+          });
+        }
+        member = withIds.member;
         break;
       } catch (err) {
         const retryable = isRetryable(err) || err instanceof PlanValidationError;
