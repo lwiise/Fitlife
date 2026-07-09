@@ -173,20 +173,28 @@ function labeled(map: Record<string, string>, key: string | null | undefined): s
 
 function describeMom(c: PlanPromptContext): string {
   const m = c.mom;
+  // The account owner is female by default; a male owner (الجنس asked at
+  // onboarding) flips the clause's grammar and the BMR formula pick. The
+  // imperatives addressed to Sara herself (طبّقي، نسّقي…) stay feminine.
+  const male = m.sex === "male";
+  const g = (f: string, mm: string) => (male ? mm : f);
   const parts: string[] = [];
-  parts.push(`العميلة (الأم): ${m.display_name ?? "غير معروف"}`);
+  parts.push(
+    `${g("العميلة (الأم)", "العميل (رب الأسرة)")}: ${m.display_name ?? "غير معروف"}`,
+  );
+  parts.push(g("أنثى", "ذكر — استخدمي معادلة BMR للذكر"));
   if (m.age != null) parts.push(`${m.age} سنة`);
-  if (m.height_cm != null) parts.push(`طولها ${m.height_cm} سم`);
-  if (m.weight_kg != null) parts.push(`وزنها ${m.weight_kg} كيلو`);
-  parts.push(`نشاطها ${labeled(ACTIVITY_LABELS_AR, m.activity_level)}`);
-  parts.push(`هدفها ${labeled(GOAL_LABELS_AR, m.primary_goal)}`);
+  if (m.height_cm != null) parts.push(`${g("طولها", "طوله")} ${m.height_cm} سم`);
+  if (m.weight_kg != null) parts.push(`${g("وزنها", "وزنه")} ${m.weight_kg} كيلو`);
+  parts.push(`${g("نشاطها", "نشاطه")} ${labeled(ACTIVITY_LABELS_AR, m.activity_level)}`);
+  parts.push(`${g("هدفها", "هدفه")} ${labeled(GOAL_LABELS_AR, m.primary_goal)}`);
 
   let line = parts.join("، ") + ".";
 
   if (m.medical_conditions.length > 0) {
-    line += ` تعاني من: ${m.medical_conditions.join("، ")} — طبّقي قواعد الحالة الصحية المناسبة.`;
+    line += ` ${g("تعاني", "يعاني")} من: ${m.medical_conditions.join("، ")} — طبّقي قواعد الحالة الصحية المناسبة.`;
   } else {
-    line += " لا تعاني من حالات صحية.";
+    line += g(" لا تعاني من حالات صحية.", " لا يعاني من حالات صحية.");
   }
   if (m.is_pregnant) {
     line += ` حامل (الثلث ${m.pregnancy_trimester ?? "غير محدد"})${m.high_risk_pregnancy ? " — حمل عالي الخطورة" : ""} — طبّقي قواعد الحمل.`;
@@ -201,19 +209,19 @@ function describeMom(c: PlanPromptContext): string {
     line += ` حساسية: ${m.allergies.join("، ")} — تجنّبيها تماماً.`;
   }
   if (m.dislikes.length > 0) {
-    line += ` لا تحب: ${m.dislikes.join("، ")}.`;
+    line += ` ${g("لا تحب", "لا يحب")}: ${m.dislikes.join("، ")}.`;
   }
   if (m.deep_dive && m.deep_dive.liked_foods.length > 0) {
-    line += ` تحب: ${m.deep_dive.liked_foods.join("، ")} — وظّفيها في الخطة.`;
+    line += ` ${g("تحب", "يحب")}: ${m.deep_dive.liked_foods.join("، ")} — وظّفيها في الخطة.`;
   }
   // Coach questionnaire (00013). Raw exercise answers ride with the derived
   // level so the TDEE multiplier match is explicit, not inferred.
   if (m.target_weight_kg != null) {
-    line += ` هدفها الوصول إلى ${m.target_weight_kg} كيلو — اجعلي وتيرة التغيير واقعية ومستدامة.`;
+    line += ` ${g("هدفها", "هدفه")} الوصول إلى ${m.target_weight_kg} كيلو — اجعلي وتيرة التغيير واقعية ومستدامة.`;
   }
   if (m.day_nature || m.exercise_days) {
     const bits: string[] = [];
-    if (m.day_nature) bits.push(`طبيعة يومها ${labeled(DAY_NATURE_LABELS_AR, m.day_nature)}`);
+    if (m.day_nature) bits.push(`طبيعة ${g("يومها", "يومه")} ${labeled(DAY_NATURE_LABELS_AR, m.day_nature)}`);
     if (m.exercise_days) {
       const t = m.exercise_type ? ` (${labeled(EXERCISE_TYPE_LABELS_AR, m.exercise_type)})` : "";
       bits.push(`${labeled(EXERCISE_DAYS_LABELS_AR, m.exercise_days)}${t}`);
@@ -221,24 +229,24 @@ function describeMom(c: PlanPromptContext): string {
     line += ` ${bits.join("، ")} — مستوى النشاط أعلاه محتسب من ذلك.`;
   }
   if (m.medications.length > 0) {
-    line += ` تتناول أدوية: ${m.medications.join("، ")} — نسّقي توقيت الوجبات مع الدواء وفق قواعد الحالة الصحية، ولا تقدّمي أي نصيحة دوائية.`;
+    line += ` ${g("تتناول", "يتناول")} أدوية: ${m.medications.join("، ")} — نسّقي توقيت الوجبات مع الدواء وفق قواعد الحالة الصحية، ولا تقدّمي أي نصيحة دوائية.`;
   }
   if (m.supplements.length > 0) {
-    line += ` تتناول مكملات: ${m.supplements.join("، ")} — راعيها في توزيع الوجبات (مثل فصل الحديد عن الكالسيوم).`;
+    line += ` ${g("تتناول", "يتناول")} مكملات: ${m.supplements.join("، ")} — راعيها في توزيع الوجبات (مثل فصل الحديد عن الكالسيوم).`;
   }
   if (m.nausea_foods.length > 0) {
-    line += ` أطعمة تسبب لها الغثيان حالياً: ${m.nausea_foods.join("، ")} — تجنّبيها مؤقتاً في هذه الخطة.`;
+    line += ` أطعمة تسبب ${g("لها", "له")} الغثيان حالياً: ${m.nausea_foods.join("، ")} — تجنّبيها مؤقتاً في هذه الخطة.`;
   }
   if (m.water_liters) {
     const low = m.water_liters === "lt1" || m.water_liters === "l1_2";
-    line += ` تشرب ${labeled(WATER_LITERS_LABELS_AR, m.water_liters)} من الماء يومياً${low ? " — شجّعيها بلطف على الزيادة ضمن الخطة" : ""}.`;
+    line += ` ${g("تشرب", "يشرب")} ${labeled(WATER_LITERS_LABELS_AR, m.water_liters)} من الماء يومياً${low ? ` — ${g("شجّعيها", "شجّعيه")} بلطف على الزيادة ضمن الخطة` : ""}.`;
   } else if (m.water_cups != null) {
-    line += ` تشرب نحو ${m.water_cups} أكواب ماء يومياً${m.water_cups < 8 ? " — شجّعيها بلطف على الزيادة ضمن الخطة" : ""}.`;
+    line += ` ${g("تشرب", "يشرب")} نحو ${m.water_cups} أكواب ماء يومياً${m.water_cups < 8 ? ` — ${g("شجّعيها", "شجّعيه")} بلطف على الزيادة ضمن الخطة` : ""}.`;
   }
   if (m.sleep_hours != null) {
-    line += ` تنام نحو ${m.sleep_hours} ساعات${m.sleep_hours < 7 ? " — راعي وجبات مسائية خفيفة تدعم نوماً أفضل" : ""}.`;
+    line += ` ${g("تنام", "ينام")} نحو ${m.sleep_hours} ساعات${m.sleep_hours < 7 ? " — راعي وجبات مسائية خفيفة تدعم نوماً أفضل" : ""}.`;
   }
-  line += ` تفضل مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
+  line += ` ${g("تفضل", "يفضل")} مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
   // meal_mode is discretionary: 'shared' is the default (cook once, split), so it
   // needs no instruction. Only flag 'independent' — and it must be surfaced HERE,
   // in the roster the SKELETON sees, because the skeleton is the phase that decides
@@ -246,8 +254,10 @@ function describeMom(c: PlanPromptContext): string {
   // gives mom the family's shared dish names and she stays grouped as shared even
   // after switching to independent. Mirrors describeMember (feminine phrasing).
   if (m.meal_mode === "independent") {
-    line +=
-      " (وجبات مستقلة: أعطيها أطباقاً خاصة بها بأسماء مختلفة عن باقي العائلة، إلا إذا تعارض مع حالة طبية/حساسية/حمل فالصحة أولاً.)";
+    line += g(
+      " (وجبات مستقلة: أعطيها أطباقاً خاصة بها بأسماء مختلفة عن باقي العائلة، إلا إذا تعارض مع حالة طبية/حساسية/حمل فالصحة أولاً.)",
+      " (وجبات مستقلة: أعطيه أطباقاً خاصة به بأسماء مختلفة عن باقي العائلة، إلا إذا تعارض مع حالة طبية/حساسية فالصحة أولاً.)",
+    );
   }
 
   return line;

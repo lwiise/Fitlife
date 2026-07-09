@@ -185,7 +185,10 @@ function pluralizeAr(count: number, singular: string, dual: string, plural: stri
   return plural;
 }
 
-function buildCompositionSummary(members: PlanPromptContextMember[]): string {
+function buildCompositionSummary(
+  members: PlanPromptContextMember[],
+  ownerIsMale: boolean,
+): string {
   const partners = members.filter((m) => m.role === "dad");
   const kids = members.filter((m) => m.role === "son" || m.role === "daughter");
   const housekeepers = members.filter((m) => m.role === "housekeeper");
@@ -193,7 +196,7 @@ function buildCompositionSummary(members: PlanPromptContextMember[]): string {
   const totalCount = 1 + partners.length + kids.length;
 
   const parts: string[] = [
-    `عائلة من ${arabicNumber(totalCount)} ${pluralizeAr(totalCount, "فرد", "فردين", "أفراد")}: الأم`,
+    `عائلة من ${arabicNumber(totalCount)} ${pluralizeAr(totalCount, "فرد", "فردين", "أفراد")}: ${ownerIsMale ? "الأب" : "الأم"}`,
   ];
   if (partners.length > 0) parts.push("الأب");
   if (kids.length > 0) {
@@ -396,7 +399,7 @@ export async function buildPlanContext(
     mom,
     family_members,
     family_wide,
-    composition_summary: buildCompositionSummary(family_members),
+    composition_summary: buildCompositionSummary(family_members, mom.sex === "male"),
     housekeeper_locale,
   };
 }

@@ -34,6 +34,7 @@ import {
 import type { Database } from "@/lib/supabase/database.types";
 
 type ProfileUpdates = Partial<{
+  sex: "female" | "male";
   display_name: string;
   birth_year: number;
   height_cm: number;
@@ -238,6 +239,8 @@ export async function saveFamilyWidePreferences(
 }
 
 export interface MomProfileInput {
+  /** Owner sex (Coach Sara intake). Missing on legacy tabs → female. */
+  sex?: "female" | "male";
   display_name: string;
   birth_year: number;
   height_cm: number;
@@ -291,8 +294,12 @@ export async function saveMomProfile(
     return { ok: false, error: VALIDATION_ERROR_AR };
   }
 
-  const isPregnant = input.pregnancy_status === "pregnant";
-  const isLactating = input.pregnancy_status === "lactating";
+  // Male owners can never be pregnant/lactating — the wizard skips the step,
+  // and the server hard-guards regardless of what the client sends.
+  const sex = input.sex ?? "female";
+  const isMale = sex === "male";
+  const isPregnant = !isMale && input.pregnancy_status === "pregnant";
+  const isLactating = !isMale && input.pregnancy_status === "lactating";
   const memberType = isPregnant ? "pregnant" : isLactating ? "lactating" : "adult";
 
   const conditions = [...input.conditions];
@@ -333,7 +340,7 @@ export async function saveMomProfile(
       supplements: input.supplements ?? [],
       nausea_foods: isPregnant ? (input.nausea_foods ?? []) : [],
       notes: input.notes?.trim() || null,
-      sex: "female",
+      sex,
       member_type: memberType,
       primary_goal: primaryGoal,
       allergies: input.allergies,

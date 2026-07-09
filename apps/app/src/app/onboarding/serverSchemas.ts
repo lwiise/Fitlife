@@ -38,6 +38,9 @@ const lifestyleFields = {
 
 export const momProfileInputSchema = z
   .object({
+    // Optional for legacy tabs that predate the الجنس question; the action
+    // defaults missing values to "female" (the product's historical baseline).
+    sex: z.enum(["female", "male"]).optional(),
     display_name: z.string().trim().min(2).max(60),
     birth_year: z.number().int().min(1940).max(CURRENT_YEAR),
     height_cm: z.number().min(80).max(250),
@@ -106,6 +109,7 @@ export const familyWideInputSchema = z.object({
 // straight into a profiles UPDATE, so every key must be explicitly allowed.
 export const profileStepSchema = z
   .object({
+    sex: z.enum(["female", "male"]),
     display_name: z.string().trim().min(2).max(60),
     birth_year: z.number().int().min(1940).max(CURRENT_YEAR),
     height_cm: z.number().min(80).max(250),

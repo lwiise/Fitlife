@@ -25,6 +25,7 @@ import type { step1Schema, step2Schema } from "../schema";
 import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
 import { saveMomProfile, saveProfileStep } from "../actions";
+import { genderPick } from "@/lib/copy/gender";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 
 type Identity = z.infer<typeof step1Schema>;
@@ -186,18 +187,27 @@ export function MomWizard() {
   const [notes, setNotes] = useState("");
   const [consultedDoctor, setConsultedDoctor] = useState(false);
 
+  // Feminine is the default voice; masculine forms swap in once a male owner
+  // answers the الجنس question on the identity step.
+  const isMale = identity?.sex === "male";
+  const g = genderPick(identity?.sex);
+
+  // The pregnancy clause is ignored for male owners — stale answers can
+  // linger if the user answered the pregnancy step then flipped sex back
+  // on the identity screen.
   const doctorNeeded = useMemo(
     () =>
       conditions.length > 0 ||
       otherCondition.trim().length > 0 ||
-      (pregStatus === "pregnant" && highRisk === true),
-    [conditions, otherCondition, pregStatus, highRisk],
+      (!isMale && pregStatus === "pregnant" && highRisk === true),
+    [conditions, otherCondition, pregStatus, highRisk, isMale],
   );
 
-  const stepKeys: StepKey[] = useMemo(
-    () => (doctorNeeded ? [...BASE_STEPS, "doctor"] : [...BASE_STEPS]),
-    [doctorNeeded],
-  );
+  // Male owners skip the pregnancy/lactation step entirely.
+  const stepKeys: StepKey[] = useMemo(() => {
+    const base = BASE_STEPS.filter((s) => s !== "pregnancy" || !isMale);
+    return doctorNeeded ? [...base, "doctor"] : base;
+  }, [doctorNeeded, isMale]);
   const step = stepKeys[stepIndex] ?? "identity";
   const totalSteps = stepKeys.length;
 
@@ -219,12 +229,20 @@ export function MomWizard() {
     );
 
   const submit = () => {
-    if (!identity || !physical || !userGoal || !pregStatus || !dayNature || !exerciseDays) {
-      setError("بعض المعلومات ناقصة، ارجعي وأكمليها");
+    if (
+      !identity ||
+      !physical ||
+      !userGoal ||
+      (!isMale && !pregStatus) ||
+      !dayNature ||
+      !exerciseDays
+    ) {
+      setError(g("بعض المعلومات ناقصة، ارجعي وأكمليها", "بعض المعلومات ناقصة، ارجع وأكملها"));
       return;
     }
     startTransition(async () => {
       const result = await saveMomProfile({
+        sex: identity.sex,
         display_name: identity.display_name,
         birth_year: identity.birth_year,
         height_cm: physical.height_cm,
@@ -240,7 +258,7 @@ export function MomWizard() {
         nausea_foods: nauseaFoods,
         notes: notes.trim() || null,
         user_goal: userGoal,
-        pregnancy_status: pregStatus,
+        pregnancy_status: isMale || !pregStatus ? "none" : pregStatus,
         trimester: trimester ?? undefined,
         high_risk_pregnancy: highRisk === true,
         months_postpartum: monthsPP ? Number(monthsPP) : undefined,
@@ -308,6 +326,7 @@ export function MomWizard() {
                   setIdentity(d);
                   startTransition(async () => {
                     await saveProfileStep({
+                      sex: d.sex,
                       display_name: d.display_name,
                       birth_year: d.birth_year,
                     });
@@ -375,7 +394,7 @@ export function MomWizard() {
 
                 <fieldset className="space-y-2">
                   <legend className="block text-sm font-bold text-brand-ink mb-2">
-                    هل تمارسين الرياضة؟
+                    {g("هل تمارسين الرياضة؟", "هل تمارس الرياضة؟")}
                   </legend>
                   <div className="grid grid-cols-2 gap-2">
                     {EXERCISE_DAYS_OPTIONS.map((opt) => (
@@ -423,10 +442,10 @@ export function MomWizard() {
 
                 <PrimaryButton
                   onClick={() => {
-                    if (!dayNature) return setError("اختاري طبيعة يومك");
-                    if (!exerciseDays) return setError("حدّدي أيام الرياضة");
+                    if (!dayNature) return setError(g("اختاري طبيعة يومك", "اختر طبيعة يومك"));
+                    if (!exerciseDays) return setError(g("حدّدي أيام الرياضة", "حدّد أيام الرياضة"));
                     if (exerciseDays !== "none" && !exerciseType)
-                      return setError("اختاري نوع الرياضة");
+                      return setError(g("اختاري نوع الرياضة", "اختر نوع الرياضة"));
                     startTransition(async () => {
                       await saveProfileStep({
                         day_nature: dayNature,
@@ -451,7 +470,7 @@ export function MomWizard() {
                     ما هدفك الرئيسي؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نبني خطتك حول هدفك أنتِ.
+                    {g("نبني خطتك حول هدفك أنتِ.", "نبني خطتك حول هدفك أنتَ.")}
                   </p>
                 </header>
                 <div className="space-y-2">
@@ -466,7 +485,9 @@ export function MomWizard() {
                     </OptionButton>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (userGoal ? goNext() : setError("اختاري هدفك"))}>
+                <PrimaryButton
+                  onClick={() => (userGoal ? goNext() : setError(g("اختاري هدفك", "اختر هدفك")))}
+                >
                   التالي
                 </PrimaryButton>
               </div>
@@ -574,10 +595,13 @@ export function MomWizard() {
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    هل لديكِ حساسية من طعام معين؟
+                    {g("هل لديكِ حساسية من طعام معين؟", "هل لديك حساسية من طعام معين؟")}
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اكتبي كل حساسية باسمها لنتجنبها تماماً.
+                    {g(
+                      "اكتبي كل حساسية باسمها لنتجنبها تماماً.",
+                      "اكتب كل حساسية باسمها لنتجنبها تماماً.",
+                    )}
                   </p>
                 </header>
                 <ChipInput
@@ -594,10 +618,10 @@ export function MomWizard() {
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    أطعمة لا تحبينها شخصياً؟
+                    {g("أطعمة لا تحبينها شخصياً؟", "أطعمة لا تحبها شخصياً؟")}
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نبعدها عن خطتك أنتِ.
+                    {g("نبعدها عن خطتك أنتِ.", "نبعدها عن خطتك أنتَ.")}
                   </p>
                 </header>
                 <ChipInput
@@ -614,10 +638,13 @@ export function MomWizard() {
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    هل لديكِ حالة صحية؟
+                    {g("هل لديكِ حالة صحية؟", "هل لديك حالة صحية؟")}
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري ما ينطبق عليكِ، أو تجاوزي إن لم يوجد.
+                    {g(
+                      "اختاري ما ينطبق عليكِ، أو تجاوزي إن لم يوجد.",
+                      "اختر ما ينطبق عليك، أو تجاوز إن لم يوجد.",
+                    )}
                   </p>
                 </header>
 
@@ -665,12 +692,15 @@ export function MomWizard() {
                     الأدوية والمكملات
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    ننسّق توقيت الوجبات معها. تجاوزي إن لم تستخدمي شيئاً.
+                    {g(
+                      "ننسّق توقيت الوجبات معها. تجاوزي إن لم تستخدمي شيئاً.",
+                      "ننسّق توقيت الوجبات معها. تجاوز إن لم تستخدم شيئاً.",
+                    )}
                   </p>
                 </header>
                 <div>
                   <p className="text-sm font-bold text-brand-ink mb-2">
-                    أدوية تستخدمينها بانتظام (اختياري)
+                    {g("أدوية تستخدمينها بانتظام (اختياري)", "أدوية تستخدمها بانتظام (اختياري)")}
                   </p>
                   <ChipInput
                     value={medications}
@@ -706,7 +736,7 @@ export function MomWizard() {
                 </header>
                 <div>
                   <p className="text-sm font-bold text-brand-ink mb-2">
-                    كم لتر ماء تشربين يومياً؟
+                    {g("كم لتر ماء تشربين يومياً؟", "كم لتر ماء تشرب يومياً؟")}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {WATER_LITERS_OPTIONS.map((o) => (
@@ -724,7 +754,7 @@ export function MomWizard() {
                 </div>
                 <NumberField
                   id="sleep-hours"
-                  label="كم ساعة تنامين؟"
+                  label={g("كم ساعة تنامين؟", "كم ساعة تنام؟")}
                   unit="ساعة"
                   value={sleepHours}
                   onChange={setSleepHours}
@@ -734,7 +764,10 @@ export function MomWizard() {
                 />
                 <div>
                   <label htmlFor="mom-notes" className="block text-sm font-bold text-brand-ink mb-2">
-                    هل من شيء آخر تودّين إخبارنا به؟ (اختياري)
+                    {g(
+                      "هل من شيء آخر تودّين إخبارنا به؟ (اختياري)",
+                      "هل من شيء آخر تودّ إخبارنا به؟ (اختياري)",
+                    )}
                   </label>
                   <textarea
                     id="mom-notes"
@@ -747,7 +780,7 @@ export function MomWizard() {
                   />
                 </div>
                 <PrimaryButton onClick={afterLifestyle} isPending={isPending && !doctorNeeded}>
-                  {doctorNeeded ? "التالي" : "أنشئي خطتي"}
+                  {doctorNeeded ? "التالي" : g("أنشئي خطتي", "أنشئ خطتي")}
                 </PrimaryButton>
               </div>
             )}
@@ -759,7 +792,10 @@ export function MomWizard() {
                     استشارة الطبيب
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    لسلامتك، نتأكد من أنكِ استشرتِ طبيبك قبل البدء بالخطة بسبب حالتك.
+                    {g(
+                      "لسلامتك، نتأكد من أنكِ استشرتِ طبيبك قبل البدء بالخطة بسبب حالتك.",
+                      "لسلامتك، نتأكد من أنك استشرت طبيبك قبل البدء بالخطة بسبب حالتك.",
+                    )}
                   </p>
                 </header>
                 <label className="flex items-start gap-3 rounded-xl bg-brand-yellow/15 border border-brand-yellow/40 p-4 cursor-pointer">
@@ -777,7 +813,7 @@ export function MomWizard() {
                   onClick={() => (consultedDoctor ? submit() : setError("يلزم تأكيد استشارة الطبيب أولاً"))}
                   isPending={isPending}
                 >
-                  أنشئي خطتي
+                  {g("أنشئي خطتي", "أنشئ خطتي")}
                 </PrimaryButton>
               </div>
             )}

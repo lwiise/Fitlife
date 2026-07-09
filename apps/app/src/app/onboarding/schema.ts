@@ -2,8 +2,13 @@ import { z } from "zod";
 
 const currentYear = new Date().getFullYear();
 
-// ─── Step 1: Mom's identity ───────────────────────
+// ─── Step 1: Owner's identity ─────────────────────
+// الجنس comes first (Coach Sara intake, 07/2026): the rest of the wizard's
+// copy and steps react to it — feminine remains the default voice.
 export const step1Schema = z.object({
+  sex: z.enum(["female", "male"], {
+    errorMap: () => ({ message: "حدّدي الجنس" }),
+  }),
   display_name: z.string().min(2, "يجب أن يكون الاسم حرفين أو أكثر").max(50),
   birth_year: z
     .number()

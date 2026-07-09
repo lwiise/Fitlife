@@ -200,13 +200,16 @@ function pluralizeAr(c: number, s: string, d: string, p: string) {
   if (c === 2) return d;
   return p;
 }
-function buildCompositionSummary(members: PlanPromptContextMember[]): string {
+function buildCompositionSummary(
+  members: PlanPromptContextMember[],
+  ownerIsMale: boolean,
+): string {
   const partners = members.filter((m) => m.role === "dad");
   const kids = members.filter((m) => m.role === "son" || m.role === "daughter");
   const housekeepers = members.filter((m) => m.role === "housekeeper");
   const total = 1 + partners.length + kids.length;
   const parts: string[] = [
-    `عائلة من ${arabicNumber(total)} ${pluralizeAr(total, "فرد", "فردين", "أفراد")}: الأم`,
+    `عائلة من ${arabicNumber(total)} ${pluralizeAr(total, "فرد", "فردين", "أفراد")}: ${ownerIsMale ? "الأب" : "الأم"}`,
   ];
   if (partners.length > 0) parts.push("الأب");
   if (kids.length > 0) {
@@ -411,7 +414,10 @@ async function buildContextViaFetch(
       cooking_methods: asStrings(profile.cooking_methods),
       meal_out_frequency: (profile.meal_out_frequency as string | null) ?? null,
     },
-    composition_summary: buildCompositionSummary(family_members),
+    composition_summary: buildCompositionSummary(
+      family_members,
+      (profile.sex as string | null) === "male",
+    ),
     housekeeper_locale,
   };
 }

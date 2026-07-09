@@ -8,6 +8,11 @@ import { step1Schema } from "../schema";
 
 type FormData = z.infer<typeof step1Schema>;
 
+const SEX_OPTIONS: { value: FormData["sex"]; label: string }[] = [
+  { value: "female", label: "أنثى" },
+  { value: "male", label: "ذكر" },
+];
+
 export function Step1Identity({
   defaultValues,
   onSubmit,
@@ -20,24 +25,71 @@ export function Step1Identity({
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(step1Schema),
     defaultValues,
   });
+  const sex = watch("sex");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <header>
         <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-          أهلاً بكِ، ما اسمك؟
+          أهلاً بك، عرّفنا عليك
         </h2>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          نسوي حسابك الشخصي عشان نحضّر لكِ خطة على مقاسك.
+          نجهّز حسابك الشخصي لنبني خطة على مقاسك.
         </p>
       </header>
 
       <div className="space-y-4">
+        <fieldset>
+          <legend className="block text-sm font-bold text-brand-ink mb-2">
+            الجنس
+          </legend>
+          <div
+            className="grid grid-cols-2 gap-2"
+            role="radiogroup"
+            aria-invalid={!!errors.sex}
+            aria-describedby={errors.sex ? "sex-error" : undefined}
+          >
+            {SEX_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={sex === o.value}
+                disabled={isPending}
+                onClick={() =>
+                  setValue("sex", o.value, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                  sex === o.value
+                    ? "border-brand-purple-900 bg-brand-purple-900/5"
+                    : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {errors.sex && (
+            <p
+              id="sex-error"
+              role="alert"
+              className="mt-1.5 text-red-600 text-sm leading-relaxed"
+            >
+              {errors.sex.message}
+            </p>
+          )}
+        </fieldset>
+
         <div>
           <label
             htmlFor="display_name"
