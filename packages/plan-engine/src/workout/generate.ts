@@ -99,6 +99,29 @@ export interface WorkoutGenerateResult {
   missingMembers: string[];
 }
 
+// Mirrors the app's STALE_GENERATION_MIN: a 'started' row older than this is a
+// hard-killed worker, not live work — it must not block anything.
+const MEAL_GEN_STALE_MIN = 15;
+
+/**
+ * Meals-first sequencing predicate: should a workout run hold off because a
+ * meal generation is live for this user? True iff any row is 'started' and
+ * younger than the stale threshold. Pure — the background function polls with
+ * it (10 s cadence, capped) so meals always get the full API budget first.
+ */
+export function mealGenBlocksWorkout(
+  rows: Array<{ status?: string | null; started_at?: string | null }>,
+  nowMs: number,
+): boolean {
+  return rows.some((row) => {
+    if (row.status !== "started") return false;
+    const startedMs = row.started_at ? Date.parse(row.started_at) : NaN;
+    // Unparseable started_at → treat as stale rather than blocking forever.
+    if (Number.isNaN(startedMs)) return false;
+    return nowMs - startedMs < MEAL_GEN_STALE_MIN * 60_000;
+  });
+}
+
 function parseJson<T>(raw: string, label: string): T {
   try {
     return JSON.parse(stripMarkdownFence(raw)) as T;

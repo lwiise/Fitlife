@@ -75,4 +75,5 @@ export {
   createWorkoutPlanRows,
   generateWorkoutPlan,
   runWorkoutPlanGeneration,
+  mealGenBlocksWorkout,
 } from "./workout/generate";

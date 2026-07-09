@@ -6,6 +6,7 @@ import {
   exerciseCatalogPromptBlock,
 } from "./exerciseCatalog";
 import { normalizeExerciseIds, MemberWorkoutSchema, type MemberWorkout } from "./schema";
+import { mealGenBlocksWorkout } from "./generate";
 import { WORKOUT_STATIC } from "./systemPrompt";
 
 describe("EXERCISE_CATALOG", () => {
@@ -98,5 +99,27 @@ describe("normalizeExerciseIds", () => {
     const { member, unknownIds } = normalizeExerciseIds(memberWith({}));
     expect(unknownIds).toEqual([]);
     expect(member.weekly_sessions[0]!.exercises[0]!.exercise_id ?? null).toBeNull();
+  });
+});
+
+describe("mealGenBlocksWorkout (meals-first sequencing)", () => {
+  const now = Date.parse("2026-07-09T12:00:00Z");
+  const iso = (minAgo: number) => new Date(now - minAgo * 60_000).toISOString();
+
+  it("blocks while a fresh meal generation is started", () => {
+    expect(mealGenBlocksWorkout([{ status: "started", started_at: iso(2) }], now)).toBe(true);
+    expect(mealGenBlocksWorkout([{ status: "started", started_at: iso(14) }], now)).toBe(true);
+  });
+
+  it("ignores stale started rows (hard-killed worker) and settled rows", () => {
+    expect(mealGenBlocksWorkout([{ status: "started", started_at: iso(16) }], now)).toBe(false);
+    expect(mealGenBlocksWorkout([{ status: "completed", started_at: iso(1) }], now)).toBe(false);
+    expect(mealGenBlocksWorkout([{ status: "failed", started_at: iso(1) }], now)).toBe(false);
+  });
+
+  it("does not block on empty results or unparseable timestamps", () => {
+    expect(mealGenBlocksWorkout([], now)).toBe(false);
+    expect(mealGenBlocksWorkout([{ status: "started", started_at: "not-a-date" }], now)).toBe(false);
+    expect(mealGenBlocksWorkout([{ status: "started", started_at: null }], now)).toBe(false);
   });
 });

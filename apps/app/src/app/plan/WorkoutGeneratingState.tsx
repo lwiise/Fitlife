@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, UtensilsCrossed } from "lucide-react";
 
 const POLL_INTERVAL_MS = 3000;
 const LONG_RUNNING_MS = 90_000;
@@ -21,20 +21,34 @@ const GENERATING_STEPS = [
  * PlanGeneratingState's card (spinner, progress bar, rotating steps,
  * long-running softening, timeout fallback) — polling the workout status
  * route instead of the meal one.
+ *
+ * Meals-first sequencing: while the status route reports waiting_for_meals,
+ * the workout worker is deliberately holding until the meal run finishes —
+ * show that honestly and keep the wait OUT of the stall/timeout clocks.
  */
 export function WorkoutGeneratingState() {
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
   const [stepIndex, setStepIndex] = useState(0);
+  const [waitingForMeals, setWaitingForMeals] = useState(false);
+  const waitingRef = useRef(false);
+  // Baseline for elapsed-time math; re-anchored while the worker waits for
+  // meals so the deferred phase never counts toward long-running/timeout.
+  const activeStartRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
-    const startedAt = Date.now();
+    activeStartRef.current = Date.now();
 
     const progressTimer = setInterval(() => {
       if (cancelled) return;
-      const elapsed = Date.now() - startedAt;
+      if (waitingRef.current) {
+        activeStartRef.current = Date.now();
+        setProgress(6);
+        return;
+      }
+      const elapsed = Date.now() - activeStartRef.current;
       const pct = Math.max(
         6,
         Math.min(95, Math.round(100 * (1 - Math.exp(-elapsed / 45000)))),
@@ -46,7 +60,7 @@ export function WorkoutGeneratingState() {
     const poll = setInterval(async () => {
       if (cancelled) return;
 
-      const elapsed = Date.now() - startedAt;
+      const elapsed = Date.now() - activeStartRef.current;
       if (elapsed > TIMEOUT_MS) {
         clearInterval(poll);
         clearInterval(progressTimer);
@@ -60,7 +74,13 @@ export function WorkoutGeneratingState() {
       try {
         const res = await fetch("/api/plans/workout/status", { cache: "no-store" });
         if (!res.ok) return;
-        const body = (await res.json()) as { status?: string };
+        const body = (await res.json()) as {
+          status?: string;
+          waiting_for_meals?: boolean;
+        };
+        const waiting = !!body.waiting_for_meals && body.status === "generating";
+        waitingRef.current = waiting;
+        setWaitingForMeals(waiting);
         if (body.status === "ready" || body.status === "failed") {
           clearInterval(poll);
           clearInterval(progressTimer);
@@ -95,6 +115,37 @@ export function WorkoutGeneratingState() {
         >
           تحديث
         </button>
+      </div>
+    );
+  }
+
+  if (waitingForMeals) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+        <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-lavender/40 mb-4">
+          <UtensilsCrossed className="size-7 text-brand-purple-900" aria-hidden="true" />
+        </div>
+        <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+          نجهّز وجباتك أولاً...
+        </h2>
+        <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
+          برنامج التمارين يبدأ فور اكتمال خطة الوجبات. تقدرين تتابعين الوجبات من تبويب
+          «الوجبات» وترجعين هنا.
+        </p>
+        <div
+          className="mt-6 h-1.5 bg-brand-surface rounded-full overflow-hidden"
+          role="progressbar"
+          aria-busy="true"
+          aria-label="بانتظار اكتمال خطة الوجبات"
+        >
+          <div className="h-full w-[6%] rounded-full bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow" />
+        </div>
+        <p
+          className="mt-3 text-brand-purple-900 text-xs font-bold leading-relaxed"
+          aria-hidden="true"
+        >
+          بانتظار اكتمال الوجبات…
+        </p>
       </div>
     );
   }
