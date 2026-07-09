@@ -149,6 +149,38 @@ export function Step1Identity({
             </p>
           )}
         </div>
+
+        <div>
+          <label
+            htmlFor="phone"
+            className="block text-sm font-bold text-brand-ink mb-2"
+          >
+            رقم الجوال (اختياري)
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            inputMode="tel"
+            dir="ltr"
+            autoComplete="tel"
+            placeholder="05xxxxxxxx"
+            spellCheck={false}
+            disabled={isPending}
+            className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors"
+            {...register("phone")}
+            aria-invalid={!!errors.phone}
+            aria-describedby={errors.phone ? "phone-error" : undefined}
+          />
+          {errors.phone && (
+            <p
+              id="phone-error"
+              role="alert"
+              className="mt-1.5 text-red-600 text-sm leading-relaxed"
+            >
+              {errors.phone.message}
+            </p>
+          )}
+        </div>
       </div>
 
       <button

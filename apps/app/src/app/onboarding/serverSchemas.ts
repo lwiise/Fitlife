@@ -36,6 +36,25 @@ const lifestyleFields = {
   nausea_foods: chipArray.optional(),
 } as const;
 
+// Coach Sara full-intake fields (00016). All optional — legacy tabs never
+// send them, and undefined keys are dropped before the DB update.
+const intakeFields = {
+  phone: z.string().trim().max(30).nullish(),
+  waist_cm: z.number().min(30).max(250).nullish(),
+  hip_cm: z.number().min(30).max(300).nullish(),
+  sleep_band: z.enum(["lt5", "h5_6", "h7_8", "gt8"]).nullish(),
+  stress_level: z.enum(["low", "medium", "high"]).nullish(),
+  dietary_restrictions: z.array(z.string().trim().min(1).max(60)).max(15).optional(),
+  liked_foods: chipArray.optional(),
+  never_eat_foods: chipArray.optional(),
+  meals_per_day: z.number().int().min(1).max(8).nullish(),
+  intermittent_fasting: z.enum(["yes", "no"]).nullish(),
+  food_recall_24h: z.string().trim().max(1000).nullish(),
+  previous_diets: z.string().trim().max(1000).nullish(),
+  pregnancy_month: z.number().int().min(1).max(9).optional(),
+  feeding_mode: z.enum(["exclusive", "mixed", "formula"]).optional(),
+} as const;
+
 export const momProfileInputSchema = z
   .object({
     // Optional for legacy tabs that predate the الجنس question; the action
@@ -52,6 +71,7 @@ export const momProfileInputSchema = z
       .optional(),
     ...exerciseFields,
     ...lifestyleFields,
+    ...intakeFields,
     notes: z.string().trim().max(500).nullish(),
     user_goal: z.enum(USER_GOALS),
     pregnancy_status: z.enum(["none", "pregnant", "lactating"]),
@@ -98,7 +118,9 @@ export const familyMemberInputSchema = z.object({
 });
 
 export const familyWideInputSchema = z.object({
-  cuisine_preference: z.enum(["khaleeji", "mediterranean", "mixed", "international"]),
+  // The spec's five cuisines; legacy values (mediterranean/mixed/international)
+  // were remapped by 00016 and are no longer accepted from the form.
+  cuisine_preference: z.enum(["khaleeji", "arabic", "asian", "western", "varied"]),
   family_dietary_restrictions: z.array(z.string().trim().min(1).max(60)).max(15),
   family_dislikes: chipArray,
   cooking_methods: z.array(z.string().trim().min(1).max(40)).max(10),
@@ -112,8 +134,11 @@ export const profileStepSchema = z
     sex: z.enum(["female", "male"]),
     display_name: z.string().trim().min(2).max(60),
     birth_year: z.number().int().min(1940).max(CURRENT_YEAR),
+    phone: z.string().trim().max(30).nullable(),
     height_cm: z.number().min(80).max(250),
     weight_kg: z.number().min(20).max(300),
+    waist_cm: z.number().min(30).max(250).nullable(),
+    hip_cm: z.number().min(30).max(300).nullable(),
     activity_level: z.enum(["sedentary", "light", "moderate", "active", "very_active"]),
     ...exerciseFields,
     target_weight_kg: z.number().min(20).max(300).nullable(),

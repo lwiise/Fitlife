@@ -26,13 +26,15 @@ export const GOALS: { value: UserGoal; label: string }[] = [
 
 export const CUISINES: { value: string; label: string }[] = [
   { value: "khaleeji", label: "خليجي" },
-  { value: "mediterranean", label: "متوسطي" },
-  { value: "mixed", label: "مختلط" },
-  { value: "international", label: "عالمي" },
+  { value: "arabic", label: "عربي" },
+  { value: "asian", label: "آسيوي" },
+  { value: "western", label: "غربي" },
+  { value: "varied", label: "متنوع" },
 ];
 
 export const DIETARY: { value: string; label: string }[] = [
   { value: "vegetarian", label: "نباتي" },
+  { value: "vegan", label: "فيغان" },
   { value: "gluten_free", label: "خالي من الجلوتين" },
   { value: "lactose_free", label: "خالي من اللاكتوز" },
   { value: "nut_free", label: "خالي من المكسرات" },
@@ -41,11 +43,22 @@ export const DIETARY: { value: string; label: string }[] = [
 
 export const COOKING: { value: string; label: string }[] = [
   { value: "grilling", label: "شوي" },
-  { value: "baking", label: "خبيز" },
+  { value: "boiling", label: "سلق" },
   { value: "steaming", label: "طبخ بالبخار" },
-  { value: "frying_minimal", label: "طبخ بزيت قليل" },
-  { value: "deep_frying", label: "قلي عميق (سنقلّله في الخطط)" },
+  { value: "baking", label: "فرن" },
+  { value: "air_fryer", label: "مقلاة هوائية" },
+  { value: "frying_minimal", label: "قلي بزيت قليل" },
 ];
+
+// Stored values that predate the 07/2026 option lists (00016 remaps cuisines
+// in the DB; until it's applied — and forever for deep_frying — summaries
+// still need a label).
+const LEGACY_LABELS: Record<string, string> = {
+  mediterranean: "متوسطي",
+  mixed: "متنوع",
+  international: "غربي",
+  deep_frying: "قلي عميق",
+};
 
 export const MEAL_OUT: { value: string; label: string }[] = [
   { value: "never", label: "أبداً" },
@@ -59,7 +72,7 @@ export function labelFor(
   value: string | null | undefined,
 ): string | null {
   if (!value) return null;
-  return options.find((o) => o.value === value)?.label ?? null;
+  return options.find((o) => o.value === value)?.label ?? LEGACY_LABELS[value] ?? null;
 }
 
 // The jsonb columns (allergies/dislikes/cooking_methods/family_*) come back as

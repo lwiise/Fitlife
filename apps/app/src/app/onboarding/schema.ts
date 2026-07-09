@@ -15,12 +15,28 @@ export const step1Schema = z.object({
     .int()
     .min(1940, "يجب أن تكون السنة بعد 1940")
     .max(currentYear - 13, "يجب أن يكون عمرك فوق 13 سنة"),
+  // اختياري — رقم للتواصل فقط، لا يؤثر على الخطة.
+  phone: z
+    .string()
+    .trim()
+    .max(20, "الرقم طويل")
+    .optional()
+    .transform((v) => (v ? v : undefined)),
 });
 
-// ─── Step 2: Mom's physical ───────────────────────
+// ─── Step 2: Owner's physical ─────────────────────
 export const step2Schema = z.object({
   height_cm: z.number().min(120, "الطول قليل").max(220, "الطول مرتفع"),
   weight_kg: z.number().min(30, "الوزن قليل").max(250, "الوزن مرتفع"),
+  // محيط الخصر مطلوب في استبيان الكوتش (٠٧/٢٠٢٦)؛ الورك اختياري.
+  waist_cm: z
+    .number({ invalid_type_error: "محيط الخصر مطلوب" })
+    .min(30, "المحيط قليل")
+    .max(250, "المحيط مرتفع"),
+  hip_cm: z
+    .union([z.number().min(30, "المحيط قليل").max(300, "المحيط مرتفع"), z.nan()])
+    .optional()
+    .transform((v) => (v == null || Number.isNaN(v) ? null : v)),
   // اختياري — مفيد لأهداف تغيير الوزن؛ يُترك فارغاً لأهداف الثبات والصحة.
   target_weight_kg: z
     .union([

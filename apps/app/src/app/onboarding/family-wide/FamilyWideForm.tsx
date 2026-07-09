@@ -9,15 +9,20 @@ import { saveFamilyWidePreferences } from "../actions";
 
 const TOTAL_STEPS = 5;
 
+// Coach Sara's intake lists (07/2026). "baking" keeps its stored value with
+// the spec's فرن label so existing rows stay valid; deep_frying was dropped
+// from the choices (old rows keep the value, the engine still understands it).
 const CUISINES: { value: string; label: string }[] = [
   { value: "khaleeji", label: "خليجي" },
-  { value: "mediterranean", label: "متوسطي" },
-  { value: "mixed", label: "مختلط" },
-  { value: "international", label: "عالمي" },
+  { value: "arabic", label: "عربي" },
+  { value: "asian", label: "آسيوي" },
+  { value: "western", label: "غربي" },
+  { value: "varied", label: "متنوع" },
 ];
 
 const DIETARY: { value: string; label: string }[] = [
   { value: "vegetarian", label: "نباتي" },
+  { value: "vegan", label: "فيغان" },
   { value: "gluten_free", label: "خالي من الجلوتين" },
   { value: "lactose_free", label: "خالي من اللاكتوز" },
   { value: "nut_free", label: "خالي من المكسرات" },
@@ -26,10 +31,11 @@ const DIETARY: { value: string; label: string }[] = [
 
 const COOKING: { value: string; label: string }[] = [
   { value: "grilling", label: "شوي" },
-  { value: "baking", label: "خبيز" },
+  { value: "boiling", label: "سلق" },
   { value: "steaming", label: "طبخ بالبخار" },
-  { value: "frying_minimal", label: "طبخ بزيت قليل" },
-  { value: "deep_frying", label: "قلي عميق (سنقلّله في الخطط)" },
+  { value: "baking", label: "فرن" },
+  { value: "air_fryer", label: "مقلاة هوائية" },
+  { value: "frying_minimal", label: "قلي بزيت قليل" },
 ];
 
 const MEAL_OUT: { value: string; label: string }[] = [

@@ -376,11 +376,13 @@ export type Database = {
           family_dietary_restrictions: Json | null
           family_dislikes: Json | null
           family_wide_completed_at: string | null
+          feeding_mode: string | null
           food_budget: string | null
           food_recall_24h: string | null
           has_medical_conditions: boolean
           height_cm: number | null
           high_risk_pregnancy: boolean | null
+          hip_cm: number | null
           id: string
           intermittent_fasting: string | null
           is_pregnant: boolean
@@ -395,13 +397,17 @@ export type Database = {
           mom_profile_completed_at: string | null
           months_postpartum: number | null
           nausea_foods: Json | null
+          never_eat_foods: Json | null
           notes: string | null
           onboarding_completed_at: string | null
+          phone: string | null
           preferred_language: string
+          pregnancy_month: number | null
           pregnancy_trimester: number | null
           previous_diets: string | null
           primary_goal: string | null
           sex: string | null
+          sleep_band: string | null
           sleep_hours: number | null
           sleep_quality: string | null
           snacks_habit: string | null
@@ -438,11 +444,13 @@ export type Database = {
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
+          feeding_mode?: string | null
           food_budget?: string | null
           food_recall_24h?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
+          hip_cm?: number | null
           id: string
           intermittent_fasting?: string | null
           is_pregnant?: boolean
@@ -457,13 +465,17 @@ export type Database = {
           mom_profile_completed_at?: string | null
           months_postpartum?: number | null
           nausea_foods?: Json | null
+          never_eat_foods?: Json | null
           notes?: string | null
           onboarding_completed_at?: string | null
+          phone?: string | null
           preferred_language?: string
+          pregnancy_month?: number | null
           pregnancy_trimester?: number | null
           previous_diets?: string | null
           primary_goal?: string | null
           sex?: string | null
+          sleep_band?: string | null
           sleep_hours?: number | null
           sleep_quality?: string | null
           snacks_habit?: string | null
@@ -500,11 +512,13 @@ export type Database = {
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
+          feeding_mode?: string | null
           food_budget?: string | null
           food_recall_24h?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
           high_risk_pregnancy?: boolean | null
+          hip_cm?: number | null
           id?: string
           intermittent_fasting?: string | null
           is_pregnant?: boolean
@@ -519,13 +533,17 @@ export type Database = {
           mom_profile_completed_at?: string | null
           months_postpartum?: number | null
           nausea_foods?: Json | null
+          never_eat_foods?: Json | null
           notes?: string | null
           onboarding_completed_at?: string | null
+          phone?: string | null
           preferred_language?: string
+          pregnancy_month?: number | null
           pregnancy_trimester?: number | null
           previous_diets?: string | null
           primary_goal?: string | null
           sex?: string | null
+          sleep_band?: string | null
           sleep_hours?: number | null
           sleep_quality?: string | null
           snacks_habit?: string | null

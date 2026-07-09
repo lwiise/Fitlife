@@ -37,8 +37,11 @@ type ProfileUpdates = Partial<{
   sex: "female" | "male";
   display_name: string;
   birth_year: number;
+  phone: string | null;
   height_cm: number;
   weight_kg: number;
+  waist_cm: number | null;
+  hip_cm: number | null;
   activity_level: string;
   day_nature: string;
   exercise_days: string;
@@ -243,11 +246,15 @@ export interface MomProfileInput {
   sex?: "female" | "male";
   display_name: string;
   birth_year: number;
+  phone?: string | null;
   height_cm: number;
   weight_kg: number;
-  // Legacy direct level; when day_nature + exercise_days are present the
-  // server derives activity_level from them instead (never trusts a client-
-  // computed level).
+  waist_cm?: number | null;
+  hip_cm?: number | null;
+  // The 07/2026 intake asks the 5-level activity directly; day_nature ×
+  // exercise_days remain accepted from legacy tabs, and when both are present
+  // the server still derives the level from them (never trusts a client-
+  // computed level over concrete answers).
   activity_level?: string;
   day_nature?: DayNature;
   exercise_days?: ExerciseDays;
@@ -255,17 +262,28 @@ export interface MomProfileInput {
   target_weight_kg?: number | null;
   water_liters?: "lt1" | "l1_2" | "l2_3" | "gt3" | null;
   sleep_hours?: number | null;
+  sleep_band?: "lt5" | "h5_6" | "h7_8" | "gt8" | null;
+  stress_level?: "low" | "medium" | "high" | null;
   medications?: string[];
   supplements?: string[];
   nausea_foods?: string[];
   notes?: string | null;
   user_goal: UserGoal;
   pregnancy_status: "none" | "pregnant" | "lactating";
+  pregnancy_month?: number;
   trimester?: number;
   high_risk_pregnancy: boolean;
+  feeding_mode?: "exclusive" | "mixed" | "formula";
   months_postpartum?: number;
+  dietary_restrictions?: string[];
   allergies: string[];
+  liked_foods?: string[];
   dislikes: string[];
+  never_eat_foods?: string[];
+  meals_per_day?: number | null;
+  intermittent_fasting?: "yes" | "no" | null;
+  food_recall_24h?: string | null;
+  previous_diets?: string | null;
   conditions: string[];
   other_condition?: string;
   consulted_doctor: boolean;
@@ -322,13 +340,19 @@ export async function saveMomProfile(
       : (input.activity_level ?? null);
 
   const now = new Date().toISOString();
+  // New 00016 intake keys use plain `input.x` (undefined → dropped at JSON
+  // serialization) so a legacy tab that never sent them can't wipe values a
+  // newer session already saved.
   const { error } = await supabase
     .from("profiles")
     .update({
       display_name: input.display_name,
       birth_year: input.birth_year,
+      phone: input.phone,
       height_cm: input.height_cm,
       weight_kg: input.weight_kg,
+      waist_cm: input.waist_cm,
+      hip_cm: input.hip_cm,
       activity_level: derivedActivity,
       day_nature: input.day_nature ?? null,
       exercise_days: input.exercise_days ?? null,
@@ -336,6 +360,8 @@ export async function saveMomProfile(
       target_weight_kg: input.target_weight_kg ?? null,
       water_liters: input.water_liters ?? null,
       sleep_hours: input.sleep_hours ?? null,
+      sleep_band: input.sleep_band,
+      stress_level: input.stress_level,
       medications: input.medications ?? [],
       supplements: input.supplements ?? [],
       nausea_foods: isPregnant ? (input.nausea_foods ?? []) : [],
@@ -343,13 +369,26 @@ export async function saveMomProfile(
       sex,
       member_type: memberType,
       primary_goal: primaryGoal,
+      dietary_restrictions: input.dietary_restrictions,
       allergies: input.allergies,
+      liked_foods: input.liked_foods,
       dislikes: input.dislikes,
+      never_eat_foods: input.never_eat_foods,
+      meals_per_day: input.meals_per_day,
+      intermittent_fasting: input.intermittent_fasting,
+      food_recall_24h: input.food_recall_24h,
+      previous_diets: input.previous_diets,
       has_medical_conditions: hasMedical,
       medical_conditions: conditions,
       is_pregnant: isPregnant,
-      pregnancy_trimester: isPregnant ? (input.trimester ?? null) : null,
+      pregnancy_month: isPregnant ? (input.pregnancy_month ?? null) : null,
+      pregnancy_trimester: isPregnant
+        ? input.pregnancy_month != null
+          ? Math.ceil(input.pregnancy_month / 3)
+          : (input.trimester ?? null)
+        : null,
       high_risk_pregnancy: isPregnant ? input.high_risk_pregnancy : false,
+      feeding_mode: isLactating ? (input.feeding_mode ?? null) : null,
       months_postpartum: isLactating ? (input.months_postpartum ?? null) : null,
       consulted_doctor: input.consulted_doctor,
       mom_profile_completed_at: now,

@@ -12,15 +12,21 @@ import {
 import type { z } from "zod";
 import type { UserGoal } from "@/lib/plans/goalMapping";
 import {
-  activityLevelFrom,
   ACTIVITY_LEVEL_LABELS,
-  DAY_NATURE_OPTIONS,
-  EXERCISE_DAYS_OPTIONS,
-  EXERCISE_TYPE_OPTIONS,
-  type DayNature,
-  type ExerciseDays,
-  type ExerciseType,
+  type ActivityLevel,
 } from "@/lib/plans/activityLevel";
+import {
+  SLEEP_BAND_OPTIONS,
+  STRESS_OPTIONS,
+  MEALS_PER_DAY_OPTIONS,
+  PERSONAL_RESTRICTION_OPTIONS,
+  FEEDING_MODE_OPTIONS,
+  PREGNANCY_MONTHS,
+  trimesterFromMonth,
+  type SleepBand,
+  type StressLevel,
+  type FeedingMode,
+} from "@/lib/plans/intakeOptions";
 import type { step1Schema, step2Schema } from "../schema";
 import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
@@ -40,19 +46,25 @@ const GOALS: { value: UserGoal; label: string }[] = [
   { value: "improve_health", label: "تحسين الحالة الصحية" },
 ];
 
-// Step keys, in order. The doctor step is appended only when a medical signal
-// requires it — the wizard length adapts (Coach Sara: "اجعل التطبيق يسأل بذكاء").
+// Step keys, in the employer questionnaire's order (07/2026): basic data →
+// goal → activity → health → pregnancy → meds → restrictions → food prefs →
+// habits → 24h recall → water/sleep/stress → diet history. The doctor step is
+// appended only when a medical signal requires it, and male owners skip the
+// pregnancy step — the wizard length adapts.
 const BASE_STEPS = [
   "identity",
   "physical",
-  "exercise",
   "goal",
-  "pregnancy",
-  "allergies",
-  "dislikes",
+  "activity",
   "medical",
+  "pregnancy",
   "medsSupps",
+  "restrictions",
+  "foodPrefs",
+  "habits",
+  "recall",
   "lifestyle",
+  "dietHistory",
 ] as const;
 type StepKey = (typeof BASE_STEPS)[number] | "doctor";
 
@@ -111,54 +123,6 @@ function PrimaryButton({
   );
 }
 
-function NumberField({
-  id,
-  label,
-  unit,
-  value,
-  onChange,
-  min,
-  max,
-  placeholder,
-}: {
-  id: string;
-  label: string;
-  unit: string;
-  value: string;
-  onChange: (v: string) => void;
-  min: number;
-  max: number;
-  placeholder: string;
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-bold text-brand-ink mb-2">
-        {label}
-      </label>
-      <div className="relative" dir="ltr">
-        <input
-          id={id}
-          type="number"
-          inputMode="numeric"
-          dir="ltr"
-          min={min}
-          max={max}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full px-4 py-3 pe-16 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-        />
-        <span
-          className="absolute inset-y-0 end-3 flex items-center text-brand-ink-muted text-sm pointer-events-none"
-          aria-hidden="true"
-        >
-          {unit}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export function MomWizard() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -167,24 +131,34 @@ export function MomWizard() {
 
   const [identity, setIdentity] = useState<Identity>();
   const [physical, setPhysical] = useState<Physical>();
-  const [dayNature, setDayNature] = useState<DayNature | null>(null);
-  const [exerciseDays, setExerciseDays] = useState<ExerciseDays | null>(null);
-  const [exerciseType, setExerciseType] = useState<ExerciseType | null>(null);
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(null);
   const [userGoal, setUserGoal] = useState<UserGoal | "">("");
   const [pregStatus, setPregStatus] = useState<"none" | "pregnant" | "lactating" | "">("");
-  const [trimester, setTrimester] = useState<number | null>(null);
+  const [pregMonth, setPregMonth] = useState<number | null>(null);
   const [highRisk, setHighRisk] = useState<boolean | null>(null);
+  const [feedingMode, setFeedingMode] = useState<FeedingMode | null>(null);
   const [monthsPP, setMonthsPP] = useState<string>("");
   const [nauseaFoods, setNauseaFoods] = useState<string[]>([]);
+  const [restrictions, setRestrictions] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
+  const [likedFoods, setLikedFoods] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
+  const [neverEat, setNeverEat] = useState<string[]>([]);
+  const [mealsPerDay, setMealsPerDay] = useState<number | null>(null);
+  const [fasting, setFasting] = useState<"yes" | "no" | null>(null);
+  const [foodRecall, setFoodRecall] = useState("");
   const [conditions, setConditions] = useState<string[]>([]);
   const [otherCondition, setOtherCondition] = useState("");
   const [medications, setMedications] = useState<string[]>([]);
   const [supplements, setSupplements] = useState<string[]>([]);
   const [waterLiters, setWaterLiters] = useState<WaterLiters | null>(null);
-  const [sleepHours, setSleepHours] = useState<string>("");
+  const [sleepBand, setSleepBand] = useState<SleepBand | null>(null);
+  const [stress, setStress] = useState<StressLevel | null>(null);
   const [notes, setNotes] = useState("");
+  const [dietTried, setDietTried] = useState<boolean | null>(null);
+  const [dietSystem, setDietSystem] = useState("");
+  const [dietWorked, setDietWorked] = useState("");
+  const [dietFailed, setDietFailed] = useState("");
   const [consultedDoctor, setConsultedDoctor] = useState(false);
 
   // Feminine is the default voice; masculine forms swap in once a male owner
@@ -211,9 +185,6 @@ export function MomWizard() {
   const step = stepKeys[stepIndex] ?? "identity";
   const totalSteps = stepKeys.length;
 
-  const derivedActivity =
-    dayNature && exerciseDays ? activityLevelFrom(dayNature, exerciseDays) : null;
-
   const goNext = () => {
     setError(null);
     setStepIndex((s) => Math.min(s + 1, totalSteps - 1));
@@ -234,36 +205,58 @@ export function MomWizard() {
       !physical ||
       !userGoal ||
       (!isMale && !pregStatus) ||
-      !dayNature ||
-      !exerciseDays
+      !activityLevel
     ) {
       setError(g("بعض المعلومات ناقصة، ارجعي وأكمليها", "بعض المعلومات ناقصة، ارجع وأكملها"));
       return;
     }
+    // The three diet-history answers persist as one labeled text — the engine
+    // already threads previous_diets into the skeleton lifestyle block.
+    const previousDiets =
+      dietTried === true
+        ? [
+            dietSystem.trim() && `النظام: ${dietSystem.trim()}`,
+            dietWorked.trim() && `ما نجح: ${dietWorked.trim()}`,
+            dietFailed.trim() && `ما لم ينجح: ${dietFailed.trim()}`,
+          ]
+            .filter(Boolean)
+            .join("؛ ") || "اتبع نظاماً غذائياً سابقاً"
+        : null;
     startTransition(async () => {
       const result = await saveMomProfile({
         sex: identity.sex,
         display_name: identity.display_name,
         birth_year: identity.birth_year,
+        phone: identity.phone ?? null,
         height_cm: physical.height_cm,
         weight_kg: physical.weight_kg,
+        waist_cm: physical.waist_cm,
+        hip_cm: physical.hip_cm ?? null,
         target_weight_kg: physical.target_weight_kg ?? null,
-        day_nature: dayNature,
-        exercise_days: exerciseDays,
-        exercise_type: exerciseDays === "none" ? null : exerciseType,
+        activity_level: activityLevel,
         water_liters: waterLiters,
-        sleep_hours: sleepHours ? Number(sleepHours) : null,
+        sleep_band: sleepBand,
+        stress_level: stress,
         medications,
         supplements,
         nausea_foods: nauseaFoods,
         notes: notes.trim() || null,
         user_goal: userGoal,
         pregnancy_status: isMale || !pregStatus ? "none" : pregStatus,
-        trimester: trimester ?? undefined,
+        pregnancy_month: pregMonth ?? undefined,
+        trimester: pregMonth != null ? trimesterFromMonth(pregMonth) : undefined,
         high_risk_pregnancy: highRisk === true,
+        feeding_mode: feedingMode ?? undefined,
         months_postpartum: monthsPP ? Number(monthsPP) : undefined,
+        dietary_restrictions: restrictions,
         allergies,
+        liked_foods: likedFoods,
         dislikes,
+        never_eat_foods: neverEat,
+        meals_per_day: mealsPerDay,
+        intermittent_fasting: fasting,
+        food_recall_24h: foodRecall.trim() || null,
+        previous_diets: previousDiets,
         conditions,
         other_condition: otherCondition.trim() || undefined,
         consulted_doctor: consultedDoctor,
@@ -277,7 +270,7 @@ export function MomWizard() {
   };
 
   // Last content step: go to the doctor step only if needed, else submit.
-  const afterLifestyle = () => {
+  const afterLastStep = () => {
     if (doctorNeeded) goNext();
     else submit();
   };
@@ -340,12 +333,15 @@ export function MomWizard() {
               <Step2Physical
                 defaultValues={physical}
                 isPending={isPending}
+                sex={identity?.sex}
                 onSubmit={(d) => {
                   setPhysical(d);
                   startTransition(async () => {
                     await saveProfileStep({
                       height_cm: d.height_cm,
                       weight_kg: d.weight_kg,
+                      waist_cm: d.waist_cm,
+                      hip_cm: d.hip_cm ?? null,
                       target_weight_kg: d.target_weight_kg ?? null,
                     });
                     goNext();
@@ -354,105 +350,39 @@ export function MomWizard() {
               />
             )}
 
-            {step === "exercise" && (
+            {step === "activity" && (
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    ما طبيعة يومك ونشاطك؟
+                    ما مستوى نشاطك؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نحتسب منها مستوى نشاطك بدقة وفق معادلة السعرات.
+                    {g(
+                      "اختاري الوصف الأقرب ليومك — عليه نبني معادلة السعرات.",
+                      "اختر الوصف الأقرب ليومك — عليه نبني معادلة السعرات.",
+                    )}
                   </p>
                 </header>
 
-                <fieldset className="space-y-2">
-                  <legend className="block text-sm font-bold text-brand-ink mb-2">
-                    طبيعة يومك
-                  </legend>
-                  {DAY_NATURE_OPTIONS.map((opt) => (
-                    <label
-                      key={opt.value}
-                      className={`block rounded-2xl border-2 px-4 py-3 cursor-pointer transition-colors min-h-[3rem] ${
-                        dayNature === opt.value
-                          ? "border-brand-purple-900 bg-brand-purple-900/5"
-                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
-                      }`}
+                <div className="space-y-2">
+                  {(Object.keys(ACTIVITY_LEVEL_LABELS) as ActivityLevel[]).map((level) => (
+                    <OptionButton
+                      key={level}
+                      full
+                      active={activityLevel === level}
+                      onClick={() => setActivityLevel(level)}
                     >
-                      <input
-                        type="radio"
-                        name="day-nature"
-                        value={opt.value}
-                        checked={dayNature === opt.value}
-                        onChange={() => setDayNature(opt.value)}
-                        className="sr-only"
-                      />
-                      <div className="font-bold text-brand-ink text-sm">{opt.label}</div>
-                      <div className="text-brand-ink-muted text-xs mt-0.5">{opt.sublabel}</div>
-                    </label>
+                      {ACTIVITY_LEVEL_LABELS[level]}
+                    </OptionButton>
                   ))}
-                </fieldset>
-
-                <fieldset className="space-y-2">
-                  <legend className="block text-sm font-bold text-brand-ink mb-2">
-                    {g("هل تمارسين الرياضة؟", "هل تمارس الرياضة؟")}
-                  </legend>
-                  <div className="grid grid-cols-2 gap-2">
-                    {EXERCISE_DAYS_OPTIONS.map((opt) => (
-                      <OptionButton
-                        key={opt.value}
-                        active={exerciseDays === opt.value}
-                        onClick={() => {
-                          setExerciseDays(opt.value);
-                          if (opt.value === "none") setExerciseType(null);
-                        }}
-                      >
-                        {opt.label}
-                      </OptionButton>
-                    ))}
-                  </div>
-                </fieldset>
-
-                {exerciseDays && exerciseDays !== "none" && (
-                  <fieldset className="space-y-2">
-                    <legend className="block text-sm font-bold text-brand-ink mb-2">
-                      نوع الرياضة
-                    </legend>
-                    <div className="grid grid-cols-3 gap-2">
-                      {EXERCISE_TYPE_OPTIONS.map((opt) => (
-                        <OptionButton
-                          key={opt.value}
-                          active={exerciseType === opt.value}
-                          onClick={() => setExerciseType(opt.value)}
-                        >
-                          {opt.label}
-                        </OptionButton>
-                      ))}
-                    </div>
-                  </fieldset>
-                )}
-
-                {derivedActivity && (
-                  <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-white border border-brand-ink/5 px-4 py-3">
-                    مستوى نشاطك المحتسب:{" "}
-                    <span className="font-bold text-brand-ink">
-                      {ACTIVITY_LEVEL_LABELS[derivedActivity]}
-                    </span>
-                  </p>
-                )}
+                </div>
 
                 <PrimaryButton
                   onClick={() => {
-                    if (!dayNature) return setError(g("اختاري طبيعة يومك", "اختر طبيعة يومك"));
-                    if (!exerciseDays) return setError(g("حدّدي أيام الرياضة", "حدّد أيام الرياضة"));
-                    if (exerciseDays !== "none" && !exerciseType)
-                      return setError(g("اختاري نوع الرياضة", "اختر نوع الرياضة"));
+                    if (!activityLevel)
+                      return setError(g("حدّدي مستوى نشاطك", "حدّد مستوى نشاطك"));
                     startTransition(async () => {
-                      await saveProfileStep({
-                        day_nature: dayNature,
-                        exercise_days: exerciseDays,
-                        exercise_type: exerciseDays === "none" ? null : exerciseType,
-                        activity_level: activityLevelFrom(dayNature, exerciseDays),
-                      });
+                      await saveProfileStep({ activity_level: activityLevel });
                       goNext();
                     });
                   }}
@@ -518,11 +448,15 @@ export function MomWizard() {
                 {pregStatus === "pregnant" && (
                   <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
                     <div>
-                      <p className="text-sm font-bold text-brand-ink mb-2">الثلث الحالي</p>
+                      <p className="text-sm font-bold text-brand-ink mb-2">شهر الحمل</p>
                       <div className="grid grid-cols-3 gap-2">
-                        {[1, 2, 3].map((t) => (
-                          <OptionButton key={t} active={trimester === t} onClick={() => setTrimester(t)}>
-                            {t === 1 ? "الأول" : t === 2 ? "الثاني" : "الثالث"}
+                        {PREGNANCY_MONTHS.map((mo) => (
+                          <OptionButton
+                            key={mo}
+                            active={pregMonth === mo}
+                            onClick={() => setPregMonth(mo)}
+                          >
+                            {String(mo)}
                           </OptionButton>
                         ))}
                       </div>
@@ -558,31 +492,47 @@ export function MomWizard() {
                 )}
 
                 {pregStatus === "lactating" && (
-                  <div className="rounded-xl bg-white border border-brand-ink/5 p-4">
-                    <label htmlFor="months-pp" className="block text-sm font-bold text-brand-ink mb-2">
-                      كم شهراً مضى على الولادة؟
-                    </label>
-                    <input
-                      id="months-pp"
-                      type="number"
-                      inputMode="numeric"
-                      dir="ltr"
-                      min={0}
-                      max={24}
-                      value={monthsPP}
-                      onChange={(e) => setMonthsPP(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-                    />
+                  <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+                    <div>
+                      <p className="text-sm font-bold text-brand-ink mb-2">نوع الرضاعة</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {FEEDING_MODE_OPTIONS.map((o) => (
+                          <OptionButton
+                            key={o.value}
+                            active={feedingMode === o.value}
+                            onClick={() => setFeedingMode(o.value)}
+                          >
+                            {o.label}
+                          </OptionButton>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="months-pp" className="block text-sm font-bold text-brand-ink mb-2">
+                        عمر الطفل بالأشهر
+                      </label>
+                      <input
+                        id="months-pp"
+                        type="number"
+                        inputMode="numeric"
+                        dir="ltr"
+                        min={0}
+                        max={24}
+                        value={monthsPP}
+                        onChange={(e) => setMonthsPP(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                      />
+                    </div>
                   </div>
                 )}
 
                 <PrimaryButton
                   onClick={() => {
                     if (!pregStatus) return setError("اختاري حالتك");
-                    if (pregStatus === "pregnant" && (trimester == null || highRisk == null))
+                    if (pregStatus === "pregnant" && (pregMonth == null || highRisk == null))
                       return setError("أكملي تفاصيل الحمل");
-                    if (pregStatus === "lactating" && !monthsPP)
-                      return setError("اكتبي كم شهراً مضى على الولادة");
+                    if (pregStatus === "lactating" && (!feedingMode || !monthsPP))
+                      return setError("أكملي تفاصيل الرضاعة");
                     goNext();
                   }}
                 >
@@ -591,45 +541,116 @@ export function MomWizard() {
               </div>
             )}
 
-            {step === "allergies" && (
+            {step === "restrictions" && (
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    {g("هل لديكِ حساسية من طعام معين؟", "هل لديك حساسية من طعام معين؟")}
+                    الحساسية والقيود الغذائية
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     {g(
-                      "اكتبي كل حساسية باسمها لنتجنبها تماماً.",
-                      "اكتب كل حساسية باسمها لنتجنبها تماماً.",
+                      "اختاري ما ينطبق عليكِ، أو تجاوزي إن لم يوجد.",
+                      "اختر ما ينطبق عليك، أو تجاوز إن لم يوجد.",
                     )}
                   </p>
                 </header>
-                <ChipInput
-                  value={allergies}
-                  onChange={setAllergies}
-                  disabled={isPending}
-                  placeholder="مثلاً: مكسرات، روبيان، لاكتوز"
-                />
+
+                <div className="flex flex-wrap gap-2">
+                  {PERSONAL_RESTRICTION_OPTIONS.map((r) => (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() =>
+                        setRestrictions((s) =>
+                          s.includes(r.value)
+                            ? s.filter((v) => v !== r.value)
+                            : [...s, r.value],
+                        )
+                      }
+                      aria-pressed={restrictions.includes(r.value)}
+                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                        restrictions.includes(r.value)
+                          ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g(
+                      "حساسية من طعام معين؟ اكتبي كل حساسية باسمها (اختياري)",
+                      "حساسية من طعام معين؟ اكتب كل حساسية باسمها (اختياري)",
+                    )}
+                  </p>
+                  <ChipInput
+                    value={allergies}
+                    onChange={setAllergies}
+                    disabled={isPending}
+                    placeholder="مثلاً: مكسرات، روبيان، لاكتوز"
+                  />
+                  <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                    نتجنبها تماماً في كل الوجبات.
+                  </p>
+                </div>
+
                 <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
               </div>
             )}
 
-            {step === "dislikes" && (
+            {step === "foodPrefs" && (
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    {g("أطعمة لا تحبينها شخصياً؟", "أطعمة لا تحبها شخصياً؟")}
+                    تفضيلات الطعام
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    {g("نبعدها عن خطتك أنتِ.", "نبعدها عن خطتك أنتَ.")}
+                    نبني الخطة حول ذوقك. الكل اختياري.
                   </p>
                 </header>
-                <ChipInput
-                  value={dislikes}
-                  onChange={setDislikes}
-                  disabled={isPending}
-                  placeholder="مثلاً: كبدة، باذنجان"
-                />
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("أطعمة تحبينها", "أطعمة تحبها")}
+                  </p>
+                  <ChipInput
+                    value={likedFoods}
+                    onChange={setLikedFoods}
+                    disabled={isPending}
+                    placeholder="مثلاً: سلمون، شوفان"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("أطعمة لا تحبينها", "أطعمة لا تحبها")}
+                  </p>
+                  <ChipInput
+                    value={dislikes}
+                    onChange={setDislikes}
+                    disabled={isPending}
+                    placeholder="مثلاً: كبدة، باذنجان"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("أطعمة لا تتناولينها نهائياً", "أطعمة لا تتناولها نهائياً")}
+                  </p>
+                  <ChipInput
+                    value={neverEat}
+                    onChange={setNeverEat}
+                    disabled={isPending}
+                    placeholder="مثلاً: لحم غنم، محار"
+                  />
+                  <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                    تُستبعد من الخطة استبعاداً كاملاً، مثل الحساسية.
+                  </p>
+                </div>
+
                 <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
               </div>
             )}
@@ -724,6 +745,95 @@ export function MomWizard() {
               </div>
             )}
 
+            {step === "habits" && (
+              <div className="space-y-6">
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    عاداتك الغذائية
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نوزّع الوجبات على إيقاع يومك الفعلي.
+                  </p>
+                </header>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("كم وجبة تتناولين يومياً؟", "كم وجبة تتناول يومياً؟")}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MEALS_PER_DAY_OPTIONS.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={mealsPerDay === o.value}
+                        onClick={() => setMealsPerDay(o.value)}
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("هل تطبّقين الصيام المتقطع؟", "هل تطبّق الصيام المتقطع؟")}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <OptionButton active={fasting === "no"} onClick={() => setFasting("no")}>
+                      لا
+                    </OptionButton>
+                    <OptionButton active={fasting === "yes"} onClick={() => setFasting("yes")}>
+                      نعم
+                    </OptionButton>
+                  </div>
+                </div>
+
+                <PrimaryButton
+                  onClick={() => {
+                    if (!mealsPerDay)
+                      return setError(g("حدّدي عدد الوجبات", "حدّد عدد الوجبات"));
+                    if (!fasting)
+                      return setError(
+                        g("أجيبي عن سؤال الصيام المتقطع", "أجب عن سؤال الصيام المتقطع"),
+                      );
+                    goNext();
+                  }}
+                >
+                  التالي
+                </PrimaryButton>
+              </div>
+            )}
+
+            {step === "recall" && (
+              <div className="space-y-6">
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    يومك الغذائي
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    {g(
+                      "اكتبي كل ما تناولتِه خلال آخر 24 ساعة مع المشروبات. اختياري — يساعدنا نفهم يومك.",
+                      "اكتب كل ما تناولته خلال آخر 24 ساعة مع المشروبات. اختياري — يساعدنا نفهم يومك.",
+                    )}
+                  </p>
+                </header>
+                <textarea
+                  value={foodRecall}
+                  onChange={(e) => setFoodRecall(e.target.value)}
+                  maxLength={1000}
+                  rows={6}
+                  aria-label={g(
+                    "ما تناولتِه خلال آخر 24 ساعة",
+                    "ما تناولته خلال آخر 24 ساعة",
+                  )}
+                  className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+                  placeholder="مثلاً: فطور — قهوة بحليب وتمرتان…"
+                />
+                <PrimaryButton onClick={goNext}>
+                  {foodRecall.trim() ? "التالي" : "تخطّي"}
+                </PrimaryButton>
+              </div>
+            )}
+
             {step === "lifestyle" && (
               <div className="space-y-6">
                 <header>
@@ -752,16 +862,42 @@ export function MomWizard() {
                     ))}
                   </div>
                 </div>
-                <NumberField
-                  id="sleep-hours"
-                  label={g("كم ساعة تنامين؟", "كم ساعة تنام؟")}
-                  unit="ساعة"
-                  value={sleepHours}
-                  onChange={setSleepHours}
-                  min={2}
-                  max={16}
-                  placeholder="7"
-                />
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("كم ساعة تنامين يومياً؟", "كم ساعة تنام يومياً؟")}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {SLEEP_BAND_OPTIONS.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={sleepBand === o.value}
+                        onClick={() =>
+                          setSleepBand((cur) => (cur === o.value ? null : o.value))
+                        }
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("كيف تصفين مستوى التوتر لديك؟", "كيف تصف مستوى التوتر لديك؟")}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {STRESS_OPTIONS.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={stress === o.value}
+                        onClick={() =>
+                          setStress((cur) => (cur === o.value ? null : o.value))
+                        }
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <label htmlFor="mom-notes" className="block text-sm font-bold text-brand-ink mb-2">
                     {g(
@@ -779,7 +915,84 @@ export function MomWizard() {
                     placeholder="مثلاً: أفضّل وجبات سريعة التحضير أيام الدوام"
                   />
                 </div>
-                <PrimaryButton onClick={afterLifestyle} isPending={isPending && !doctorNeeded}>
+                <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
+              </div>
+            )}
+
+            {step === "dietHistory" && (
+              <div className="space-y-6">
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    الحميات السابقة
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    {g(
+                      "تجربتك السابقة تخبرنا ما يناسبك وما لا يناسبك.",
+                      "تجربتك السابقة تخبرنا ما يناسبك وما لا يناسبك.",
+                    )}
+                  </p>
+                </header>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("هل سبق أن اتبعتِ نظاماً غذائياً؟", "هل سبق أن اتبعت نظاماً غذائياً؟")}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <OptionButton active={dietTried === false} onClick={() => setDietTried(false)}>
+                      لا
+                    </OptionButton>
+                    <OptionButton active={dietTried === true} onClick={() => setDietTried(true)}>
+                      نعم
+                    </OptionButton>
+                  </div>
+                </div>
+
+                {dietTried === true && (
+                  <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+                    <div>
+                      <label htmlFor="diet-system" className="block text-sm font-bold text-brand-ink mb-2">
+                        {g("ما النظام الذي اتبعتِه؟", "ما النظام الذي اتبعته؟")}
+                      </label>
+                      <input
+                        id="diet-system"
+                        type="text"
+                        value={dietSystem}
+                        onChange={(e) => setDietSystem(e.target.value)}
+                        maxLength={200}
+                        placeholder="مثلاً: كيتو، صيام متقطع"
+                        className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="diet-worked" className="block text-sm font-bold text-brand-ink mb-2">
+                        ما الذي نجح معك؟ (اختياري)
+                      </label>
+                      <input
+                        id="diet-worked"
+                        type="text"
+                        value={dietWorked}
+                        onChange={(e) => setDietWorked(e.target.value)}
+                        maxLength={200}
+                        className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="diet-failed" className="block text-sm font-bold text-brand-ink mb-2">
+                        وما الذي لم ينجح؟ (اختياري)
+                      </label>
+                      <input
+                        id="diet-failed"
+                        type="text"
+                        value={dietFailed}
+                        onChange={(e) => setDietFailed(e.target.value)}
+                        maxLength={200}
+                        className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <PrimaryButton onClick={afterLastStep} isPending={isPending && !doctorNeeded}>
                   {doctorNeeded ? "التالي" : g("أنشئي خطتي", "أنشئ خطتي")}
                 </PrimaryButton>
               </div>
