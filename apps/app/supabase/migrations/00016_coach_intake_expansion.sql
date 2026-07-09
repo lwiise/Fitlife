@@ -49,9 +49,17 @@ alter table public.profiles add constraint profiles_pregnancy_month_check
 
 -- ── Cuisine remap to the spec's five options ────────────────────────────────
 -- New canonical set: khaleeji / arabic / asian / western / varied.
+-- The 00005 CHECK pins the legacy set, so it must be DROPPED before the remap
+-- (a plain UPDATE violates it) and re-added AFTER (adding first would fail
+-- validation against the still-legacy rows).
+alter table public.profiles drop constraint if exists profiles_cuisine_preference_check;
+
 update public.profiles set cuisine_preference = 'arabic'
   where cuisine_preference = 'mediterranean';
 update public.profiles set cuisine_preference = 'varied'
   where cuisine_preference = 'mixed';
 update public.profiles set cuisine_preference = 'western'
   where cuisine_preference = 'international';
+
+alter table public.profiles add constraint profiles_cuisine_preference_check
+  check (cuisine_preference in ('khaleeji','arabic','asian','western','varied'));
