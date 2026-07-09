@@ -66,6 +66,7 @@ export default async function HealthEditPage() {
             nausea_foods: asStringArray(profile.nausea_foods),
             notes: profile.notes ?? "",
             user_goal: userGoal,
+            sex: profile.sex ?? null,
             pregnancy_status: pregnancyStatus,
             trimester: profile.pregnancy_trimester ?? null,
             high_risk_pregnancy: profile.high_risk_pregnancy ?? false,

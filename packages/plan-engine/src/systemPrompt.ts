@@ -675,6 +675,18 @@ function buildRoster(
     .join("\n");
 }
 
+// Cooking-method slugs → Arabic (the stored values are English tokens; the
+// prompt should read as فصحى, not slugs).
+const COOKING_LABELS_AR: Record<string, string> = {
+  grilling: "شوي",
+  boiling: "سلق",
+  steaming: "طبخ بالبخار",
+  baking: "فرن",
+  air_fryer: "مقلاة هوائية",
+  frying_minimal: "قلي بزيت قليل",
+  deep_frying: "قلي عميق",
+};
+
 function familyWideText(context: PlanPromptContext): string {
   const fw = context.family_wide;
   const bits: string[] = [];
@@ -683,7 +695,9 @@ function familyWideText(context: PlanPromptContext): string {
   if (fw.dislikes.length > 0)
     bits.push(`أطعمة لا تأكلها العائلة أبداً: ${fw.dislikes.join("، ")}`);
   if (fw.cooking_methods.length > 0)
-    bits.push(`طرق الطبخ المفضلة: ${fw.cooking_methods.join("، ")}`);
+    bits.push(
+      `طرق الطبخ المفضلة: ${fw.cooking_methods.map((c) => COOKING_LABELS_AR[c] ?? c).join("، ")}`,
+    );
   if (fw.meal_out_frequency)
     bits.push(
       `الأكل خارج البيت: ${MEAL_OUT_LABELS_AR[fw.meal_out_frequency] ?? fw.meal_out_frequency}`,

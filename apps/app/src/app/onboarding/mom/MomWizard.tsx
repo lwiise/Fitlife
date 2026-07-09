@@ -323,6 +323,7 @@ export function MomWizard() {
                       sex: d.sex,
                       display_name: d.display_name,
                       birth_year: d.birth_year,
+                      phone: d.phone ?? null,
                     });
                     goNext();
                   });
@@ -533,8 +534,11 @@ export function MomWizard() {
                     if (!pregStatus) return setError("اختاري حالتك");
                     if (pregStatus === "pregnant" && (pregMonth == null || highRisk == null))
                       return setError("أكملي تفاصيل الحمل");
-                    if (pregStatus === "lactating" && (!feedingMode || !monthsPP))
-                      return setError("أكملي تفاصيل الرضاعة");
+                    if (pregStatus === "lactating") {
+                      const mpp = Number(monthsPP);
+                      if (!feedingMode || !monthsPP || Number.isNaN(mpp) || mpp < 0 || mpp > 24)
+                        return setError("أكملي تفاصيل الرضاعة — عمر الطفل بين 0 و24 شهراً");
+                    }
                     goNext();
                   }}
                 >
@@ -702,6 +706,7 @@ export function MomWizard() {
                     type="text"
                     value={otherCondition}
                     onChange={(e) => setOtherCondition(e.target.value)}
+                    maxLength={200}
                     spellCheck={false}
                     className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
                     placeholder={g("اكتبيها هنا", "اكتبها هنا")}

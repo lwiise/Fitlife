@@ -39,6 +39,8 @@ export type HealthInitial = {
   nausea_foods: string[];
   notes: string;
   user_goal: UserGoal | undefined;
+  /** Owner sex — male owners never see the pregnancy/lactation section. */
+  sex: string | null;
   pregnancy_status: PregStatus;
   trimester: number | null;
   high_risk_pregnancy: boolean;
@@ -312,7 +314,8 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         </div>
       </section>
 
-      {/* الحمل والرضاعة */}
+      {/* الحمل والرضاعة — never shown to a male owner (server hard-guards too) */}
+      {initial.sex !== "male" && (
       <section className="space-y-4">
         <GroupHeading>الحمل والرضاعة</GroupHeading>
         <div className="space-y-2">
@@ -383,6 +386,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
           </div>
         )}
       </section>
+      )}
 
       {/* الحساسيات */}
       <section className="space-y-4">

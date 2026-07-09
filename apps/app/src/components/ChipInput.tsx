@@ -28,7 +28,9 @@ export function ChipInput({
 
   const add = (raw: string) => {
     const t = raw.trim();
-    if (!t || value.includes(t)) {
+    // Caps mirror the server's chipArray schema (30 items × 80 chars) so a
+    // violation can't surface as a cryptic end-of-wizard rejection.
+    if (!t || value.includes(t) || value.length >= 30) {
       setDraft("");
       return;
     }
@@ -79,6 +81,7 @@ export function ChipInput({
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
         onBlur={() => add(draft)}
+        maxLength={80}
         placeholder={value.length === 0 ? placeholder : undefined}
         spellCheck={false}
         className="flex-1 min-w-[8rem] bg-transparent px-2 py-2 text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none"

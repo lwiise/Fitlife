@@ -12,7 +12,7 @@ import {
   type LocaleCode,
 } from "@/lib/plans/locales";
 
-type CuisineValue = "khaleeji" | "mediterranean" | "mixed" | "international";
+type CuisineValue = "khaleeji" | "arabic" | "asian" | "western" | "varied";
 type MealOutValue = "never" | "rarely" | "sometimes" | "often";
 
 export type FamilyPrefsInitial = {

@@ -112,8 +112,16 @@ export async function saveMomHealthInfo(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  const isPregnant = data.pregnancy_status === "pregnant";
-  const isLactating = data.pregnancy_status === "lactating";
+  // Male owners can never be pregnant/lactating — mirror the onboarding
+  // hard-guard (the health form also hides the section, but never trust it).
+  const { data: ownProfile } = await supabase
+    .from("profiles")
+    .select("sex")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isMale = ownProfile?.sex === "male";
+  const isPregnant = !isMale && data.pregnancy_status === "pregnant";
+  const isLactating = !isMale && data.pregnancy_status === "lactating";
   const memberType = isPregnant ? "pregnant" : isLactating ? "lactating" : "adult";
 
   const conditions = [...data.conditions];
@@ -151,16 +159,23 @@ export async function saveMomHealthInfo(
       target_weight_kg: data.target_weight_kg ?? null,
       water_liters: data.water_liters ?? null,
       sleep_hours: data.sleep_hours ?? null,
+      // This form edits hours, not the 00016 band — clear the band or the
+      // prompt (band takes precedence) would silently ignore the edit.
+      sleep_band: null,
       medications: data.medications ?? [],
       supplements: data.supplements ?? [],
-      nausea_foods: data.pregnancy_status === "pregnant" ? (data.nausea_foods ?? []) : [],
+      nausea_foods: isPregnant ? (data.nausea_foods ?? []) : [],
       notes: data.notes?.trim() || null,
       primary_goal: primaryGoal,
       member_type: memberType,
       is_pregnant: isPregnant,
       pregnancy_trimester: isPregnant ? (data.trimester ?? null) : null,
+      // The form edits the trimester only; a stale onboarding month would
+      // contradict it in the prompt (month renders with precedence) — clear it.
+      pregnancy_month: null,
       high_risk_pregnancy: isPregnant ? data.high_risk_pregnancy : false,
       months_postpartum: isLactating ? (data.months_postpartum ?? null) : null,
+      feeding_mode: isLactating ? undefined : null,
       allergies: data.allergies,
       dislikes: data.dislikes,
       has_medical_conditions: hasMedical,
@@ -183,7 +198,8 @@ export async function saveMomHealthInfo(
 
 // ── Section 3: Family preferences ─────────────────────────────────────────
 const FamilyPreferencesSchema = z.object({
-  cuisine_preference: z.enum(["khaleeji", "mediterranean", "mixed", "international"]),
+  // Spec's five cuisines (00016 remapped the legacy stored values).
+  cuisine_preference: z.enum(["khaleeji", "arabic", "asian", "western", "varied"]),
   family_dietary_restrictions: z.array(z.string()),
   family_dislikes: z.array(z.string()),
   cooking_methods: z.array(z.string()),
