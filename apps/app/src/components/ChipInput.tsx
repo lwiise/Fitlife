@@ -13,12 +13,16 @@ export function ChipInput({
   placeholder,
   id,
   disabled,
+  ariaLabel,
 }: {
   value: string[];
   onChange: (next: string[]) => void;
   placeholder?: string;
   id?: string;
   disabled?: boolean;
+  /** Persistent accessible name — the placeholder disappears once a chip
+   * exists, leaving the field nameless without this. */
+  ariaLabel?: string;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -70,6 +74,7 @@ export function ChipInput({
         id={id}
         type="text"
         value={draft}
+        aria-label={ariaLabel}
         disabled={disabled}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}

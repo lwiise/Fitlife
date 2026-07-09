@@ -11,7 +11,7 @@ export interface ConditionOption {
 // 10 high-risk conditions — require doctor sign-off before a plan is generated.
 export const GATE_CONDITIONS: ConditionOption[] = [
   { slug: "unstable_diabetes", label_ar: "مرض السكري غير مستقر" },
-  { slug: "uncontrolled_hypertension", label_ar: "ارتفاع ضغط غير مسيطر" },
+  { slug: "uncontrolled_hypertension", label_ar: "ارتفاع ضغط غير مسيطر عليه" },
   { slug: "heart_disease", label_ar: "أمراض القلب" },
   { slug: "kidney_disease", label_ar: "أمراض الكلى" },
   { slug: "liver_disease", label_ar: "أمراض الكبد" },
@@ -31,7 +31,7 @@ export const STABLE_CONDITIONS: ConditionOption[] = [
   { slug: "stable_hypothyroid", label_ar: "قصور الغدة الدرقية مستقر" },
   { slug: "high_cholesterol", label_ar: "ارتفاع الكوليسترول" },
   { slug: "ibs", label_ar: "متلازمة القولون العصبي" },
-  { slug: "anemia", label_ar: "الأنيميا" },
+  { slug: "anemia", label_ar: "فقر الدم" },
 ];
 
 const GATE_SLUGS = new Set(GATE_CONDITIONS.map((c) => c.slug));

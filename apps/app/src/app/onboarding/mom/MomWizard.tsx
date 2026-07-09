@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import {
@@ -125,6 +125,7 @@ function PrimaryButton({
 
 export function MomWizard() {
   const router = useRouter();
+  const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -296,7 +297,7 @@ export function MomWizard() {
               className="h-full bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow"
               initial={false}
               animate={{ width: `${((stepIndex + 1) / totalSteps) * 100}%` }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: reduceMotion ? 0 : 0.4, ease: [0.16, 1, 0.3, 1] }}
             />
           </div>
         </div>
@@ -306,10 +307,10 @@ export function MomWizard() {
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
-            initial={{ opacity: 0, x: 30 }}
+            initial={{ opacity: 0, x: reduceMotion ? 0 : 30 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
+            exit={{ opacity: 0, x: reduceMotion ? 0 : -30 }}
+            transition={{ duration: reduceMotion ? 0 : 0.3, ease: "easeOut" }}
           >
             {step === "identity" && (
               <Step1Identity
@@ -482,6 +483,7 @@ export function MomWizard() {
                         value={nauseaFoods}
                         onChange={setNauseaFoods}
                         disabled={isPending}
+                        ariaLabel="أطعمة تسبب الغثيان حالياً"
                         placeholder="مثلاً: بيض، دجاج"
                       />
                       <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
@@ -590,6 +592,7 @@ export function MomWizard() {
                     value={allergies}
                     onChange={setAllergies}
                     disabled={isPending}
+                    ariaLabel="الحساسية الغذائية"
                     placeholder="مثلاً: مكسرات، روبيان، لاكتوز"
                   />
                   <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
@@ -620,6 +623,7 @@ export function MomWizard() {
                     value={likedFoods}
                     onChange={setLikedFoods}
                     disabled={isPending}
+                    ariaLabel="أطعمة مفضلة"
                     placeholder="مثلاً: سلمون، شوفان"
                   />
                 </div>
@@ -632,6 +636,7 @@ export function MomWizard() {
                     value={dislikes}
                     onChange={setDislikes}
                     disabled={isPending}
+                    ariaLabel="أطعمة غير محببة"
                     placeholder="مثلاً: كبدة، باذنجان"
                   />
                 </div>
@@ -644,6 +649,7 @@ export function MomWizard() {
                     value={neverEat}
                     onChange={setNeverEat}
                     disabled={isPending}
+                    ariaLabel="أطعمة مستبعدة نهائياً"
                     placeholder="مثلاً: لحم غنم، محار"
                   />
                   <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
@@ -678,8 +684,8 @@ export function MomWizard() {
                       aria-pressed={conditions.includes(c.slug)}
                       className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                         conditions.includes(c.slug)
-                          ? "border-brand-pink bg-brand-pink-light text-brand-pink"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-pink/40"
+                          ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
                       }`}
                     >
                       {c.label_ar}
@@ -698,7 +704,7 @@ export function MomWizard() {
                     onChange={(e) => setOtherCondition(e.target.value)}
                     spellCheck={false}
                     className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-                    placeholder="اكتبيها هنا"
+                    placeholder={g("اكتبيها هنا", "اكتبها هنا")}
                   />
                 </div>
 
@@ -727,6 +733,7 @@ export function MomWizard() {
                     value={medications}
                     onChange={setMedications}
                     disabled={isPending}
+                    ariaLabel="أدوية مستخدمة بانتظام"
                     placeholder="مثلاً: ميتفورمين"
                   />
                 </div>
@@ -738,6 +745,7 @@ export function MomWizard() {
                     value={supplements}
                     onChange={setSupplements}
                     disabled={isPending}
+                    ariaLabel="مكملات غذائية"
                     placeholder="مثلاً: حديد، فيتامين د"
                   />
                 </div>
@@ -1044,7 +1052,7 @@ export function MomWizard() {
             type="button"
             onClick={goBack}
             disabled={isPending}
-            className="mt-6 inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            className="mt-6 inline-flex items-center gap-1 min-h-11 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
             رجوع

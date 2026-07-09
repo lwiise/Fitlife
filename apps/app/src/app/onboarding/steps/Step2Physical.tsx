@@ -60,6 +60,7 @@ export function Step2Physical({
               className="w-full px-4 py-3 pe-12 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors"
               {...register("height_cm", { valueAsNumber: true })}
               aria-invalid={!!errors.height_cm}
+              aria-describedby={errors.height_cm ? "height_cm-error" : undefined}
             />
             <span
               className="absolute inset-y-0 end-3 flex items-center text-brand-ink-muted text-sm pointer-events-none"
@@ -69,7 +70,11 @@ export function Step2Physical({
             </span>
           </div>
           {errors.height_cm && (
-            <p role="alert" className="mt-1.5 text-red-600 text-sm leading-relaxed">
+            <p
+              id="height_cm-error"
+              role="alert"
+              className="mt-1.5 text-red-600 text-sm leading-relaxed"
+            >
               {errors.height_cm.message}
             </p>
           )}
@@ -94,6 +99,7 @@ export function Step2Physical({
               className="w-full px-4 py-3 pe-12 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors"
               {...register("weight_kg", { valueAsNumber: true })}
               aria-invalid={!!errors.weight_kg}
+              aria-describedby={errors.weight_kg ? "weight_kg-error" : undefined}
             />
             <span
               className="absolute inset-y-0 end-3 flex items-center text-brand-ink-muted text-sm pointer-events-none"
@@ -103,7 +109,11 @@ export function Step2Physical({
             </span>
           </div>
           {errors.weight_kg && (
-            <p role="alert" className="mt-1.5 text-red-600 text-sm leading-relaxed">
+            <p
+              id="weight_kg-error"
+              role="alert"
+              className="mt-1.5 text-red-600 text-sm leading-relaxed"
+            >
               {errors.weight_kg.message}
             </p>
           )}
@@ -130,6 +140,7 @@ export function Step2Physical({
               className="w-full px-4 py-3 pe-12 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors"
               {...register("waist_cm", { valueAsNumber: true })}
               aria-invalid={!!errors.waist_cm}
+              aria-describedby={errors.waist_cm ? "waist_cm-error" : undefined}
             />
             <span
               className="absolute inset-y-0 end-3 flex items-center text-brand-ink-muted text-sm pointer-events-none"
@@ -139,7 +150,11 @@ export function Step2Physical({
             </span>
           </div>
           {errors.waist_cm && (
-            <p role="alert" className="mt-1.5 text-red-600 text-sm leading-relaxed">
+            <p
+              id="waist_cm-error"
+              role="alert"
+              className="mt-1.5 text-red-600 text-sm leading-relaxed"
+            >
               {errors.waist_cm.message}
             </p>
           )}
@@ -164,6 +179,7 @@ export function Step2Physical({
               className="w-full px-4 py-3 pe-12 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors"
               {...register("hip_cm", { valueAsNumber: true })}
               aria-invalid={!!errors.hip_cm}
+              aria-describedby={errors.hip_cm ? "hip_cm-error" : undefined}
             />
             <span
               className="absolute inset-y-0 end-3 flex items-center text-brand-ink-muted text-sm pointer-events-none"
@@ -173,7 +189,11 @@ export function Step2Physical({
             </span>
           </div>
           {errors.hip_cm && (
-            <p role="alert" className="mt-1.5 text-red-600 text-sm leading-relaxed">
+            <p
+              id="hip_cm-error"
+              role="alert"
+              className="mt-1.5 text-red-600 text-sm leading-relaxed"
+            >
               {errors.hip_cm.message}
             </p>
           )}
@@ -199,6 +219,7 @@ export function Step2Physical({
             className="w-full px-4 py-3 pe-12 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors"
             {...register("target_weight_kg", { valueAsNumber: true })}
             aria-invalid={!!errors.target_weight_kg}
+            aria-describedby={errors.target_weight_kg ? "target_weight_kg-error" : undefined}
           />
           <span
             className="absolute inset-y-0 end-3 flex items-center text-brand-ink-muted text-sm pointer-events-none"
@@ -214,7 +235,11 @@ export function Step2Physical({
           )}
         </p>
         {errors.target_weight_kg && (
-          <p role="alert" className="mt-1.5 text-red-600 text-sm leading-relaxed">
+          <p
+            id="target_weight_kg-error"
+            role="alert"
+            className="mt-1.5 text-red-600 text-sm leading-relaxed"
+          >
             {errors.target_weight_kg.message}
           </p>
         )}
