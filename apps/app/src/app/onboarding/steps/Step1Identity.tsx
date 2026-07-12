@@ -38,7 +38,7 @@ export function Step1Identity({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <header>
         <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-          أهلاً بكِ، عرّفينا بنفسكِ
+          أهلاً بك، نتعرّف إليك أولاً
         </h2>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
           نجهّز حسابك الشخصي لنبني خطة على مقاسك.

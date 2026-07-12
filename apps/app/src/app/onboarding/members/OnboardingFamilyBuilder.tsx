@@ -6,6 +6,7 @@ import { MemberWizard } from "@/app/family/add/MemberWizard";
 import { PregLactSwitch } from "@/app/family/add/PregLactSwitch";
 import { HousekeeperForm } from "@/app/family/add/HousekeeperForm";
 import { CheckRow, StepperRow } from "@/app/family/add/FamilyComposerControls";
+import { genderPick } from "@/lib/copy/gender";
 import { useRouter } from "next/navigation";
 
 // One step of the guided sequence. Husband and maid are singular; the rest carry a count.
@@ -24,7 +25,9 @@ type Task =
  * generates the whole family at once. Each member is saved as it's completed;
  * generation stays deferred until the sequence ends.
  */
-export function OnboardingFamilyBuilder() {
+export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
+  const g = genderPick(sex);
+  const isMale = sex === "male";
   const [phase, setPhase] = useState<"select" | "fill" | "finalizing">("select");
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
@@ -86,14 +89,16 @@ export function OnboardingFamilyBuilder() {
     const isLastTask = index === queue.length - 1;
     // For MemberWizard tasks, label the very last member "التالي" when more types
     // still follow, so it doesn't read "أنشئي الخطة" mid-sequence.
-    const terminalLabel = isLastTask ? "أنشئي الخطة" : "التالي";
+    const terminalLabel = isLastTask ? g("أنشئي الخطة", "أنشئ الخطة") : "التالي";
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-brand-surface">
         {task.kind === "husband" && (
           <MemberWizard
             key={`husband-${index}`}
             type="adult"
-            role="dad"
+            // A male owner's spouse must not carry role="dad" — the engine
+            // labels that role الأب in the family summary.
+            role={isMale ? "other_adult" : "dad"}
             onboarding
             count={1}
             onComplete={advance}
@@ -159,16 +164,19 @@ export function OnboardingFamilyBuilder() {
             id="builder-title"
             className="font-extrabold text-2xl text-brand-ink leading-tight"
           >
-            من معكِ في المنزل؟
+            {g("من معكِ في المنزل؟", "من معكَ في المنزل؟")}
           </h2>
           <p className="text-brand-ink-muted text-sm leading-relaxed">
-            أضيفي عيلتك، ولكل واحد خطته — أطباق فردية أو مشتركة، بضغطة وحدة
+            {g(
+              "أضيفي عيلتك، ولكل واحد خطته — أطباق فردية أو مشتركة، بضغطة وحدة",
+              "أضف عائلتك، ولكل واحد خطته — أطباق فردية أو مشتركة، بضغطة واحدة",
+            )}
           </p>
         </header>
 
         <div className="space-y-2">
           <CheckRow
-            label="زوج"
+            label={g("زوج", "زوجة")}
             Icon={User}
             checked={husband}
             onToggle={() => setHusband((v) => !v)}
@@ -195,7 +203,9 @@ export function OnboardingFamilyBuilder() {
             onClick={start}
             className="w-full flex items-center justify-center gap-2 min-h-11 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
-            {totalSelected > 0 ? "التالي — أكملي بيانات العائلة" : "جاهزة — أنشئي خطتي"}
+            {totalSelected > 0
+              ? g("التالي — أكملي بيانات العائلة", "التالي — أكمل بيانات العائلة")
+              : g("جاهزة — أنشئي خطتي", "جاهز — أنشئ خطتي")}
           </button>
 
           {/* Family is optional — let her skip and add them later from /family.

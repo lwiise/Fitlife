@@ -154,4 +154,4 @@ export const profileStepSchema = z
   .partial()
   .strict();
 
-export const VALIDATION_ERROR_AR = "بيانات غير صالحة. تحققي من الحقول وأعيدي المحاولة";
+export const VALIDATION_ERROR_AR = "بيانات غير صالحة — يلزم التحقق من الحقول والمحاولة مرة أخرى";

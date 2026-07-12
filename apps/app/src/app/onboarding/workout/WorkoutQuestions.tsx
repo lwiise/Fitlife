@@ -4,11 +4,14 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import type { WorkoutProfile } from "@fitlife/plan-engine";
+import { genderPick } from "@/lib/copy/gender";
 import { saveWorkoutProfiles, continueAfterWorkoutOptIn } from "./actions";
 
 export interface WorkoutPerson {
   target: "mom" | string;
   name: string;
+  /** The person's own sex — genders their labels (e.g. مبتدئة/مبتدئ). */
+  sex?: string | null;
   existing: WorkoutProfile | null;
 }
 
@@ -39,10 +42,11 @@ const FOCUS = [
   { value: "definition", label: "إبراز التفاصيل العضلية" },
   { value: "balanced", label: "برنامج متوازن" },
 ] as const;
+// Experience describes the PERSON being planned for — label follows their sex.
 const EXPERIENCE = [
-  { value: "beginner", label: "مبتدئة" },
-  { value: "intermediate", label: "متوسطة" },
-  { value: "advanced", label: "متقدمة" },
+  { value: "beginner", f: "مبتدئة", m: "مبتدئ" },
+  { value: "intermediate", f: "متوسطة", m: "متوسط" },
+  { value: "advanced", f: "متقدمة", m: "متقدم" },
 ] as const;
 const SESSION = [
   { value: "m20_30", label: "20-30 دقيقة" },
@@ -78,15 +82,18 @@ function draftFrom(existing: WorkoutProfile | null): Draft {
 // wizard's one-focus-per-screen rhythm. Aspirational first (what the program
 // looks like), logistics second, safety last — each screen validates itself so
 // errors are always in view on a phone.
+type GPick = (feminine: string, masculine: string) => string;
+
 const STEPS = [
   {
     key: "shape",
     title: "شكل البرنامج",
     description: "نبني البرنامج حول مناطق التركيز وعدد الأيام ومدة كل جلسة.",
-    validate: (d: Draft): string | null => {
-      if (d.focus_areas.length === 0) return "اختاري منطقة تركيز واحدة على الأقل";
-      if (!d.desired_days) return "حدّدي أيام التدريب";
-      if (!d.session_minutes) return "حدّدي مدة الجلسة";
+    validate: (d: Draft, g: GPick): string | null => {
+      if (d.focus_areas.length === 0)
+        return g("اختاري منطقة تركيز واحدة على الأقل", "اختر منطقة تركيز واحدة على الأقل");
+      if (!d.desired_days) return g("حدّدي أيام التدريب", "حدّد أيام التدريب");
+      if (!d.session_minutes) return g("حدّدي مدة الجلسة", "حدّد مدة الجلسة");
       return null;
     },
   },
@@ -94,15 +101,15 @@ const STEPS = [
     key: "place",
     title: "مكان التدريب وأدواته",
     description: "نختار تمارين تناسب المكان والأدوات المتاحة.",
-    validate: (d: Draft): string | null =>
-      d.location ? null : "اختاري مكان التدريب",
+    validate: (d: Draft, g: GPick): string | null =>
+      d.location ? null : g("اختاري مكان التدريب", "اختر مكان التدريب"),
   },
   {
     key: "safety",
     title: "الخبرة والسلامة",
     description: "نضبط شدة التمارين حسب الخبرة ونراعي أي إصابة.",
-    validate: (d: Draft): string | null =>
-      d.experience ? null : "حدّدي مستوى الخبرة",
+    validate: (d: Draft, g: GPick): string | null =>
+      d.experience ? null : g("حدّدي مستوى الخبرة", "حدّد مستوى الخبرة"),
   },
 ] as const;
 
@@ -169,7 +176,15 @@ function ScreenHeading({
   );
 }
 
-export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
+export function WorkoutQuestions({
+  people,
+  ownerSex,
+}: {
+  people: WorkoutPerson[];
+  /** The account owner answers the form — imperatives follow their sex. */
+  ownerSex?: string | null;
+}) {
+  const g = genderPick(ownerSex);
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +238,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
     for (let p = 0; p < chosen.length; p++) {
       const d = drafts[chosen[p]!.target]!;
       for (let s = 0; s < STEPS.length; s++) {
-        const problem = STEPS[s]!.validate(d);
+        const problem = STEPS[s]!.validate(d, g);
         if (problem) {
           goTo(p, s);
           setError(problem);
@@ -260,11 +275,12 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
   const next = () => {
     setError(null);
     if (personIndex === -1) {
-      if (chosen.length === 0) return setError("اختاري فرداً واحداً على الأقل");
+      if (chosen.length === 0)
+        return setError(g("اختاري فرداً واحداً على الأقل", "اختر فرداً واحداً على الأقل"));
       goTo(0, 0);
       return;
     }
-    const problem = stepDef.validate(draft!);
+    const problem = stepDef.validate(draft!, g);
     if (problem) return setError(problem);
     if (stepIndex + 1 < STEPS.length) return goTo(personIndex, stepIndex + 1);
     if (personIndex + 1 < chosen.length) return goTo(personIndex + 1, 0);
@@ -470,7 +486,7 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
                           active={draft.experience === o.value}
                           onClick={() => setDraft({ experience: o.value })}
                         >
-                          {o.label}
+                          {current.sex === "male" ? o.m : o.f}
                         </OptionButton>
                       ))}
                     </div>
@@ -496,8 +512,8 @@ export function WorkoutQuestions({ people }: { people: WorkoutPerson[] }) {
                         value={draft.injury_notes}
                         onChange={(e) => setDraft({ injury_notes: e.target.value })}
                         maxLength={300}
-                        aria-label="وضّحي الإصابة باختصار (اختياري)"
-                        placeholder="وضّحي الإصابة باختصار (اختياري)"
+                        aria-label={g("وضّحي الإصابة باختصار (اختياري)", "وضّح الإصابة باختصار (اختياري)")}
+                        placeholder={g("وضّحي الإصابة باختصار (اختياري)", "وضّح الإصابة باختصار (اختياري)")}
                         className="mt-2 w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
                       />
                     )}

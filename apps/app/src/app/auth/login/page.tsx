@@ -60,7 +60,7 @@ export default async function LoginPage({
         </div>
 
         <p className="text-center mt-6 text-brand-ink-muted/60 text-xs leading-relaxed">
-          بإنشاء حساب، أنتِ توافقين على{" "}
+          إنشاء الحساب يعني الموافقة على{" "}
           <Link
             href="/terms"
             className="text-brand-purple-900 underline underline-offset-4 hover:text-brand-purple-700 transition-colors"

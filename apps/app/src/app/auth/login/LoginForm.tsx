@@ -14,15 +14,15 @@ function arabicAuthError(message: string): string {
     return "الإيميل أو كلمة المرور غير صحيحة.";
   }
   if (m.includes("already registered") || m.includes("already been registered")) {
-    return "هذا الإيميل مسجّل من قبل. سجّلي دخولك.";
+    return "هذا الإيميل مسجّل من قبل — يمكنك تسجيل الدخول مباشرة.";
   }
   if (m.includes("password") && m.includes("at least")) {
     return "كلمة المرور لازم تكون 8 أحرف على الأقل.";
   }
   if (m.includes("email not confirmed")) {
-    return "لازم تأكدين إيميلك أولاً. تفقّدي رسالة التأكيد.";
+    return "يلزم تأكيد الإيميل أولاً — رسالة التأكيد في بريدك.";
   }
-  return "حصل خطأ. حاولي مرة ثانية.";
+  return "حصل خطأ — يمكنك المحاولة مرة ثانية.";
 }
 
 export function LoginForm() {
@@ -100,15 +100,15 @@ export function LoginForm() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-emerald/10 mb-4">
           <Mail className="size-7 text-brand-emerald" aria-hidden="true" />
         </div>
-        <h3 className="font-bold text-lg text-brand-ink mb-2">تفقّدي إيميلك</h3>
+        <h3 className="font-bold text-lg text-brand-ink mb-2">رسالة التأكيد في إيميلك</h3>
         <p className="text-brand-ink-muted text-sm leading-relaxed">
           أرسلنا رابط تأكيد إلى
           <br />
           <span className="font-semibold text-brand-ink">{email}</span>
         </p>
         <p className="mt-4 text-brand-ink-muted/60 text-xs leading-relaxed">
-          أكّدي إيميلك من الرابط، بعدها تقدرين تسجّلين دخولك. لو ما وصل، تفقّدي
-          مجلد السبام.
+          بعد تأكيد الإيميل من الرابط يمكنك تسجيل الدخول. إن لم تصل الرسالة،
+          فقد تكون في مجلد السبام.
         </p>
         <button
           type="button"
@@ -135,8 +135,8 @@ export function LoginForm() {
         </h2>
         <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
           {mode === "signin"
-            ? "أدخلي إيميلك وكلمة المرور."
-            : "أنشئي حسابك بإيميل وكلمة مرور."}
+            ? "الإيميل وكلمة المرور لتسجيل الدخول."
+            : "حساب جديد بإيميل وكلمة مرور."}
         </p>
       </div>
 
@@ -224,7 +224,7 @@ export function LoginForm() {
           }}
           className="text-brand-purple-900 hover:text-brand-purple-700 font-bold underline underline-offset-4"
         >
-          {mode === "signin" ? "أنشئي حساب" : "سجّلي دخولك"}
+          {mode === "signin" ? "إنشاء حساب" : "تسجيل الدخول"}
         </button>
       </p>
     </div>

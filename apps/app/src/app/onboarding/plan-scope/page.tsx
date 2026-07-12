@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/Logo";
+import { genderPick } from "@/lib/copy/gender";
 import { PlanScopeChoice } from "./PlanScopeChoice";
 
 export const metadata = {
@@ -18,11 +19,13 @@ export default async function PlanScopePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mom_profile_completed_at, onboarding_completed_at")
+    .select("mom_profile_completed_at, onboarding_completed_at, sex")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile?.mom_profile_completed_at) redirect("/onboarding");
   if (profile.onboarding_completed_at) redirect("/dashboard");
+
+  const g = genderPick(profile.sex);
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -34,10 +37,10 @@ export default async function PlanScopePage() {
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>
           <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
-            ماذا نجهّز لكِ؟
+            {g("ماذا نجهّز لكِ؟", "ماذا نجهّز لكَ؟")}
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            اكتملت أسئلة الوجبات. اختاري نطاق خطتك.
+            {g("اكتملت أسئلة الوجبات. اختاري نطاق خطتك.", "اكتملت أسئلة الوجبات. اختر نطاق خطتك.")}
           </p>
         </header>
         <PlanScopeChoice />

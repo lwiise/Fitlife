@@ -100,9 +100,9 @@ export function FamilyWideForm() {
     setError(null);
     if (!cuisine) {
       setStep(0);
-      return setError("اختاري المطبخ المفضل");
+      return setError("يلزم اختيار المطبخ المفضل");
     }
-    if (!mealOut) return setError("اختاري كم مرة تأكلون خارج البيت");
+    if (!mealOut) return setError("يلزم تحديد عدد مرات الأكل خارج البيت");
 
     startTransition(async () => {
       // حلال دائماً ضمن القيود.
@@ -179,7 +179,7 @@ export function FamilyWideForm() {
                     </button>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (cuisine ? goNext() : setError("اختاري المطبخ المفضل"))}>
+                <PrimaryButton onClick={() => (cuisine ? goNext() : setError("يلزم اختيار المطبخ المفضل"))}>
                   التالي
                 </PrimaryButton>
               </>
@@ -192,7 +192,7 @@ export function FamilyWideForm() {
                     هل لديكم أي قيود غذائية في العائلة؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري ما ينطبق، أو تجاوزي.
+                    ما ينطبق على عائلتك — والتجاوز ممكن.
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
@@ -223,7 +223,7 @@ export function FamilyWideForm() {
                     أي أطعمة العائلة لا تأكلها أبداً؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اكتبيها، أو تجاوزي.
+                    إن وُجدت تُكتب هنا — والتجاوز ممكن.
                   </p>
                 </header>
                 <ChipInput
@@ -243,7 +243,7 @@ export function FamilyWideForm() {
                     ما طرق الطبخ المفضلة لديكم؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري ما ينطبق، أو تجاوزي.
+                    ما ينطبق على عائلتك — والتجاوز ممكن.
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">

@@ -7,7 +7,8 @@ const currentYear = new Date().getFullYear();
 // copy and steps react to it — feminine remains the default voice.
 export const step1Schema = z.object({
   sex: z.enum(["female", "male"], {
-    errorMap: () => ({ message: "حدّدي الجنس" }),
+    // Neutral wording — shown before the answer, when the sex is unknown.
+    errorMap: () => ({ message: "يلزم تحديد الجنس" }),
   }),
   display_name: z.string().min(2, "يجب أن يكون الاسم حرفين أو أكثر").max(50),
   birth_year: z

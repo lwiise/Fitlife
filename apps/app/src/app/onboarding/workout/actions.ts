@@ -35,7 +35,7 @@ export async function saveWorkoutProfiles(
 ): Promise<SaveResult> {
   const parsed = EntriesSchema.safeParse(entries);
   if (!parsed.success) {
-    return { ok: false, error: "بيانات غير صالحة. تحققي من الإجابات وأعيدي المحاولة" };
+    return { ok: false, error: "بيانات غير صالحة — يلزم التحقق من الإجابات والمحاولة مرة أخرى" };
   }
 
   const supabase = await createClient();
@@ -54,7 +54,7 @@ export async function saveWorkoutProfiles(
         Sentry.captureException(error, {
           tags: { area: "workout-optin", userId: user.id },
         });
-        return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
+        return { ok: false, error: "فشل الحفظ — يمكنك المحاولة مرة أخرى" };
       }
     } else {
       // Eligibility enforced server-side: own member, adult-family beneficiary
@@ -78,7 +78,7 @@ export async function saveWorkoutProfiles(
         Sentry.captureException(error, {
           tags: { area: "workout-optin", userId: user.id },
         });
-        return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
+        return { ok: false, error: "فشل الحفظ — يمكنك المحاولة مرة أخرى" };
       }
     }
   }

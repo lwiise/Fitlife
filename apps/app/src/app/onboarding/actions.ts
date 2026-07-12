@@ -804,9 +804,9 @@ async function runFamilyGeneration(
       };
     }
     case "onboarding":
-      return { ok: false, kind: "error", error: "أكملي بياناتك أولاً قبل إنشاء الخطة" };
+      return { ok: false, kind: "error", error: "يلزم إكمال بياناتك أولاً قبل إنشاء الخطة" };
     default:
-      return { ok: false, kind: "error", error: "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية" };
+      return { ok: false, kind: "error", error: "حدث خطأ في إنشاء الخطة — يمكنك المحاولة مرة ثانية" };
   }
 }
 

@@ -5,6 +5,7 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { Logo } from "@/components/Logo";
+import { genderPick } from "@/lib/copy/gender";
 import { OnboardingFamilyBuilder } from "./OnboardingFamilyBuilder";
 
 export const metadata = { title: "عائلتك" };
@@ -26,6 +27,10 @@ export default async function OnboardingMembersPage() {
     (m) => m.role !== "housekeeper",
   );
 
+  // Sex was answered on the identity step — tailor everything after it.
+  const sex = profile.sex === "male" ? ("male" as const) : ("female" as const);
+  const g = genderPick(sex);
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5">
@@ -40,7 +45,10 @@ export default async function OnboardingMembersPage() {
             عائلتك
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            أضيفي أفراد عائلتك واحداً واحداً، ثم أنشئي الخطة للجميع دفعة واحدة.
+            {g(
+              "أضيفي أفراد عائلتك واحداً واحداً، ثم أنشئي الخطة للجميع دفعة واحدة.",
+              "أضف أفراد عائلتك واحداً واحداً، ثم أنشئ الخطة للجميع دفعة واحدة.",
+            )}
           </p>
         </header>
 
@@ -51,7 +59,7 @@ export default async function OnboardingMembersPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-brand-ink truncate">
-                <span className="text-brand-pink">أنتِ</span>
+                <span className="text-brand-pink">{g("أنتِ", "أنتَ")}</span>
                 {profile.display_name ? ` — ${profile.display_name}` : ""}
               </p>
             </div>
@@ -73,7 +81,7 @@ export default async function OnboardingMembersPage() {
         </div>
       </div>
 
-      <OnboardingFamilyBuilder />
+      <OnboardingFamilyBuilder sex={sex} />
     </main>
   );
 }

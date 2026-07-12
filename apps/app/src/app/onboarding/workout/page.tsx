@@ -30,12 +30,12 @@ export default async function WorkoutOptInPage() {
   const [{ data: profile }, { data: members }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("display_name, mom_profile_completed_at, workout_profile")
+      .select("display_name, mom_profile_completed_at, workout_profile, sex")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("family_members")
-      .select("id, name, member_type, role, workout_profile")
+      .select("id, name, member_type, role, workout_profile, sex")
       .eq("user_id", user.id)
       .order("display_order", { ascending: true }),
   ]);
@@ -46,6 +46,7 @@ export default async function WorkoutOptInPage() {
     {
       target: "mom",
       name: profile.display_name ?? "أنا",
+      sex: profile.sex ?? null,
       existing: parseProfile(profile.workout_profile),
     },
     ...(members ?? [])
@@ -53,6 +54,7 @@ export default async function WorkoutOptInPage() {
       .map((m) => ({
         target: m.id as string,
         name: m.name as string,
+        sex: (m.sex as string | null) ?? null,
         existing: parseProfile(m.workout_profile),
       })),
   ];
@@ -65,7 +67,7 @@ export default async function WorkoutOptInPage() {
         </div>
       </header>
       <div className="container-app py-8 md:py-12 max-w-2xl">
-        <WorkoutQuestions people={people} />
+        <WorkoutQuestions people={people} ownerSex={profile.sex ?? null} />
       </div>
     </main>
   );
