@@ -29,8 +29,10 @@ function makeMeal(recipeName: string): Meal {
     recipe_name_ar: recipeName,
     ingredients: [{ name_ar: "بيض", amount: 2, unit: "piece" }],
     prep_steps_ar: ["اخفقي البيض", "اطبخيه"],
-    calories: 300,
-    macros: { protein_g: 20, carbs_g: 10, fat_g: 15 },
+    // In-band vs the fixtures' 1600-kcal skeleton target so the per-day
+    // calorie enforcement doesn't re-roll scripted mock sequences.
+    calories: 1600,
+    macros: { protein_g: 100, carbs_g: 140, fat_g: 55 },
   };
 }
 
@@ -40,7 +42,7 @@ function makeDay(dayIndex: number, recipeName: string): Day {
     day_index: dayIndex,
     day_name_ar: `اليوم ${dayIndex + 1}`,
     meals,
-    day_total: { calories: 300, protein_g: 20, carbs_g: 10, fat_g: 15 },
+    day_total: { calories: 1600, protein_g: 100, carbs_g: 140, fat_g: 55 },
   };
 }
 
@@ -385,15 +387,23 @@ function sharedStreamReturns(systemPrompt: string): {
 } {
   const ids = [...systemPrompt.matchAll(/member_id="([^"]+)"/g)].map((m) => m[1]!);
   const dayMatch = systemPrompt.match(/day_index=(\d+)/);
+  // Per-day calorie enforcement: emit each member's day at the target the
+  // prompt states (works for both mock-skeleton targets and prior-plan
+  // targets in regen flows) so scripted sequences never trigger re-rolls.
+  const promptTargets = new Map(
+    [...systemPrompt.matchAll(/member_id="([^"]+)" — الهدف: (\d+) سعرة/g)].map(
+      (m) => [m[1]!, Number(m[2])] as const,
+    ),
+  );
   // The edited member's regenerated portion is bigger than its carried one (دجاج 200).
-  const lunchMeal = (recipe: string): Meal => ({
+  const lunchMeal = (recipe: string, calories: number): Meal => ({
     slot: "lunch",
     slot_name_ar: "غداء",
     recipe_name_ar: recipe,
     ingredients: [{ name_ar: "دجاج", amount: 200, unit: "g" }],
     prep_steps_ar: ["جهّزي الكبسة"],
-    calories: 700,
-    macros: { protein_g: 40, carbs_g: 60, fat_g: 20 },
+    calories,
+    macros: { protein_g: 100, carbs_g: 140, fat_g: 55 },
   });
   let text: string;
   if (!dayMatch) {
@@ -418,7 +428,10 @@ function sharedStreamReturns(systemPrompt: string): {
   } else {
     const slice: DaySlice = {
       day_index: Number(dayMatch[1]),
-      members: ids.map((id) => ({ member_id: id, meals: [lunchMeal("كبسة")] })),
+      members: ids.map((id) => ({
+        member_id: id,
+        meals: [lunchMeal("كبسة", promptTargets.get(id) ?? 1600)],
+      })),
     };
     DaySliceSchema.parse(slice);
     text = JSON.stringify(slice);

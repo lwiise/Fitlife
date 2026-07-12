@@ -29,6 +29,7 @@ import {
   type MealPlan,
   type MemberPlan,
   type PlanSkeleton,
+  type DaySlice,
   type Meal,
   type Day,
   type Ingredient,
@@ -320,6 +321,72 @@ function sumDayTotal(meals: Meal[]) {
     carbs_g: Math.round(carbs_g),
     fat_g: Math.round(fat_g),
   };
+}
+
+// ── Per-day calorie-band enforcement ────────────────────────────────────────
+// The plan header promises each adult a daily calorie target; a generated day
+// must actually respect it. The prompt aims ±5%; code enforces this HARD band
+// (wider so a near-miss doesn't burn a re-roll) and re-rolls the day with a
+// corrective note when an adult lands outside it.
+export const DAY_CALORIE_BAND_PCT = 0.1;
+export const DAY_CALORIE_BAND_MIN_KCAL = 100;
+
+export interface DayCalorieDeviation {
+  member_id: string;
+  got: number;
+  target: number;
+  allowed: number; // ± band in kcal
+}
+
+/**
+ * Out-of-band adults in a parsed day slice. Children are exempt (portion-based,
+ * no calorie math per the methodology); members missing from the skeleton or
+ * with a non-positive target are skipped. Pure — exported for unit tests.
+ */
+export function dayCalorieDeviations(
+  slice: DaySlice,
+  skeleton: PlanSkeleton,
+  context: PlanPromptContext,
+): DayCalorieDeviation[] {
+  const out: DayCalorieDeviation[] = [];
+  for (const m of slice.members) {
+    const sk = skeleton.members.find((s) => s.member_id === m.member_id);
+    if (!sk) continue;
+    const isChild =
+      m.member_id === "mom"
+        ? context.mom.member_type === "child"
+        : (context.family_members.find((f) => f.id === m.member_id)?.is_child ?? false);
+    if (isChild) continue;
+    const target = sk.daily_calories_target;
+    if (!Number.isFinite(target) || target <= 0) continue;
+    const allowed = Math.max(
+      DAY_CALORIE_BAND_MIN_KCAL,
+      Math.round(target * DAY_CALORIE_BAND_PCT),
+    );
+    const got = sumDayTotal(m.meals).calories;
+    if (Math.abs(got - target) > allowed) {
+      out.push({ member_id: m.member_id, got, target, allowed });
+    }
+  }
+  return out;
+}
+
+/**
+ * Corrective block appended to the day prompt on a calorie re-roll — telling
+ * the model exactly how far the previous attempt landed converges far better
+ * than a blind re-ask. Exported for unit tests.
+ */
+export function buildDayCalorieCorrectiveNote(
+  deviations: DayCalorieDeviation[],
+): string {
+  const lines = deviations.map(
+    (d) =>
+      `- member_id="${d.member_id}": مجموع المحاولة السابقة ${d.got} سعرة والهدف ${d.target} سعرة (المقبول من ${d.target - d.allowed} إلى ${d.target + d.allowed}).`,
+  );
+  return `# تصحيح إلزامي لهذه المحاولة
+في المحاولة السابقة خرج مجموع سعرات اليوم عن النطاق المقبول للأفراد التاليين:
+${lines.join("\n")}
+عدّلي أحجام الحصص والمقادير حتى يقع مجموع يوم كل فرد داخل نطاقه، مع إبقاء السعرات والماكروز متسقة مع المقادير المكتوبة، واجمعي سعرات كل فرد قبل الإخراج للتأكد.`;
 }
 
 // ── Deterministic shared-meal assembly + re-sync ────────────────────────────
@@ -1455,17 +1522,20 @@ export async function generateMealPlan(params: {
         dayMemberIds.has(m.member_id),
       ),
     };
-    const prompt = buildDayPrompt(
+    const basePrompt = buildDayPrompt(
       context,
       daySkeleton,
       dayIndex,
       dayNameByIndex.get(dayIndex),
     );
+    let prompt = basePrompt; // calorie re-rolls append a corrective block
     // Size this day's cap + timeout to the members actually missing it.
     let dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
     const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
     let apiAttempt = 0; // 429/529/5xx/overload/stream/timeout retries (honor Retry-After)
     let contentAttempt = 0; // re-rolls for a one-off malformed/invalid model response
+    let calorieAttempt = 0; // re-rolls (with corrective note) for out-of-band day calories
+    let bestOffBand: { slice: DaySlice; totalDev: number } | null = null;
     let tokensRetried = false; // one doubled-cap retry on truncation
     for (;;) {
       try {
@@ -1506,7 +1576,39 @@ export async function generateMealPlan(params: {
             `Day ${dayIndex} failed validation: ${r.error.message.slice(0, 300)}`,
             res.text,
           );
-        const slice = r.data;
+        let slice = r.data;
+
+        // Per-day calorie-band enforcement (adults only). Skipped for a partial
+        // scope: there the slice is spliced into a carried frame, so the slice's
+        // own sum isn't the member's full day. Out of band → re-roll WITH a
+        // corrective note stating the previous total and the band; exhausted →
+        // accept the closest attempt (log-only) — a slightly-off day beats a
+        // missing one.
+        if (!partialScope) {
+          const deviations = dayCalorieDeviations(slice, daySkeleton, context);
+          if (deviations.length > 0) {
+            const totalDev = deviations.reduce(
+              (s, d) => s + Math.abs(d.got - d.target),
+              0,
+            );
+            if (!bestOffBand || totalDev < bestOffBand.totalDev) {
+              bestOffBand = { slice, totalDev };
+            }
+            if (calorieAttempt < CONTENT_MAX_RETRIES) {
+              calorieAttempt++;
+              prompt = `${basePrompt}\n\n${buildDayCalorieCorrectiveNote(deviations)}`;
+              await sleep(retryWaitMs(calorieAttempt));
+              continue;
+            }
+            console.warn(
+              `[plan-generate] day ${dayIndex} calories out of band after ${calorieAttempt} corrective re-rolls — accepting closest attempt`,
+              deviations
+                .map((d) => `${d.member_id}: ${d.got}/${d.target}±${d.allowed}`)
+                .join(", "),
+            );
+            slice = bestOffBand.slice;
+          }
+        }
 
         // Re-sync shared meals across the WHOLE family for this day — not just the
         // members regenerated now. The fresh members' raw single portions plus every

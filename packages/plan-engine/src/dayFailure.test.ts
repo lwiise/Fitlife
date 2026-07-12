@@ -103,8 +103,10 @@ function validMeal(recipeName: string) {
     recipe_name_ar: recipeName,
     ingredients: [{ name_ar: "بيض", amount: 2, unit: "piece" }],
     prep_steps_ar: ["اخفقي البيض", "اطبخيه"],
-    calories: 300,
-    macros: { protein_g: 20, carbs_g: 10, fat_g: 15 },
+    // In-band vs skeletonResponse's 1600-kcal target so the per-day calorie
+    // enforcement doesn't re-roll the carefully scripted call sequences.
+    calories: 1600,
+    macros: { protein_g: 100, carbs_g: 140, fat_g: 55 },
   };
 }
 
