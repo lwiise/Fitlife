@@ -28,11 +28,11 @@ export const step1Schema = z.object({
 export const step2Schema = z.object({
   height_cm: z.number().min(120, "الطول قليل").max(220, "الطول مرتفع"),
   weight_kg: z.number().min(30, "الوزن قليل").max(250, "الوزن مرتفع"),
-  // محيط الخصر مطلوب في استبيان الكوتش (٠٧/٢٠٢٦)؛ الورك اختياري.
+  // محيط الخصر والورك اختياريان — ليست كل مستخدمة تملك شريط قياس عند التسجيل.
   waist_cm: z
-    .number({ invalid_type_error: "محيط الخصر مطلوب" })
-    .min(30, "المحيط قليل")
-    .max(250, "المحيط مرتفع"),
+    .union([z.number().min(30, "المحيط قليل").max(250, "المحيط مرتفع"), z.nan()])
+    .optional()
+    .transform((v) => (v == null || Number.isNaN(v) ? null : v)),
   hip_cm: z
     .union([z.number().min(30, "المحيط قليل").max(300, "المحيط مرتفع"), z.nan()])
     .optional()
