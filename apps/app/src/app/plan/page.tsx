@@ -282,6 +282,7 @@ export default async function PlanPage({
               updatedAt={latest.updated_at}
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
+              showWorkoutOptIn={workout === null}
             />
           </>
         )}
