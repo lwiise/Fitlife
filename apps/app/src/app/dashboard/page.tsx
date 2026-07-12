@@ -4,6 +4,7 @@ import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } 
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { DeepDiveBanner } from "./DeepDiveBanner";
 import { WorkoutOptInBanner } from "./WorkoutOptInBanner";
+import { WorkoutPlanCard } from "./WorkoutPlanCard";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { TodaysMeals } from "./TodaysMeals";
 import {
@@ -11,7 +12,8 @@ import {
   getCurrentUserFamilyMembers,
   getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
-import { planHasContent } from "@fitlife/plan-engine";
+import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
+import { planHasContent, workoutPlanHasContent } from "@fitlife/plan-engine";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
@@ -47,7 +49,12 @@ export default async function DashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const subscription = user ? await getCurrentSubscription(user.id) : null;
+  const [subscription, workoutPlan] = user
+    ? await Promise.all([
+        getCurrentSubscription(user.id),
+        getLatestWorkoutPlan(user.id),
+      ])
+    : [null, null];
   const subStatus = subscription?.status ?? null;
   const isPaywalled = subStatus === "cancelled" || subStatus === "expired";
 
@@ -80,12 +87,30 @@ export default async function DashboardPage() {
     beneficiaryCount === 0;
 
   // Meals-only user with a ready plan → nudge the workout opt-in. One banner
-  // at a time: family > workout > deep-dive.
+  // at a time: family > workout > deep-dive. Once a workout plan exists (even
+  // one another family member opted into), the quick-glance card carries its
+  // state — don't nag over it.
   const showWorkoutOptIn =
     !showAddFamily &&
     planIsReady &&
     !latestPlan?.in_progress &&
-    profile.workout_profile === null;
+    profile.workout_profile === null &&
+    workoutPlan === null;
+
+  // Exercise plan quick-glance card: persistent (unlike the dismissible
+  // banner) so the add-workout path is always reachable post-onboarding.
+  const workoutHasContent = workoutPlan?.plan_data
+    ? workoutPlanHasContent(workoutPlan.plan_data)
+    : false;
+  const workoutState =
+    workoutPlan === null
+      ? ("optin" as const)
+      : workoutPlan.status === "failed"
+        ? ("failed" as const)
+        : workoutPlan.status === "ready" && workoutHasContent
+          ? ("ready" as const)
+          : ("generating" as const);
+  const showWorkoutCard = onboardingDone && !isPaywalled;
 
   // First plan ready + the optional deep-dive questionnaire not done → nudge.
   const showDeepDive =
@@ -214,7 +239,11 @@ export default async function DashboardPage() {
         </h2>
 
         <p className="text-brand-ink-muted text-xs font-bold mb-3">نظرة سريعة</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div
+          className={`grid grid-cols-1 gap-3 ${
+            showWorkoutCard ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"
+          }`}
+        >
           <Link
             href="/family"
             className="block bg-white rounded-2xl p-4 border border-brand-ink/5 hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
@@ -314,6 +343,13 @@ export default async function DashboardPage() {
               </>
             )}
           </div>
+          )}
+
+          {showWorkoutCard && (
+            <WorkoutPlanCard
+              state={workoutState}
+              waitingForMeals={planIsGenerating}
+            />
           )}
 
           <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
