@@ -126,7 +126,7 @@ export function Step2Physical({
             htmlFor="waist_cm"
             className="block text-sm font-bold text-brand-ink mb-2"
           >
-            محيط الخصر
+            محيط الخصر (اختياري)
           </label>
           <div className="relative" dir="ltr">
             <input
