@@ -26,13 +26,20 @@ const GENERATING_STEPS = [
  * the workout worker is deliberately holding until the meal run finishes —
  * show that honestly and keep the wait OUT of the stall/timeout clocks.
  */
-export function WorkoutGeneratingState() {
+export function WorkoutGeneratingState({
+  // Server-computed first paint: when the plan page knows a meal generation is
+  // live (combined onboarding), the meals-first card shows from the very first
+  // frame instead of flashing the generic card until the first poll lands.
+  initialWaitingForMeals = false,
+}: {
+  initialWaitingForMeals?: boolean;
+}) {
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
   const [stepIndex, setStepIndex] = useState(0);
-  const [waitingForMeals, setWaitingForMeals] = useState(false);
-  const waitingRef = useRef(false);
+  const [waitingForMeals, setWaitingForMeals] = useState(initialWaitingForMeals);
+  const waitingRef = useRef(initialWaitingForMeals);
   // Baseline for elapsed-time math; re-anchored while the worker waits for
   // meals so the deferred phase never counts toward long-running/timeout.
   const activeStartRef = useRef(0);
@@ -57,7 +64,7 @@ export function WorkoutGeneratingState() {
       setStepIndex(Math.floor(elapsed / 4000) % GENERATING_STEPS.length);
     }, 1000);
 
-    const poll = setInterval(async () => {
+    const checkStatus = async () => {
       if (cancelled) return;
 
       const elapsed = Date.now() - activeStartRef.current;
@@ -90,7 +97,12 @@ export function WorkoutGeneratingState() {
       } catch {
         // network blip — keep polling
       }
-    }, POLL_INTERVAL_MS);
+    };
+
+    const poll = setInterval(checkStatus, POLL_INTERVAL_MS);
+    // Fire once immediately so server/client drift (meals just finished, or a
+    // stale prerender) corrects within network latency instead of one interval.
+    void checkStatus();
 
     return () => {
       cancelled = true;

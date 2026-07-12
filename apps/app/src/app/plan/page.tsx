@@ -231,7 +231,18 @@ export default async function PlanPage({
 
         {workoutView && workout && (
           <>
-            {workout.status === "generating" && <WorkoutGeneratingState />}
+            {workout.status === "generating" && (
+              // Server-known initial state: a live meal run means the workout
+              // worker is holding (meals-first) — open directly on the
+              // "نجهّز وجباتك أولاً" card, no generic flash. `status ===
+              // "generating"` covers the first seconds before the meal shell's
+              // first emit; `in_progress` covers the rest of the run.
+              <WorkoutGeneratingState
+                initialWaitingForMeals={
+                  !!latest && (latest.status === "generating" || latest.in_progress)
+                }
+              />
+            )}
             {workout.status === "failed" && (
               <div
                 role="alert"
