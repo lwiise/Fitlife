@@ -5,6 +5,7 @@ import {
 } from "./buildContext";
 import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
+import { DAY_CALORIE_AIM_PCT } from "./constants";
 
 /**
  * Standalone translation prompt — translates an existing plan's meals into the
@@ -930,9 +931,10 @@ export function buildDayPrompt(
         .map((m) => `${m.slot_name_ar} (${m.slot}): ${m.recipe_name_ar}`)
         .join(" | ");
 
-      // Aim band shown to the model (±5%); code enforces a wider hard band and
-      // re-rolls the day when an adult lands outside it (see dayCalorieDeviations).
-      const aimBand = Math.round(sm.daily_calories_target * 0.05);
+      // Aim band shown to the model; dayCalorieDeviations enforces the SAME
+      // fraction (plus a small-target kcal floor) and re-rolls the day with a
+      // corrective note when an adult lands outside it.
+      const aimBand = Math.round(sm.daily_calories_target * DAY_CALORIE_AIM_PCT);
       const target = isChild
         ? "طفل — بالحصص، بدون هدف سعرات"
         : `الهدف: ${sm.daily_calories_target} سعرة (مجموع اليوم المقبول: من ${sm.daily_calories_target - aimBand} إلى ${sm.daily_calories_target + aimBand})، بروتين ${sm.macros_target.protein_g} / كارب ${sm.macros_target.carbs_g} / دهون ${sm.macros_target.fat_g} (جم)`;

@@ -145,15 +145,26 @@ describe("dayCalorieDeviations", () => {
   const context = makeContext();
   const skeleton = skeletonWith([{ id: "mom", target: 1600 }]);
 
-  it("accepts a day inside the ±10% band", () => {
+  it("accepts a day inside the band (±5%, min 100 kcal)", () => {
+    // target 1600 → 5% = 80 < the 100 kcal floor → band 1500..1700
     expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 1600 }]), skeleton, context)).toEqual([]);
-    expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 1450 }]), skeleton, context)).toEqual([]);
-    expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 1755 }]), skeleton, context)).toEqual([]);
+    expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 1505 }]), skeleton, context)).toEqual([]);
+    expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 1695 }]), skeleton, context)).toEqual([]);
   });
 
   it("flags a day outside the band with got/target/allowed", () => {
     const dev = dayCalorieDeviations(sliceOf([{ id: "mom", calories: 1200 }]), skeleton, context);
-    expect(dev).toEqual([{ member_id: "mom", got: 1200, target: 1600, allowed: 160 }]);
+    expect(dev).toEqual([{ member_id: "mom", got: 1200, target: 1600, allowed: 100 }]);
+  });
+
+  it("flags a 2500 kcal day against a 2700 target (the shipped-shortfall regression)", () => {
+    // The old ±10% band (allowed 270) silently accepted this 200 kcal miss;
+    // the band now matches the ±5% the prompt and plan header promise.
+    const big = skeletonWith([{ id: "mom", target: 2700 }]);
+    expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 2500 }]), big, context)).toEqual([
+      { member_id: "mom", got: 2500, target: 2700, allowed: 135 },
+    ]);
+    expect(dayCalorieDeviations(sliceOf([{ id: "mom", calories: 2600 }]), big, context)).toEqual([]);
   });
 
   it("applies the 100 kcal minimum band for small targets", () => {
@@ -193,13 +204,13 @@ describe("dayCalorieDeviations", () => {
 describe("buildDayCalorieCorrectiveNote", () => {
   it("names each member with previous total, target, and band", () => {
     const note = buildDayCalorieCorrectiveNote([
-      { member_id: "mom", got: 1200, target: 1600, allowed: 160 },
+      { member_id: "mom", got: 1200, target: 1600, allowed: 100 },
     ]);
     expect(note).toContain("تصحيح إلزامي");
     expect(note).toContain('member_id="mom"');
     expect(note).toContain("1200");
     expect(note).toContain("1600");
-    expect(note).toContain("من 1440 إلى 1760");
+    expect(note).toContain("من 1500 إلى 1700");
   });
 });
 

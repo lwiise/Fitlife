@@ -11,6 +11,7 @@ import {
   bigCallTimeoutMs,
   dayConcurrency,
   MEMBER_GEN_MAX_ATTEMPTS,
+  DAY_CALORIE_AIM_PCT,
 } from "./constants";
 import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
@@ -325,10 +326,13 @@ function sumDayTotal(meals: Meal[]) {
 
 // ── Per-day calorie-band enforcement ────────────────────────────────────────
 // The plan header promises each adult a daily calorie target; a generated day
-// must actually respect it. The prompt aims ±5%; code enforces this HARD band
-// (wider so a near-miss doesn't burn a re-roll) and re-rolls the day with a
-// corrective note when an adult lands outside it.
-export const DAY_CALORIE_BAND_PCT = 0.1;
+// must actually respect it. Code enforces the SAME ±5% band the day prompt asks
+// for — a wider ±10% band silently accepted e.g. a 2500-kcal day against a
+// 2700-kcal header, a user-visible 200-kcal shortfall. The kcal floor keeps
+// small targets from re-rolling over trivial misses; when re-rolls are
+// exhausted the closest attempt is still accepted (log-only), so a slightly-off
+// day always beats a missing one.
+export const DAY_CALORIE_BAND_PCT = DAY_CALORIE_AIM_PCT;
 export const DAY_CALORIE_BAND_MIN_KCAL = 100;
 
 export interface DayCalorieDeviation {

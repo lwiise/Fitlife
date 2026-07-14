@@ -175,6 +175,16 @@ export function dayConcurrency(memberCount: number, hasTranslation: boolean): nu
 // batches, which read as broken; sequential is the intended UX.)
 export const TRANSLATE_CONCURRENCY = 1;
 
+// ── Per-day calorie band ─────────────────────────────────────────────────
+// The ± fraction of daily_calories_target a generated day's total must land
+// within. The SAME fraction is shown to the model in every day prompt (the
+// "مجموع اليوم المقبول" line) AND enforced by dayCalorieDeviations (which adds a
+// kcal floor for small targets), so the totals a plan ships with match the band
+// its header promises. Shared here because the prompt (systemPrompt.ts) and the
+// enforcement (generate.ts) must never drift apart — a wider enforcement band
+// once let a 2500-kcal day ship against a 2700-kcal header.
+export const DAY_CALORIE_AIM_PCT = 0.05;
+
 // One-at-a-time member adds: the drain re-runs an incomplete member (a day that
 // failed after in-run retries) until it's whole BEFORE starting the next member.
 // This caps those completion-retries per member so a deterministically-failing
