@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon } from "lucide-react";
+import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Sparkles } from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
 import { ExerciseLottie } from "./ExerciseLottie";
 
@@ -22,6 +22,20 @@ function formatRest(restSeconds: number): string {
   return restSeconds >= 60
     ? `${Math.round(restSeconds / 30) / 2} د`
     : `${restSeconds} ث`;
+}
+
+// Program week counter: the plan is ONE template week repeated for
+// duration_weeks (Sara-style); progress comes from the progression rules, so
+// the viewer just tells the trainee where she is in the program.
+function currentProgramWeek(
+  weekStartDate: string,
+  durationWeeks: number | null | undefined,
+): { week: number; duration: number } | null {
+  const start = Date.parse(weekStartDate);
+  if (Number.isNaN(start)) return null;
+  const duration = durationWeeks ?? 12;
+  const elapsed = Math.floor((Date.now() - start) / (7 * 24 * 60 * 60 * 1000));
+  return { week: Math.min(Math.max(elapsed + 1, 1), duration), duration };
 }
 
 // Today if it's a training day, else the next training day (wrapping) — so the
@@ -101,6 +115,11 @@ function SessionDetail({
                               aria-hidden="true"
                             />
                             <span className="min-w-0">
+                              {ex.is_opener && (
+                                <span className="inline-block rounded-full bg-brand-purple-900/10 px-2 py-0.5 text-[10px] font-bold text-brand-purple-900 mb-0.5">
+                                  التمرين الرئيسي
+                                </span>
+                              )}
                               <span className="font-bold text-brand-ink block">{displayName}</span>
                               <span className="text-brand-ink-muted text-xs block">
                                 {ex.target_muscles_ar}
@@ -113,6 +132,11 @@ function SessionDetail({
                           </button>
                         ) : (
                           <span className="block py-1">
+                            {ex.is_opener && (
+                              <span className="inline-block rounded-full bg-brand-purple-900/10 px-2 py-0.5 text-[10px] font-bold text-brand-purple-900 mb-0.5">
+                                التمرين الرئيسي
+                              </span>
+                            )}
                             <span className="font-bold text-brand-ink block">{displayName}</span>
                             <span className="text-brand-ink-muted text-xs block">
                               {ex.target_muscles_ar}
@@ -209,6 +233,7 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
   if (!active || !stats) return null;
 
   const isSolo = plan.members.length === 1;
+  const programWeek = currentProgramWeek(plan.week_start_date, active.duration_weeks);
   const activeSession = active.weekly_sessions.find(
     (s) => s.day_index === activeDayIndex,
   );
@@ -262,6 +287,47 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
           </div>
         </div>
       )}
+
+      {/* Program identity card (Sara-style: a named program with a goal,
+          level, and duration — not an anonymous floating week) */}
+      {active.program_title_ar && (
+        <div className="rounded-2xl bg-brand-purple-900 p-5 text-white">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            {active.level_ar && (
+              <span className="rounded-full bg-brand-yellow px-2.5 py-0.5 text-[11px] font-bold text-brand-ink">
+                {active.level_ar}
+              </span>
+            )}
+            {programWeek && (
+              <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-bold tabular-nums">
+                الأسبوع {programWeek.week} من {programWeek.duration}
+              </span>
+            )}
+          </div>
+          <h2 className="text-xl font-extrabold leading-snug">{active.program_title_ar}</h2>
+          {(active.program_goals_ar?.length ?? 0) > 0 && (
+            <ul className="mt-3 space-y-1 text-sm leading-relaxed text-white/85">
+              {active.program_goals_ar!.map((g, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="mt-2 size-1.5 flex-shrink-0 rounded-full bg-brand-lavender" aria-hidden="true" />
+                  {g}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Mid-program intensification reached — point at the progression rules */}
+      {programWeek &&
+        active.volume_bump_week != null &&
+        programWeek.week >= active.volume_bump_week &&
+        programWeek.week < programWeek.duration && (
+          <p className="flex items-start gap-2 rounded-xl bg-brand-yellow/15 border border-brand-yellow/40 px-4 py-3 text-brand-ink text-sm leading-relaxed">
+            <Sparkles className="size-4.5 flex-shrink-0 mt-0.5 text-brand-ink" aria-hidden="true" />
+            وصلتِ إلى أسبوع التكثيف — حان وقت رفع الحجم قليلاً كما في قواعد التدرّج أدناه.
+          </p>
+        )}
 
       {/* Member summary tiles */}
       <div className="grid grid-cols-4 gap-2">
@@ -387,11 +453,19 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
         <div className="rounded-2xl border border-brand-ink/5 bg-white p-4">
           <p className="flex items-center gap-2 text-sm font-bold text-brand-ink mb-1.5">
             <TrendingUp className="size-4 text-brand-purple-900" aria-hidden="true" />
-            التدرّج
+            قواعد التدرّج
           </p>
-          <p className="text-sm text-brand-ink-muted leading-relaxed">
-            {active.progression_notes_ar}
-          </p>
+          {(active.progression_rules_ar?.length ?? 0) > 0 ? (
+            <ol className="text-sm text-brand-ink-muted leading-relaxed list-decimal ps-5 space-y-1.5">
+              {active.progression_rules_ar!.map((rule, i) => (
+                <li key={i}>{rule}</li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-sm text-brand-ink-muted leading-relaxed">
+              {active.progression_notes_ar}
+            </p>
+          )}
         </div>
         {active.cardio_notes_ar && (
           <div className="rounded-2xl border border-brand-ink/5 bg-white p-4">
