@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { RegenerateButton } from "./RegenerateButton";
@@ -50,6 +50,7 @@ export function PlanViewer({
   hideExport = false,
   housekeeperLocale,
   locale,
+  showWorkoutOptIn = false,
 }: {
   plan: MealPlan;
   planId: string;
@@ -69,6 +70,9 @@ export function PlanViewer({
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
+  // No workout plan exists yet → offer the add-exercise-plan entry in the
+  // action bar (main /plan page only; read-only views never pass it).
+  showWorkoutOptIn?: boolean;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -302,6 +306,15 @@ export function PlanViewer({
             >
               <History className="size-4" aria-hidden="true" />
               الخطط السابقة
+            </Link>
+          )}
+          {!readOnly && !translated && showWorkoutOptIn && (
+            <Link
+              href="/onboarding/workout"
+              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              <Dumbbell className="size-4" aria-hidden="true" />
+              أضيفي خطة التمارين
             </Link>
           )}
           {!readOnly && housekeeperLocale && (
