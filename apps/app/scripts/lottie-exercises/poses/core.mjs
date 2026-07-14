@@ -1,5 +1,5 @@
 // Core work — planks, supine flexion, quadruped balance, pelvic floor.
-import { armIK, legIK } from "../rig.mjs";
+import { armIK, legIK, jointFrom } from "../rig.mjs";
 
 // Forearm plank — static hold with breathing + core-band pulse.
 function plankPose(at, hipLift) {
@@ -257,4 +257,155 @@ export const kegel = {
   poses: [kegelPose(0, false), kegelPose(0.5, true), kegelPose(1, false)],
 };
 
-export const CORE = [plank, side_plank, dead_bug, bird_dog, crunch, reverse_crunch, leg_raises, kegel];
+// Mountain climber — plank frame, knees alternate driving to the chest
+// (two-beat loop, brisk).
+function climberPose(at, nearTucked) {
+  const shoulder = [380, 330];
+  const hip = [250, 372];
+  const torso = (Math.atan2(shoulder[1] - hip[1], shoulder[0] - hip[0]) * 180) / Math.PI;
+  const arm = armIK(shoulder, [396, 473], "back");
+  const ext = { thigh: 162, shin: 162, foot: 100 };
+  const tuck = { thigh: 19, shin: 141, foot: 100 };
+  const near = nearTucked ? tuck : ext;
+  const far = nearTucked ? ext : tuck;
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: near.thigh,
+      shinNear: near.shin,
+      footNear: near.foot,
+      thighFar: far.thigh,
+      shinFar: far.shin,
+      footFar: far.foot,
+      headLift: -10,
+    },
+  };
+}
+export const mountain_climber = {
+  id: "mountain_climber",
+  seconds: 1.6,
+  coreBand: true,
+  farOpacity: 55,
+  farPeek: { arm: 10 },
+  poses: [climberPose(0, true), climberPose(0.5, false), climberPose(1, true)],
+};
+
+// Connection breath — seated tall, palm on the belly; the pulsing band at the
+// deep core cues the exhale draw-in. Foundation of diastasis-recti recovery.
+function connBreathPose(at, breathe) {
+  const hip = [250, 377];
+  const torso = -88;
+  const legs = legIK(hip, [370, 473], "front");
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, [272, 316 + (breathe ? 3 : 0)], "back");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 0,
+      headLift: breathe ? -3 : 0,
+    },
+  };
+}
+export const connection_breath = {
+  id: "connection_breath",
+  seconds: 3.6,
+  coreBand: { at: 0.45, size: [54, 58] },
+  furniture: [
+    { kind: "rect", x: 255, y: 415, w: 150, h: 48, r: 10 },
+    { kind: "line", x1: 200, y1: 440, x2: 200, y2: 484, w: 12 },
+    { kind: "line", x1: 310, y1: 440, x2: 310, y2: 484, w: 12 },
+  ],
+  farPeek: { arm: 8, leg: 6 },
+  poses: [connBreathPose(0, false), connBreathPose(0.5, true), connBreathPose(1, false)],
+};
+
+// Heel slide — supine with knees bent; one heel slides out along the floor
+// and back while the core stays braced.
+function heelSlidePose(at, ankleX) {
+  const hip = [262, 458];
+  const shoulderTarget = [132, 456];
+  const torso = (Math.atan2(shoulderTarget[1] - hip[1], shoulderTarget[0] - hip[0]) * 180) / Math.PI;
+  const near = legIK(hip, [ankleX, 458], "front");
+  const bentFar = legIK(hip, [322, 452], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: 3,
+      forearmNear: 0,
+      thighNear: near.thigh,
+      shinNear: near.shin,
+      footNear: near.shin - 90,
+      thighFar: bentFar.thigh,
+      shinFar: bentFar.shin,
+      footFar: bentFar.shin - 90,
+      headLift: 0,
+    },
+  };
+}
+export const heel_slides = {
+  id: "heel_slides",
+  seconds: 3,
+  coreBand: { at: 0.55, size: [46, 52] },
+  farOpacity: 45,
+  arrow: { at: [408, 424], move: [34, 0], window: [0.05, 0.42] },
+  poses: [heelSlidePose(0, 318), heelSlidePose(0.42, 442), heelSlidePose(0.52, 442), heelSlidePose(1, 318)],
+};
+
+// Supine toe taps — tabletop hold; one leg lowers to tap the toe and returns
+// without the back arching.
+function toeTapPose(at, tap) {
+  const hip = [268, 458];
+  const shoulderTarget = [138, 456];
+  const torso = (Math.atan2(shoulderTarget[1] - hip[1], shoulderTarget[0] - hip[0]) * 180) / Math.PI;
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: 3,
+      forearmNear: 0,
+      thighNear: tap ? -28 : -80,
+      shinNear: tap ? 40 : 10,
+      footNear: tap ? -10 : 20,
+      thighFar: -76,
+      shinFar: 14,
+      footFar: 24,
+      headLift: 0,
+    },
+  };
+}
+export const toe_taps = {
+  id: "toe_taps",
+  seconds: 2.8,
+  coreBand: { at: 0.55, size: [46, 52] },
+  farOpacity: 45,
+  arrow: { at: [430, 420], move: [10, 32], window: [0.05, 0.42] },
+  poses: [toeTapPose(0, false), toeTapPose(0.42, true), toeTapPose(0.52, true), toeTapPose(1, false)],
+};
+
+export const CORE = [
+  plank,
+  side_plank,
+  dead_bug,
+  bird_dog,
+  crunch,
+  reverse_crunch,
+  leg_raises,
+  mountain_climber,
+  kegel,
+  connection_breath,
+  heel_slides,
+  toe_taps,
+];

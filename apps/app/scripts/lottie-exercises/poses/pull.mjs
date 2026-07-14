@@ -328,11 +328,70 @@ export const hammer_curl = {
   poses: [curlPose(0, 88), curlPose(0.42, -36), curlPose(0.54, -36), curlPose(1, 88)],
 };
 
+// Barbell row — the bent-over hinge held, bar (plate end-on) rows to the ribs.
+export const barbell_row = {
+  id: "barbell_row",
+  seconds: 2.6,
+  highlight: ["upperArmNear", "upperArmFar"],
+  props: [{ type: "plate", parent: "forearmNear" }],
+  farPeek: { arm: 10, leg: 6 },
+  arrow: { at: [255, 380], move: [0, -40], window: [0.05, 0.42] },
+  poses: [
+    bentRowPose(0, [318, 432]),
+    bentRowPose(0.42, [320, 352]),
+    bentRowPose(0.52, [320, 352]),
+    bentRowPose(1, [318, 432]),
+  ],
+};
+
+// Straight-arm pulldown — slight hinge, straight arms sweep the high cable
+// from eye level down to the thighs.
+function straightArmPose(at, wrist) {
+  const hip = [200, 288];
+  const torso = -72;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, wrist, "back");
+  const legs = legIK(hip, [222, 473], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 0,
+      headLift: -6,
+    },
+  };
+}
+export const straight_arm_pulldown = {
+  id: "straight_arm_pulldown",
+  seconds: 2.6,
+  highlight: ["upperArmNear", "upperArmFar"],
+  furniture: [
+    { kind: "circle", x: 440, y: 78, r: 10 },
+    { kind: "line", x1: 440, y1: 58, x2: 440, y2: 30, w: 10 },
+  ],
+  props: [{ type: "band", from: { point: [434, 84] }, to: { joint: "wristNear" }, w: 7 }],
+  farPeek: { arm: 10, leg: 6 },
+  arrow: { at: [420, 200], move: [-8, 42], window: [0.05, 0.42] },
+  poses: [
+    straightArmPose(0, [372, 150]),
+    straightArmPose(0.42, [320, 310]),
+    straightArmPose(0.52, [320, 310]),
+    straightArmPose(1, [372, 150]),
+  ],
+};
+
 export const PULL = [
   one_arm_db_row,
   bent_over_row,
+  barbell_row,
   seated_cable_row,
   lat_pulldown,
+  straight_arm_pulldown,
   assisted_pullup,
   band_row,
   face_pull,

@@ -46,11 +46,24 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   { id: "lunge", name_ar: "الطعنات الأمامية", name_en: "Forward Lunge", target_muscles_ar: "الفخذان والمؤخرة مع التوازن", pattern: "lunge", equipment: [], home_ok: true, pregnancy_safe: true },
   { id: "step_up", name_ar: "الصعود على الدرجة", name_en: "Step-up", target_muscles_ar: "الفخذان والمؤخرة", pattern: "lunge", equipment: ["box"], home_ok: true, pregnancy_safe: true },
   { id: "romanian_deadlift", name_ar: "الرفعة الرومانية بالدمبل", name_en: "Romanian Deadlift", target_muscles_ar: "أوتار الفخذ والمؤخرة", pattern: "hinge", equipment: ["dumbbell"], home_ok: true, pregnancy_safe: true },
+  { id: "barbell_deadlift", name_ar: "الرفعة المميتة بالبار", name_en: "Barbell Deadlift", target_muscles_ar: "أوتار الفخذ والمؤخرة والظهر", pattern: "hinge", equipment: ["barbell"], home_ok: false, pregnancy_safe: false },
+  { id: "sumo_deadlift", name_ar: "الرفعة المميتة سومو", name_en: "Sumo Deadlift", target_muscles_ar: "المؤخرة والفخذ الداخلي", pattern: "hinge", equipment: ["barbell"], home_ok: false, pregnancy_safe: false },
   { id: "glute_bridge", name_ar: "جسر المؤخرة", name_en: "Glute Bridge", target_muscles_ar: "المؤخرة وأوتار الفخذ", pattern: "hinge", equipment: [], home_ok: true, pregnancy_safe: false },
   { id: "hip_thrust", name_ar: "دفع الورك على المقعد", name_en: "Hip Thrust", target_muscles_ar: "المؤخرة", pattern: "hinge", equipment: ["bench"], home_ok: true, pregnancy_safe: false },
+  { id: "barbell_hip_thrust", name_ar: "دفع الورك بالبار", name_en: "Barbell Hip Thrust", target_muscles_ar: "المؤخرة", pattern: "hinge", equipment: ["barbell", "bench"], home_ok: false, pregnancy_safe: false },
+  { id: "back_extension", name_ar: "تمديد الظهر على الجهاز", name_en: "Back Extension", target_muscles_ar: "أسفل الظهر والمؤخرة وأوتار الفخذ", pattern: "hinge", equipment: ["machine"], home_ok: false, pregnancy_safe: false },
+  { id: "glute_pull_through", name_ar: "السحب بين الساقين بالكابل", name_en: "Cable Pull-Through", target_muscles_ar: "المؤخرة وأوتار الفخذ", pattern: "hinge", equipment: ["machine"], home_ok: false, pregnancy_safe: false },
+  { id: "cable_kickback", name_ar: "ركلة المؤخرة بالكابل", name_en: "Cable Glute Kickback", target_muscles_ar: "المؤخرة", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
+  { id: "hip_abduction_machine", name_ar: "فتح الوركين بالجهاز", name_en: "Seated Hip Abduction", target_muscles_ar: "جانب المؤخرة", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
+  { id: "hip_adduction_machine", name_ar: "ضم الوركين بالجهاز", name_en: "Seated Hip Adduction", target_muscles_ar: "الفخذ الداخلي", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
+  { id: "banded_lateral_walk", name_ar: "المشي الجانبي بحبل المقاومة", name_en: "Banded Lateral Walk", target_muscles_ar: "جانب المؤخرة", pattern: "isolation", equipment: ["band"], home_ok: true, pregnancy_safe: true },
+  { id: "bulgarian_split_squat", name_ar: "سكوات بلغاري — القدم الخلفية مرفوعة", name_en: "Bulgarian Split Squat", target_muscles_ar: "الفخذان والمؤخرة", pattern: "lunge", equipment: ["bench"], home_ok: true, pregnancy_safe: false },
+  { id: "curtsy_squat", name_ar: "سكوات كيرتسي — طعنة خلفية متقاطعة", name_en: "Curtsy Squat", target_muscles_ar: "المؤخرة وجانب الفخذ", pattern: "lunge", equipment: [], home_ok: true, pregnancy_safe: false },
+  { id: "reverse_lunge", name_ar: "الطعنات الخلفية", name_en: "Reverse Lunge", target_muscles_ar: "الفخذان والمؤخرة", pattern: "lunge", equipment: [], home_ok: true, pregnancy_safe: true },
   { id: "leg_extension", name_ar: "مد الأرجل بالجهاز", name_en: "Leg Extension", target_muscles_ar: "الفخذ الأمامي", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "leg_curl", name_ar: "ثني الأرجل بالجهاز", name_en: "Leg Curl", target_muscles_ar: "أوتار الفخذ", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "calf_raise", name_ar: "رفعات السمانة واقفة", name_en: "Standing Calf Raise", target_muscles_ar: "السمانة", pattern: "isolation", equipment: [], home_ok: true, pregnancy_safe: true },
+  { id: "seated_calf_raise", name_ar: "رفعات السمانة جالسة", name_en: "Seated Calf Raise", target_muscles_ar: "السمانة", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
 
   // ── Push ──────────────────────────────────────────────────────────────────
   { id: "pushup", name_ar: "تمرين الضغط", name_en: "Push-up", target_muscles_ar: "الصدر والترايسبس", pattern: "push", equipment: [], home_ok: true, pregnancy_safe: false },
@@ -58,8 +71,14 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   { id: "wall_pushup", name_ar: "الضغط على الحائط", name_en: "Wall Push-up", target_muscles_ar: "الصدر والترايسبس", pattern: "push", equipment: ["wall"], home_ok: true, pregnancy_safe: true },
   { id: "db_bench_press", name_ar: "ضغط الصدر بالدمبل", name_en: "Dumbbell Bench Press", target_muscles_ar: "الصدر والترايسبس", pattern: "push", equipment: ["dumbbell", "bench"], home_ok: true, pregnancy_safe: false },
   { id: "barbell_bench_press", name_ar: "ضغط الصدر بالبار", name_en: "Barbell Bench Press", target_muscles_ar: "الصدر والترايسبس", pattern: "push", equipment: ["barbell", "bench"], home_ok: false, pregnancy_safe: false },
+  { id: "incline_db_press", name_ar: "ضغط الصدر بالدمبل على مقعد مائل", name_en: "Incline Dumbbell Press", target_muscles_ar: "أعلى الصدر والكتف الأمامي", pattern: "push", equipment: ["dumbbell", "bench"], home_ok: true, pregnancy_safe: false },
+  { id: "chest_press_machine", name_ar: "ضغط الصدر بالجهاز جالسة", name_en: "Seated Chest Press", target_muscles_ar: "الصدر والترايسبس", pattern: "push", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
+  { id: "chest_fly_machine", name_ar: "تجميع الصدر بالجهاز", name_en: "Machine Chest Fly", target_muscles_ar: "الصدر", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "overhead_press", name_ar: "ضغط الكتف بالدمبل واقفة", name_en: "Overhead Press", target_muscles_ar: "الكتفان والترايسبس", pattern: "push", equipment: ["dumbbell"], home_ok: true, pregnancy_safe: true },
+  { id: "arnold_press", name_ar: "ضغط أرنولد بالدمبل", name_en: "Arnold Press", target_muscles_ar: "الكتفان", pattern: "push", equipment: ["dumbbell"], home_ok: true, pregnancy_safe: true },
   { id: "lateral_raise", name_ar: "الرفرفة الجانبية", name_en: "Lateral Raise", target_muscles_ar: "الكتفان", pattern: "isolation", equipment: ["dumbbell"], home_ok: true, pregnancy_safe: true },
+  { id: "cable_lateral_raise", name_ar: "الرفرفة الجانبية بالكابل", name_en: "Cable Lateral Raise", target_muscles_ar: "الكتفان", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
+  { id: "cable_front_raise", name_ar: "الرفع الأمامي بالكابل", name_en: "Cable Front Raise", target_muscles_ar: "الكتف الأمامي", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "triceps_extension", name_ar: "مد الترايسبس فوق الرأس", name_en: "Overhead Triceps Extension", target_muscles_ar: "الترايسبس", pattern: "isolation", equipment: ["dumbbell"], home_ok: true, pregnancy_safe: true },
   { id: "triceps_pushdown", name_ar: "دفع الترايسبس بالكابل", name_en: "Triceps Pushdown", target_muscles_ar: "الترايسبس", pattern: "isolation", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "bench_dips", name_ar: "الغطس على المقعد", name_en: "Bench Dips", target_muscles_ar: "الترايسبس والصدر", pattern: "push", equipment: ["bench"], home_ok: true, pregnancy_safe: false },
@@ -67,6 +86,8 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   // ── Pull ──────────────────────────────────────────────────────────────────
   { id: "one_arm_db_row", name_ar: "التجديف بالدمبل بذراع واحدة", name_en: "One-arm Dumbbell Row", target_muscles_ar: "الظهر والبايسبس", pattern: "pull", equipment: ["dumbbell", "bench"], home_ok: true, pregnancy_safe: true },
   { id: "bent_over_row", name_ar: "التجديف بالانحناء بالدمبل", name_en: "Bent-over Row", target_muscles_ar: "الظهر والبايسبس", pattern: "pull", equipment: ["dumbbell"], home_ok: true, pregnancy_safe: true },
+  { id: "barbell_row", name_ar: "التجديف بالبار", name_en: "Barbell Row", target_muscles_ar: "الظهر والبايسبس", pattern: "pull", equipment: ["barbell"], home_ok: false, pregnancy_safe: false },
+  { id: "straight_arm_pulldown", name_ar: "السحب بذراع مستقيمة بالكابل", name_en: "Straight-Arm Pulldown", target_muscles_ar: "الظهر العريض", pattern: "pull", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "seated_cable_row", name_ar: "التجديف بالكابل جالسة", name_en: "Seated Cable Row", target_muscles_ar: "الظهر والبايسبس", pattern: "pull", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "lat_pulldown", name_ar: "السحب العلوي بالجهاز", name_en: "Lat Pulldown", target_muscles_ar: "الظهر العريض والبايسبس", pattern: "pull", equipment: ["machine"], home_ok: false, pregnancy_safe: true },
   { id: "assisted_pullup", name_ar: "العقلة بالمساعدة", name_en: "Assisted Pull-up", target_muscles_ar: "الظهر العريض والبايسبس", pattern: "pull", equipment: ["machine"], home_ok: false, pregnancy_safe: false },
@@ -84,6 +105,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   { id: "crunch", name_ar: "الطحن (كرانش)", name_en: "Crunch", target_muscles_ar: "البطن", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: false },
   { id: "reverse_crunch", name_ar: "الطحن العكسي", name_en: "Reverse Crunch", target_muscles_ar: "أسفل البطن", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: false },
   { id: "leg_raises", name_ar: "رفع الأرجل مستلقية", name_en: "Lying Leg Raise", target_muscles_ar: "أسفل البطن ومثنية الورك", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: false },
+  { id: "mountain_climber", name_ar: "متسلق الجبال", name_en: "Mountain Climber", target_muscles_ar: "الجذع والكتفان", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: false },
 
   // ── Warm-up / mobility ───────────────────────────────────────────────────
   { id: "march_in_place", name_ar: "المشي في المكان", name_en: "March in Place", target_muscles_ar: "الجسم كاملاً — إحماء", pattern: "cardio", equipment: [], home_ok: true, pregnancy_safe: true },
@@ -109,6 +131,9 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   // ── Pregnancy / postpartum specific ──────────────────────────────────────
   { id: "pelvic_tilt", name_ar: "إمالة الحوض واقفة", name_en: "Standing Pelvic Tilt", target_muscles_ar: "الحوض وأسفل الظهر", pattern: "mobility", equipment: [], home_ok: true, pregnancy_safe: true },
   { id: "kegel", name_ar: "تمارين قاع الحوض (كيقل)", name_en: "Pelvic Floor Exercise", target_muscles_ar: "قاع الحوض", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: true },
+  { id: "connection_breath", name_ar: "نفَس الاتصال — تنشيط الكور العميق", name_en: "Connection Breath", target_muscles_ar: "الكور العميق وقاع الحوض", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: true },
+  { id: "heel_slides", name_ar: "سحب الكعب مستلقية", name_en: "Heel Slides", target_muscles_ar: "أسفل البطن العميق", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: false },
+  { id: "toe_taps", name_ar: "لمسات القدم مستلقية", name_en: "Supine Toe Taps", target_muscles_ar: "الكور العميق وأسفل البطن", pattern: "core", equipment: [], home_ok: true, pregnancy_safe: false },
 ];
 
 export const EXERCISE_BY_ID: ReadonlyMap<string, CatalogExercise> = new Map(
