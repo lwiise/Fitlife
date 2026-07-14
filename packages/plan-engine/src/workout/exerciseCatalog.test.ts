@@ -47,6 +47,15 @@ describe("EXERCISE_CATALOG", () => {
       expect(WORKOUT_STATIC).toContain(`- ${e.id} —`);
     }
   });
+
+  it("roster lines carry muscles, pattern, and the pregnancy hint", () => {
+    const block = exerciseCatalogPromptBlock();
+    // Informed selection: name | muscles | pattern (gear؛ venue؛ hint).
+    expect(block).toContain("- squat — سكوات بوزن الجسم | الفخذان والمؤخرة | قرفصاء (بدون أدوات؛ منزل+نادٍ؛ ح✓)");
+    // Non-pregnancy-safe entries must NOT carry the hint.
+    expect(block).toMatch(/- pushup — [^\n]*منزل\+نادٍ\)/);
+    expect(block).not.toMatch(/- pushup — [^\n]*ح✓/);
+  });
 });
 
 const memberWith = (exercise: Record<string, unknown>): MemberWorkout =>

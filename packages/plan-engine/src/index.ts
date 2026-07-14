@@ -67,6 +67,7 @@ export * from "./workout/exerciseCatalog";
 export {
   WORKOUT_STATIC,
   WORKOUT_METHODOLOGY,
+  SARA_PROGRAM_STYLE,
   buildWorkoutSkeletonPrompt,
   buildWorkoutMemberPrompt,
   workoutTrainees,

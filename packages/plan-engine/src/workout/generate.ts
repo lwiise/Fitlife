@@ -19,6 +19,7 @@ import {
   normalizeWorkoutSkeleton,
   normalizeMemberSessions,
   normalizeExerciseIds,
+  workoutGuardrailIssues,
   type WorkoutPlan,
   type MemberWorkout,
   type WorkoutSkeleton,
@@ -242,6 +243,25 @@ export async function generateWorkoutPlan(params: {
             member: trainee.member_id,
             ids: withIds.unknownIds,
           });
+        }
+        // Quality guardrails: a degenerate week (1-exercise session, absurd
+        // duration, no progression) re-rolls like a shape failure — a fresh
+        // sample usually fixes it, and after MAX_RETRIES the member is
+        // omitted per the existing partial-plan contract.
+        const person = trainee.person;
+        const gentle =
+          ("is_pregnant" in person && !!person.is_pregnant) ||
+          person.member_type === "pregnant" ||
+          (person.months_postpartum != null && person.months_postpartum <= 3);
+        const issues = workoutGuardrailIssues(withIds.member, {
+          sessionMinutes: trainee.profile.session_minutes,
+          gentle,
+        });
+        if (issues.length > 0) {
+          throw new PlanValidationError(
+            `member workout failed quality guardrails: ${issues.join("; ")}`,
+            res.text,
+          );
         }
         member = withIds.member;
         break;

@@ -64,6 +64,9 @@ export const WorkoutExerciseSchema = z.object({
   rest_seconds: z.number().int().min(15).max(300),
   // RIR effort note, e.g. "أبقي 2-3 عدّات في الخزان".
   rir: z.string().nullish(),
+  // Marks the session's heavy compound opener (more sets, longer rest) so the
+  // viewer can set it apart. Style-level; absent on pre-style plans.
+  is_opener: z.boolean().nullish(),
   // Home substitution when the member trains in both locations.
   home_variant_ar: z.string().nullish(),
   // Catalog id for the home substitution's animation (must be home_ok).
@@ -84,10 +87,24 @@ export const MemberWorkoutSchema = z.object({
   member_id: z.string().min(1),
   member_name_ar: z.string().min(1),
   split_name_ar: z.string().min(1),
+  // ── Program identity (Sara-style framing; nullish so pre-style plans parse) ──
+  // A plan is a NAMED program with a goal, level, and duration — one template
+  // week the trainee repeats, not an anonymous floating week.
+  program_title_ar: z.string().nullish(),
+  program_goals_ar: z.array(z.string().min(1)).max(6).nullish(),
+  level_ar: z.string().nullish(),
+  duration_weeks: z.number().int().min(4).max(24).nullish(),
   // max(7): tolerate an off-by-one week from the model; normalizeMemberSessions
   // caps to the trainee's desired_days deterministically after parse.
   weekly_sessions: z.array(WorkoutSessionSchema).min(1).max(7),
-  progression_notes_ar: z.string().min(1),
+  // Numbered progression rules (Sara-style: short, 2-4 of them) — preferred
+  // over the legacy single free-text blob. Guardrail check (not the schema)
+  // demands at least one of the two so old plans keep parsing.
+  progression_rules_ar: z.array(z.string().min(1)).max(6).nullish(),
+  // Mid-program intensification week ("from week N add a set"), rendered as a
+  // banner when the plan's week counter reaches it.
+  volume_bump_week: z.number().int().min(2).max(20).nullish(),
+  progression_notes_ar: z.string().nullish(),
   cardio_notes_ar: z.string().nullish(),
   safety_notes_ar: z.string().nullish(),
 });
@@ -201,6 +218,53 @@ export function normalizeExerciseIds(member: MemberWorkout): {
     })),
   };
   return { member: normalized, unknownIds };
+}
+
+// ─── Quality guardrails (deterministic, run inside the generation retry loop) ─
+// Guardrails, not a style cop: they catch degenerate emissions a parse can't
+// (a 1-exercise session, a 90-minute "20-30 min" session, no progression at
+// all). Style preferences (opener shape, core finishers) stay prompt-level.
+
+const DURATION_BOUNDS: Record<WorkoutProfile["session_minutes"], [number, number]> = {
+  m20_30: [15, 40],
+  m30_45: [20, 55],
+  m45_60: [30, 75],
+};
+
+/**
+ * Hard quality violations for a freshly generated member week. Non-empty ⇒
+ * the caller re-rolls the expansion (same treatment as invalid JSON).
+ * `gentle` relaxes the exercise floor for pregnancy / early-postpartum weeks,
+ * whose sessions are legitimately short and light.
+ */
+export function workoutGuardrailIssues(
+  member: MemberWorkout,
+  opts: { sessionMinutes: WorkoutProfile["session_minutes"]; gentle: boolean },
+): string[] {
+  const issues: string[] = [];
+  const [minDur, maxDur] = DURATION_BOUNDS[opts.sessionMinutes];
+  const minExercises = opts.gentle ? 2 : 3;
+
+  for (const s of member.weekly_sessions) {
+    if (s.exercises.length < minExercises) {
+      issues.push(
+        `session day ${s.day_index}: only ${s.exercises.length} exercise(s) (min ${minExercises})`,
+      );
+    }
+    if (s.exercises.length > 9) {
+      issues.push(`session day ${s.day_index}: ${s.exercises.length} exercises (max 9)`);
+    }
+    if (s.duration_min < minDur || s.duration_min > maxDur) {
+      issues.push(
+        `session day ${s.day_index}: duration ${s.duration_min}min outside ${minDur}-${maxDur} for ${opts.sessionMinutes}`,
+      );
+    }
+  }
+  const hasProgression =
+    (member.progression_rules_ar?.length ?? 0) > 0 ||
+    !!member.progression_notes_ar?.trim();
+  if (!hasProgression) issues.push("no progression rules or notes");
+  return issues;
 }
 
 function normalizeSessionList<T extends { day_index: number }>(

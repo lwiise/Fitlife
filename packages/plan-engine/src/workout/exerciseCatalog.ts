@@ -133,17 +133,34 @@ export const FALLBACK_BY_PATTERN: Readonly<Record<ExercisePattern, string>> = {
   cardio: "march_in_place",
 };
 
+const PATTERN_AR: Record<ExercisePattern, string> = {
+  squat: "قرفصاء",
+  hinge: "مفصلة ورك",
+  lunge: "طعن",
+  push: "دفع",
+  pull: "سحب",
+  core: "كور",
+  isolation: "عزل",
+  mobility: "حركية",
+  stretch: "إطالة",
+  cardio: "كارديو",
+};
+
 /**
  * Compact roster block for the (cached) static system prompt: one line per
- * exercise so the model can pick `exercise_id` values exactly.
+ * exercise so the model can pick `exercise_id` values exactly. Each line
+ * carries the target muscles + movement pattern (+ a conservative pregnancy
+ * hint) so selection is informed, not name-guessing.
  */
 export function exerciseCatalogPromptBlock(): string {
   const lines = EXERCISE_CATALOG.map((e) => {
     const gear = e.equipment.length > 0 ? e.equipment.join("+") : "بدون أدوات";
     const home = e.home_ok ? "منزل+نادٍ" : "نادٍ فقط";
-    return `- ${e.id} — ${e.name_ar} (${gear}؛ ${home})`;
+    const preg = e.pregnancy_safe ? "؛ ح✓" : "";
+    return `- ${e.id} — ${e.name_ar} | ${e.target_muscles_ar} | ${PATTERN_AR[e.pattern]} (${gear}؛ ${home}${preg})`;
   });
   return `# كتالوج التمارين المعتمد (قيم exercise_id المسموحة حصراً)
 اختاري لكل تمرين exercise_id من هذه القائمة فقط — الاسم والوصف يبقيان بصياغتك، لكن المعرّف يجب أن يطابق القائمة حرفياً. اختاري ما يناسب مكان التدريب وأدوات المتدربة وحالتها الصحية.
+(ح✓ = مناسب مبدئياً أثناء الحمل — استرشادي فقط؛ قواعد الحمل الإلزامية في المنهجية تتقدم دائماً.)
 ${lines.join("\n")}`;
 }
