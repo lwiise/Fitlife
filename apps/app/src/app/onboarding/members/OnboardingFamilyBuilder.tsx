@@ -44,10 +44,13 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
     (husband ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
 
   const finalize = () => {
-    // Meals questionnaire done → the plan-scope fork (meals only vs meals +
-    // workout) decides what happens before the subscription hand-off.
+    // Route through the family-wide questions: that page checks server-side
+    // whether the household has more than one person and either renders the
+    // 5 questions or falls straight through to the plan-scope fork — so solo
+    // users never see the family screen, and skip paths can't dodge it once
+    // members were actually saved.
     setPhase("finalizing");
-    router.push("/onboarding/plan-scope");
+    router.push("/onboarding/family-wide");
   };
 
   const start = () => {

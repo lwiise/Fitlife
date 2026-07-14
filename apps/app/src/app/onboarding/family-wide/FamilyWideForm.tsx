@@ -114,7 +114,9 @@ export function FamilyWideForm() {
         meal_out_frequency: mealOut,
       });
       if (!result.ok) return setError(result.error);
-      router.push("/onboarding/mom");
+      // The family screen now sits AFTER the members step — continue to the
+      // plan-scope fork, not back into the personal wizard.
+      router.push("/onboarding/plan-scope");
     });
   };
 
