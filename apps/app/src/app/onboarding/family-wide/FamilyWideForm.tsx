@@ -7,18 +7,9 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import { saveFamilyWidePreferences } from "../actions";
 
-const TOTAL_STEPS = 5;
-
-// Coach Sara's intake lists (07/2026). "baking" keeps its stored value with
-// the spec's فرن label so existing rows stay valid; deep_frying was dropped
-// from the choices (old rows keep the value, the engine still understands it).
-const CUISINES: { value: string; label: string }[] = [
-  { value: "khaleeji", label: "خليجي" },
-  { value: "arabic", label: "عربي" },
-  { value: "asian", label: "آسيوي" },
-  { value: "western", label: "غربي" },
-  { value: "varied", label: "متنوع" },
-];
+// Cuisine + cooking methods moved into the personal wizard (every user
+// answers them); this form keeps only the genuinely family-wide questions.
+const TOTAL_STEPS = 3;
 
 const DIETARY: { value: string; label: string }[] = [
   { value: "vegetarian", label: "نباتي" },
@@ -27,15 +18,6 @@ const DIETARY: { value: string; label: string }[] = [
   { value: "lactose_free", label: "خالي من اللاكتوز" },
   { value: "nut_free", label: "خالي من المكسرات" },
   { value: "egg_free", label: "خالي من البيض" },
-];
-
-const COOKING: { value: string; label: string }[] = [
-  { value: "grilling", label: "شوي" },
-  { value: "boiling", label: "سلق" },
-  { value: "steaming", label: "طبخ بالبخار" },
-  { value: "baking", label: "فرن" },
-  { value: "air_fryer", label: "مقلاة هوائية" },
-  { value: "frying_minimal", label: "قلي بزيت قليل" },
 ];
 
 const MEAL_OUT: { value: string; label: string }[] = [
@@ -81,10 +63,8 @@ export function FamilyWideForm() {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
 
-  const [cuisine, setCuisine] = useState("");
   const [dietary, setDietary] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
-  const [cooking, setCooking] = useState<string[]>([]);
   const [mealOut, setMealOut] = useState("");
 
   const goNext = () => {
@@ -98,19 +78,13 @@ export function FamilyWideForm() {
 
   const submit = () => {
     setError(null);
-    if (!cuisine) {
-      setStep(0);
-      return setError("يلزم اختيار المطبخ المفضل");
-    }
     if (!mealOut) return setError("يلزم تحديد عدد مرات الأكل خارج البيت");
 
     startTransition(async () => {
       // حلال دائماً ضمن القيود.
       const result = await saveFamilyWidePreferences({
-        cuisine_preference: cuisine,
         family_dietary_restrictions: ["halal", ...dietary],
         family_dislikes: dislikes,
-        cooking_methods: cooking,
         meal_out_frequency: mealOut,
       });
       if (!result.ok) return setError(result.error);
@@ -161,36 +135,6 @@ export function FamilyWideForm() {
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    ما المطبخ المفضل لعائلتك؟
-                  </h2>
-                </header>
-                <div className="grid grid-cols-2 gap-2">
-                  {CUISINES.map((o) => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => setCuisine(o.value)}
-                      aria-pressed={cuisine === o.value}
-                      className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                        cuisine === o.value
-                          ? "border-brand-purple-900 bg-brand-purple-900/5"
-                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                <PrimaryButton onClick={() => (cuisine ? goNext() : setError("يلزم اختيار المطبخ المفضل"))}>
-                  التالي
-                </PrimaryButton>
-              </>
-            )}
-
-            {step === 1 && (
-              <>
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
                     هل لديكم أي قيود غذائية في العائلة؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -218,7 +162,7 @@ export function FamilyWideForm() {
               </>
             )}
 
-            {step === 2 && (
+            {step === 1 && (
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
@@ -238,38 +182,7 @@ export function FamilyWideForm() {
               </>
             )}
 
-            {step === 3 && (
-              <>
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    ما طرق الطبخ المفضلة لديكم؟
-                  </h2>
-                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    ما ينطبق على عائلتك — والتجاوز ممكن.
-                  </p>
-                </header>
-                <div className="flex flex-wrap gap-2">
-                  {COOKING.map((o) => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => setCooking((s) => toggle(s, o.value))}
-                      aria-pressed={cooking.includes(o.value)}
-                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                        cooking.includes(o.value)
-                          ? "border-brand-purple-900 bg-brand-purple-900/5"
-                          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
-              </>
-            )}
-
-            {step === 4 && (
+            {step === 2 && (
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
@@ -294,7 +207,7 @@ export function FamilyWideForm() {
                   ))}
                 </div>
                 <PrimaryButton onClick={submit} isPending={isPending}>
-                  التالي — ملفك الشخصي
+                  حفظ ومتابعة
                 </PrimaryButton>
               </>
             )}

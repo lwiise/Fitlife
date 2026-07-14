@@ -197,11 +197,11 @@ export async function completeOnboarding(
 
 // ─── Prompt 1.8c: restructured onboarding ──────────────────────────────────
 
+// Cuisine + cooking methods moved to the personal wizard (saveMomProfile) —
+// this screen keeps only the genuinely family-wide preferences.
 export interface FamilyWideInput {
-  cuisine_preference: string;
   family_dietary_restrictions: string[];
   family_dislikes: string[];
-  cooking_methods: string[];
   meal_out_frequency: string;
 }
 
@@ -223,10 +223,8 @@ export async function saveFamilyWidePreferences(
   const { error } = await supabase
     .from("profiles")
     .update({
-      cuisine_preference: input.cuisine_preference,
       family_dietary_restrictions: input.family_dietary_restrictions,
       family_dislikes: input.family_dislikes,
-      cooking_methods: input.cooking_methods,
       meal_out_frequency: input.meal_out_frequency,
       family_wide_completed_at: new Date().toISOString(),
     })
@@ -284,6 +282,8 @@ export interface MomProfileInput {
   intermittent_fasting?: "yes" | "no" | null;
   food_recall_24h?: string | null;
   previous_diets?: string | null;
+  cuisine_preference?: string;
+  cooking_methods?: string[];
   conditions: string[];
   other_condition?: string;
   consulted_doctor: boolean;
@@ -378,6 +378,8 @@ export async function saveMomProfile(
       intermittent_fasting: input.intermittent_fasting,
       food_recall_24h: input.food_recall_24h,
       previous_diets: input.previous_diets,
+      cuisine_preference: input.cuisine_preference,
+      cooking_methods: input.cooking_methods,
       has_medical_conditions: hasMedical,
       medical_conditions: conditions,
       is_pregnant: isPregnant,

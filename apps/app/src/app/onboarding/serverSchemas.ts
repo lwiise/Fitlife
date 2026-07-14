@@ -53,6 +53,11 @@ const intakeFields = {
   previous_diets: z.string().trim().max(1000).nullish(),
   pregnancy_month: z.number().int().min(1).max(9).optional(),
   feeding_mode: z.enum(["exclusive", "mixed", "formula"]).optional(),
+  // Cuisine + cooking are personal questions now (spec sections ١٤-١٥).
+  cuisine_preference: z
+    .enum(["khaleeji", "arabic", "asian", "western", "varied"])
+    .optional(),
+  cooking_methods: z.array(z.string().trim().min(1).max(40)).max(10).optional(),
 } as const;
 
 export const momProfileInputSchema = z
@@ -117,13 +122,10 @@ export const familyMemberInputSchema = z.object({
   feeding_mode: z.enum(["exclusive", "mixed", "formula"]).nullish(),
 });
 
+// Cuisine + cooking moved to momProfileInputSchema (personal wizard).
 export const familyWideInputSchema = z.object({
-  // The spec's five cuisines; legacy values (mediterranean/mixed/international)
-  // were remapped by 00016 and are no longer accepted from the form.
-  cuisine_preference: z.enum(["khaleeji", "arabic", "asian", "western", "varied"]),
   family_dietary_restrictions: z.array(z.string().trim().min(1).max(60)).max(15),
   family_dislikes: chipArray,
-  cooking_methods: z.array(z.string().trim().min(1).max(40)).max(10),
   meal_out_frequency: z.enum(["never", "rarely", "sometimes", "often"]),
 });
 

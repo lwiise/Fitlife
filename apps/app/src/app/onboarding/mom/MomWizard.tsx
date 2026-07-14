@@ -32,6 +32,7 @@ import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
 import { saveMomProfile, saveProfileStep } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
+import { CUISINES, COOKING } from "@/app/profile/labels";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 
 type Identity = z.infer<typeof step1Schema>;
@@ -64,6 +65,7 @@ const BASE_STEPS = [
   "habits",
   "recall",
   "lifestyle",
+  "kitchen",
   "dietHistory",
 ] as const;
 type StepKey = (typeof BASE_STEPS)[number] | "doctor";
@@ -155,6 +157,8 @@ export function MomWizard() {
   const [waterLiters, setWaterLiters] = useState<WaterLiters | null>(null);
   const [sleepBand, setSleepBand] = useState<SleepBand | null>(null);
   const [stress, setStress] = useState<StressLevel | null>(null);
+  const [cuisinePref, setCuisinePref] = useState("");
+  const [cookingMethods, setCookingMethods] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [dietTried, setDietTried] = useState<boolean | null>(null);
   const [dietSystem, setDietSystem] = useState("");
@@ -206,7 +210,8 @@ export function MomWizard() {
       !physical ||
       !userGoal ||
       (!isMale && !pregStatus) ||
-      !activityLevel
+      !activityLevel ||
+      !cuisinePref
     ) {
       setError(g("بعض المعلومات ناقصة، ارجعي وأكمليها", "بعض المعلومات ناقصة، ارجع وأكملها"));
       return;
@@ -258,6 +263,8 @@ export function MomWizard() {
         intermittent_fasting: fasting,
         food_recall_24h: foodRecall.trim() || null,
         previous_diets: previousDiets,
+        cuisine_preference: cuisinePref,
+        cooking_methods: cookingMethods,
         conditions,
         other_condition: otherCondition.trim() || undefined,
         consulted_doctor: consultedDoctor,
@@ -929,6 +936,73 @@ export function MomWizard() {
                   />
                 </div>
                 <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
+              </div>
+            )}
+
+            {step === "kitchen" && (
+              <div className="space-y-6">
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    مطبخك وطرق الطبخ
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نبني الوصفات على ذوقك وبالطرق المتاحة لديك.
+                  </p>
+                </header>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">المطبخ المفضل</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CUISINES.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={cuisinePref === o.value}
+                        onClick={() => setCuisinePref(o.value)}
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    طرق الطبخ المفضلة (يمكن اختيار أكثر من خيار)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {COOKING.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() =>
+                          setCookingMethods((s) =>
+                            s.includes(o.value)
+                              ? s.filter((v) => v !== o.value)
+                              : [...s, o.value],
+                          )
+                        }
+                        aria-pressed={cookingMethods.includes(o.value)}
+                        className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                          cookingMethods.includes(o.value)
+                            ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                            : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <PrimaryButton
+                  onClick={() =>
+                    cuisinePref
+                      ? goNext()
+                      : setError(g("اختاري المطبخ المفضل", "اختر المطبخ المفضل"))
+                  }
+                >
+                  التالي
+                </PrimaryButton>
               </div>
             )}
 
