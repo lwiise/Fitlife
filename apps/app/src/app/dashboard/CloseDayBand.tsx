@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Moon, X } from "lucide-react";
 
@@ -54,7 +54,7 @@ const REASON_CHIPS: Array<{ value: CheckinReason; label: string; gold?: boolean 
   { value: "guests", label: "جاءنا ضيوف", gold: true },
   { value: "ordered_in", label: "طلبنا اليوم" },
   { value: "ate_out", label: "خارج البيت" },
-  { value: "missing_ingredients", label: "ما توفرت المقادير" },
+  { value: "missing_ingredients", label: "لم تتوفر المقادير" },
   { value: "no_time", label: "ضاق الوقت" },
 ];
 
@@ -67,7 +67,7 @@ const VERDICT_FACE: Record<Verdict, string> = {
 const VERDICT_LABEL: Record<Verdict, string> = {
   loved: "أحبه",
   fine: "عادي",
-  not_again: "ما يُعاد",
+  not_again: "لا يُعاد",
 };
 
 interface SlotAnswer {
@@ -98,18 +98,42 @@ export function CloseDayBand({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  // Escape + scroll lock while the sheet is open (parity with ConfirmDialog).
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Escape, scroll lock, focus-into-dialog + Tab trap + focus restore
+  // (WCAG 2.4.3 / APG modal contract; extends the ConfirmDialog pattern).
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
+    const t = setTimeout(() => closeBtnRef.current?.focus(), 50);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !pending) setOpen(false);
+      if (e.key === "Tab" && sheetRef.current) {
+        const focusables = sheetRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      clearTimeout(t);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      trigger?.focus();
     };
   }, [open, pending]);
 
@@ -223,6 +247,7 @@ export function CloseDayBand({
         </p>
         <button
           type="button"
+          ref={triggerRef}
           onClick={() => setOpen(true)}
           className="flex-shrink-0 inline-flex items-center justify-center min-h-11 px-5 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
         >
@@ -238,7 +263,10 @@ export function CloseDayBand({
             onClick={() => !pending && setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-brand-surface p-4 pb-6 shadow-2xl">
+          <div
+            ref={sheetRef}
+            className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-brand-surface p-4 pb-6 shadow-2xl"
+          >
             <div className="mx-auto max-w-lg space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-extrabold text-brand-ink">
@@ -246,6 +274,7 @@ export function CloseDayBand({
                 </h2>
                 <button
                   type="button"
+                  ref={closeBtnRef}
                   onClick={() => !pending && setOpen(false)}
                   aria-label="إغلاق"
                   className="size-11 inline-flex items-center justify-center rounded-full text-brand-ink-muted hover:bg-brand-lavender/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
@@ -253,7 +282,7 @@ export function CloseDayBand({
                   <X className="size-5" aria-hidden="true" />
                 </button>
               </div>
-              <p className="text-xs text-brand-ink-muted">
+              <p className="text-xs text-brand-ink-muted leading-relaxed">
                 كل إجابة صادقة تُحسّن خطتكم القادمة — وما لم تجيبي عنه يبقى بلا حكم.
               </p>
 
@@ -275,7 +304,7 @@ export function CloseDayBand({
                           type="button"
                           onClick={() => setStatus(s.slot, c.value)}
                           aria-pressed={a?.status === c.value}
-                          className={`min-h-11 px-3.5 rounded-full text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                          className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                             a?.status === c.value
                               ? "bg-brand-purple-900 text-white"
                               : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
@@ -294,7 +323,7 @@ export function CloseDayBand({
                             type="button"
                             onClick={() => setReason(s.slot, r.value)}
                             aria-pressed={a?.reason === r.value}
-                            className={`min-h-11 px-3 rounded-full text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                            className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                               a?.reason === r.value
                                 ? r.gold
                                   ? "bg-brand-yellow text-brand-ink"
@@ -350,17 +379,18 @@ export function CloseDayBand({
                 </p>
               )}
 
+              {answeredSlots.length === 0 && (
+                <p className="text-xs text-brand-ink-muted text-center leading-relaxed">
+                  اختاري إجابة واحدة على الأقل لإغلاق اليوم
+                </p>
+              )}
               <button
                 type="button"
                 onClick={submit}
                 disabled={pending || answeredSlots.length === 0}
                 className="w-full min-h-12 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
               >
-                {pending
-                  ? "يُحفظ…"
-                  : answeredSlots.length === 0
-                    ? "اختاري إجابة واحدة على الأقل"
-                    : "إغلاق اليوم"}
+                {pending ? "يُحفظ…" : "إغلاق اليوم"}
               </button>
             </div>
           </div>
