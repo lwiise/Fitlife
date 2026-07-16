@@ -1,6 +1,33 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+
+// 00017 engagement tables. Not yet in the generated Database types (db:types
+// re-runs only when the migration is applied to prod), so reads go through an
+// untyped client — and tolerate the table not existing yet (pre-apply prod
+// returns an error object, which exports as an empty list rather than a 500).
+const ENGAGEMENT_TABLES = [
+  "meal_checkins",
+  "member_exceptions",
+  "meal_verdicts",
+  "body_logs",
+] as const;
+
+async function fetchEngagementRows(
+  supabase: unknown,
+  table: (typeof ENGAGEMENT_TABLES)[number],
+  userId: string,
+): Promise<unknown[]> {
+  const client = supabase as SupabaseClient;
+  const { data } = await client
+    .from(table)
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}
 
 // Internal billing identifiers — not the user's own data, so they're stripped
 // from the subscription before it goes into the portability export.
@@ -68,6 +95,13 @@ export async function GET() {
     ],
   );
 
+  const [mealCheckins, memberExceptions, mealVerdicts, bodyLogs] =
+    await Promise.all(
+      ENGAGEMENT_TABLES.map((table) =>
+        fetchEngagementRows(supabase, table, user.id),
+      ),
+    );
+
   const data = {
     exported_at: new Date().toISOString(),
     user: {
@@ -82,6 +116,10 @@ export async function GET() {
       subscription.data as Record<string, unknown> | null,
     ),
     generation_history: generations.data ?? [],
+    meal_checkins: mealCheckins,
+    member_exceptions: memberExceptions,
+    meal_verdicts: mealVerdicts,
+    body_logs: bodyLogs,
   };
 
   const date = new Date().toISOString().slice(0, 10);

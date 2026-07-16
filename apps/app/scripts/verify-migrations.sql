@@ -60,5 +60,30 @@ select * from (values
   ('00015 water in liters (profiles.water_liters)',
     (select case when exists (select 1 from information_schema.columns
       where table_schema='public' and table_name='profiles' and column_name='water_liters')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00016 intake expansion (profiles.sleep_band)',
+    (select case when exists (select 1 from information_schema.columns
+      where table_schema='public' and table_name='profiles' and column_name='sleep_band')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00016 cuisine remap (five-option CHECK)',
+    (select case when exists (select 1 from information_schema.check_constraints
+      where constraint_schema='public' and constraint_name='profiles_cuisine_preference_check'
+        and check_clause like '%khaleeji%')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00017 meal_checkins table',
+    (select case when to_regclass('public.meal_checkins') is not null
+      then 'APPLIED' else 'MISSING' end)),
+  ('00017 member_exceptions table',
+    (select case when to_regclass('public.member_exceptions') is not null
+      then 'APPLIED' else 'MISSING' end)),
+  ('00017 meal_verdicts table',
+    (select case when to_regclass('public.meal_verdicts') is not null
+      then 'APPLIED' else 'MISSING' end)),
+  ('00017 body_logs table',
+    (select case when to_regclass('public.body_logs') is not null
+      then 'APPLIED' else 'MISSING' end)),
+  ('00017 one-checkin-per-meal unique',
+    (select case when exists (select 1 from pg_indexes where schemaname='public'
+      and indexname='meal_checkins_one_per_meal')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);

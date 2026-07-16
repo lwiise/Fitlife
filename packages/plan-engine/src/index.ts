@@ -29,6 +29,11 @@ export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic
 export type { StreamResult } from "./anthropic";
 
 export {
+  canonicalRecipeKey,
+  CANONICAL_KEY_VERSION,
+} from "./canonicalRecipeKey";
+
+export {
   MacrosSchema,
   IngredientSchema,
   PerMemberPortionSchema,
