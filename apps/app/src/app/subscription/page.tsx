@@ -13,7 +13,7 @@ import { CurrentPlanCard } from "./CurrentPlanCard";
 import { CardOnFile } from "./CardOnFile";
 import { ChangePlanSection } from "./ChangePlanSection";
 import { BillingHistory } from "./BillingHistory";
-import { CancelSubscription } from "./CancelSubscription";
+import { CancelSubscription, PausedNotice } from "./CancelSubscription";
 
 export const metadata = {
   title: "الاشتراك — فت لايف",
@@ -158,13 +158,14 @@ export default async function SubscriptionPage({
           </SectionShell>
         )}
 
-        {/* Section 5 — Cancel */}
+        {/* Section 5 — Cancel (with reason-matched save offers) */}
         {hasLSSub &&
           sub.status === "active" &&
           !sub.cancel_at_period_end && (
             <SectionShell title="إلغاء الاشتراك">
               <p className="text-brand-ink-muted text-sm leading-relaxed mb-4">
-                تقدرين تلغين في أي وقت. الخدمة تستمر حتى نهاية فترتك الحالية.
+                تقدرين تلغين في أي وقت. الخدمة تستمر حتى نهاية فترتك الحالية —
+                وإن كان السبب سفراً أو انشغالاً، فالاستراحة المؤقتة متاحة أيضاً.
               </p>
               <CancelSubscription
                 tierName={PRICING_TIERS[sub.tier].name_ar}
@@ -172,6 +173,13 @@ export default async function SubscriptionPage({
               />
             </SectionShell>
           )}
+
+        {/* Paused state — resume early, or let it auto-resume */}
+        {hasLSSub && sub.status === "paused" && (
+          <SectionShell title="اشتراكك في استراحة">
+            <PausedNotice resumesAt={sub.current_period_end} />
+          </SectionShell>
+        )}
       </div>
     </main>
   );

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat } from "lucide-react";
+import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat, MailOpen } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { DeepDiveBanner } from "./DeepDiveBanner";
 import { WorkoutOptInBanner } from "./WorkoutOptInBanner";
@@ -19,6 +19,7 @@ import { getCurrentSubscription } from "@/lib/subscription/state";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
+import { CloseDayBand } from "./CloseDayBand";
 import { Logo } from "@/components/Logo";
 import { SettingsLink } from "@/components/SettingsLink";
 import { LogoutButton } from "./LogoutButton";
@@ -147,6 +148,80 @@ export default async function DashboardPage() {
     !!housekeeper &&
     housekeeper.preferred_language !== "ar";
 
+  // ختام اليوم band data — household-level slots come from the mom's member
+  // plan (shared dishes cover the family; two same-slot snacks dedup to one,
+  // matching the (plan, day, slot) storage key). Verdict faces list every
+  // beneficiary (never the housekeeper). Closed days come from meal_checkins.
+  let closeDayProps = null;
+  if (user && planIsReady && latestPlan?.plan_data) {
+    const planData = latestPlan.plan_data;
+    const momPlan =
+      planData.members.find((m) => m.member_id === "mom") ?? planData.members[0];
+    if (momPlan) {
+      const { data: checkinRows } = await supabase
+        .from("meal_checkins")
+        .select("day_index")
+        .eq("meal_plan_id", latestPlan.id)
+        .limit(60);
+      closeDayProps = {
+        planId: latestPlan.id,
+        weekStart: planData.week_start_date,
+        days: momPlan.days.map((d) => ({
+          day_index: d.day_index,
+          slots: [
+            ...new Map(
+              d.meals.map((meal) => [
+                meal.slot,
+                {
+                  slot: meal.slot,
+                  slot_name_ar: meal.slot_name_ar,
+                  recipe_name_ar: meal.recipe_name_ar,
+                },
+              ]),
+            ).values(),
+          ],
+        })),
+        members: [
+          { id: "mom", name: profile?.display_name?.trim() || "أنتِ" },
+          ...familyMembers
+            .filter((m) => m.role !== "housekeeper")
+            .map((m) => ({ id: m.id, name: m.name })),
+        ],
+        closedDayIndexes: [
+          ...new Set(
+            ((checkinRows ?? []) as Array<{ day_index: number }>).map(
+              (r) => r.day_index,
+            ),
+          ),
+        ],
+      };
+    }
+  }
+
+  // Day-3 trial activation checklist — DB-derived, computed only while
+  // trialing.
+  let trialChecklist;
+  if (user && subscription?.status === "trialing") {
+    const [chatCount, weightCount] = await Promise.all([
+      supabase
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .limit(1),
+      supabase
+        .from("body_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .limit(1),
+    ]);
+    trialChecklist = {
+      planReady: planIsReady,
+      advisorTried: (chatCount.count ?? 0) > 0,
+      weightLogged: !weightCount.error && (weightCount.count ?? 0) > 0,
+      showHousekeeperStep: showHousekeeperLink,
+    };
+  }
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -184,7 +259,7 @@ export default async function DashboardPage() {
         )}
 
         {subscription?.status === "trialing" && (
-          <TrialBanner subscription={subscription} />
+          <TrialBanner subscription={subscription} checklist={trialChecklist} />
         )}
 
         {showAddFamily && <AddFamilyBanner />}
@@ -383,6 +458,9 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        {/* ختام اليوم — the retroactive daily check-in band */}
+        {closeDayProps && <CloseDayBand {...closeDayProps} />}
+
         {/* Quick entry links (advisor + optional cook view) — above today's meals. */}
         {(onboardingDone || showHousekeeperLink) && (
           <div className="flex flex-wrap gap-2 mt-10 mb-4">
@@ -402,6 +480,24 @@ export default async function DashboardPage() {
               >
                 <ChefHat className="size-4" aria-hidden="true" />
                 وصفات الطبخ بلغة الخدامة
+              </Link>
+            )}
+            {onboardingDone && (
+              <Link
+                href="/recap"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                <MailOpen className="size-4" aria-hidden="true" />
+                رسالتك الأسبوعية
+              </Link>
+            )}
+            {onboardingDone && (
+              <Link
+                href="/journey"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                <Lock className="size-4" aria-hidden="true" />
+                رحلتك الخاصة
               </Link>
             )}
           </div>

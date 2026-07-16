@@ -10,7 +10,8 @@ export const runtime = "nodejs";
  *   2. Sign out (invalidate the session cookie).
  *   3. eraseUserAccount: cancel the LS subscription (best-effort) then hard-delete
  *      the auth.users row → CASCADE removes profiles, family_members, meal_plans,
- *      subscriptions, plan_generations, chat_messages.
+ *      subscriptions, plan_generations, chat_messages, and the 00017 engagement
+ *      tables (meal_checkins, member_exceptions, meal_verdicts, body_logs).
  *
  * Only `user.id` (a UUID) is ever sent to Sentry (inside the helper) — never PII.
  */

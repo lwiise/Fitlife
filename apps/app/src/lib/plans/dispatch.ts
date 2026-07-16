@@ -20,6 +20,7 @@ import {
   type LocaleCode,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
+import { fetchEngagementDigest } from "@/lib/engagement/digest";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import {
@@ -170,6 +171,11 @@ export async function triggerPlanGeneration(params: {
 
   // Layer the user's regeneration feedback into the prompt context.
   if (feedback) context.user_feedback = feedback;
+
+  // «خطة تشبهك»: attach the household's recent check-in/verdict digest.
+  // Best-effort (undefined pre-00017 / on any failure) — matters for the dev
+  // inline run; the background function re-attaches for the prod run.
+  context.engagement_digest = await fetchEngagementDigest(supabase, userId);
 
   // A per-member regenerate honors the target's CURRENT meal_mode, not the prior
   // plan's grouping. mom's meal_mode lives on `profiles` (context.mom); family

@@ -47,6 +47,7 @@ import {
   type PlanPromptContextMember,
 } from "./buildContext";
 import { riyadhTodayISO, khaleejiDayName } from "./dates";
+import { canonicalRecipeKey } from "./canonicalRecipeKey";
 
 // Accepts any Supabase client shape (cookie-typed or service-role admin).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1456,6 +1457,12 @@ export async function generateMealPlan(params: {
       skeleton.methodology_notes_ar ?? existingPlan?.methodology_notes_ar,
     safety_disclaimer_ar:
       skeleton.safety_disclaimer_ar ?? existingPlan?.safety_disclaimer_ar,
+    // «سارة عدّلت خطتك»: THIS run's changes only — never carried from the prior
+    // plan (old changes would misattribute) and empty arrays drop to undefined.
+    week_changes:
+      skeleton.week_changes && skeleton.week_changes.length > 0
+        ? skeleton.week_changes
+        : undefined,
     days_total: totalDays,
     generating,
     // While generating a single targeted member, tell the UI who — so the loading
@@ -1893,6 +1900,35 @@ export async function generateMealPlan(params: {
         Math.round(calcKcal),
       );
       memberPlan.daily_calories_target = Math.round(calcKcal);
+    }
+  }
+
+  // Non-fatal engagement guards («خطة تشبهك»): a vetoed dish reappearing is a
+  // trust-destroying event, a promised golden dish missing breaks a "guaranteed"
+  // — both are prompt-tuning signals, never generation failures.
+  if (context.engagement_digest) {
+    const digest = context.engagement_digest;
+    const planKeys = new Set<string>();
+    for (const memberPlan of plan.members)
+      for (const day of memberPlan.days)
+        for (const meal of day.meals)
+          planKeys.add(canonicalRecipeKey(meal.recipe_name_ar));
+
+    for (const veto of digest.vetoes) {
+      if (planKeys.has(veto.canonical_key)) {
+        console.warn("[plan-generate] vetoed dish reappeared", {
+          userId: context.mom.id,
+          dish: veto.recipe_name_ar,
+        });
+      }
+    }
+    for (const golden of digest.golden_dishes) {
+      if (!planKeys.has(golden.canonical_key)) {
+        console.warn("[plan-generate] golden dish missing from plan", {
+          userId: context.mom.id,
+          dish: golden.recipe_name_ar,
+        });
+      }
     }
   }
 

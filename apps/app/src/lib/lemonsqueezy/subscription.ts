@@ -112,6 +112,48 @@ export async function cancelLSSubscription(
 }
 
 /**
+ * Pause billing (استراحة) instead of cancelling. mode "void" suspends both
+ * charges and access until resumes_at; LS auto-resumes billing then. This is
+ * the churn-deflection primitive: ~25% of would-be cancellers take a pause
+ * where offered, and ~75% of pausers return.
+ */
+export async function pauseLSSubscription(
+  subscriptionId: string,
+  resumesAtIso: string,
+): Promise<{ success: boolean }> {
+  setupLemonsqueezy();
+  try {
+    const { error } = await updateSubscription(subscriptionId, {
+      pause: { mode: "void", resumesAt: resumesAtIso },
+    });
+    return { success: !error };
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { area: "ls-pause-subscription" },
+    });
+    return { success: false };
+  }
+}
+
+/** Lift a pause immediately («عدتُ مبكراً») — billing resumes on LS's side. */
+export async function resumeLSSubscription(
+  subscriptionId: string,
+): Promise<{ success: boolean }> {
+  setupLemonsqueezy();
+  try {
+    const { error } = await updateSubscription(subscriptionId, {
+      pause: null,
+    });
+    return { success: !error };
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { area: "ls-resume-subscription" },
+    });
+    return { success: false };
+  }
+}
+
+/**
  * Change an existing subscription's tier by swapping its variant. LS handles
  * proration + any SCA re-auth. Used for active subscribers (trial/new users go
  * through checkout instead).

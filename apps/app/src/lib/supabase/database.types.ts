@@ -16,78 +16,135 @@ export type Database = {
     Tables: {
       admin_audit_log: {
         Row: {
-          id: string
-          admin_user_id: string | null
-          subscriber_id: string | null
           action: string
-          detail: Json | null
+          admin_user_id: string | null
           created_at: string
+          detail: Json | null
+          id: string
+          subscriber_id: string | null
         }
         Insert: {
-          id?: string
-          admin_user_id?: string | null
-          subscriber_id?: string | null
           action: string
-          detail?: Json | null
+          admin_user_id?: string | null
           created_at?: string
+          detail?: Json | null
+          id?: string
+          subscriber_id?: string | null
         }
         Update: {
-          id?: string
-          admin_user_id?: string | null
-          subscriber_id?: string | null
           action?: string
-          detail?: Json | null
+          admin_user_id?: string | null
           created_at?: string
+          detail?: Json | null
+          id?: string
+          subscriber_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_users: {
         Row: {
-          user_id: string
-          role: string
           created_at: string
+          role: string
+          user_id: string
         }
         Insert: {
-          user_id: string
-          role?: string
           created_at?: string
+          role?: string
+          user_id: string
         }
         Update: {
-          user_id?: string
-          role?: string
           created_at?: string
+          role?: string
+          user_id?: string
         }
         Relationships: []
       }
+      body_logs: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          recorded_on: string
+          updated_at: string
+          user_id: string
+          waist_cm: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          recorded_on: string
+          updated_at?: string
+          user_id: string
+          waist_cm?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          recorded_on?: string
+          updated_at?: string
+          user_id?: string
+          waist_cm?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
+          cost_usd: number | null
+          created_at: string
           id: string
-          user_id: string
           model: string | null
           tokens_in: number | null
           tokens_out: number | null
-          cost_usd: number | null
-          created_at: string
+          user_id: string
         }
         Insert: {
+          cost_usd?: number | null
+          created_at?: string
           id?: string
-          user_id: string
           model?: string | null
           tokens_in?: number | null
           tokens_out?: number | null
-          cost_usd?: number | null
-          created_at?: string
+          user_id: string
         }
         Update: {
+          cost_usd?: number | null
+          created_at?: string
           id?: string
-          user_id?: string
           model?: string | null
           tokens_in?: number | null
           tokens_out?: number | null
-          cost_usd?: number | null
-          created_at?: string
+          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       family_members: {
         Row: {
@@ -101,6 +158,7 @@ export type Database = {
           dislikes: Json | null
           display_order: number
           exercise_days: string | null
+          exercise_profile: Json | null
           exercise_type: string | null
           feeding_mode: string | null
           height_cm: number | null
@@ -141,6 +199,7 @@ export type Database = {
           dislikes?: Json | null
           display_order?: number
           exercise_days?: string | null
+          exercise_profile?: Json | null
           exercise_type?: string | null
           feeding_mode?: string | null
           height_cm?: number | null
@@ -181,6 +240,7 @@ export type Database = {
           dislikes?: Json | null
           display_order?: number
           exercise_days?: string | null
+          exercise_profile?: Json | null
           exercise_type?: string | null
           feeding_mode?: string | null
           height_cm?: number | null
@@ -213,6 +273,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "family_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_checkins: {
+        Row: {
+          created_at: string
+          day_index: number
+          id: string
+          local_date: string
+          meal_plan_id: string
+          reason: string | null
+          slot: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_index: number
+          id?: string
+          local_date: string
+          meal_plan_id: string
+          reason?: string | null
+          slot: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day_index?: number
+          id?: string
+          local_date?: string
+          meal_plan_id?: string
+          reason?: string | null
+          slot?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_checkins_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_checkins_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -266,6 +380,105 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meal_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_verdicts: {
+        Row: {
+          canonical_key: string
+          created_at: string
+          day_index: number
+          id: string
+          meal_plan_id: string
+          member_id: string
+          recipe_name_ar: string
+          slot: string
+          updated_at: string
+          user_id: string
+          verdict: string
+        }
+        Insert: {
+          canonical_key: string
+          created_at?: string
+          day_index: number
+          id?: string
+          meal_plan_id: string
+          member_id: string
+          recipe_name_ar: string
+          slot: string
+          updated_at?: string
+          user_id: string
+          verdict: string
+        }
+        Update: {
+          canonical_key?: string
+          created_at?: string
+          day_index?: number
+          id?: string
+          meal_plan_id?: string
+          member_id?: string
+          recipe_name_ar?: string
+          slot?: string
+          updated_at?: string
+          user_id?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_verdicts_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_verdicts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_exceptions: {
+        Row: {
+          checkin_id: string
+          created_at: string
+          id: string
+          kind: string
+          member_id: string
+          user_id: string
+        }
+        Insert: {
+          checkin_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          member_id: string
+          user_id: string
+        }
+        Update: {
+          checkin_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          member_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_exceptions_checkin_id_fkey"
+            columns: ["checkin_id"]
+            isOneToOne: false
+            referencedRelation: "meal_checkins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_exceptions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -352,6 +565,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "plan_generations_workout_plan_id_fkey"
+            columns: ["workout_plan_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plans"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -372,12 +592,15 @@ export type Database = {
           display_name: string | null
           exercise_days: string | null
           exercise_duration: string | null
+          exercise_profile: Json | null
+          exercise_prompt_shown_at: string | null
           exercise_type: string | null
           family_dietary_restrictions: Json | null
           family_dislikes: Json | null
           family_wide_completed_at: string | null
           feeding_mode: string | null
           food_budget: string | null
+          food_preferences: Json
           food_recall_24h: string | null
           has_medical_conditions: boolean
           height_cm: number | null
@@ -440,12 +663,15 @@ export type Database = {
           display_name?: string | null
           exercise_days?: string | null
           exercise_duration?: string | null
+          exercise_profile?: Json | null
+          exercise_prompt_shown_at?: string | null
           exercise_type?: string | null
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
           feeding_mode?: string | null
           food_budget?: string | null
+          food_preferences?: Json
           food_recall_24h?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
@@ -508,12 +734,15 @@ export type Database = {
           display_name?: string | null
           exercise_days?: string | null
           exercise_duration?: string | null
+          exercise_profile?: Json | null
+          exercise_prompt_shown_at?: string | null
           exercise_type?: string | null
           family_dietary_restrictions?: Json | null
           family_dislikes?: Json | null
           family_wide_completed_at?: string | null
           feeding_mode?: string | null
           food_budget?: string | null
+          food_preferences?: Json
           food_recall_24h?: string | null
           has_medical_conditions?: boolean
           height_cm?: number | null
@@ -563,7 +792,7 @@ export type Database = {
       }
       subscriptions: {
         Row: {
-          billing_interval: string
+          billing_interval: string | null
           cadence: string | null
           cancel_at_period_end: boolean
           cancelled_at: string | null
@@ -575,10 +804,10 @@ export type Database = {
           lemonsqueezy_customer_id: string | null
           lemonsqueezy_subscription_id: string | null
           lemonsqueezy_variant_id: string | null
-          ls_customer_id: string
+          ls_customer_id: string | null
           ls_order_id: string | null
-          ls_subscription_id: string
-          ls_variant_id: string
+          ls_subscription_id: string | null
+          ls_variant_id: string | null
           status: string
           tier: string
           trial_ends_at: string | null
@@ -587,7 +816,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          billing_interval: string
+          billing_interval?: string | null
           cadence?: string | null
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
@@ -599,19 +828,19 @@ export type Database = {
           lemonsqueezy_customer_id?: string | null
           lemonsqueezy_subscription_id?: string | null
           lemonsqueezy_variant_id?: string | null
-          ls_customer_id: string
+          ls_customer_id?: string | null
           ls_order_id?: string | null
-          ls_subscription_id: string
-          ls_variant_id: string
-          status: string
-          tier: string
+          ls_subscription_id?: string | null
+          ls_variant_id?: string | null
+          status?: string
+          tier?: string
           trial_ends_at?: string | null
           trial_started_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          billing_interval?: string
+          billing_interval?: string | null
           cadence?: string | null
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
@@ -623,10 +852,10 @@ export type Database = {
           lemonsqueezy_customer_id?: string | null
           lemonsqueezy_subscription_id?: string | null
           lemonsqueezy_variant_id?: string | null
-          ls_customer_id?: string
+          ls_customer_id?: string | null
           ls_order_id?: string | null
-          ls_subscription_id?: string
-          ls_variant_id?: string
+          ls_subscription_id?: string | null
+          ls_variant_id?: string | null
           status?: string
           tier?: string
           trial_ends_at?: string | null

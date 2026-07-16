@@ -27,6 +27,11 @@ import type {
   PlanPromptContext,
   PlanPromptContextMember,
 } from "../../../../packages/plan-engine/src/buildContext";
+import { computeEngagementDigest } from "../../../../packages/plan-engine/src/engagementDigest";
+import type {
+  EngagementCheckinRow,
+  EngagementVerdictRow,
+} from "../../../../packages/plan-engine/src/engagementDigest";
 
 type Activity =
   | "sedentary"
@@ -687,6 +692,38 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
     if (body.feedback) context.user_feedback = body.feedback;
+
+    // «خطة تشبهك»: recent check-in/verdict digest, PostgREST flavor of
+    // lib/engagement/digest.ts. Best-effort — pre-00017 prod (missing tables)
+    // or any fetch failure leaves the digest undefined and the run unchanged.
+    try {
+      const sinceIso = new Date(
+        Date.now() - 14 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const [checkinRows, verdictRows] = await Promise.all([
+        sbSelectMany(
+          supabaseUrl,
+          expected,
+          "meal_checkins",
+          `user_id=eq.${userId}&created_at=gte.${sinceIso}&select=slot,status,reason&limit=400`,
+        ),
+        sbSelectMany(
+          supabaseUrl,
+          expected,
+          "meal_verdicts",
+          `user_id=eq.${userId}&created_at=gte.${sinceIso}&select=recipe_name_ar,canonical_key,verdict&limit=400`,
+        ),
+      ]);
+      context.engagement_digest = computeEngagementDigest(
+        checkinRows as unknown as EngagementCheckinRow[],
+        verdictRows as unknown as EngagementVerdictRow[],
+      );
+    } catch (digestErr) {
+      console.warn(
+        "[generate-plan-background] engagement digest unavailable — generating without it",
+        digestErr,
+      );
+    }
 
     // Carry-over source, re-read from the DB (not received by value — see
     // fetchPriorPlan). A plain per-member regen strips the target so it
