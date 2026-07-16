@@ -157,7 +157,9 @@ The housekeeper's translated view (on her token) gains one giant button per reci
 - The mom gets a prefilled thank-you in the worker's language (genuinely useful — mom may not write Tagalog or Amharic) that she must *send herself*; one-tap scripted gratitude is hollow.
 - This is the mechanic nobody else on earth can ship, because nobody else has the household's cook inside the product.
 
-#### 4.12 مواسم البيت — the Ramadan/Hijri engine ★★ (L, **scheduled build ~Dec 2026 for Ramadan 1448 ≈ Feb 2027**)
+#### 4.12 مواسم البيت — the Ramadan/Hijri engine ★★ (L, **DEFERRED — founder decision 07/2026: out of scope for this initiative; revisit ~2 months before Ramadan 1448 ≈ Feb 2027**)
+
+> Founder call: Ramadan is not near — we take care of it when Ramadan is around the corner. Nothing below is being built now. The ONLY obligation that survives into v1 is the extensible slot enum (one design decision, zero build), so that the season later becomes a config change instead of a data migration. Spec preserved for when we pick it up:
 Ramadan flips the product natively: slots become **سحور / إفطار / غبقة** (generation prompts + check-in keys + viewer + cook view, ×7 languages), the day pivots on Maghrib, workout timing suggests post-taraweeh, Shawwal gets a gentle reset, and the season ends in a shareable static recap («اجتمعت سفرتكم ٥٤ مرة هذا الشهر»).
 - **Today's only obligation:** keep 4.1's slot enum extensible. Build the season when it's ~2 months out — seasonal code shipped 7 months early rots.
 - Red-team guardrails, all mandatory: Ramadan start/end via **remote-config keyed to the official announcement** (pre-computed Umm-al-Qura can miss the moon-sighting by a day — flipping to سحور mode early is unrecoverable credibility loss); the app never advises whether anyone *may* fast — medical questions get «استشيري طبيبك», religious ones «يُسأل عنها أهل العلم»; the tracker counts **home-cooked iftars only**, never fasts or any عبادة; a discreet **«يوم إفطار»** toggle restructures the day for non-fasting days and *never asks why* (menstruating/postpartum women don't fast — asking the reason would be the most intimate privacy violation in the product); Maghrib times carry «الإفطار مع الأذان» framing, never a countdown-to-eat.
@@ -220,8 +222,10 @@ Ramadan flips the product natively: slots become **سحور / إفطار / غب�
 ### v2 — Rhythm & the second human (next 4–8 weeks, gated on v1 metrics)
 إيقاع أسبوعك (forgiving streak) → مفاتيح البيت cook token → تم الطبخ + تحضيرات اليوم (cook coordination) → جمعة البيت (Friday skin + invitation card) → ضيوف الليلة (fast single-call guest mode) → قائمة السوق if not already shipped → وضع هادئ + solo mode polish.
 
-### v3 — Seasonal & moat (from ~Dec 2026)
-مواسم البيت Ramadan engine (build starts ~2 months before Ramadan 1448) → season recap share card → جواز الوصفات passport + offboarding export → husband/child tokens if cook telemetry justifies → monthly family report rollup → absolute-bar cohort seasons (the safe descendant of the league).
+### v3 — The moat (gated on v2)
+جواز الوصفات passport + offboarding export → husband/child tokens if cook telemetry justifies → monthly family report rollup → absolute-bar cohort seasons (the safe descendant of the league).
+
+**Deferred by founder decision (07/2026): the entire Ramadan/Hijri engine (4.12).** Picked up again ~2 months before Ramadan 1448 (≈ Feb 2027). Until then the only trace of it in the codebase is the extensible slot enum in the v1 event schema.
 
 ### The channel decision (strategic, not a feature)
 The set's biggest structural weakness is the no-notification hole, and there are exactly three honest ways out — worth deciding early:
@@ -242,4 +246,4 @@ Also cross-cutting: one **notification/prompt budget** owner — summed naively,
 
 ## 8. One-paragraph summary for the pitch deck
 
-Fit Life's engagement layer is not a points system — it is the house's memory. Each evening the mom closes her day in fifteen seconds: what her kitchen cooked, what her family loved, gold-marked days when guests were honored. Each week, Coach Sara answers with a plan that visibly changed because of it — and tells her why. Her weight journey stays hers alone; her children are never measured, only celebrated for curiosity; her housekeeper is coordinated with dignity in her own language and builds a recipe passport she keeps for life; and Ramadan doesn't break the product — it is the product's finest month. Nothing to grind, nothing to lose, no one shamed: just a home that runs a little better every week, and an app that would take months of family memory with it if she ever left.
+Fit Life's engagement layer is not a points system — it is the house's memory. Each evening the mom closes her day in fifteen seconds: what her kitchen cooked, what her family loved, gold-marked days when guests were honored. Each week, Coach Sara answers with a plan that visibly changed because of it — and tells her why. Her weight journey stays hers alone; her children are never measured, only celebrated for curiosity; and her housekeeper is coordinated with dignity in her own language and builds a recipe passport she keeps for life. Nothing to grind, nothing to lose, no one shamed: just a home that runs a little better every week, and an app that would take months of family memory with it if she ever left. (And when Ramadan approaches, the season slots into the same spine — by design, not by migration.)
