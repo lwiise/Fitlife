@@ -20,6 +20,11 @@ import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { CloseDayBand } from "./CloseDayBand";
+import { RenewalRecapCard } from "./RenewalRecapCard";
+import {
+  isWithinRenewalWindow,
+  loadFamilyLedger,
+} from "@/lib/engagement/ledger";
 import { Logo } from "@/components/Logo";
 import { SettingsLink } from "@/components/SettingsLink";
 import { LogoutButton } from "./LogoutButton";
@@ -196,6 +201,22 @@ export default async function DashboardPage() {
         ],
       };
     }
+  }
+
+  // Renewal-week recap — active paid subs within 7 days of period end.
+  let renewalRecap = null;
+  if (
+    user &&
+    subscription?.status === "active" &&
+    subscription.lemonsqueezy_subscription_id &&
+    !subscription.cancel_at_period_end &&
+    subscription.current_period_end &&
+    isWithinRenewalWindow(subscription.current_period_end)
+  ) {
+    renewalRecap = {
+      ledger: await loadFamilyLedger(supabase, user.id),
+      cadence: subscription.cadence,
+    };
   }
 
   // Day-3 trial activation checklist — DB-derived, computed only while
@@ -457,6 +478,9 @@ export default async function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Renewal-week recap — celebratory bookkeeping, never a countdown */}
+        {renewalRecap && <RenewalRecapCard {...renewalRecap} />}
 
         {/* ختام اليوم — the retroactive daily check-in band */}
         {closeDayProps && <CloseDayBand {...closeDayProps} />}

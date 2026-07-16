@@ -37,9 +37,13 @@ const REASONS: Array<{ key: CancelReason; label: string }> = [
 export function CancelSubscription({
   tierName,
   endsAt,
+  ledgerLine,
 }: {
   tierName: string;
   endsAt: string | null;
+  /** Factual accumulated-value line («١٤ خطة أسبوعية لبيتٍ من ٥») — shown
+   *  once in the reason step, never repeated, never dramatized. */
+  ledgerLine?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -152,6 +156,11 @@ export function CancelSubscription({
         }}
         onCancel={close}
       >
+        {step === "reason" && ledgerLine && (
+          <p className="mb-3 text-sm text-brand-purple-900 bg-brand-lavender/20 rounded-xl px-4 py-3 leading-relaxed">
+            {ledgerLine}
+          </p>
+        )}
         {step === "reason" && (
           <div className="flex flex-wrap gap-2">
             {REASONS.map((r) => (

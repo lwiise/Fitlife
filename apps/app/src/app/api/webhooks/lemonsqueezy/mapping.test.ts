@@ -10,7 +10,13 @@ describe("mapLemonsqueezyStatus", () => {
     expect(mapLemonsqueezyStatus("active")).toBe("active");
   });
 
-  it.each(["paused", "past_due", "unpaid"])(
+  // A pause is a deliberate churn-deflection استراحة, not a billing failure —
+  // it must never trigger the past_due payment banner.
+  it("maps paused to paused", () => {
+    expect(mapLemonsqueezyStatus("paused")).toBe("paused");
+  });
+
+  it.each(["past_due", "unpaid"])(
     "maps %s to past_due",
     (status) => {
       expect(mapLemonsqueezyStatus(status)).toBe("past_due");
