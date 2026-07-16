@@ -1,13 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-// 00017 engagement tables. Not yet in the generated Database types (db:types
-// re-runs only when the migration is applied to prod), so reads go through an
-// untyped client — and tolerate the table not existing yet (pre-apply prod
-// returns an error object, which exports as an empty list rather than a 500).
+// 00017 engagement tables — included in the portability export.
 const ENGAGEMENT_TABLES = [
   "meal_checkins",
   "member_exceptions",
@@ -16,11 +14,11 @@ const ENGAGEMENT_TABLES = [
 ] as const;
 
 async function fetchEngagementRows(
-  supabase: unknown,
+  supabase: SupabaseClient<Database>,
   table: (typeof ENGAGEMENT_TABLES)[number],
   userId: string,
 ): Promise<unknown[]> {
-  const client = supabase as SupabaseClient;
+  const client = supabase;
   const { data } = await client
     .from(table)
     .select("*")

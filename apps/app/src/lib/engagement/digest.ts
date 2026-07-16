@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { Database } from "@/lib/supabase/database.types";
 import {
   computeEngagementDigest,
   type EngagementCheckinRow,
@@ -17,16 +18,13 @@ const ROW_CAP = 400;
  * generation digest. BEST-EFFORT BY CONTRACT: any failure — 00017 not yet
  * applied to prod, RLS hiccup, network — returns undefined and generation
  * proceeds exactly as before the engagement layer existed.
- *
- * Untyped client access: the 00017 tables enter the generated Database types
- * only after `db:types` re-runs post-apply (see lib/engagement/types.ts).
  */
 export async function fetchEngagementDigest(
-  supabase: unknown,
+  supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<EngagementDigest | undefined> {
   try {
-    const client = supabase as SupabaseClient;
+    const client = supabase;
     const since = new Date(
       Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();

@@ -1,7 +1,5 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 import { adminDb } from "./db";
 
 /**
@@ -31,7 +29,7 @@ const WINDOW_DAYS = 7;
 const RENEWAL_PROXY_DAYS = 20;
 
 export async function loadEngagementStats(): Promise<EngagementStats> {
-  const db = adminDb() as unknown as SupabaseClient;
+  const db = adminDb();
   const sinceIso = new Date(
     Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();

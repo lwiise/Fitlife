@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { Database } from "@/lib/supabase/database.types";
+
 import { planHasContent, type MealPlan } from "@fitlife/plan-engine";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
@@ -157,14 +159,14 @@ export function buildShareText(input: {
  * there is no usable plan at all.
  */
 export async function fetchWeeklyRecap(
-  supabase: unknown,
+  supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<WeeklyRecap | null> {
   const latest = await getLatestPlan(userId);
   const plan = latest?.plan_data;
   if (!plan || !planHasContent(plan)) return null;
 
-  const client = supabase as SupabaseClient;
+  const client = supabase;
   const weekStart = plan.week_start_date;
   const weekEnd = addDaysISO(weekStart, 6);
   // Verdicts carry no local_date; created_at from week start is close enough

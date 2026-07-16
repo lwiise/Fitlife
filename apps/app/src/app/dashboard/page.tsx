@@ -148,8 +148,7 @@ export default async function DashboardPage() {
     housekeeper.preferred_language !== "ar";
 
   // Day-3 trial activation checklist — DB-derived, computed only while
-  // trialing. body_logs is a 00017 table (untyped pre-regen, absent pre-apply
-  // in prod) so its probe is tolerant: an error just reads as "not yet".
+  // trialing.
   let trialChecklist;
   if (user && subscription?.status === "trialing") {
     const [chatCount, weightCount] = await Promise.all([
@@ -158,7 +157,7 @@ export default async function DashboardPage() {
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
         .limit(1),
-      (supabase as unknown as import("@supabase/supabase-js").SupabaseClient)
+      supabase
         .from("body_logs")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)

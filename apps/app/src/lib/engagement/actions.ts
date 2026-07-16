@@ -1,7 +1,6 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 import { canonicalRecipeKey } from "@fitlife/plan-engine";
@@ -68,9 +67,7 @@ export async function closeDay(rawInput: CloseDayInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
-  // 00017 tables aren't in the generated Database types until db:types re-runs
-  // post-apply — writes go through the untyped client (see lib/engagement/types.ts).
-  const db = supabase as unknown as SupabaseClient;
+  const db = supabase;
 
   const { error: checkinError } = await db.from("meal_checkins").upsert(
     input.slots.map((s) => ({
@@ -193,7 +190,7 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
   }
 
   const today = riyadhTodayISO();
-  const db = supabase as unknown as SupabaseClient;
+  const db = supabase;
 
   const { data: recent } = await db
     .from("body_logs")

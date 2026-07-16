@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { Lock } from "lucide-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -99,9 +98,7 @@ export default async function JourneyPage() {
     .single();
   const targetKg = profile?.is_pregnant ? null : (profile?.target_weight_kg ?? null);
 
-  // 00017 table — untyped pending db:types regen; empty pre-apply.
-  const db = supabase as unknown as SupabaseClient;
-  const { data: logRows } = await db
+  const { data: logRows } = await supabase
     .from("body_logs")
     .select("recorded_on,weight_kg")
     .eq("user_id", user.id)
