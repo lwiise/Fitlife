@@ -14,7 +14,8 @@ import {
   type LogBodyWeightInput,
 } from "./serverSchemas";
 
-const VALIDATION_ERROR_AR = "بيانات غير صالحة";
+const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، حاولي مرة أخرى";
+const AUTH_ERROR_AR = "انتهت الجلسة، سجّلي الدخول مرة أخرى";
 
 /** How many days back a day may still be closed («retroactive-first», 48h). */
 const GRACE_DAYS = 2;
@@ -41,7 +42,7 @@ export async function closeDay(rawInput: CloseDayInput) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, error: "Not authenticated" };
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
 
   const parsed = closeDayInputSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
@@ -174,7 +175,7 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, error: "Not authenticated" };
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
 
   const parsed = logBodyWeightSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };

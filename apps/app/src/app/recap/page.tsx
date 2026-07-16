@@ -32,18 +32,18 @@ function letterLines(recap: WeeklyRecap): string[] {
   const lines: string[] = [];
   if (recap.cooked_days > 0) {
     lines.push(
-      `هذا الأسبوع قامت سفرتكم من مطبخكم ${AR_NUM.format(recap.cooked_days)} ${recap.cooked_days === 1 ? "يوماً" : "أيام"}.`,
+      `هذا الأسبوع قامت سفرتكِ من مطبخكِ ${AR_NUM.format(recap.cooked_days)} ${recap.cooked_days === 1 ? "يوماً" : "أيام"}.`,
     );
   }
   if (recap.guest_days > 0) {
     lines.push(
       recap.guest_days === 1
-        ? "وليلة كرمٍ أضاءت بيتكم — الضيف له المقام."
-        : `و${AR_NUM.format(recap.guest_days)} ليالي كرمٍ أضاءت بيتكم.`,
+        ? "وليلة كرمٍ أضاءت بيتكِ — الضيف له المقام."
+        : `و${AR_NUM.format(recap.guest_days)} ليالي كرمٍ أضاءت بيتكِ.`,
     );
   }
   if (recap.top_dish) {
-    lines.push(`طبق الأسبوع عندكم: «${recap.top_dish.recipe_name_ar}».`);
+    lines.push(`طبق الأسبوع عندكِ: «${recap.top_dish.recipe_name_ar}».`);
   }
   if (lines.length === 0) {
     lines.push("أسبوع هادئ — وخطة الأسبوع القادم جاهزة متى ما كنتِ مستعدة.");
@@ -81,7 +81,7 @@ export default async function RecapPage() {
               href="/plan"
               className="inline-flex items-center justify-center min-h-11 px-5 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
-              إلى خطتك
+              افتحي خطتك
             </Link>
           </section>
         ) : (
@@ -112,26 +112,37 @@ export default async function RecapPage() {
               </div>
 
               {/* Week strip — gold = hospitality honored, purple = cooked */}
-              <div className="flex gap-1.5" role="img" aria-label="أيام الأسبوع">
-                {recap.day_cells.map((cell) => (
-                  <span
-                    key={cell.local_date}
-                    title={cell.local_date}
-                    className={
-                      "size-9 rounded-lg text-xs font-bold flex items-center justify-center " +
-                      (cell.state === "guest"
-                        ? "bg-brand-yellow text-brand-ink"
-                        : cell.state === "cooked"
-                          ? "bg-brand-purple-900 text-white"
-                          : cell.state === "logged"
-                            ? "bg-brand-lavender/40 text-brand-purple-900"
-                            : "border border-dashed border-brand-ink/20 text-brand-ink-muted")
-                    }
-                  >
-                    {dayInitial(cell.local_date)}
-                  </span>
-                ))}
-              </div>
+              <ul className="flex gap-1.5 list-none p-0 m-0" aria-label="أيام الأسبوع">
+                {recap.day_cells.map((cell) => {
+                  const stateLabel =
+                    cell.state === "guest"
+                      ? "يوم كرم"
+                      : cell.state === "cooked"
+                        ? "طُبخ من الخطة"
+                        : cell.state === "logged"
+                          ? "يوم مسجل"
+                          : "بلا تسجيل";
+                  return (
+                    <li
+                      key={cell.local_date}
+                      title={cell.local_date}
+                      className={
+                        "size-9 rounded-lg text-xs font-bold flex items-center justify-center " +
+                        (cell.state === "guest"
+                          ? "bg-brand-yellow text-brand-ink"
+                          : cell.state === "cooked"
+                            ? "bg-brand-purple-900 text-white"
+                            : cell.state === "logged"
+                              ? "bg-brand-lavender/40 text-brand-purple-900"
+                              : "border border-dashed border-brand-ink/20 text-brand-ink-muted")
+                      }
+                    >
+                      <span aria-hidden="true">{dayInitial(cell.local_date)}</span>
+                      <span className="sr-only">{`${cell.local_date}: ${stateLabel}`}</span>
+                    </li>
+                  );
+                })}
+              </ul>
               <p className="text-xs text-brand-ink-muted">
                 الذهبي يوم كرم — يُحسب لكِ، لا عليكِ.
               </p>
@@ -168,7 +179,7 @@ export default async function RecapPage() {
                   key={label}
                   className="bg-white rounded-2xl border border-brand-ink/5 p-4 text-center"
                 >
-                  <Icon className="size-4 text-brand-pink mx-auto" aria-hidden="true" />
+                  <Icon className="size-4 text-brand-purple-900 mx-auto" aria-hidden="true" />
                   <p className="text-2xl font-extrabold text-brand-purple-900 mt-1">
                     {value}
                   </p>

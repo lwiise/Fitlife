@@ -61,7 +61,7 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
             type="button"
             onClick={() => setRevealed((r) => !r)}
             aria-pressed={revealed}
-            className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-full text-sm font-bold text-brand-purple-900 hover:bg-brand-lavender/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-full text-sm font-bold text-brand-purple-900 hover:bg-brand-lavender/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
           >
             {revealed ? (
               <>
@@ -78,6 +78,13 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
         )}
       </div>
 
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+        className="space-y-4"
+      >
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-xs font-bold text-brand-ink-muted">الوزن (كجم)</span>
@@ -89,7 +96,7 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
             max={300}
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
-            className="mt-1 w-full min-h-12 rounded-xl border border-brand-ink/15 bg-brand-surface px-4 font-bold text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            className="mt-1 w-full min-h-12 rounded-xl border border-brand-ink/15 bg-brand-surface px-4 font-bold text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
           />
         </label>
         <label className="block">
@@ -104,13 +111,13 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
             max={250}
             value={waist}
             onChange={(e) => setWaist(e.target.value)}
-            className="mt-1 w-full min-h-12 rounded-xl border border-brand-ink/15 bg-brand-surface px-4 font-bold text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            className="mt-1 w-full min-h-12 rounded-xl border border-brand-ink/15 bg-brand-surface px-4 font-bold text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
           />
         </label>
       </div>
 
       {message && (
-        <p role="alert" className="text-sm font-bold text-brand-pink">
+        <p role="alert" className="text-sm font-bold text-red-700">
           {message}
         </p>
       )}
@@ -121,13 +128,13 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
       )}
 
       <button
-        type="button"
-        onClick={submit}
+        type="submit"
         disabled={pending}
         className="w-full min-h-12 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 font-bold transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
       >
         {pending ? "يُحفظ…" : "حفظ"}
       </button>
+      </form>
       <p className="text-xs text-brand-ink-muted">
         مرة واحدة في الأسبوع تكفي — ويمكنك التخطي متى شئتِ بلا أي تذكير مزعج.
       </p>

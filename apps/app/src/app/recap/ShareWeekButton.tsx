@@ -27,6 +27,7 @@ export function ShareWeekButton({
     >
       <Share2 className="size-4" aria-hidden="true" />
       شاركي أسبوعك
+      <span className="sr-only">(يفتح واتساب في نافذة جديدة)</span>
     </a>
   );
 }

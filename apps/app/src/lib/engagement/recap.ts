@@ -147,8 +147,8 @@ export function buildShareText(input: {
       input.guest_days === 1 ? "وليلة كرم" : `و${AR_NUM.format(input.guest_days)} ليالي كرم`,
     );
   }
-  const body = parts.length > 0 ? parts.join(" ") : "أسبوع جديد على نظام بيتنا";
-  return `أسبوعنا مع فِت لايف: ${body} — fitlife-app-mvp.netlify.app`;
+  const body = parts.length > 0 ? parts.join(" ") : "أسبوع جديد مع خطة بيتنا";
+  return `أسبوعنا مع فت لايف: ${body} — fitlife-app-mvp.netlify.app`;
 }
 
 /**
