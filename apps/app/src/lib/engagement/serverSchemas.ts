@@ -36,6 +36,13 @@ const exceptionEntry = z.object({
   slot: z.enum(CHECKIN_SLOTS),
 });
 
+// وزنكِ الخاص — weekly mom weigh-in. Ranges mirror the 00017 DB CHECKs.
+export const logBodyWeightSchema = z.object({
+  weight_kg: z.number().min(20).max(300),
+  waist_cm: z.number().min(30).max(250).nullish(),
+});
+export type LogBodyWeightInput = z.infer<typeof logBodyWeightSchema>;
+
 export const closeDayInputSchema = z.object({
   meal_plan_id: uuid,
   day_index: z.number().int().min(0).max(6),

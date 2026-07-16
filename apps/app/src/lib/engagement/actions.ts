@@ -7,7 +7,12 @@ import { revalidatePath } from "next/cache";
 import { canonicalRecipeKey } from "@fitlife/plan-engine";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
-import { closeDayInputSchema, type CloseDayInput } from "./serverSchemas";
+import {
+  closeDayInputSchema,
+  logBodyWeightSchema,
+  type CloseDayInput,
+  type LogBodyWeightInput,
+} from "./serverSchemas";
 
 const VALIDATION_ERROR_AR = "بيانات غير صالحة";
 
@@ -152,4 +157,83 @@ export async function closeDay(rawInput: CloseDayInput) {
   revalidatePath("/dashboard");
   revalidatePath("/plan");
   return { ok: true as const, local_date: localDate };
+}
+
+/**
+ * وزنكِ الخاص — the mom's private weigh-in.
+ *
+ * v1 is mom-only and ADULTS-ONLY (18+ by birth_year; the schema-level stance
+ * that children are never weighed extends to any under-18 account). Cadence is
+ * weekly by design — ED-safety, not a technical limit: a second weigh-in in
+ * the same week is refused gently, while re-submitting TODAY's value upserts
+ * as a correction. The latest value also refreshes the profiles.weight_kg
+ * scalar so next week's generation uses the freshest number.
+ */
+export async function logBodyWeight(rawInput: LogBodyWeightInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Not authenticated" };
+
+  const parsed = logBodyWeightSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  const input = parsed.data;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("birth_year")
+    .eq("id", user.id)
+    .single();
+  const birthYear = (profile as { birth_year?: number | null } | null)?.birth_year;
+  const age = birthYear ? new Date().getFullYear() - birthYear : null;
+  if (age !== null && age < 18) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  const today = riyadhTodayISO();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: recent } = await db
+    .from("body_logs")
+    .select("recorded_on")
+    .eq("user_id", user.id)
+    .eq("member_id", "mom")
+    .gte("recorded_on", addDaysISO(today, -6))
+    .limit(7);
+  const hasOtherThisWeek = ((recent ?? []) as Array<{ recorded_on: string }>).some(
+    (r) => r.recorded_on !== today,
+  );
+  if (hasOtherThisWeek) {
+    return {
+      ok: false as const,
+      error: "سجّلتِ وزنك هذا الأسبوع — مرة واحدة في الأسبوع تكفي",
+    };
+  }
+
+  const { error: logError } = await db.from("body_logs").upsert(
+    {
+      user_id: user.id,
+      member_id: "mom",
+      recorded_on: today,
+      weight_kg: input.weight_kg,
+      waist_cm: input.waist_cm ?? null,
+    },
+    { onConflict: "user_id,member_id,recorded_on" },
+  );
+  if (logError) {
+    Sentry.captureException(logError, {
+      tags: { area: "engagement", step: "body-log-upsert", userId: user.id },
+    });
+    return { ok: false as const, error: "تعذر حفظ وزنك، حاولي مرة أخرى" };
+  }
+
+  // Best-effort scalar mirror — generation reads profiles.weight_kg.
+  await supabase
+    .from("profiles")
+    .update({ weight_kg: input.weight_kg })
+    .eq("id", user.id);
+
+  revalidatePath("/journey");
+  return { ok: true as const, recorded_on: today };
 }
