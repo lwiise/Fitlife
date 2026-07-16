@@ -47,25 +47,23 @@ const GOALS: { value: UserGoal; label: string }[] = [
   { value: "improve_health", label: "تحسين الحالة الصحية" },
 ];
 
-// Step keys, in the employer questionnaire's order (07/2026): basic data →
-// goal → activity → health → pregnancy → meds → restrictions → food prefs →
-// habits → 24h recall → water/sleep/stress → diet history. The doctor step is
-// appended only when a medical signal requires it, and male owners skip the
-// pregnancy step — the wizard length adapts.
+// Step keys (07/2026 consolidation): the employer questionnaire's 14 screens
+// are folded into 10 without dropping a question — goal+activity share the
+// calorie-equation screen, health conditions sit with meds/supplements, taste
+// (likes/dislikes) with the kitchen, habits with the 24h recall, and the
+// never-eat question lives with allergies (it's a hard exclusion). The doctor
+// step is appended only when a medical signal requires it, and male owners
+// skip the pregnancy step — the wizard length adapts.
 const BASE_STEPS = [
   "identity",
   "physical",
-  "goal",
-  "activity",
-  "medical",
+  "goalActivity",
+  "healthMeds",
   "pregnancy",
-  "medsSupps",
   "restrictions",
-  "foodPrefs",
-  "habits",
-  "recall",
+  "tasteKitchen",
+  "habitsRecall",
   "lifestyle",
-  "kitchen",
   "dietHistory",
 ] as const;
 type StepKey = (typeof BASE_STEPS)[number] | "doctor";
@@ -359,73 +357,75 @@ export function MomWizard() {
               />
             )}
 
-            {step === "activity" && (
+            {step === "goalActivity" && (
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    ما مستوى نشاطك؟
+                    هدفك ومستوى نشاطك
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     {g(
-                      "اختاري الوصف الأقرب ليومك — عليه نبني معادلة السعرات.",
-                      "اختر الوصف الأقرب ليومك — عليه نبني معادلة السعرات.",
+                      "نبني خطتك حول هدفك أنتِ، وعلى نشاطك نبني معادلة السعرات.",
+                      "نبني خطتك حول هدفك أنتَ، وعلى نشاطك نبني معادلة السعرات.",
                     )}
                   </p>
                 </header>
 
-                <div className="space-y-2">
-                  {(Object.keys(ACTIVITY_LEVEL_LABELS) as ActivityLevel[]).map((level) => (
-                    <OptionButton
-                      key={level}
-                      full
-                      active={activityLevel === level}
-                      onClick={() => setActivityLevel(level)}
-                    >
-                      {ACTIVITY_LEVEL_LABELS[level]}
-                    </OptionButton>
-                  ))}
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    ما هدفك الرئيسي؟
+                  </p>
+                  <div className="space-y-2">
+                    {GOALS.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        full
+                        active={userGoal === o.value}
+                        onClick={() => {
+                          setError(null);
+                          setUserGoal(o.value);
+                        }}
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    ما مستوى نشاطك؟
+                  </p>
+                  <div className="space-y-2">
+                    {(Object.keys(ACTIVITY_LEVEL_LABELS) as ActivityLevel[]).map((level) => (
+                      <OptionButton
+                        key={level}
+                        full
+                        active={activityLevel === level}
+                        onClick={() => {
+                          setError(null);
+                          setActivityLevel(level);
+                        }}
+                      >
+                        {ACTIVITY_LEVEL_LABELS[level]}
+                      </OptionButton>
+                    ))}
+                  </div>
                 </div>
 
                 <PrimaryButton
                   onClick={() => {
+                    if (!userGoal) return setError(g("اختاري هدفك", "اختر هدفك"));
                     if (!activityLevel)
                       return setError(g("حدّدي مستوى نشاطك", "حدّد مستوى نشاطك"));
+                    // The goal itself persists at final submit — its Sara
+                    // mapping needs the health answers from later steps.
                     startTransition(async () => {
                       await saveProfileStep({ activity_level: activityLevel });
                       goNext();
                     });
                   }}
                   isPending={isPending}
-                >
-                  التالي
-                </PrimaryButton>
-              </div>
-            )}
-
-            {step === "goal" && (
-              <div className="space-y-6">
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    ما هدفك الرئيسي؟
-                  </h2>
-                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    {g("نبني خطتك حول هدفك أنتِ.", "نبني خطتك حول هدفك أنتَ.")}
-                  </p>
-                </header>
-                <div className="space-y-2">
-                  {GOALS.map((g) => (
-                    <OptionButton
-                      key={g.value}
-                      full
-                      active={userGoal === g.value}
-                      onClick={() => setUserGoal(g.value)}
-                    >
-                      {g.label}
-                    </OptionButton>
-                  ))}
-                </div>
-                <PrimaryButton
-                  onClick={() => (userGoal ? goNext() : setError(g("اختاري هدفك", "اختر هدفك")))}
                 >
                   التالي
                 </PrimaryButton>
@@ -611,50 +611,12 @@ export function MomWizard() {
                   </p>
                 </div>
 
-                <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
-              </div>
-            )}
-
-            {step === "foodPrefs" && (
-              <div className="space-y-6">
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    تفضيلات الطعام
-                  </h2>
-                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نبني الخطة حول ذوقك. الكل اختياري.
-                  </p>
-                </header>
-
                 <div>
                   <p className="text-sm font-bold text-brand-ink mb-2">
-                    {g("أطعمة تحبينها", "أطعمة تحبها")}
-                  </p>
-                  <ChipInput
-                    value={likedFoods}
-                    onChange={setLikedFoods}
-                    disabled={isPending}
-                    ariaLabel="أطعمة مفضلة"
-                    placeholder="مثلاً: سلمون، شوفان"
-                  />
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-brand-ink mb-2">
-                    {g("أطعمة لا تحبينها", "أطعمة لا تحبها")}
-                  </p>
-                  <ChipInput
-                    value={dislikes}
-                    onChange={setDislikes}
-                    disabled={isPending}
-                    ariaLabel="أطعمة غير محببة"
-                    placeholder="مثلاً: كبدة، باذنجان"
-                  />
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-brand-ink mb-2">
-                    {g("أطعمة لا تتناولينها نهائياً", "أطعمة لا تتناولها نهائياً")}
+                    {g(
+                      "أطعمة لا تتناولينها نهائياً (اختياري)",
+                      "أطعمة لا تتناولها نهائياً (اختياري)",
+                    )}
                   </p>
                   <ChipInput
                     value={neverEat}
@@ -672,36 +634,137 @@ export function MomWizard() {
               </div>
             )}
 
-            {step === "medical" && (
+            {step === "tasteKitchen" && (
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    {g("هل لديكِ حالة صحية؟", "هل لديك حالة صحية؟")}
+                    ذوقك ومطبخك
+                  </h2>
+                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
+                    نبني الوصفات على ذوقك وبالطرق المتاحة لديك.
+                  </p>
+                </header>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("أطعمة تحبينها (اختياري)", "أطعمة تحبها (اختياري)")}
+                  </p>
+                  <ChipInput
+                    value={likedFoods}
+                    onChange={setLikedFoods}
+                    disabled={isPending}
+                    ariaLabel="أطعمة مفضلة"
+                    placeholder="مثلاً: سلمون، شوفان"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("أطعمة لا تحبينها (اختياري)", "أطعمة لا تحبها (اختياري)")}
+                  </p>
+                  <ChipInput
+                    value={dislikes}
+                    onChange={setDislikes}
+                    disabled={isPending}
+                    ariaLabel="أطعمة غير محببة"
+                    placeholder="مثلاً: كبدة، باذنجان"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">المطبخ المفضل</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CUISINES.map((o) => (
+                      <OptionButton
+                        key={o.value}
+                        active={cuisinePref === o.value}
+                        onClick={() => {
+                          setError(null);
+                          setCuisinePref(o.value);
+                        }}
+                      >
+                        {o.label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    طرق الطبخ المفضلة (يمكن اختيار أكثر من خيار)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {COOKING.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() =>
+                          setCookingMethods((s) =>
+                            s.includes(o.value)
+                              ? s.filter((v) => v !== o.value)
+                              : [...s, o.value],
+                          )
+                        }
+                        aria-pressed={cookingMethods.includes(o.value)}
+                        className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                          cookingMethods.includes(o.value)
+                            ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                            : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <PrimaryButton
+                  onClick={() =>
+                    cuisinePref
+                      ? goNext()
+                      : setError(g("اختاري المطبخ المفضل", "اختر المطبخ المفضل"))
+                  }
+                >
+                  التالي
+                </PrimaryButton>
+              </div>
+            )}
+
+            {step === "healthMeds" && (
+              <div className="space-y-6">
+                <header>
+                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
+                    صحتك وأدويتك
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     {g(
-                      "اختاري ما ينطبق عليكِ، أو تجاوزي إن لم يوجد.",
-                      "اختر ما ينطبق عليك، أو تجاوز إن لم يوجد.",
+                      "اختاري ما ينطبق عليكِ وننسّق الخطة معه، أو تجاوزي إن لم يوجد.",
+                      "اختر ما ينطبق عليك وننسّق الخطة معه، أو تجاوز إن لم يوجد.",
                     )}
                   </p>
                 </header>
 
-                <div className="flex flex-wrap gap-2">
-                  {[...GATE_CONDITIONS, ...STABLE_CONDITIONS].map((c) => (
-                    <button
-                      key={c.slug}
-                      type="button"
-                      onClick={() => toggleCondition(c.slug)}
-                      aria-pressed={conditions.includes(c.slug)}
-                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                        conditions.includes(c.slug)
-                          ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
-                      }`}
-                    >
-                      {c.label_ar}
-                    </button>
-                  ))}
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g("هل لديكِ حالة صحية؟", "هل لديك حالة صحية؟")}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[...GATE_CONDITIONS, ...STABLE_CONDITIONS].map((c) => (
+                      <button
+                        key={c.slug}
+                        type="button"
+                        onClick={() => toggleCondition(c.slug)}
+                        aria-pressed={conditions.includes(c.slug)}
+                        className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                          conditions.includes(c.slug)
+                            ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                            : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                        }`}
+                      >
+                        {c.label_ar}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -720,23 +783,6 @@ export function MomWizard() {
                   />
                 </div>
 
-                <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
-              </div>
-            )}
-
-            {step === "medsSupps" && (
-              <div className="space-y-6">
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    الأدوية والمكملات
-                  </h2>
-                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    {g(
-                      "ننسّق توقيت الوجبات معها. تجاوزي إن لم تستخدمي شيئاً.",
-                      "ننسّق توقيت الوجبات معها. تجاوز إن لم تستخدم شيئاً.",
-                    )}
-                  </p>
-                </header>
                 <div>
                   <p className="text-sm font-bold text-brand-ink mb-2">
                     {g("أدوية تستخدمينها بانتظام (اختياري)", "أدوية تستخدمها بانتظام (اختياري)")}
@@ -748,7 +794,11 @@ export function MomWizard() {
                     ariaLabel="أدوية مستخدمة بانتظام"
                     placeholder="مثلاً: ميتفورمين"
                   />
+                  <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                    ننسّق توقيت الوجبات معها.
+                  </p>
                 </div>
+
                 <div>
                   <p className="text-sm font-bold text-brand-ink mb-2">
                     مكملات غذائية (اختياري)
@@ -761,15 +811,16 @@ export function MomWizard() {
                     placeholder="مثلاً: حديد، فيتامين د"
                   />
                 </div>
+
                 <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
               </div>
             )}
 
-            {step === "habits" && (
+            {step === "habitsRecall" && (
               <div className="space-y-6">
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    عاداتك الغذائية
+                    عاداتك ويومك الغذائي
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     نوزّع الوجبات على إيقاع يومك الفعلي.
@@ -785,7 +836,10 @@ export function MomWizard() {
                       <OptionButton
                         key={o.value}
                         active={mealsPerDay === o.value}
-                        onClick={() => setMealsPerDay(o.value)}
+                        onClick={() => {
+                          setError(null);
+                          setMealsPerDay(o.value);
+                        }}
                       >
                         {o.label}
                       </OptionButton>
@@ -798,13 +852,49 @@ export function MomWizard() {
                     {g("هل تطبّقين الصيام المتقطع؟", "هل تطبّق الصيام المتقطع؟")}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
-                    <OptionButton active={fasting === "no"} onClick={() => setFasting("no")}>
+                    <OptionButton
+                      active={fasting === "no"}
+                      onClick={() => {
+                        setError(null);
+                        setFasting("no");
+                      }}
+                    >
                       لا
                     </OptionButton>
-                    <OptionButton active={fasting === "yes"} onClick={() => setFasting("yes")}>
+                    <OptionButton
+                      active={fasting === "yes"}
+                      onClick={() => {
+                        setError(null);
+                        setFasting("yes");
+                      }}
+                    >
                       نعم
                     </OptionButton>
                   </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-brand-ink mb-2">
+                    {g(
+                      "اكتبي كل ما تناولتِه خلال آخر 24 ساعة مع المشروبات (اختياري)",
+                      "اكتب كل ما تناولته خلال آخر 24 ساعة مع المشروبات (اختياري)",
+                    )}
+                  </p>
+                  <textarea
+                    value={foodRecall}
+                    onChange={(e) => setFoodRecall(e.target.value)}
+                    maxLength={1000}
+                    rows={5}
+                    aria-label={g(
+                      "ما تناولتِه خلال آخر 24 ساعة",
+                      "ما تناولته خلال آخر 24 ساعة",
+                    )}
+                    className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+                    placeholder="مثلاً: فطور — قهوة بحليب وتمرتان…"
+                  />
+                  <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                    يساعدنا نفهم يومك.
+                  </p>
                 </div>
 
                 <PrimaryButton
@@ -819,37 +909,6 @@ export function MomWizard() {
                   }}
                 >
                   التالي
-                </PrimaryButton>
-              </div>
-            )}
-
-            {step === "recall" && (
-              <div className="space-y-6">
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    يومك الغذائي
-                  </h2>
-                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    {g(
-                      "اكتبي كل ما تناولتِه خلال آخر 24 ساعة مع المشروبات. اختياري — يساعدنا نفهم يومك.",
-                      "اكتب كل ما تناولته خلال آخر 24 ساعة مع المشروبات. اختياري — يساعدنا نفهم يومك.",
-                    )}
-                  </p>
-                </header>
-                <textarea
-                  value={foodRecall}
-                  onChange={(e) => setFoodRecall(e.target.value)}
-                  maxLength={1000}
-                  rows={6}
-                  aria-label={g(
-                    "ما تناولتِه خلال آخر 24 ساعة",
-                    "ما تناولته خلال آخر 24 ساعة",
-                  )}
-                  className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
-                  placeholder="مثلاً: فطور — قهوة بحليب وتمرتان…"
-                />
-                <PrimaryButton onClick={goNext}>
-                  {foodRecall.trim() ? "التالي" : "تخطّي"}
                 </PrimaryButton>
               </div>
             )}
@@ -936,73 +995,6 @@ export function MomWizard() {
                   />
                 </div>
                 <PrimaryButton onClick={goNext}>التالي</PrimaryButton>
-              </div>
-            )}
-
-            {step === "kitchen" && (
-              <div className="space-y-6">
-                <header>
-                  <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">
-                    مطبخك وطرق الطبخ
-                  </h2>
-                  <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نبني الوصفات على ذوقك وبالطرق المتاحة لديك.
-                  </p>
-                </header>
-
-                <div>
-                  <p className="text-sm font-bold text-brand-ink mb-2">المطبخ المفضل</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CUISINES.map((o) => (
-                      <OptionButton
-                        key={o.value}
-                        active={cuisinePref === o.value}
-                        onClick={() => setCuisinePref(o.value)}
-                      >
-                        {o.label}
-                      </OptionButton>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-brand-ink mb-2">
-                    طرق الطبخ المفضلة (يمكن اختيار أكثر من خيار)
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {COOKING.map((o) => (
-                      <button
-                        key={o.value}
-                        type="button"
-                        onClick={() =>
-                          setCookingMethods((s) =>
-                            s.includes(o.value)
-                              ? s.filter((v) => v !== o.value)
-                              : [...s, o.value],
-                          )
-                        }
-                        aria-pressed={cookingMethods.includes(o.value)}
-                        className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                          cookingMethods.includes(o.value)
-                            ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
-                            : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
-                        }`}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <PrimaryButton
-                  onClick={() =>
-                    cuisinePref
-                      ? goNext()
-                      : setError(g("اختاري المطبخ المفضل", "اختر المطبخ المفضل"))
-                  }
-                >
-                  التالي
-                </PrimaryButton>
               </div>
             )}
 
