@@ -244,6 +244,64 @@ Also cross-cutting: one **notification/prompt budget** owner — summed naively,
 
 ---
 
-## 8. One-paragraph summary for the pitch deck
+## 8. Evidence check — retention & monetization validation (07/2026)
+
+A web-research pass (5 search angles → 23 sources → 93 extracted claims → adversarial verification; verification was partially interrupted by a usage limit, so confidence labels below are honest: **[verified]** = survived 3-vote adversarial check, **[sourced]** = direct quote extracted from the source but not fully cross-verified, **[vendor]** = from a company selling retention tooling — directionally useful, self-interested).
+
+### Verdict per mechanic
+
+**M1 — 15-second retroactive check-in: CONFIRMED (strongest evidence in the set).**
+- Simplified daily diet check-ins hit a median **97% of days logged vs 49%** for full food logging in an RCT — with *identical* weight outcomes (−3.3 vs −3.4 kg) [sourced, JMIR Formative Research 2022].
+- Even with in-app reminders and coaching context, median MyFitnessPal logging is **1.9–5.3 days/week**, and fewer than half of participants still track by week 10 of a 6-month program [sourced, JMIR mHealth 2019; PMC6856872]. Complete-day logging is NOT associated with weight loss; days-with-any-tracking is (R²=0.27) [sourced, PMC9159560/PMC6856872].
+- Missing a single entry triggers an abandonment spiral in food journalers, and heavyweight logging produces "negative nudges" (users avoid foods that are hard to log); home-cooked meals are specifically hard to log — validating dish-level check-ins over any quantity/nutrient entry [sourced, CHI 2015, n=141 + 5,526 forum posts].
+- **Design consequence:** adherence WILL decline — every downstream surface (letter, digest, Sara) must degrade gracefully on sparse data. Already in the plan (minimum-signal guard); now evidence-backed.
+
+**M2 — Self-set weekly rhythm + hospitality pardons + repair: CONFIRMED, three refinements adopted.**
+- **[verified 3-0]** Duolingo: users *picking their own* streak goal is where the engagement comes from — pre-selecting the goal for them destroyed the benefit. Validates the self-set weekly declaration.
+- **[verified 3-0]** Duolingo: streak-freeze forgiveness measurably raised lapsed-user return rates.
+- **[verified 2-0]** Duolingo "Earn Back": streak repair is earned by doing the core action within a window, not just granted.
+- [sourced] "Emergency reserve" goal research: reserve-framed goals beat BOTH stricter and easier goals on post-miss recovery (rebound rates 55%/47% vs 37% hard / 44% easy); the effect **requires the reserve to be scarce, visible, and feel spent when used** — invisible/unlimited forgiveness forfeits the motivation. Rigid schedules undermined habit persistence vs flexible ones in a 2,508-person field experiment [sourced, JMR 2017; OBHDP 2021; Mgmt Sci 2021].
+- Caveat: head-to-head academic evidence that self-set beats assigned goals is thin (a 2026 feasibility trial couldn't test it, n=24) — Duolingo's production data is the strongest signal here.
+- **Refinements adopted:** (1) pardons are **pre-granted and visible** (e.g., ٢ tokens per week shown up front — a lapsed user won't come back to earn protection after the miss); (2) the weekly repair requires doing the core action (close yesterday + declare tomorrow), Earn-Back style, not just tapping a reason; (3) the weekly milestone moment deserves real design investment — Duolingo moved day-7 retention **+1.7% with a single milestone animation** [sourced, teardown].
+
+**M3 — Dish votes → visible AI personalization: SUPPORTED (mechanism-level), no direct precedent — this is our bet.**
+- Dish-level feedback matches the documented pain (home-cooked meals defeat database logging). Accumulated-data recaps demonstrably create lock-in (Wrapped's retention effect) [sourced]. And the category's problem is precisely post-payment retention (below). But **no published study tests a visible AI changelog** — instrument it ourselves: % of regens honoring a veto, renewal delta for households with ≥N votes. This stays the thesis, now explicitly framed as the experiment.
+
+**M4 + M5 — Weekly letter/receipt + WhatsApp share cards: SUPPORTED, one cadence refinement.**
+- Wrapped: ~60M shared recap stories (2021), a 21% download lift in release week (2020), engineered for sharing (9:16 pre-formatted assets, share buttons throughout) and functions as retention lock-in via accumulated data [sourced, marketing analyses].
+- Duolingo's milestone share cards raised organic sharing **5–10x**, ~6M shares/day [sourced, teardown].
+- **Refinement adopted: sharing spikes at MILESTONES, not on a flat weekly cadence** — the weekly card stays quiet; the big share moments are milestones (week 10 of her rhythm, 25th golden dish, season recaps). Cards pre-formatted 9:16 for Stories/WhatsApp with one-tap share.
+- KSA channel fit: WhatsApp is the dominant consumer channel (~33M users claimed; vendor figure, uncited — but penetration >90% is corroborated) [vendor].
+
+**M6 — Private weekly weigh-in: SUPPORTED.**
+- Weight self-monitoring sustains far higher adherence (4.8–5.1 days/week) than diet logging in the same users — it's the lowest-burden, most durable tracking habit [sourced, JMIR 2019]. Weekly cadence gating + ED guardrails stay as designed.
+
+**M7 — Pause-before-cancel + ledger + annual upgrade: STRONGLY CONFIRMED, two placement refinements.**
+- Pause: **58% of consumers paused a subscription instead of canceling** in the past year; **79% want a pause option when deciding to subscribe** (pause helps conversion, not just churn); ~25% of would-be cancelers deflect to pause where offered; ~**75% of pausers return**; only ~37% of subscriptions even offer pause — a differentiator [vendor: Chargebee survey, Recurly platform data].
+- Cancel-flow economics: B2C churn ≈ 39%/year and **76% of it is voluntary** — the cancel flow targets the biggest bucket; discount-acceptors in cancel flows stay 5.1 months longer on average (3M+ session dataset) [vendor: Churnkey].
+- Annual: Health & Fitness is the **only category where annual plans dominate revenue (60.6%, up from 51% in 2023)**; day-380 retention is **19.9% annual vs 14.2% monthly vs 5.5% weekly**; annual-trial subscribers show **+63.6% LTV** [vendor: Adapty 2026, 16k apps/$3B].
+- **Refinements adopted:** (1) the cancel flow matches the offer to the stated reason — cost → discount/downgrade, low usage → pause, "didn't work" → Sara check-in — not one flat pause offer; (2) **annual is offered at trial conversion, not only at renewal week** (the trial itself should default to the annual plan with monthly as the visible alternative).
+
+**M8 — Day-3 trial activation checklist: CONFIRMED, with a trial-length experiment attached.**
+- **89.4% of trials start on day 0**, and H&F conversions are bimodal — day 0 or days 4–7, almost nothing between: day 3 is exactly the pre-decision window [vendor: Adapty].
+- Benchmarks to beat: H&F trial-to-paid ≈ **35% (Adapty avg) / 39.9% median, 68.3% top-decile (RevenueCat**, page fetch-blocked — figures from indexed snippets).
+- Trial length: **≤4-day trials convert at 26.8% median vs 45.7% for 17–32-day trials** [vendor: RevenueCat, same caveat] — the 14-day-trial experiment is now a recommendation, not an open question.
+- Paywall placement: paywalls shown after a demonstrated value moment get **~2.1x higher trial-start rates** than immediate hard paywalls [vendor: Adapty].
+- Caution [sourced, JMIR]: re-ordering onboarding tasks alone did NOT improve engagement in a randomized comparison — the checklist works only if each step delivers real value (the housekeeper handoff), not as checklist theater.
+
+**The category's brutal number that justifies this whole layer:** Health & Fitness has the **worst first-renewal retention of any app category — 30.3%** (vs 58.1% best) despite the highest trial conversion [vendor: Adapty]. Users commit fast and churn at renewal #1. Renewal-1 retention is THE metric this layer must move.
+
+**Gulf-specific:** Qatar/UAE produce $27+ LTV (above US average) with the lowest refund rates globally; KSA prices at parity with the US [vendor: Adapty] — premium pricing is viable. WhatsApp Business API unit economics for outbound recaps: utility messages ≈ $0.011–0.016 each (≈ 0.05 SAR; a weekly recap ≈ 0.2 SAR/user/month) + BSP setup/monthly fees; **Meta's Jan 2026 policy bans open-ended AI chatbots on the API** (templated recaps are fine; Sara-chat-over-WhatsApp is not), and PDPL requires explicit opt-in [vendor].
+
+### The five monetization gaps this check exposed in our plan
+1. **No explicit renewal-1 playbook.** The category loses ~70% of payers at first renewal; our plan must name renewal-1 retention as its primary success metric and concentrate the letter/ledger/annual offers into weeks 2–4 of the first paid cycle.
+2. **Annual offered too late.** Category norm is annual-dominant revenue; move the annual offer to trial conversion (and default the trial to the annual plan), keep the renewal-week offer as the second chance.
+3. **Flat cancel flow.** Reason-matched offers (pause / discount / coach check-in) measurably outperform a single save offer.
+4. **Treating "no push" as immutable.** WhatsApp utility messages cost pennies at 90%+ penetration and 92–98% claimed open rates — a templated weekly "خطة أسبوعك جاهزة" + recap delivery is the cheapest channel unlock available, gated only on PDPL opt-in UX. This should be a phase-2 decision, not a someday note.
+5. **Trial length untested.** The 26.8%-vs-45.7% spread by trial length is too large to ignore — A/B 7 vs 14 days once the day-3 checklist ships.
+
+---
+
+## 9. One-paragraph summary for the pitch deck
 
 Fit Life's engagement layer is not a points system — it is the house's memory. Each evening the mom closes her day in fifteen seconds: what her kitchen cooked, what her family loved, gold-marked days when guests were honored. Each week, Coach Sara answers with a plan that visibly changed because of it — and tells her why. Her weight journey stays hers alone; her children are never measured, only celebrated for curiosity; and her housekeeper is coordinated with dignity in her own language and builds a recipe passport she keeps for life. Nothing to grind, nothing to lose, no one shamed: just a home that runs a little better every week, and an app that would take months of family memory with it if she ever left. (And when Ramadan approaches, the season slots into the same spine — by design, not by migration.)
