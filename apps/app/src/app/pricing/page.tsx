@@ -21,7 +21,11 @@ export default async function PricingPage({
   searchParams: Promise<{ cadence?: string; tier?: string; from?: string }>;
 }) {
   const params = await searchParams;
-  const cadence: Cadence = params.cadence === "annual" ? "annual" : "monthly";
+  // Annual-first by default (explicit ?cadence=monthly still honored): Health &
+  // Fitness is annual-dominant (60.6% of category revenue) and annual starts
+  // retain at 19.9% vs 14.2% monthly at day 380 — the trial should begin on the
+  // plan we want the customer to keep.
+  const cadence: Cadence = params.cadence === "monthly" ? "monthly" : "annual";
   const fromOnboarding = params.from === "onboarding";
 
   return (

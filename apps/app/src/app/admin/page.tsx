@@ -11,7 +11,9 @@ import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import type { SubscriberSortKey } from "@/lib/admin/types";
 import type { AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
+import { loadEngagementStats } from "@/lib/admin/engagement";
 import { AdminTopBar } from "./_components/AdminTopBar";
+import { EngagementStrip } from "./_components/EngagementStrip";
 import { RevenueChartSection } from "./_components/RevenueChartSection";
 import { AiCostStrip } from "./_components/AiCostStrip";
 import { FilterBar } from "./_components/FilterBar";
@@ -46,7 +48,10 @@ export default async function AdminOverviewPage({
   const qs = new URLSearchParams(baseParams).toString();
   const topBarNext = qs ? `/admin?${qs}` : "/admin";
 
-  const dataset = await loadAdminDataset();
+  const [dataset, engagementStats] = await Promise.all([
+    loadAdminDataset(),
+    loadEngagementStats(),
+  ]);
   const overview = buildOverviewView(dataset, {
     metric: params.metric,
     metrics: params.metrics,
@@ -127,6 +132,8 @@ export default async function AdminOverviewPage({
             />
 
             <AiCostStrip view={overview} currency={currency} locale={locale} />
+
+            <EngagementStrip stats={engagementStats} locale={locale} />
 
             {dataset.truncated.length > 0 ? (
               <p className="rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">

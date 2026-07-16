@@ -21,6 +21,9 @@ export type Cadence = "monthly" | "annual";
 export type SubscriptionStatus =
   | "trialing"
   | "active"
+  // Billing suspended via the LemonSqueezy pause API (churn deflection);
+  // auto-resumes at resumes_at. Not active: plan access gates off while paused.
+  | "paused"
   | "past_due"
   | "cancelled"
   | "expired";
