@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
+import type { EngagementDigest } from "./engagementDigest";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
 
@@ -166,6 +167,12 @@ export interface PlanPromptContext {
   // The user's free-text feedback for a manual regeneration ("what's wrong /
   // what to improve"). Layered into the prompt as guidance. Undefined otherwise.
   user_feedback?: string;
+  // Aggregated check-in/verdict signals from the household's recent week —
+  // computed by the CALLER (app or bg function, each with its own data access)
+  // via computeEngagementDigest and attached best-effort. Undefined when below
+  // the minimum-signal floor, pre-00017 prod, or on any fetch failure; the
+  // skeleton prompt renders nothing in that case («silence beats fabrication»).
+  engagement_digest?: EngagementDigest;
 }
 
 /** Defensive jsonb parse — a malformed profile silently means "not opted in". */

@@ -16,6 +16,12 @@
  * turn this into a DB CHECK.
  */
 
+// Current slot vocabulary — mirrors the plan JSON's MealSchema slots. A future
+// Ramadan season EXTENDS this list ("suhoor" | "iftar" | "ghabga") + Zod; the
+// DB column is unconstrained TEXT precisely so that is a config change.
+export const CHECKIN_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
+export type CheckinSlot = (typeof CHECKIN_SLOTS)[number];
+
 export const CHECKIN_STATUSES = ["cooked", "swapped", "skipped"] as const;
 export type CheckinStatus = (typeof CHECKIN_STATUSES)[number];
 

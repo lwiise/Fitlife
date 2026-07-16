@@ -151,6 +151,19 @@ export const MemberPlanSchema = z.object({
 });
 export type MemberPlan = z.infer<typeof MemberPlanSchema>;
 
+// ─── Week changes («سارة عدّلت خطتك») ───────────────────────────────────
+export const WeekChangeSchema = z.object({
+  change_ar: z.string().min(1),
+  because_ar: z.string().min(1),
+});
+export type WeekChange = z.infer<typeof WeekChangeSchema>;
+// Trim extras instead of failing; any malformed emission degrades to undefined.
+const WeekChangesField = z
+  .array(WeekChangeSchema)
+  .transform((a) => a.slice(0, 3))
+  .optional()
+  .catch(undefined);
+
 // ─── Full meal plan ────────────────────────────────────────────────────
 export const MealPlanSchema = z.object({
   week_start_date: z.string(), // ISO date — the server may override post-validation
@@ -180,6 +193,12 @@ export const MealPlanSchema = z.object({
   // button) — persisted so the weekly per-member regen quota can be counted from
   // plan_data. Absent on new plans, member-adds, and drains.
   regenerated_for: z.string().optional(),
+  // «سارة عدّلت خطتك» — up to 3 {change, because} pairs the skeleton emitted in
+  // response to the engagement digest, each `because_ar` citing a real logged
+  // event. TOLERANT BY DESIGN: extras are trimmed and a malformed value becomes
+  // undefined — a bad week_changes must never fail a whole plan. Absent on
+  // older plans and on runs with no digest (minimum-signal guard).
+  week_changes: WeekChangesField,
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;
 
@@ -222,6 +241,9 @@ export const PlanSkeletonSchema = z.object({
   members: z.array(SkeletonMemberSchema).min(1),
   methodology_notes_ar: z.string().optional(),
   safety_disclaimer_ar: z.string().optional(),
+  // Emitted only when the prompt carried an engagement digest; carried onto the
+  // final plan by generate.ts. Same tolerant field as MealPlanSchema.
+  week_changes: WeekChangesField,
 });
 export type PlanSkeleton = z.infer<typeof PlanSkeletonSchema>;
 

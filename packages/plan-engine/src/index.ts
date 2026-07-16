@@ -34,6 +34,18 @@ export {
 } from "./canonicalRecipeKey";
 
 export {
+  computeEngagementDigest,
+  engagementText,
+  MIN_SIGNAL_EVENTS,
+  GOLDEN_LOVED_THRESHOLD,
+} from "./engagementDigest";
+export type {
+  EngagementDigest,
+  EngagementCheckinRow,
+  EngagementVerdictRow,
+} from "./engagementDigest";
+
+export {
   MacrosSchema,
   IngredientSchema,
   PerMemberPortionSchema,
@@ -41,6 +53,7 @@ export {
   DaySchema,
   MemberPlanSchema,
   MealPlanSchema,
+  WeekChangeSchema,
   planHasContent,
   PRIMARY_GOALS,
   LOCALE_CODES,
@@ -53,6 +66,7 @@ export type {
   Day,
   MemberPlan,
   MealPlan,
+  WeekChange,
   LocaleCode,
 } from "./schema";
 

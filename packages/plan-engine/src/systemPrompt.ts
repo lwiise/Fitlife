@@ -5,6 +5,7 @@ import {
 } from "./buildContext";
 import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
+import { engagementText } from "./engagementDigest";
 
 /**
  * Standalone translation prompt — translates an existing plan's meals into the
@@ -727,6 +728,17 @@ ${fb}
 طبّقي هذه الملاحظات قدر الإمكان مع الحفاظ على منهجيتك وأسلوب كتابك وبنية الوصفات والقواعد الصحية.`;
 }
 
+/**
+ * The engagement digest block («خطة تشبهك») — what the household actually
+ * cooked/loved/vetoed last week, plus the week_changes emission instruction.
+ * Skeleton-only (like the deep-dive block) to keep day-call token cost flat.
+ * Empty string when there is no digest — the minimum-signal guard lives in
+ * computeEngagementDigest, not here.
+ */
+function skeletonEngagementText(context: PlanPromptContext): string {
+  return engagementText(context.engagement_digest);
+}
+
 const DEEP_DIVE_LABELS: Array<{
   key: keyof import("./buildContext").DeepDiveFields;
   label: string;
@@ -835,7 +847,7 @@ export function buildSkeletonPrompt(
 الخدامة (إن وجدت) تطبخ وتنفّذ الوصفات، وليست فرداً في الخطة.
 
 # أفراد الخطة المطلوبة الآن (استخدمي member_id بالضبط)
-${buildRoster(context, targetMemberIds)}${deepDiveText(context)}${momNotesText(context)}${feedbackText(context)}
+${buildRoster(context, targetMemberIds)}${deepDiveText(context)}${momNotesText(context)}${feedbackText(context)}${skeletonEngagementText(context)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
@@ -847,6 +859,7 @@ ${buildRoster(context, targetMemberIds)}${deepDiveText(context)}${momNotesText(c
 type Skeleton = {
   safety_disclaimer_ar: string;            // تذكير مختصر بأن الخطة لا تغني عن الطبيب
   methodology_notes_ar?: string;
+  week_changes?: Array<{ change_ar: string; because_ar: string }>; // فقط عند وجود قسم «ما حدث فعلياً في أسبوع العائلة» أعلاه، وإلا احذفيه
   members: Array<{
     member_id: string;                     // كما هو أعلاه
     primary_goal?: "fat_loss"|"muscle_gain"|"body_recomposition"|"athletic_performance"|"metabolic_health"|"digestive_health"|"pregnancy_lactation"|"posture_recovery"|"maintain"|"general_health";
