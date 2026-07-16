@@ -287,13 +287,17 @@ export function MomWizard() {
         <div className="container-app py-4">
           <div className="flex items-center justify-between mb-3">
             <h1 className="font-bold text-base text-brand-ink">ملفك الشخصي</h1>
-            <span className="text-brand-ink-muted text-xs font-medium tabular-nums">
+            <span
+              id="step-counter"
+              className="text-brand-ink-muted text-xs font-medium tabular-nums"
+            >
               {stepIndex + 1} / {totalSteps}
             </span>
           </div>
           <div
             className="h-1.5 bg-brand-surface rounded-full overflow-hidden"
             role="progressbar"
+            aria-labelledby="step-counter"
             aria-valuenow={stepIndex + 1}
             aria-valuemin={1}
             aria-valuemax={totalSteps}
@@ -365,8 +369,8 @@ export function MomWizard() {
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     {g(
-                      "نبني خطتك حول هدفك أنتِ، وعلى نشاطك نبني معادلة السعرات.",
-                      "نبني خطتك حول هدفك أنتَ، وعلى نشاطك نبني معادلة السعرات.",
+                      "نبني خطتك حول هدفك أنتِ. ومن نشاطك نحسب سعراتك اليومية.",
+                      "نبني خطتك حول هدفك أنتَ. ومن نشاطك نحسب سعراتك اليومية.",
                     )}
                   </p>
                 </header>
@@ -568,28 +572,37 @@ export function MomWizard() {
                   </p>
                 </header>
 
-                <div className="flex flex-wrap gap-2">
-                  {PERSONAL_RESTRICTION_OPTIONS.map((r) => (
-                    <button
-                      key={r.value}
-                      type="button"
-                      onClick={() =>
-                        setRestrictions((s) =>
-                          s.includes(r.value)
-                            ? s.filter((v) => v !== r.value)
-                            : [...s, r.value],
-                        )
-                      }
-                      aria-pressed={restrictions.includes(r.value)}
-                      className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                        restrictions.includes(r.value)
-                          ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
-                          : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
+                <div>
+                  <p id="restrictions-q" className="text-sm font-bold text-brand-ink mb-2">
+                    القيود الغذائية (اختياري)
+                  </p>
+                  <div
+                    role="group"
+                    aria-labelledby="restrictions-q"
+                    className="flex flex-wrap gap-2"
+                  >
+                    {PERSONAL_RESTRICTION_OPTIONS.map((r) => (
+                      <button
+                        key={r.value}
+                        type="button"
+                        onClick={() =>
+                          setRestrictions((s) =>
+                            s.includes(r.value)
+                              ? s.filter((v) => v !== r.value)
+                              : [...s, r.value],
+                          )
+                        }
+                        aria-pressed={restrictions.includes(r.value)}
+                        className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                          restrictions.includes(r.value)
+                            ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                            : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -738,17 +751,17 @@ export function MomWizard() {
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     {g(
-                      "اختاري ما ينطبق عليكِ وننسّق الخطة معه، أو تجاوزي إن لم يوجد.",
-                      "اختر ما ينطبق عليك وننسّق الخطة معه، أو تجاوز إن لم يوجد.",
+                      "اختاري ما ينطبق عليكِ، أو تجاوزي إن لم يوجد.",
+                      "اختر ما ينطبق عليك، أو تجاوز إن لم يوجد.",
                     )}
                   </p>
                 </header>
 
                 <div>
-                  <p className="text-sm font-bold text-brand-ink mb-2">
+                  <p id="conditions-q" className="text-sm font-bold text-brand-ink mb-2">
                     {g("هل لديكِ حالة صحية؟", "هل لديك حالة صحية؟")}
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div role="group" aria-labelledby="conditions-q" className="flex flex-wrap gap-2">
                     {[...GATE_CONDITIONS, ...STABLE_CONDITIONS].map((c) => (
                       <button
                         key={c.slug}
@@ -874,26 +887,26 @@ export function MomWizard() {
                 </div>
 
                 <div>
-                  <p className="text-sm font-bold text-brand-ink mb-2">
+                  <label
+                    htmlFor="food-recall"
+                    className="block text-sm font-bold text-brand-ink mb-2"
+                  >
                     {g(
                       "اكتبي كل ما تناولتِه خلال آخر 24 ساعة مع المشروبات (اختياري)",
                       "اكتب كل ما تناولته خلال آخر 24 ساعة مع المشروبات (اختياري)",
                     )}
-                  </p>
+                  </label>
                   <textarea
+                    id="food-recall"
                     value={foodRecall}
                     onChange={(e) => setFoodRecall(e.target.value)}
                     maxLength={1000}
                     rows={5}
-                    aria-label={g(
-                      "ما تناولتِه خلال آخر 24 ساعة",
-                      "ما تناولته خلال آخر 24 ساعة",
-                    )}
                     className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
                     placeholder="مثلاً: فطور — قهوة بحليب وتمرتان…"
                   />
                   <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
-                    يساعدنا نفهم يومك.
+                    يساعدنا على فهم يومك.
                   </p>
                 </div>
 
