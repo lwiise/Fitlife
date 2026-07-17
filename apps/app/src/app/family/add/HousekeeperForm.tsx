@@ -137,7 +137,7 @@ export function HousekeeperForm({
             type="button"
             onClick={() => router.push("/family")}
             disabled={isPending}
-            className="inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            className="inline-flex items-center gap-1 min-h-11 px-3 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface rounded-md"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
             رجوع
@@ -149,7 +149,7 @@ export function HousekeeperForm({
               type="button"
               onClick={onSkip}
               disabled={isPending}
-              className="px-3 py-2 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+              className="inline-flex items-center min-h-11 px-3 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface rounded-md"
             >
               تخطّي الآن — أضيفهم لاحقاً
             </button>

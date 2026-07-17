@@ -81,7 +81,7 @@ export function PregLactSwitch({
             // builder (onComplete set) has its own escapes — don't leave mid-flow.
             <Link
               href={onboarding ? "/onboarding/members" : "/family"}
-              className="inline-flex items-center gap-1 min-h-11 px-3 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+              className="inline-flex items-center gap-1 min-h-11 px-3 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface rounded-md"
             >
               <ChevronRight className="size-4" aria-hidden="true" />
               {onboarding ? "رجوع" : "رجوع للعائلة"}
@@ -95,7 +95,7 @@ export function PregLactSwitch({
             <button
               type="button"
               onClick={onSkip}
-              className="px-3 py-2 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+              className="inline-flex items-center min-h-11 px-3 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface rounded-md"
             >
               تخطّي الآن — أضيفهم لاحقاً
             </button>
