@@ -362,8 +362,7 @@ export function MealCard({
                       </button>
                     ))}
                   </div>
-                  {(checkin?.status === "swapped" ||
-                    checkin?.status === "skipped") && (
+                  {checkin?.status === "swapped" && (
                     <div className="flex flex-wrap gap-1.5" role="group" aria-label="السبب">
                       {CHECKIN_REASON_CHIPS.map((r) => (
                         <button
