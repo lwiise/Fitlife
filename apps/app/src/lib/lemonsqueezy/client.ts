@@ -29,3 +29,27 @@ export function checkoutPrefillEmail(
 ): string | undefined {
   return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
 }
+
+/**
+ * Render an LS SDK error (or anything thrown) as a log/debug string. SDK
+ * errors are Error instances whose `cause` carries the API's JSON error list —
+ * that detail is what actually names the rejection reason.
+ */
+export function describeLsError(err: unknown): string {
+  if (err instanceof Error) {
+    let cause = "";
+    if (err.cause !== undefined) {
+      try {
+        cause = ` — ${JSON.stringify(err.cause)}`;
+      } catch {
+        cause = ` — ${String(err.cause)}`;
+      }
+    }
+    return `${err.message}${cause}`;
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}

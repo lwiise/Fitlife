@@ -7,7 +7,7 @@ import {
   updateSubscription,
 } from "@lemonsqueezy/lemonsqueezy.js";
 import * as Sentry from "@sentry/nextjs";
-import { setupLemonsqueezy } from "./client";
+import { setupLemonsqueezy, describeLsError } from "./client";
 
 export interface LSSubscriptionDetails {
   status: string;
@@ -161,17 +161,22 @@ export async function resumeLSSubscription(
 export async function changeLSSubscriptionTier(
   subscriptionId: string,
   variantId: string,
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; errorDetail?: string }> {
   setupLemonsqueezy();
   try {
     const { error } = await updateSubscription(subscriptionId, {
       variantId: Number(variantId),
     });
-    return { success: !error };
+    if (error) {
+      // Surface WHY LS refused (sub cancelled/expired, wrong mode, bad
+      // variant) — callers log it and, pre-launch, echo it to the operator.
+      return { success: false, errorDetail: describeLsError(error) };
+    }
+    return { success: true };
   } catch (err) {
     Sentry.captureException(err, {
       tags: { area: "ls-update-subscription" },
     });
-    return { success: false };
+    return { success: false, errorDetail: describeLsError(err) };
   }
 }
