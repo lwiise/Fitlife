@@ -19,7 +19,6 @@ import { getCurrentSubscription } from "@/lib/subscription/state";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
-import { CloseDayBand } from "./CloseDayBand";
 import { RenewalRecapCard } from "./RenewalRecapCard";
 import {
   isWithinRenewalWindow,
@@ -152,56 +151,6 @@ export default async function DashboardPage() {
     latestPlan?.status === "ready" &&
     !!housekeeper &&
     housekeeper.preferred_language !== "ar";
-
-  // ختام اليوم band data — household-level slots come from the mom's member
-  // plan (shared dishes cover the family; two same-slot snacks dedup to one,
-  // matching the (plan, day, slot) storage key). Verdict faces list every
-  // beneficiary (never the housekeeper). Closed days come from meal_checkins.
-  let closeDayProps = null;
-  if (user && planIsReady && latestPlan?.plan_data) {
-    const planData = latestPlan.plan_data;
-    const momPlan =
-      planData.members.find((m) => m.member_id === "mom") ?? planData.members[0];
-    if (momPlan) {
-      const { data: checkinRows } = await supabase
-        .from("meal_checkins")
-        .select("day_index")
-        .eq("meal_plan_id", latestPlan.id)
-        .limit(60);
-      closeDayProps = {
-        planId: latestPlan.id,
-        weekStart: planData.week_start_date,
-        days: momPlan.days.map((d) => ({
-          day_index: d.day_index,
-          slots: [
-            ...new Map(
-              d.meals.map((meal) => [
-                meal.slot,
-                {
-                  slot: meal.slot,
-                  slot_name_ar: meal.slot_name_ar,
-                  recipe_name_ar: meal.recipe_name_ar,
-                },
-              ]),
-            ).values(),
-          ],
-        })),
-        members: [
-          { id: "mom", name: profile?.display_name?.trim() || "أنتِ" },
-          ...familyMembers
-            .filter((m) => m.role !== "housekeeper")
-            .map((m) => ({ id: m.id, name: m.name })),
-        ],
-        closedDayIndexes: [
-          ...new Set(
-            ((checkinRows ?? []) as Array<{ day_index: number }>).map(
-              (r) => r.day_index,
-            ),
-          ),
-        ],
-      };
-    }
-  }
 
   // Renewal-week recap — active paid subs within 7 days of period end.
   let renewalRecap = null;
@@ -481,9 +430,6 @@ export default async function DashboardPage() {
 
         {/* Renewal-week recap — celebratory bookkeeping, never a countdown */}
         {renewalRecap && <RenewalRecapCard {...renewalRecap} />}
-
-        {/* ختام اليوم — the retroactive daily check-in band */}
-        {closeDayProps && <CloseDayBand {...closeDayProps} />}
 
         {/* Quick entry links (advisor + optional cook view) — above today's meals. */}
         {(onboardingDone || showHousekeeperLink) && (
