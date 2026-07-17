@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
 import { SentryUserSync } from "./SentryUserSync";
@@ -11,11 +11,6 @@ const tajawal = Tajawal({
   variable: "--font-tajawal",
   display: "swap",
 });
-
-export const viewport: Viewport = {
-  // Browser-chrome tint for the installed/standalone experience.
-  themeColor: "#4E2490",
-};
 
 export const metadata: Metadata = {
   metadataBase: new URL(
