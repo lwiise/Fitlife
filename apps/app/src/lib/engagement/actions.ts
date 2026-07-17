@@ -11,7 +11,7 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "./eligibility";
-import { BODY_PHOTOS_BUCKET } from "./types";
+import { BODY_PHOTOS_BUCKET, HOUSEHOLD_CHECKIN_MEMBER } from "./types";
 import {
   closeDayInputSchema,
   logBodyWeightSchema,
@@ -77,23 +77,43 @@ export async function closeDay(rawInput: CloseDayInput) {
 
   const db = supabase;
 
-  const { error: checkinError } = await db.from("meal_checkins").upsert(
-    input.slots.map((s) => ({
-      user_id: user.id,
-      meal_plan_id: input.meal_plan_id,
-      day_index: input.day_index,
-      local_date: localDate,
-      slot: s.slot,
-      status: s.status,
-      reason: s.status === "cooked" ? null : (s.reason ?? null),
-    })),
-    { onConflict: "meal_plan_id,day_index,slot" },
-  );
+  // The sheet is the kitchen's attestation → rows carry the 'household'
+  // member sentinel on purpose (per-person marks live on the plan page).
+  // member_id is a 00019 column not yet in the generated types → untyped
+  // cast (house pattern); on a pre-00019 prod the write degrades to the
+  // legacy household-level shape so the day still saves.
+  const checkinRowsInput = input.slots.map((s) => ({
+    user_id: user.id,
+    meal_plan_id: input.meal_plan_id,
+    day_index: input.day_index,
+    local_date: localDate,
+    slot: s.slot,
+    status: s.status,
+    reason: s.status === "cooked" ? null : (s.reason ?? null),
+  }));
+  const { error: checkinError } = await (db as unknown as SupabaseClient)
+    .from("meal_checkins")
+    .upsert(
+      checkinRowsInput.map((r) => ({
+        ...r,
+        member_id: HOUSEHOLD_CHECKIN_MEMBER,
+      })),
+      { onConflict: "meal_plan_id,day_index,slot,member_id" },
+    );
   if (checkinError) {
-    Sentry.captureException(checkinError, {
-      tags: { area: "engagement", step: "checkin-upsert", userId: user.id },
-    });
-    return { ok: false as const, error: "تعذر حفظ يومك، حاولي مرة أخرى" };
+    const { error: legacyError } = await db
+      .from("meal_checkins")
+      .upsert(checkinRowsInput, { onConflict: "meal_plan_id,day_index,slot" });
+    if (legacyError) {
+      Sentry.captureException(checkinError, {
+        tags: { area: "engagement", step: "checkin-upsert", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ يومك، حاولي مرة أخرى" };
+    }
+    Sentry.captureMessage(
+      "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
+      { level: "warning", tags: { area: "engagement", step: "checkin-upsert" } },
+    );
   }
 
   if (input.verdicts.length > 0) {
@@ -125,18 +145,28 @@ export async function closeDay(rawInput: CloseDayInput) {
 
   // Exceptions: resubmission REPLACES the day's exceptions (delete-then-insert
   // under the day's checkin ids), so removing a mistaken tap works naturally.
+  // select("*") tolerates a pre-00019 prod (rows without member_id); with
+  // 00019 applied, a slot can carry per-member rows next to the whole-kitchen
+  // row — exceptions ride the household row (the one this sheet just wrote).
   const { data: checkinRows } = await db
     .from("meal_checkins")
-    .select("id,slot")
+    .select("*")
     .eq("meal_plan_id", input.meal_plan_id)
     .eq("day_index", input.day_index);
-  const checkinIdBySlot = new Map(
-    ((checkinRows ?? []) as Array<{ id: string; slot: string }>).map((r) => [
-      r.slot,
-      r.id,
-    ]),
-  );
-  const checkinIds = [...checkinIdBySlot.values()];
+  const dayRows = (checkinRows ?? []) as Array<{
+    id: string;
+    slot: string;
+    member_id?: string | null;
+  }>;
+  const checkinIdBySlot = new Map<string, string>();
+  for (const r of dayRows) {
+    const isHousehold =
+      (r.member_id ?? HOUSEHOLD_CHECKIN_MEMBER) === HOUSEHOLD_CHECKIN_MEMBER;
+    if (isHousehold || !checkinIdBySlot.has(r.slot)) {
+      checkinIdBySlot.set(r.slot, r.id);
+    }
+  }
+  const checkinIds = dayRows.map((r) => r.id);
   if (checkinIds.length > 0) {
     await db.from("member_exceptions").delete().in("checkin_id", checkinIds);
     const exceptionRows = input.exceptions
@@ -170,6 +200,13 @@ export async function closeDay(rawInput: CloseDayInput) {
  * table and same rules as the «ختام اليوم» sheet: server-derived calendar
  * date, 48-hour grace window, never a future day (adherence cannot be
  * fabricated ahead of time). status null clears an accidental mark.
+ *
+ * PER-PERSON (00019): member_id says whose status this is — on a shared meal
+ * each participant is marked separately (Louis can skip the dish anas ate).
+ * A concrete member's write supersedes any legacy whole-house row for that
+ * meal: the ambiguous mark is deleted so the two never contradict. On a
+ * pre-00019 prod the write degrades to the legacy household-level shape
+ * (marking keeps working; per-person separation waits for the migration).
  */
 export async function setMealCheckin(rawInput: SetMealCheckinInput) {
   const supabase = await createClient();
@@ -181,6 +218,7 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
   const parsed = setMealCheckinSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
   const input = parsed.data;
+  const memberId = input.member_id;
 
   const { data: planRow, error: planError } = await supabase
     .from("meal_plans")
@@ -199,38 +237,90 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
+  // Ownership gate: a family_members id must belong to the caller (the
+  // RLS-scoped read returns no row otherwise) — same posture as logBodyWeight.
+  if (memberId !== "mom" && memberId !== HOUSEHOLD_CHECKIN_MEMBER) {
+    const { data: member } = await supabase
+      .from("family_members")
+      .select("id")
+      .eq("id", memberId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!member) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  // member_id is a 00019 column not yet in the generated types — untyped
+  // client cast (house pattern; see logBodyWeight).
+  const db = supabase as unknown as SupabaseClient;
+
   if (input.status === null) {
-    const { error: deleteError } = await supabase
+    // Clear the member's mark AND the legacy whole-house row for this meal —
+    // otherwise the household fallback resurfaces and the tap looks ignored.
+    const { error: deleteError } = await db
       .from("meal_checkins")
       .delete()
       .eq("meal_plan_id", input.meal_plan_id)
       .eq("day_index", input.day_index)
       .eq("slot", input.slot)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .in("member_id", [memberId, HOUSEHOLD_CHECKIN_MEMBER]);
     if (deleteError) {
-      Sentry.captureException(deleteError, {
-        tags: { area: "engagement", step: "checkin-clear", userId: user.id },
-      });
-      return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
+      // Pre-00019 prod (no member_id column): legacy household-level clear.
+      const { error: legacyError } = await supabase
+        .from("meal_checkins")
+        .delete()
+        .eq("meal_plan_id", input.meal_plan_id)
+        .eq("day_index", input.day_index)
+        .eq("slot", input.slot)
+        .eq("user_id", user.id);
+      if (legacyError) {
+        Sentry.captureException(deleteError, {
+          tags: { area: "engagement", step: "checkin-clear", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
+      }
     }
   } else {
-    const { error: upsertError } = await supabase.from("meal_checkins").upsert(
-      {
-        user_id: user.id,
-        meal_plan_id: input.meal_plan_id,
-        day_index: input.day_index,
-        local_date: localDate,
-        slot: input.slot,
-        status: input.status,
-        reason: input.status === "cooked" ? null : (input.reason ?? null),
-      },
-      { onConflict: "meal_plan_id,day_index,slot" },
+    const row = {
+      user_id: user.id,
+      meal_plan_id: input.meal_plan_id,
+      day_index: input.day_index,
+      local_date: localDate,
+      slot: input.slot,
+      status: input.status,
+      reason: input.status === "cooked" ? null : (input.reason ?? null),
+    };
+    const { error: upsertError } = await db.from("meal_checkins").upsert(
+      { ...row, member_id: memberId },
+      { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
     if (upsertError) {
-      Sentry.captureException(upsertError, {
-        tags: { area: "engagement", step: "checkin-inline", userId: user.id },
-      });
-      return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+      // Pre-00019 prod: degrade to the legacy household-level write so the
+      // mark still saves, and flag ops to apply the migration.
+      const { error: legacyError } = await supabase
+        .from("meal_checkins")
+        .upsert(row, { onConflict: "meal_plan_id,day_index,slot" });
+      if (legacyError) {
+        Sentry.captureException(upsertError, {
+          tags: { area: "engagement", step: "checkin-inline", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+      }
+      Sentry.captureMessage(
+        "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
+        { level: "warning", tags: { area: "engagement", step: "checkin-inline" } },
+      );
+    } else if (memberId !== HOUSEHOLD_CHECKIN_MEMBER) {
+      // Supersede the legacy whole-house row: a per-person mark is the more
+      // precise truth for this meal. Best-effort — its absence is the norm.
+      await db
+        .from("meal_checkins")
+        .delete()
+        .eq("meal_plan_id", input.meal_plan_id)
+        .eq("day_index", input.day_index)
+        .eq("slot", input.slot)
+        .eq("user_id", user.id)
+        .eq("member_id", HOUSEHOLD_CHECKIN_MEMBER);
     }
   }
 

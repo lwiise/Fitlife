@@ -157,11 +157,14 @@ export async function fetchWeeklyRecap(
   const [checkins, verdicts, weights] = await Promise.all([
     client
       .from("meal_checkins")
+      // Rows are per person since 00019 (7 days × 4 slots × household) — the
+      // day-cell aggregation below is per-date, so fan-out only needs a
+      // higher cap, not new logic.
       .select("local_date,slot,status,reason")
       .eq("user_id", userId)
       .gte("local_date", weekStart)
       .lte("local_date", weekEnd)
-      .limit(200),
+      .limit(400),
     client
       .from("meal_verdicts")
       .select("recipe_name_ar,canonical_key,verdict")

@@ -82,10 +82,13 @@ select * from (values
   ('00017 body_logs table',
     (select case when to_regclass('public.body_logs') is not null
       then 'APPLIED' else 'MISSING' end)),
-  ('00017 one-checkin-per-meal unique',
-    (select case when exists (select 1 from pg_indexes where schemaname='public'
-      and indexname='meal_checkins_one_per_meal')
-      then 'APPLIED' else 'MISSING' end)),
+  ('00017 one-checkin-per-meal unique (superseded by 00019)',
+    (select case
+      when exists (select 1 from pg_indexes where schemaname='public'
+        and indexname='meal_checkins_one_per_member_meal') then 'SUPERSEDED BY 00019 (ok)'
+      when exists (select 1 from pg_indexes where schemaname='public'
+        and indexname='meal_checkins_one_per_meal') then 'APPLIED (old form — run 00019)'
+      else 'MISSING' end)),
   ('00018 body photo column (body_logs.photo_path)',
     (select case when exists (select 1 from information_schema.columns
       where table_schema='public' and table_name='body_logs' and column_name='photo_path')
@@ -93,5 +96,13 @@ select * from (values
   ('00018 private body-photos bucket',
     (select case when exists (select 1 from storage.buckets
       where id='body-photos' and public=false)
+      then 'APPLIED' else 'MISSING' end)),
+  ('00019 per-person check-in column (meal_checkins.member_id)',
+    (select case when exists (select 1 from information_schema.columns
+      where table_schema='public' and table_name='meal_checkins' and column_name='member_id')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00019 one-checkin-per-member-meal unique',
+    (select case when exists (select 1 from pg_indexes where schemaname='public'
+      and indexname='meal_checkins_one_per_member_meal')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);
