@@ -20,7 +20,7 @@ export function TierCard({
   const annualTotal = tier.price_annual_sar;
 
   const highlightClasses = tier.highlighted
-    ? "border-brand-yellow bg-white shadow-2xl scale-100 md:scale-105"
+    ? "border-brand-purple-900 bg-white shadow-2xl shadow-brand-purple-900/10 scale-100 md:scale-105"
     : "border-brand-ink/10 bg-white";
 
   return (
@@ -31,7 +31,7 @@ export function TierCard({
       {tier.highlighted && (
         <span
           aria-hidden="true"
-          className="absolute -top-3 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 inline-flex items-center px-3 py-1 rounded-full bg-brand-ink text-white text-xs font-bold"
+          className="absolute -top-3 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 inline-flex items-center px-3 py-1 rounded-full bg-brand-purple-900 text-white text-xs font-bold"
         >
           الأكثر شعبية
         </span>
@@ -61,7 +61,7 @@ export function TierCard({
             className="flex items-start gap-2 text-brand-ink text-sm leading-relaxed"
           >
             <Check
-              className="size-4 flex-shrink-0 mt-0.5 text-brand-emerald"
+              className="size-4 flex-shrink-0 mt-0.5 text-brand-purple-900"
               aria-hidden="true"
             />
             <span>{f}</span>

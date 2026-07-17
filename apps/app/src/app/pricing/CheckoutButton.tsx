@@ -56,7 +56,7 @@ export function CheckoutButton({
         type="button"
         onClick={handleClick}
         disabled={isPending}
-        className="w-full inline-flex items-center justify-center gap-2 bg-brand-ink hover:bg-brand-purple-900 disabled:bg-brand-ink/40 text-white font-bold text-sm px-5 py-3 rounded-xl transition-colors disabled:cursor-not-allowed min-h-[3rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+        className="w-full inline-flex items-center justify-center gap-2 bg-brand-purple-900 hover:bg-brand-purple-700 disabled:bg-brand-purple-900/40 text-white font-bold text-sm px-5 py-3 rounded-xl transition-colors disabled:cursor-not-allowed min-h-[3rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
       >
         {isPending ? (
           <>

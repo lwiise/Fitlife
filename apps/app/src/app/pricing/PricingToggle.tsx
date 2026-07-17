@@ -9,10 +9,6 @@ import { useTransition } from "react";
  * The cadence is ALWAYS written explicitly to the URL — an earlier version
  * deleted the param for "monthly" (the old default), which silently broke the
  * monthly button when the page default flipped to annual-first.
- *
- * Brown treatment per founder direction (07/2026) — a deliberate exception to
- * the core palette, using a deep coffee tone that sits well with the gold
- * badge: active #5C4033, hover #4A332A.
  */
 export function PricingToggle({ cadence }: { cadence: "monthly" | "annual" }) {
   const router = useRouter();
@@ -30,15 +26,16 @@ export function PricingToggle({ cadence }: { cadence: "monthly" | "annual" }) {
   }
 
   const base =
-    "flex-1 min-h-12 px-6 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5C4033] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70";
-  const active = "bg-[#5C4033] text-white shadow-sm";
-  const inactive = "text-brand-ink-muted hover:text-[#5C4033] hover:bg-[#5C4033]/10";
+    "flex-1 min-h-12 px-6 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70";
+  const active = "bg-brand-purple-900 text-white shadow-sm";
+  const inactive =
+    "text-brand-ink-muted hover:text-brand-purple-900 hover:bg-brand-lavender/30";
 
   return (
     <div
       role="group"
       aria-label="مدة الفوترة"
-      className="inline-flex w-full max-w-xs rounded-full bg-white p-1.5 border border-[#5C4033]/25 shadow-sm"
+      className="inline-flex w-full max-w-xs rounded-full bg-white p-1.5 border border-brand-ink/10 shadow-sm"
     >
       <button
         type="button"
@@ -60,8 +57,8 @@ export function PricingToggle({ cadence }: { cadence: "monthly" | "annual" }) {
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
             cadence === "annual"
-              ? "bg-brand-yellow text-brand-ink"
-              : "bg-brand-yellow/25 text-[#5C4033]"
+              ? "bg-brand-lavender text-brand-purple-900"
+              : "bg-brand-lavender/40 text-brand-purple-900"
           }`}
         >
           وفّري 20%
