@@ -184,6 +184,36 @@ export async function POST(request: Request) {
         break;
       }
 
+      // Authoritative confirmation of the pause flow (/api/subscription/pause
+      // mirrors optimistically; these events are the source of truth).
+      case "subscription_paused": {
+        const update: Record<string, unknown> = { status: "paused" };
+        if (attrs.renews_at) {
+          update.current_period_end = attrs.renews_at;
+          update.ends_at = attrs.renews_at;
+        }
+        const { error } = await applyUpdate(update);
+        if (error) {
+          console.error("[lemonsqueezy-webhook] subscription_paused failed", error);
+          return new NextResponse(null, { status: 500 });
+        }
+        console.log("[lemonsqueezy-webhook]", { eventName, lsSubscriptionId });
+        break;
+      }
+
+      case "subscription_unpaused":
+      case "subscription_resumed": {
+        const update: Record<string, unknown> = { status: "active", ends_at: null };
+        if (attrs.renews_at) update.current_period_end = attrs.renews_at;
+        const { error } = await applyUpdate(update);
+        if (error) {
+          console.error("[lemonsqueezy-webhook] subscription_unpaused failed", error);
+          return new NextResponse(null, { status: 500 });
+        }
+        console.log("[lemonsqueezy-webhook]", { eventName, lsSubscriptionId });
+        break;
+      }
+
       case "subscription_cancelled": {
         // Sub remains 'active' until current_period_end; just flag the intent.
         const { error } = await applyUpdate({

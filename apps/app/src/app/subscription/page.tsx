@@ -14,6 +14,19 @@ import { CardOnFile } from "./CardOnFile";
 import { ChangePlanSection } from "./ChangePlanSection";
 import { BillingHistory } from "./BillingHistory";
 import { CancelSubscription, PausedNotice } from "./CancelSubscription";
+import { loadFamilyLedger } from "@/lib/engagement/ledger";
+
+const LEDGER_NUM = new Intl.NumberFormat("ar-SA", { useGrouping: false });
+
+/** «ذاكرة مائدتكم» in one factual sentence for the cancel dialog. */
+async function buildLedgerLine(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string | null> {
+  const ledger = await loadFamilyLedger(supabase, userId);
+  if (ledger.planWeeks === 0) return null;
+  return `سجلّ بيتك حتى اليوم: ${LEDGER_NUM.format(ledger.planWeeks)} خطة أسبوعية لبيتٍ من ${LEDGER_NUM.format(ledger.membersServed)} — يبقى محفوظاً حتى نهاية اشتراكك.`;
+}
 
 export const metadata = {
   title: "الاشتراك — فت لايف",
@@ -170,6 +183,7 @@ export default async function SubscriptionPage({
               <CancelSubscription
                 tierName={PRICING_TIERS[sub.tier].name_ar}
                 endsAt={sub.current_period_end}
+                ledgerLine={await buildLedgerLine(supabase, user.id)}
               />
             </SectionShell>
           )}

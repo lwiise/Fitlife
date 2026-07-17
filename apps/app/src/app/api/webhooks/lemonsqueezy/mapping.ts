@@ -13,13 +13,16 @@
  */
 export function mapLemonsqueezyStatus(
   lsStatus: string,
-): "trialing" | "active" | "past_due" | "cancelled" | "expired" | null {
+): "trialing" | "active" | "paused" | "past_due" | "cancelled" | "expired" | null {
   switch (lsStatus) {
     case "on_trial":
       return "trialing";
     case "active":
       return "active";
+    // A pause is a deliberate «استراحة» (churn deflection), NOT a payment
+    // failure — mapping it to past_due showed pausers the red billing banner.
     case "paused":
+      return "paused";
     case "past_due":
     case "unpaid":
       return "past_due";
