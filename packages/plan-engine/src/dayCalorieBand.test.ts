@@ -11,6 +11,10 @@ import {
   generateMealPlan,
   dayCalorieDeviations,
   buildDayCalorieCorrectiveNote,
+  rescaleDayCalories,
+  scaleIngredientAmount,
+  DAY_CALORIE_AIM_PCT,
+  DAY_CALORIE_AIM_MIN_KCAL,
 } from "./generate";
 import { buildDayPrompt } from "./systemPrompt";
 import type { PlanPromptContext } from "./buildContext";
@@ -190,6 +194,99 @@ describe("dayCalorieDeviations", () => {
   });
 });
 
+describe("dayCalorieDeviations — aim band override", () => {
+  const context = makeContext();
+  const skeleton = skeletonWith([{ id: "mom", target: 1600 }]);
+
+  it("flags a day that passes the hard band but misses the aim band", () => {
+    // 1450 vs 1600: off by 150 — inside hard ±160, outside aim ±80.
+    const slice = sliceOf([{ id: "mom", calories: 1450 }]);
+    expect(dayCalorieDeviations(slice, skeleton, context)).toEqual([]);
+    expect(
+      dayCalorieDeviations(
+        slice,
+        skeleton,
+        context,
+        DAY_CALORIE_AIM_PCT,
+        DAY_CALORIE_AIM_MIN_KCAL,
+      ),
+    ).toEqual([{ member_id: "mom", got: 1450, target: 1600, allowed: 80 }]);
+  });
+
+  it("accepts a day inside the aim band", () => {
+    expect(
+      dayCalorieDeviations(
+        sliceOf([{ id: "mom", calories: 1550 }]),
+        skeleton,
+        context,
+        DAY_CALORIE_AIM_PCT,
+        DAY_CALORIE_AIM_MIN_KCAL,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("scaleIngredientAmount", () => {
+  it("rounds grams/ml to kitchen steps by magnitude", () => {
+    expect(scaleIngredientAmount(150, "g", 1.33)).toBe(200); // 199.5 → nearest 10
+    expect(scaleIngredientAmount(50, "g", 1.33)).toBe(65); // 66.5 → nearest 5
+    expect(scaleIngredientAmount(10, "g", 1.33)).toBe(13); // 13.3 → nearest 1
+    expect(scaleIngredientAmount(2, "g", 0.1)).toBe(1); // floor of 1
+  });
+
+  it("rounds kg/l to 2 decimals and count-like units to quarters", () => {
+    expect(scaleIngredientAmount(0.5, "kg", 1.33)).toBe(0.67);
+    expect(scaleIngredientAmount(2, "piece", 1.185)).toBe(2.25);
+    expect(scaleIngredientAmount(1, "tbsp", 0.1)).toBe(0.25); // floor of a quarter
+  });
+});
+
+describe("rescaleDayCalories", () => {
+  it("scales calories, macros, and ingredient amounts onto the target", () => {
+    const slice = sliceOf([{ id: "mom", calories: 2030 }]);
+    const out = rescaleDayCalories(slice, [
+      { member_id: "mom", got: 2030, target: 2700, allowed: 135 },
+    ]);
+    const meal = out.members[0]!.meals[0]!;
+    expect(meal.calories).toBe(2700); // 2030 × (2700/2030)
+    expect(meal.macros.protein_g).toBe(Math.round(30 * (2700 / 2030)));
+    expect(meal.ingredients[0]!.amount).toBe(2.75); // 2 pieces × 1.33 → quarter step
+    // Untouched: the original slice and non-numeric fields.
+    expect(slice.members[0]!.meals[0]!.calories).toBe(2030);
+    expect(meal.recipe_name_ar).toBe("mom-dish");
+  });
+
+  it("leaves unlimited ingredients and non-deviating members untouched", () => {
+    const slice = sliceOf([
+      { id: "mom", calories: 2030 },
+      { id: "dad", calories: 2500 },
+    ]);
+    slice.members[0]!.meals[0]!.ingredients.push({
+      name_ar: "سلطة حرة",
+      amount: 1,
+      unit: "unlimited",
+    });
+    const out = rescaleDayCalories(slice, [
+      { member_id: "mom", got: 2030, target: 2700, allowed: 135 },
+    ]);
+    expect(out.members[0]!.meals[0]!.ingredients[1]).toEqual({
+      name_ar: "سلطة حرة",
+      amount: 1,
+      unit: "unlimited",
+    });
+    expect(out.members[1]).toBe(slice.members[1]);
+  });
+
+  it("clamps an extreme factor instead of exploding portions", () => {
+    const slice = sliceOf([{ id: "mom", calories: 500 }]);
+    const out = rescaleDayCalories(slice, [
+      { member_id: "mom", got: 500, target: 2700, allowed: 135 },
+    ]);
+    // 2700/500 = 5.4 → clamped to 2.5.
+    expect(out.members[0]!.meals[0]!.calories).toBe(1250);
+  });
+});
+
 describe("buildDayCalorieCorrectiveNote", () => {
   it("names each member with previous total, target, and band", () => {
     const note = buildDayCalorieCorrectiveNote([
@@ -257,7 +354,39 @@ describe("generateMealPlan — per-day calorie enforcement", () => {
     expect(plan.members[0]!.days[0]!.day_total.calories).toBe(1600);
   }, 30_000);
 
-  it("accepts the CLOSEST attempt (log-only) when every re-roll stays out of band", async () => {
+  it("rescales an in-hard-band but off-aim day onto the target WITHOUT burning a re-roll", async () => {
+    let dayCalls = 0;
+    mockedStream.mockImplementation(async (params) => {
+      const systemPrompt =
+        (params as { systemPrompt?: string } | undefined)?.systemPrompt ?? "";
+      if (!/day_index=\d+/.test(systemPrompt)) {
+        return {
+          text: JSON.stringify(skeletonWith([{ id: "mom", target: 1600 }])),
+          tokensIn: 10,
+          tokensOut: 20,
+          stopReason: null,
+        };
+      }
+      dayCalls++;
+      // 1450: inside hard ±160 (no re-roll) but outside aim ±80 (rescaled).
+      return {
+        text: JSON.stringify(sliceOf([{ id: "mom", calories: 1450 }])),
+        tokensIn: 10,
+        tokensOut: 20,
+        stopReason: null,
+      };
+    });
+
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext(),
+    });
+
+    expect(dayCalls).toBe(1); // no corrective re-roll spent
+    expect(plan.members[0]!.days[0]!.day_total.calories).toBe(1600);
+  }, 30_000);
+
+  it("accepts the CLOSEST attempt when every re-roll stays out of band — then rescales it onto the target", async () => {
     let dayCalls = 0;
     mockedStream.mockImplementation(async (params) => {
       const systemPrompt =
@@ -288,6 +417,7 @@ describe("generateMealPlan — per-day calorie enforcement", () => {
 
     expect(dayCalls).toBe(3); // initial + CONTENT_MAX_RETRIES corrective rolls
     expect(missingDays).toEqual([]); // the day is NOT lost
-    expect(plan.members[0]!.days[0]!.day_total.calories).toBe(1350); // best attempt
+    // Best attempt (1350) deterministically rescaled onto the 1600 target.
+    expect(plan.members[0]!.days[0]!.day_total.calories).toBe(1600);
   }, 30_000);
 });
