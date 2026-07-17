@@ -1,7 +1,7 @@
 "use client";
 
 import { Share2 } from "lucide-react";
-import { buildShareText } from "@/lib/engagement/recap";
+import { buildShareText } from "@/lib/engagement/shareText";
 
 /**
  * WhatsApp share of the week — positives only BY CONSTRUCTION: this component
