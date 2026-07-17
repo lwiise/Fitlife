@@ -6,6 +6,7 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
+import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
@@ -44,6 +45,19 @@ export default async function PlanPage({
   // meal view is untouched otherwise.
   const workout = profile ? await getLatestWorkoutPlan(profile.id) : null;
   const workoutView = view === "workout" && workout != null;
+
+  // Inline per-meal tracking marks for this plan (interactive page only —
+  // history/housekeeper views never receive them).
+  let checkins;
+  if (profile && latest?.status === "ready") {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("meal_checkins")
+      .select("day_index,slot,status,reason")
+      .eq("meal_plan_id", latest.id)
+      .limit(60);
+    checkins = data ?? [];
+  }
 
   const isOnboarded = !!profile?.onboarding_completed_at;
   // Members saved but not yet in the plan (deferred while a prior gen was in
@@ -283,6 +297,7 @@ export default async function PlanPage({
               preselectedMember={member}
               housekeeperLocale={housekeeperLocale}
               showWorkoutOptIn={workout === null}
+              checkins={checkins}
             />
           </>
         )}

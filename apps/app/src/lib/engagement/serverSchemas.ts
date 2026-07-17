@@ -43,6 +43,17 @@ export const logBodyWeightSchema = z.object({
 });
 export type LogBodyWeightInput = z.infer<typeof logBodyWeightSchema>;
 
+// Inline per-meal marking on the plan page. status null = clear the mark
+// (a mis-tap must be reversible — honesty over accumulation).
+export const setMealCheckinSchema = z.object({
+  meal_plan_id: uuid,
+  day_index: z.number().int().min(0).max(6),
+  slot: z.enum(CHECKIN_SLOTS),
+  status: z.enum(CHECKIN_STATUSES).nullable(),
+  reason: z.enum(CHECKIN_REASONS).nullish(),
+});
+export type SetMealCheckinInput = z.infer<typeof setMealCheckinSchema>;
+
 export const closeDayInputSchema = z.object({
   meal_plan_id: uuid,
   day_index: z.number().int().min(0).max(6),
