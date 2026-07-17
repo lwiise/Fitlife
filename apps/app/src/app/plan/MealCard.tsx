@@ -380,7 +380,7 @@ export function MealCard({
                             checkin.reason === r.value
                               ? r.gold
                                 ? "bg-brand-yellow text-brand-ink"
-                                : "bg-brand-purple-900 text-white"
+                                : "bg-brand-lavender text-brand-purple-900"
                               : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
                           }`}
                         >
