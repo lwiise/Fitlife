@@ -11,6 +11,7 @@ import { env, getLemonsqueezyStoreId } from "@/lib/env";
 import {
   setupLemonsqueezy,
   checkoutPrefillEmail,
+  describeLsError,
 } from "@/lib/lemonsqueezy/client";
 import { getVariantId } from "@fitlife/config";
 
@@ -21,24 +22,6 @@ export const runtime = "nodejs";
 // the Netlify function logs. Remove `debug` (and its rendering in
 // CheckoutButton) once checkout works. It never contains keys — only the
 // LemonSqueezy rejection reason.
-function describeLsError(err: unknown): string {
-  if (err instanceof Error) {
-    let cause = "";
-    if (err.cause !== undefined) {
-      try {
-        cause = ` — ${JSON.stringify(err.cause)}`;
-      } catch {
-        cause = ` — ${String(err.cause)}`;
-      }
-    }
-    return `${err.message}${cause}`;
-  }
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return String(err);
-  }
-}
 
 const bodySchema = z.object({
   tier: z.enum(["starter", "pro", "family", "premium"]),

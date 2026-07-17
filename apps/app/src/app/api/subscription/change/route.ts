@@ -9,6 +9,7 @@ import { getCurrentSubscription } from "@/lib/subscription/state";
 import {
   setupLemonsqueezy,
   checkoutPrefillEmail,
+  describeLsError,
 } from "@/lib/lemonsqueezy/client";
 import { changeLSSubscriptionTier } from "@/lib/lemonsqueezy/subscription";
 import { env, getLemonsqueezyStoreId } from "@/lib/env";
@@ -26,6 +27,10 @@ const bodySchema = z.object({
  * Existing subscriber → updateSubscription (LS handles proration + SCA), returns
  * { updated: true }. Trial/new user (no LS subscription) → createCheckout,
  * returns { checkout_url } for the client to redirect to.
+ *
+ * TEMPORARY (pre-launch diagnosis): failure responses carry a `debug` string
+ * (rendered by ChangePlanSection) naming which branch ran and what LS said —
+ * the operator has no easy Netlify-log access. Remove once payments work.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -53,13 +58,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "أنتِ على هذه الخطة" }, { status: 400 });
     }
 
-    const { success } = await changeLSSubscriptionTier(
+    const { success, errorDetail } = await changeLSSubscriptionTier(
       sub.lemonsqueezy_subscription_id,
       variantId,
     );
     if (!success) {
+      console.error("[subscription/change] LS update failed", {
+        lsSubscriptionId: sub.lemonsqueezy_subscription_id,
+        variantId,
+        errorDetail: errorDetail ?? null,
+      });
       return NextResponse.json(
-        { error: "تعذّر تغيير الخطة. حاولي بعد قليل" },
+        {
+          error: "تعذّر تغيير الخطة. حاولي بعد قليل",
+          debug: `update-path (LS sub ${sub.lemonsqueezy_subscription_id}, variant ${variantId}): ${errorDetail ?? "unknown"}`,
+        },
         { status: 502 },
       );
     }
@@ -82,8 +95,23 @@ export async function POST(request: Request) {
   }
 
   // ── Trial / new user: first-time subscription via checkout ──
-  setupLemonsqueezy();
-  const storeId = getLemonsqueezyStoreId();
+  let storeId: string;
+  try {
+    setupLemonsqueezy();
+    storeId = getLemonsqueezyStoreId();
+  } catch (err) {
+    console.error(
+      "[subscription/change] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID)",
+      err,
+    );
+    return NextResponse.json(
+      {
+        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        debug: `config: ${describeLsError(err)}`,
+      },
+      { status: 500 },
+    );
+  }
   const origin =
     request.headers.get("origin") ??
     new URL(request.url).origin ??
@@ -117,7 +145,10 @@ export async function POST(request: Request) {
         lsError: response?.error ?? null,
       });
       return NextResponse.json(
-        { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
+        {
+          error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+          debug: `checkout-path LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
+        },
         { status: 502 },
       );
     }
@@ -127,7 +158,10 @@ export async function POST(request: Request) {
       tags: { area: "subscription-change-checkout", userId: user.id },
     });
     return NextResponse.json(
-      { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
+      {
+        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        debug: `checkout-path exception: ${describeLsError(err)}`,
+      },
       { status: 502 },
     );
   }
