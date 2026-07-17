@@ -326,11 +326,23 @@ function sumDayTotal(meals: Meal[]) {
 
 // ── Per-day calorie-band enforcement ────────────────────────────────────────
 // The plan header promises each adult a daily calorie target; a generated day
-// must actually respect it. The prompt aims ±5%; code enforces this HARD band
-// (wider so a near-miss doesn't burn a re-roll) and re-rolls the day with a
-// corrective note when an adult lands outside it.
+// must actually respect it. Three layers, cheapest-first:
+//   1. The prompt aims ±5% (AIM band).
+//   2. Code enforces a wider HARD band (±10%) and re-rolls the day with a
+//      corrective note when an adult lands outside it — a fresh roll produces
+//      naturally coherent portions, so it's preferred while attempts remain.
+//   3. DETERMINISTIC BACKSTOP: whatever slice is finally accepted, any adult
+//      still outside the AIM band is rescaled in code to the exact target —
+//      portions, calories and macros together — so a stubborn model miss can
+//      never ship a visibly inconsistent day (e.g. a 2030 day among 2700s).
 export const DAY_CALORIE_BAND_PCT = 0.1;
 export const DAY_CALORIE_BAND_MIN_KCAL = 100;
+export const DAY_CALORIE_AIM_PCT = 0.05; // keep in sync with the prompt's aim band
+export const DAY_CALORIE_AIM_MIN_KCAL = 50;
+// Rescale clamp: beyond this the source attempt is garbage and blowing portions
+// up/down further would produce absurd recipes — scale this far and log.
+export const DAY_CALORIE_RESCALE_MAX_FACTOR = 2.5;
+export const DAY_CALORIE_RESCALE_MIN_FACTOR = 0.4;
 
 export interface DayCalorieDeviation {
   member_id: string;
@@ -342,12 +354,16 @@ export interface DayCalorieDeviation {
 /**
  * Out-of-band adults in a parsed day slice. Children are exempt (portion-based,
  * no calorie math per the methodology); members missing from the skeleton or
- * with a non-positive target are skipped. Pure — exported for unit tests.
+ * with a non-positive target are skipped. Defaults to the HARD band; pass the
+ * AIM band constants for the post-acceptance consistency check. Pure — exported
+ * for unit tests.
  */
 export function dayCalorieDeviations(
   slice: DaySlice,
   skeleton: PlanSkeleton,
   context: PlanPromptContext,
+  bandPct: number = DAY_CALORIE_BAND_PCT,
+  bandMinKcal: number = DAY_CALORIE_BAND_MIN_KCAL,
 ): DayCalorieDeviation[] {
   const out: DayCalorieDeviation[] = [];
   for (const m of slice.members) {
@@ -360,16 +376,105 @@ export function dayCalorieDeviations(
     if (isChild) continue;
     const target = sk.daily_calories_target;
     if (!Number.isFinite(target) || target <= 0) continue;
-    const allowed = Math.max(
-      DAY_CALORIE_BAND_MIN_KCAL,
-      Math.round(target * DAY_CALORIE_BAND_PCT),
-    );
+    const allowed = Math.max(bandMinKcal, Math.round(target * bandPct));
     const got = sumDayTotal(m.meals).calories;
     if (Math.abs(got - target) > allowed) {
       out.push({ member_id: m.member_id, got, target, allowed });
     }
   }
   return out;
+}
+
+/**
+ * Scaled ingredient amount rounded to a kitchen-realistic step for its unit, so
+ * a rescaled recipe still reads like a recipe (185g not 184.62g, 2.25 pieces
+ * not 2.31). Exported for unit tests.
+ */
+export function scaleIngredientAmount(
+  value: number,
+  unit: Ingredient["unit"],
+  factor: number,
+): number {
+  const v = value * factor;
+  switch (unit) {
+    case "g":
+    case "ml":
+      if (v >= 100) return Math.round(v / 10) * 10;
+      if (v >= 20) return Math.round(v / 5) * 5;
+      return Math.max(1, Math.round(v));
+    case "kg":
+    case "l":
+      return Math.round(v * 100) / 100;
+    default: // tbsp / tsp / cup / piece / serving — quarter steps
+      return Math.max(0.25, Math.round(v * 4) / 4);
+  }
+}
+
+/**
+ * Deterministically rescale each deviating member's meals so their day total
+ * lands on the skeleton target: one uniform factor per member applied to every
+ * meal's calories, macros, and scalable ingredient amounts (translated
+ * ingredients too, so the housekeeper view stays consistent). "unlimited"
+ * ingredients (سلطة حرة) are left untouched. The factor is clamped so a garbage
+ * attempt can't explode portions into absurdity. Non-deviating members and the
+ * meal text (names, steps) are untouched. Pure — exported for unit tests.
+ */
+export function rescaleDayCalories(
+  slice: DaySlice,
+  deviations: DayCalorieDeviation[],
+): DaySlice {
+  if (deviations.length === 0) return slice;
+  const byId = new Map(deviations.map((d) => [d.member_id, d]));
+  const scaleIngredients = (ings: Ingredient[], factor: number): Ingredient[] =>
+    ings.map((ing) =>
+      ing.unit === "unlimited"
+        ? ing
+        : {
+            ...ing,
+            amount: scaleIngredientAmount(ing.amount, ing.unit, factor),
+            ...(ing.amount_min != null
+              ? { amount_min: scaleIngredientAmount(ing.amount_min, ing.unit, factor) }
+              : {}),
+            ...(ing.amount_max != null
+              ? { amount_max: scaleIngredientAmount(ing.amount_max, ing.unit, factor) }
+              : {}),
+          },
+    );
+  return {
+    ...slice,
+    members: slice.members.map((m) => {
+      const dev = byId.get(m.member_id);
+      if (!dev || !(dev.got > 0)) return m;
+      const factor = Math.min(
+        DAY_CALORIE_RESCALE_MAX_FACTOR,
+        Math.max(DAY_CALORIE_RESCALE_MIN_FACTOR, dev.target / dev.got),
+      );
+      return {
+        ...m,
+        meals: m.meals.map((meal) => ({
+          ...meal,
+          ingredients: scaleIngredients(meal.ingredients, factor),
+          ...(meal.ingredients_translated
+            ? { ingredients_translated: scaleIngredients(meal.ingredients_translated, factor) }
+            : {}),
+          ...(meal.own_portion
+            ? {
+                own_portion: {
+                  ...meal.own_portion,
+                  ingredients: scaleIngredients(meal.own_portion.ingredients, factor),
+                },
+              }
+            : {}),
+          calories: Math.round(meal.calories * factor),
+          macros: {
+            protein_g: Math.round(meal.macros.protein_g * factor),
+            carbs_g: Math.round(meal.macros.carbs_g * factor),
+            fat_g: Math.round(meal.macros.fat_g * factor),
+          },
+        })),
+      };
+    }),
+  };
 }
 
 /**
@@ -1589,8 +1694,8 @@ export async function generateMealPlan(params: {
         // scope: there the slice is spliced into a carried frame, so the slice's
         // own sum isn't the member's full day. Out of band → re-roll WITH a
         // corrective note stating the previous total and the band; exhausted →
-        // accept the closest attempt (log-only) — a slightly-off day beats a
-        // missing one.
+        // accept the closest attempt — the deterministic rescale below then
+        // pulls it onto the target, so an off-band day never reaches the user.
         if (!partialScope) {
           const deviations = dayCalorieDeviations(slice, daySkeleton, context);
           if (deviations.length > 0) {
@@ -1614,6 +1719,27 @@ export async function generateMealPlan(params: {
                 .join(", "),
             );
             slice = bestOffBand.slice;
+          }
+          // Deterministic backstop: whatever was accepted above, any adult still
+          // outside the AIM band (±5%) is rescaled in code to the exact target,
+          // BEFORE shared-meal assembly so batch totals stay consistent. This is
+          // the guarantee that day totals match across the week — re-rolls only
+          // make the rescale rare, they no longer decide the outcome.
+          const offAim = dayCalorieDeviations(
+            slice,
+            daySkeleton,
+            context,
+            DAY_CALORIE_AIM_PCT,
+            DAY_CALORIE_AIM_MIN_KCAL,
+          );
+          if (offAim.length > 0) {
+            slice = rescaleDayCalories(slice, offAim);
+            console.warn(
+              `[plan-generate] day ${dayIndex} rescaled onto calorie targets:`,
+              offAim
+                .map((d) => `${d.member_id}: ${d.got}→${d.target}`)
+                .join(", "),
+            );
           }
         }
 
