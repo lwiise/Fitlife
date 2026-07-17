@@ -62,9 +62,22 @@ export async function POST(request: Request) {
     );
   }
 
-  setupLemonsqueezy();
-
-  const storeId = getLemonsqueezyStoreId();
+  // Distinguish config-missing from LS-API failures in the function logs —
+  // the client message is the same either way, the operator's fix is not.
+  let storeId: string;
+  try {
+    setupLemonsqueezy();
+    storeId = getLemonsqueezyStoreId();
+  } catch (err) {
+    console.error(
+      "[checkout] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID)",
+      err,
+    );
+    return NextResponse.json(
+      { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
+      { status: 500 },
+    );
+  }
   const variantId = getVariantId(parsed.tier, parsed.cadence);
 
   // Return to the EXACT origin the user is browsing (the same-origin POST sends
@@ -97,7 +110,16 @@ export async function POST(request: Request) {
 
     const checkoutUrl = response?.data?.data?.attributes?.url;
     if (!checkoutUrl) {
-      console.error("[checkout] missing checkout URL in LS response", response);
+      // The SDK doesn't throw on API rejection — the reason lives in
+      // response.error (e.g. invalid API key, variant not in this store,
+      // test/live mode mismatch). Surface it for the function logs.
+      console.error("[checkout] LS did not return a checkout URL", {
+        tier: parsed.tier,
+        cadence: parsed.cadence,
+        variantId,
+        statusCode: response?.statusCode ?? null,
+        lsError: response?.error ?? null,
+      });
       return NextResponse.json(
         { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
         { status: 502 },
