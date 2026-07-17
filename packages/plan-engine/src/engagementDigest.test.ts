@@ -86,7 +86,7 @@ describe("computeEngagementDigest", () => {
       verdict("مقلوبة", "loved"),
     ]);
     expect(digest!.golden_dishes).toHaveLength(1);
-    expect(digest!.golden_dishes[0].loved_count).toBe(3);
+    expect(digest!.golden_dishes[0]!.loved_count).toBe(3);
   });
 
   it("skips rows whose name normalizes to nothing", () => {
