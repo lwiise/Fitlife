@@ -21,7 +21,10 @@ export function WorkoutPlanCard({
   waitingForMeals = false,
 }: WorkoutPlanCardProps) {
   return (
-    <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+    // flex-col + mt-auto on the CTA: the quick-glance grid stretches cards to
+    // equal height, so bottom-pinning keeps this button on the same baseline
+    // as the subscription card's regardless of how much text each card holds.
+    <div className="bg-white rounded-2xl p-4 border border-brand-ink/5 flex flex-col">
       <div className="flex items-center gap-3 mb-2">
         <div className="size-10 rounded-full bg-brand-purple-900/10 flex items-center justify-center">
           <Dumbbell className="size-5 text-brand-purple-900" aria-hidden="true" />
@@ -37,13 +40,15 @@ export function WorkoutPlanCard({
           <p className="text-brand-ink-muted text-xs mt-1">
             برنامج تمارين أسبوعي يوافق هدفك الغذائي
           </p>
-          <Link
-            href="/onboarding/workout"
-            className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-4 py-2 rounded-full mt-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-h-[2.75rem]"
-          >
-            <Dumbbell className="size-4" aria-hidden="true" />
-            أضيفي خطة التمارين
-          </Link>
+          <div className="mt-auto pt-3">
+            <Link
+              href="/onboarding/workout"
+              className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-4 py-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-h-[2.75rem]"
+            >
+              <Dumbbell className="size-4" aria-hidden="true" />
+              أضيفي خطة التمارين
+            </Link>
+          </div>
         </>
       )}
 

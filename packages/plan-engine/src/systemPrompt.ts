@@ -943,12 +943,19 @@ export function buildDayPrompt(
         .map((m) => `${m.slot_name_ar} (${m.slot}): ${m.recipe_name_ar}`)
         .join(" | ");
 
-      // Aim band shown to the model (±5%); code enforces a wider hard band and
-      // re-rolls the day when an adult lands outside it (see dayCalorieDeviations).
+      // Aim band shown to the model (calories ±5%); code enforces wider hard
+      // bands and re-rolls the day when an adult lands outside either (see
+      // dayCalorieDeviations / dayProteinDeviations). Protein gets its own
+      // explicit band — days must match on protein too, and it can only be
+      // steered here (composition), never fixed by the code-side rescale.
       const aimBand = Math.round(sm.daily_calories_target * 0.05);
+      const proteinBand = Math.max(
+        15,
+        Math.round(sm.macros_target.protein_g * 0.1),
+      );
       const target = isChild
         ? "طفل — بالحصص، بدون هدف سعرات"
-        : `الهدف: ${sm.daily_calories_target} سعرة (مجموع اليوم المقبول: من ${sm.daily_calories_target - aimBand} إلى ${sm.daily_calories_target + aimBand})، بروتين ${sm.macros_target.protein_g} / كارب ${sm.macros_target.carbs_g} / دهون ${sm.macros_target.fat_g} (جم)`;
+        : `الهدف: ${sm.daily_calories_target} سعرة (مجموع اليوم المقبول: من ${sm.daily_calories_target - aimBand} إلى ${sm.daily_calories_target + aimBand})، بروتين ${sm.macros_target.protein_g} جم (مجموع بروتين اليوم المقبول: من ${sm.macros_target.protein_g - proteinBand} إلى ${sm.macros_target.protein_g + proteinBand}) / كارب ${sm.macros_target.carbs_g} / دهون ${sm.macros_target.fat_g} (جم)`;
 
       // No preset dishes for this member today (the skeleton omitted this day, and
       // the family grid is empty during a shared-group regen) → don't print "—",
@@ -972,7 +979,7 @@ export function buildDayPrompt(
       "شاركي الطبق فقط حين يناسب الجميع فعلاً (لا حساسية متعارضة ولا قيد غذائي/كره قوي ولا اختلاف ماكروز/حالة طبية يمنع ذلك). مَن لا يناسبه الطبق — أو مَن وُسم بـ(وجبات مستقلة) — أعطيه طبقاً مختلفاً **باسم مختلف** لتلك الوجبة. للأطفال: حصة مناسبة للعمر بدون معادلات سعرات.";
 
   return `# المطلوب (المرحلة 2: توسيع يوم واحد)
-وسّعي وجبات **${dayName}** (day_index=${dayIndex}) فقط، لكل فرد، إلى وصفات كاملة تحقق هدف كل فرد. **قيد إلزامي**: مجموع سعرات وجبات اليوم لكل بالغ يجب أن يقع داخل النطاق المقبول المذكور بجانب هدفه — اجمعي سعرات وجبات كل فرد قبل الإخراج، وإن خرج المجموع عن النطاق فعدّلي أحجام الحصص والمقادير حتى يقع داخله. أسماء الأطباق المعطاة لكل فرد هي خطة العائلة لهذا اليوم: التزمي بها **بنفس الاسم تماماً** حين تناسب الفرد (حتى تبقى وجبة عائلية واحدة تُطبخ مرة واحدة وتُقسَّم). أما إذا كان الطبق لا يناسب فرداً فعلاً — حساسية أو حالة طبية أو اختلاف هدف/ماكروز جذري أو طفل/حمل/رضاعة — فأعطيه بدلاً منه طبقاً مناسباً له **باسم مختلف بوضوح** لتلك الوجبة (سيُعامل تلقائياً كوجبة فردية). الأولوية لملاءمة الفرد، لا لتوحيد الطبق. وإن لم تُعطَ أطباق لفردٍ ما (مكتوب: «لا أطباق محددة»)، فصمّمي له يوماً كاملاً مناسباً لهدفه — ولا تتركي وجباته فارغة أبداً.
+وسّعي وجبات **${dayName}** (day_index=${dayIndex}) فقط، لكل فرد، إلى وصفات كاملة تحقق هدف كل فرد. **قيد إلزامي**: مجموع سعرات اليوم **ومجموع بروتين اليوم** لكل بالغ يجب أن يقعا داخل النطاقين المقبولين المذكورين بجانب هدفه — اجمعي سعرات وبروتين وجبات كل فرد قبل الإخراج؛ إن خرجت السعرات عن نطاقها فعدّلي أحجام الحصص والمقادير، وإن خرج البروتين عن نطاقه فعدّلي تركيبة المكونات (زيدي أو بدّلي مصادر البروتين ومقابلها أنقصي الكارب أو الدهون) لأن تغيير حجم الحصة وحده لا يصلح البروتين دون كسر السعرات. أسماء الأطباق المعطاة لكل فرد هي خطة العائلة لهذا اليوم: التزمي بها **بنفس الاسم تماماً** حين تناسب الفرد (حتى تبقى وجبة عائلية واحدة تُطبخ مرة واحدة وتُقسَّم). أما إذا كان الطبق لا يناسب فرداً فعلاً — حساسية أو حالة طبية أو اختلاف هدف/ماكروز جذري أو طفل/حمل/رضاعة — فأعطيه بدلاً منه طبقاً مناسباً له **باسم مختلف بوضوح** لتلك الوجبة (سيُعامل تلقائياً كوجبة فردية). الأولوية لملاءمة الفرد، لا لتوحيد الطبق. وإن لم تُعطَ أطباق لفردٍ ما (مكتوب: «لا أطباق محددة»)، فصمّمي له يوماً كاملاً مناسباً لهدفه — ولا تتركي وجباته فارغة أبداً.
 
 ${sharedRule}
 

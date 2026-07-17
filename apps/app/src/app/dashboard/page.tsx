@@ -309,7 +309,7 @@ export default async function DashboardPage() {
           </Link>
 
           {isPaywalled ? (
-            <div className="bg-brand-purple-900 text-white rounded-2xl p-4">
+            <div className="bg-brand-purple-900 text-white rounded-2xl p-4 flex flex-col">
               <div className="flex items-center gap-3 mb-2">
                 <div className="size-10 rounded-full bg-white/15 flex items-center justify-center">
                   <Lock className="size-5 text-brand-yellow" aria-hidden="true" />
@@ -322,12 +322,14 @@ export default async function DashboardPage() {
               <p className="text-white/80 text-xs mt-1">
                 للوصول لخطتك الغذائية
               </p>
-              <a
-                href="/pricing"
-                className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-4 py-2 rounded-full mt-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900 min-h-[2.75rem]"
-              >
-                اشتركي للاستمرار
-              </a>
+              <div className="mt-auto pt-3">
+                <a
+                  href="/pricing"
+                  className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-4 py-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900 min-h-[2.75rem]"
+                >
+                  اشتركي للاستمرار
+                </a>
+              </div>
             </div>
           ) : (
           <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
@@ -397,7 +399,9 @@ export default async function DashboardPage() {
             />
           )}
 
-          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+          {/* flex-col + mt-auto on the CTA keeps this button level with the
+              workout card's — the grid stretches cards to equal height. */}
+          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5 flex flex-col">
             <div className="flex items-center gap-3 mb-2">
               <div className="size-10 rounded-full bg-brand-yellow/20 flex items-center justify-center">
                 <Sparkles className="size-5 text-brand-yellow" aria-hidden="true" />
@@ -416,7 +420,7 @@ export default async function DashboardPage() {
               </p>
             )}
             {subscription && (
-              <div className="mt-3">
+              <div className="mt-auto pt-3">
                 <Link
                   href="/subscription"
                   className="inline-flex items-center gap-2 bg-brand-ink text-white hover:bg-brand-purple-900 font-bold text-sm px-4 py-2 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"

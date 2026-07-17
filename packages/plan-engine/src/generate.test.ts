@@ -387,23 +387,31 @@ function sharedStreamReturns(systemPrompt: string): {
 } {
   const ids = [...systemPrompt.matchAll(/member_id="([^"]+)"/g)].map((m) => m[1]!);
   const dayMatch = systemPrompt.match(/day_index=(\d+)/);
-  // Per-day calorie enforcement: emit each member's day at the target the
-  // prompt states (works for both mock-skeleton targets and prior-plan
-  // targets in regen flows) so scripted sequences never trigger re-rolls.
+  // Per-day calorie + protein enforcement: emit each member's day at the
+  // targets the prompt states (works for both mock-skeleton targets and
+  // prior-plan targets in regen flows) so scripted sequences never trigger
+  // re-rolls.
   const promptTargets = new Map(
     [...systemPrompt.matchAll(/member_id="([^"]+)" — الهدف: (\d+) سعرة/g)].map(
       (m) => [m[1]!, Number(m[2])] as const,
     ),
   );
+  const promptProtein = new Map(
+    [
+      ...systemPrompt.matchAll(
+        /member_id="([^"]+)" — الهدف: \d+ سعرة[^\n]*بروتين (\d+) جم/g,
+      ),
+    ].map((m) => [m[1]!, Number(m[2])] as const),
+  );
   // The edited member's regenerated portion is bigger than its carried one (دجاج 200).
-  const lunchMeal = (recipe: string, calories: number): Meal => ({
+  const lunchMeal = (recipe: string, calories: number, protein: number): Meal => ({
     slot: "lunch",
     slot_name_ar: "غداء",
     recipe_name_ar: recipe,
     ingredients: [{ name_ar: "دجاج", amount: 200, unit: "g" }],
     prep_steps_ar: ["جهّزي الكبسة"],
     calories,
-    macros: { protein_g: 100, carbs_g: 140, fat_g: 55 },
+    macros: { protein_g: protein, carbs_g: 140, fat_g: 55 },
   });
   let text: string;
   if (!dayMatch) {
@@ -430,7 +438,13 @@ function sharedStreamReturns(systemPrompt: string): {
       day_index: Number(dayMatch[1]),
       members: ids.map((id) => ({
         member_id: id,
-        meals: [lunchMeal("كبسة", promptTargets.get(id) ?? 1600)],
+        meals: [
+          lunchMeal(
+            "كبسة",
+            promptTargets.get(id) ?? 1600,
+            promptProtein.get(id) ?? 100,
+          ),
+        ],
       })),
     };
     DaySliceSchema.parse(slice);

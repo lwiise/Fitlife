@@ -10,7 +10,9 @@ import { streamAnthropic } from "./anthropic";
 import {
   generateMealPlan,
   dayCalorieDeviations,
-  buildDayCalorieCorrectiveNote,
+  dayProteinDeviations,
+  normalizedDayDeviation,
+  buildDayCorrectiveNote,
   rescaleDayCalories,
   scaleIngredientAmount,
   DAY_CALORIE_AIM_PCT,
@@ -123,7 +125,10 @@ function skeletonWith(members: Array<{ id: string; target: number }>): PlanSkele
   };
 }
 
-function mealOf(calories: number, name = "طبق"): Meal {
+// Protein defaults to the same 25%-of-calories ratio the skeleton fixture
+// uses, so a calorie-in-band slice is protein-in-band too unless a test
+// overrides protein explicitly.
+function mealOf(calories: number, name = "طبق", protein?: number): Meal {
   return {
     slot: "breakfast",
     slot_name_ar: "الفطور",
@@ -131,16 +136,22 @@ function mealOf(calories: number, name = "طبق"): Meal {
     ingredients: [{ name_ar: "بيض", amount: 2, unit: "piece" }],
     prep_steps_ar: ["اخفقي البيض"],
     calories,
-    macros: { protein_g: 30, carbs_g: 40, fat_g: 15 },
+    macros: {
+      protein_g: protein ?? Math.round((calories * 0.25) / 4),
+      carbs_g: 40,
+      fat_g: 15,
+    },
   };
 }
 
-function sliceOf(members: Array<{ id: string; calories: number }>): DaySlice {
+function sliceOf(
+  members: Array<{ id: string; calories: number; protein?: number }>,
+): DaySlice {
   return {
     day_index: 0,
-    members: members.map(({ id, calories }) => ({
+    members: members.map(({ id, calories, protein }) => ({
       member_id: id,
-      meals: [mealOf(calories, `${id}-dish`)],
+      meals: [mealOf(calories, `${id}-dish`, protein)],
     })),
   };
 }
@@ -249,7 +260,7 @@ describe("rescaleDayCalories", () => {
     ]);
     const meal = out.members[0]!.meals[0]!;
     expect(meal.calories).toBe(2700); // 2030 × (2700/2030)
-    expect(meal.macros.protein_g).toBe(Math.round(30 * (2700 / 2030)));
+    expect(meal.macros.protein_g).toBe(Math.round(127 * (2700 / 2030)));
     expect(meal.ingredients[0]!.amount).toBe(2.75); // 2 pieces × 1.33 → quarter step
     // Untouched: the original slice and non-numeric fields.
     expect(slice.members[0]!.meals[0]!.calories).toBe(2030);
@@ -287,9 +298,77 @@ describe("rescaleDayCalories", () => {
   });
 });
 
-describe("buildDayCalorieCorrectiveNote", () => {
-  it("names each member with previous total, target, and band", () => {
-    const note = buildDayCalorieCorrectiveNote([
+describe("dayProteinDeviations", () => {
+  const context = makeContext();
+  // target 1600 kcal → protein target 100g, band max(15, 10) = ±15g.
+  const skeleton = skeletonWith([{ id: "mom", target: 1600 }]);
+
+  it("accepts a day inside the protein band", () => {
+    expect(
+      dayProteinDeviations(sliceOf([{ id: "mom", calories: 1600, protein: 100 }]), skeleton, context),
+    ).toEqual([]);
+    expect(
+      dayProteinDeviations(sliceOf([{ id: "mom", calories: 1600, protein: 86 }]), skeleton, context),
+    ).toEqual([]);
+    expect(
+      dayProteinDeviations(sliceOf([{ id: "mom", calories: 1600, protein: 114 }]), skeleton, context),
+    ).toEqual([]);
+  });
+
+  it("flags a protein-short day even when calories are on target", () => {
+    const slice = sliceOf([{ id: "mom", calories: 1600, protein: 60 }]);
+    expect(dayCalorieDeviations(slice, skeleton, context)).toEqual([]);
+    expect(dayProteinDeviations(slice, skeleton, context)).toEqual([
+      { member_id: "mom", got: 60, target: 100, allowed: 15 },
+    ]);
+  });
+
+  it("applies the 15g minimum band for small targets", () => {
+    // target 900 kcal → protein target 56g; 10% = 6 < 15 → band ±15.
+    const small = skeletonWith([{ id: "mom", target: 900 }]);
+    expect(
+      dayProteinDeviations(sliceOf([{ id: "mom", calories: 900, protein: 42 }]), small, context),
+    ).toEqual([]);
+    expect(
+      dayProteinDeviations(sliceOf([{ id: "mom", calories: 900, protein: 40 }]), small, context),
+    ).toHaveLength(1);
+  });
+
+  it("exempts children entirely", () => {
+    const ctx = makeContext(true);
+    const skeleton2 = skeletonWith([
+      { id: "mom", target: 1600 },
+      { id: "member-2", target: 1200 },
+    ]);
+    expect(
+      dayProteinDeviations(
+        sliceOf([
+          { id: "mom", calories: 1600, protein: 100 },
+          { id: "member-2", calories: 1200, protein: 10 }, // child → exempt
+        ]),
+        skeleton2,
+        ctx,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("normalizedDayDeviation", () => {
+  it("weighs calorie and protein misses relative to their own targets", () => {
+    // 200/1600 kcal + 20/100 g = 0.125 + 0.2 = 0.325
+    expect(
+      normalizedDayDeviation(
+        [{ member_id: "mom", got: 1400, target: 1600, allowed: 160 }],
+        [{ member_id: "mom", got: 80, target: 100, allowed: 15 }],
+      ),
+    ).toBeCloseTo(0.325, 5);
+    expect(normalizedDayDeviation([], [])).toBe(0);
+  });
+});
+
+describe("buildDayCorrectiveNote", () => {
+  it("names each calorie-deviating member with previous total, target, and band", () => {
+    const note = buildDayCorrectiveNote([
       { member_id: "mom", got: 1200, target: 1600, allowed: 160 },
     ]);
     expect(note).toContain("تصحيح إلزامي");
@@ -297,20 +376,45 @@ describe("buildDayCalorieCorrectiveNote", () => {
     expect(note).toContain("1200");
     expect(note).toContain("1600");
     expect(note).toContain("من 1440 إلى 1760");
+    expect(note).not.toContain("بروتين المحاولة السابقة");
+  });
+
+  it("directs protein misses at composition, not portion size", () => {
+    const note = buildDayCorrectiveNote(
+      [],
+      [{ member_id: "mom", got: 60, target: 100, allowed: 15 }],
+    );
+    expect(note).toContain("تصحيح إلزامي");
+    expect(note).toContain("بروتين المحاولة السابقة 60 جم");
+    expect(note).toContain("من 85 إلى 115");
+    expect(note).toContain("مصادر البروتين");
+    expect(note).not.toContain("سعرات اليوم عن النطاق");
+  });
+
+  it("carries both sections when both measures missed", () => {
+    const note = buildDayCorrectiveNote(
+      [{ member_id: "mom", got: 1200, target: 1600, allowed: 160 }],
+      [{ member_id: "mom", got: 60, target: 100, allowed: 15 }],
+    );
+    expect(note).toContain("سعرات اليوم عن النطاق");
+    expect(note).toContain("بروتين اليوم عن النطاق");
   });
 });
 
-describe("buildDayPrompt — calorie band lines", () => {
-  it("states the mandatory sum requirement and the per-member aim band", () => {
+describe("buildDayPrompt — calorie + protein band lines", () => {
+  it("states the mandatory sum requirement and the per-member bands", () => {
     const prompt = buildDayPrompt(
       makeContext(),
       skeletonWith([{ id: "mom", target: 1600 }]),
       0,
     );
     expect(prompt).toContain("قيد إلزامي");
-    expect(prompt).toContain("اجمعي سعرات وجبات كل فرد قبل الإخراج");
+    expect(prompt).toContain("اجمعي سعرات وبروتين وجبات كل فرد قبل الإخراج");
     // ±5% aim band around 1600 → 1520..1680
     expect(prompt).toContain("من 1520 إلى 1680");
+    // Protein 100g ±15 → 85..115
+    expect(prompt).toContain("من 85 إلى 115");
+    expect(prompt).toContain("مصادر البروتين");
   });
 });
 
@@ -352,6 +456,48 @@ describe("generateMealPlan — per-day calorie enforcement", () => {
     expect(prompts[1]).toContain("900");
     // The accepted day is the in-band roll.
     expect(plan.members[0]!.days[0]!.day_total.calories).toBe(1600);
+  }, 30_000);
+
+  it("re-rolls a protein-short day at CORRECT calories with a composition note, then accepts the fix", async () => {
+    let dayCalls = 0;
+    const prompts: string[] = [];
+    mockedStream.mockImplementation(async (params) => {
+      const systemPrompt =
+        (params as { systemPrompt?: string } | undefined)?.systemPrompt ?? "";
+      if (!/day_index=\d+/.test(systemPrompt)) {
+        return {
+          text: JSON.stringify(skeletonWith([{ id: "mom", target: 1600 }])),
+          tokensIn: 10,
+          tokensOut: 20,
+          stopReason: null,
+        };
+      }
+      dayCalls++;
+      prompts.push(systemPrompt);
+      // 1st roll: calories on target but only 60g protein (target 100±15);
+      // 2nd roll: composition fixed.
+      const protein = dayCalls === 1 ? 60 : 100;
+      return {
+        text: JSON.stringify(sliceOf([{ id: "mom", calories: 1600, protein }])),
+        tokensIn: 10,
+        tokensOut: 20,
+        stopReason: null,
+      };
+    });
+
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: makeContext(),
+    });
+
+    expect(dayCalls).toBe(2);
+    // The re-roll carried the protein composition note, not a portion note.
+    expect(prompts[1]).toContain("تصحيح إلزامي");
+    expect(prompts[1]).toContain("مصادر البروتين");
+    expect(prompts[1]).toContain("بروتين المحاولة السابقة 60 جم");
+    // Accepted day: calories untouched (in aim band → no rescale), protein fixed.
+    expect(plan.members[0]!.days[0]!.day_total.calories).toBe(1600);
+    expect(plan.members[0]!.days[0]!.day_total.protein_g).toBe(100);
   }, 30_000);
 
   it("rescales an in-hard-band but off-aim day onto the target WITHOUT burning a re-roll", async () => {
