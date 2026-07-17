@@ -9,8 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 import {
   closeDayInputSchema,
   logBodyWeightSchema,
+  setMealCheckinSchema,
   type CloseDayInput,
   type LogBodyWeightInput,
+  type SetMealCheckinInput,
 } from "./serverSchemas";
 
 const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، حاولي مرة أخرى";
@@ -154,6 +156,80 @@ export async function closeDay(rawInput: CloseDayInput) {
 
   revalidatePath("/dashboard");
   revalidatePath("/plan");
+  return { ok: true as const, local_date: localDate };
+}
+
+/**
+ * Inline per-meal marking from the plan page — one slot at a time, same
+ * table and same rules as the «ختام اليوم» sheet: server-derived calendar
+ * date, 48-hour grace window, never a future day (adherence cannot be
+ * fabricated ahead of time). status null clears an accidental mark.
+ */
+export async function setMealCheckin(rawInput: SetMealCheckinInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
+
+  const parsed = setMealCheckinSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  const input = parsed.data;
+
+  const { data: planRow, error: planError } = await supabase
+    .from("meal_plans")
+    .select("week_start:plan_data->>week_start_date")
+    .eq("id", input.meal_plan_id)
+    .eq("user_id", user.id)
+    .single();
+  const weekStart = (planRow as { week_start?: string } | null)?.week_start;
+  if (planError || !weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  const localDate = addDaysISO(weekStart, input.day_index);
+  const today = riyadhTodayISO();
+  if (localDate > today || localDate < addDaysISO(today, -GRACE_DAYS)) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  if (input.status === null) {
+    const { error: deleteError } = await supabase
+      .from("meal_checkins")
+      .delete()
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot)
+      .eq("user_id", user.id);
+    if (deleteError) {
+      Sentry.captureException(deleteError, {
+        tags: { area: "engagement", step: "checkin-clear", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
+    }
+  } else {
+    const { error: upsertError } = await supabase.from("meal_checkins").upsert(
+      {
+        user_id: user.id,
+        meal_plan_id: input.meal_plan_id,
+        day_index: input.day_index,
+        local_date: localDate,
+        slot: input.slot,
+        status: input.status,
+        reason: input.status === "cooked" ? null : (input.reason ?? null),
+      },
+      { onConflict: "meal_plan_id,day_index,slot" },
+    );
+    if (upsertError) {
+      Sentry.captureException(upsertError, {
+        tags: { area: "engagement", step: "checkin-inline", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+    }
+  }
+
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
   return { ok: true as const, local_date: localDate };
 }
 

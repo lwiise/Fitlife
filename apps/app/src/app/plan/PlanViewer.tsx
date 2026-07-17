@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
+import { setMealCheckin as setMealCheckinAction } from "@/lib/engagement/actions";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
@@ -42,7 +43,7 @@ function formatWeekRange(weekStart: string, locale?: LocaleCode): string {
 
 export function PlanViewer({
   plan,
-  planId: _planId,
+  planId,
   generating = false,
   updatedAt,
   preselectedMember,
@@ -51,6 +52,7 @@ export function PlanViewer({
   housekeeperLocale,
   locale,
   showWorkoutOptIn = false,
+  checkins,
 }: {
   plan: MealPlan;
   planId: string;
@@ -73,6 +75,15 @@ export function PlanViewer({
   // No workout plan exists yet → offer the add-exercise-plan entry in the
   // action bar (main /plan page only; read-only views never pass it).
   showWorkoutOptIn?: boolean;
+  // Inline per-meal tracking (main /plan page only): current marks for this
+  // plan. Presence of the prop enables the controls; read-only/translated
+  // views never pass it.
+  checkins?: Array<{
+    day_index: number;
+    slot: string;
+    status: string;
+    reason: string | null;
+  }>;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -94,6 +105,62 @@ export function PlanViewer({
     const i = dayIndexFromWeekStart(plan.week_start_date);
     return i >= 0 && i <= 6 ? i : 0;
   });
+
+  // Inline per-meal tracking (see the checkins prop). Optimistic map keyed
+  // day|slot; the 48h window is enforced server-side too — the client gate
+  // just hides controls on future days so adherence can't be pre-marked.
+  const [checkinMap, setCheckinMap] = useState<
+    Map<string, { status: "cooked" | "swapped" | "skipped"; reason: string | null }>
+  >(
+    () =>
+      new Map(
+        (checkins ?? [])
+          .filter(
+            (c): c is typeof c & { status: "cooked" | "swapped" | "skipped" } =>
+              c.status === "cooked" || c.status === "swapped" || c.status === "skipped",
+          )
+          .map((c) => [`${c.day_index}|${c.slot}`, { status: c.status, reason: c.reason }]),
+      ),
+  );
+  const [checkinError, setCheckinError] = useState<string | null>(null);
+  const checkinTodayIdx = dayIndexFromWeekStart(plan.week_start_date);
+  const canCheckinActiveDay =
+    checkins !== undefined &&
+    !readOnly &&
+    !translated &&
+    activeDayIndex <= checkinTodayIdx &&
+    activeDayIndex >= checkinTodayIdx - 2;
+
+  function handleCheckin(
+    slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
+    status: "cooked" | "swapped" | "skipped" | null,
+    reason: string | null,
+  ) {
+    const key = `${activeDayIndex}|${slot}`;
+    const prev = checkinMap.get(key) ?? null;
+    const next = new Map(checkinMap);
+    if (status === null) next.delete(key);
+    else next.set(key, { status, reason });
+    setCheckinMap(next);
+    setCheckinError(null);
+    void setMealCheckinAction({
+      meal_plan_id: planId,
+      day_index: activeDayIndex,
+      slot,
+      status,
+      reason: reason as never,
+    }).then((result) => {
+      if (!result.ok) {
+        setCheckinMap((cur) => {
+          const reverted = new Map(cur);
+          if (prev) reverted.set(key, prev);
+          else reverted.delete(key);
+          return reverted;
+        });
+        setCheckinError(result.error);
+      }
+    });
+  }
 
   // The ?member= param only seeds the initial tab; strip it after mount so a
   // later refresh doesn't override the user's subsequent tab clicks.
@@ -558,15 +625,28 @@ export function PlanViewer({
               <p className="text-brand-ink-muted text-sm">{t.translating}</p>
             </div>
           ) : activeDay && activeDay.meals.length > 0 ? (
-            orderedMeals.map((meal, i) => (
-              <MealCard
-                key={i}
-                meal={meal}
-                memberNames={memberNames}
-                locale={locale}
-                currentMemberId={activeMember.member_id}
-              />
-            ))
+            <>
+              {checkinError && (
+                <p role="alert" className="text-sm font-bold text-red-700">
+                  {checkinError}
+                </p>
+              )}
+              {orderedMeals.map((meal, i) => (
+                <MealCard
+                  key={i}
+                  meal={meal}
+                  memberNames={memberNames}
+                  locale={locale}
+                  currentMemberId={activeMember.member_id}
+                  checkin={checkinMap.get(`${activeDayIndex}|${meal.slot}`) ?? null}
+                  onCheckin={
+                    canCheckinActiveDay
+                      ? (status, reason) => handleCheckin(meal.slot, status, reason)
+                      : undefined
+                  }
+                />
+              ))}
+            </>
           ) : memberIsGenerating &&
             !preparingStalled &&
             activeDayIndex === currentPreparingIndex ? (

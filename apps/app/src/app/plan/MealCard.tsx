@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
-import { ChevronDown, Users } from "lucide-react";
+import { Check, ChevronDown, Users } from "lucide-react";
 import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
@@ -50,11 +50,38 @@ function IngredientList({
   );
 }
 
+// Inline check-in state for the plan page («تتبّع من هنا»). Chip labels are
+// the exact vocabulary of the ختام اليوم sheet — one language everywhere.
+export interface MealCheckinState {
+  status: "cooked" | "swapped" | "skipped";
+  reason: string | null;
+}
+
+const CHECKIN_STATUS_CHIPS = [
+  { value: "cooked" as const, label: "طبختها كما هي" },
+  { value: "swapped" as const, label: "بدّلتها" },
+  { value: "skipped" as const, label: "تجاوزتها" },
+];
+const CHECKIN_REASON_CHIPS = [
+  { value: "guests", label: "جاءنا ضيوف", gold: true },
+  { value: "ordered_in", label: "طلبنا اليوم" },
+  { value: "ate_out", label: "خارج البيت" },
+  { value: "missing_ingredients", label: "لم تتوفر المقادير" },
+  { value: "no_time", label: "ضاق الوقت" },
+];
+const CHECKIN_HEADER_LABEL: Record<MealCheckinState["status"], string> = {
+  cooked: "طُبخت",
+  swapped: "بُدّلت",
+  skipped: "تُجوّزت",
+};
+
 export function MealCard({
   meal,
   memberNames,
   locale,
   currentMemberId,
+  checkin,
+  onCheckin,
 }: {
   meal: Meal;
   memberNames?: Record<string, string>;
@@ -63,6 +90,10 @@ export function MealCard({
   // The member whose plan is currently open — used to highlight their portion in
   // a shared (family) recipe so "what you take" is obvious. Optional.
   currentMemberId?: string;
+  /** Current inline check-in mark, when the surface tracks (plan page only). */
+  checkin?: MealCheckinState | null;
+  /** Present only on trackable days (today/48h back) — absent hides controls. */
+  onCheckin?: (status: MealCheckinState["status"] | null, reason: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -144,6 +175,22 @@ export function MealCard({
               {meal.macros.fat_g} {t.fat} ({t.grams})
             </p>
           </div>
+          {checkin && (
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0 mt-0.5 ${
+                checkin.reason === "guests"
+                  ? "bg-brand-yellow text-brand-ink"
+                  : checkin.status === "cooked"
+                    ? "bg-brand-purple-900 text-white"
+                    : "bg-brand-lavender/40 text-brand-purple-900"
+              }`}
+            >
+              {checkin.status === "cooked" && (
+                <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+              )}
+              {CHECKIN_HEADER_LABEL[checkin.status]}
+            </span>
+          )}
           <div className="flex flex-col items-end flex-shrink-0">
             <span className="font-extrabold text-brand-ink text-xl tabular-nums">
               {meal.calories}
@@ -171,6 +218,62 @@ export function MealCard({
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 pt-1 border-t border-brand-ink/5 space-y-4">
+              {onCheckin && (
+                <div className="pt-3 space-y-2" aria-label="تتبّع الوجبة">
+                  <div className="flex flex-wrap gap-1.5">
+                    {CHECKIN_STATUS_CHIPS.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() =>
+                          onCheckin(
+                            checkin?.status === c.value ? null : c.value,
+                            null,
+                          )
+                        }
+                        aria-pressed={checkin?.status === c.value}
+                        className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                          checkin?.status === c.value
+                            ? "bg-brand-purple-900 text-white"
+                            : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                  {(checkin?.status === "swapped" ||
+                    checkin?.status === "skipped") && (
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="السبب">
+                      {CHECKIN_REASON_CHIPS.map((r) => (
+                        <button
+                          key={r.value}
+                          type="button"
+                          onClick={() =>
+                            onCheckin(
+                              checkin.status,
+                              checkin.reason === r.value ? null : r.value,
+                            )
+                          }
+                          aria-pressed={checkin.reason === r.value}
+                          className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                            checkin.reason === r.value
+                              ? r.gold
+                                ? "bg-brand-yellow text-brand-ink"
+                                : "bg-brand-purple-900 text-white"
+                              : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+                    تسجيلك يُحسّن خطة الأسبوع القادم — والضغط مرة أخرى يمسح الاختيار.
+                  </p>
+                </div>
+              )}
               {metaBits.length > 0 && (
                 <p className="text-brand-ink-muted text-xs tabular-nums">
                   {metaBits.join(" · ")}
