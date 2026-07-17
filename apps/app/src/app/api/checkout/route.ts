@@ -13,6 +13,30 @@ import { getVariantId } from "@fitlife/config";
 
 export const runtime = "nodejs";
 
+// TEMPORARY (pre-launch diagnosis): failure responses carry a `debug` string
+// that the pricing page renders, because the operator has no easy access to
+// the Netlify function logs. Remove `debug` (and its rendering in
+// CheckoutButton) once checkout works. It never contains keys — only the
+// LemonSqueezy rejection reason.
+function describeLsError(err: unknown): string {
+  if (err instanceof Error) {
+    let cause = "";
+    if (err.cause !== undefined) {
+      try {
+        cause = ` — ${JSON.stringify(err.cause)}`;
+      } catch {
+        cause = ` — ${String(err.cause)}`;
+      }
+    }
+    return `${err.message}${cause}`;
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 const bodySchema = z.object({
   tier: z.enum(["starter", "pro", "family", "premium"]),
   cadence: z.enum(["monthly", "annual"]),
@@ -74,7 +98,10 @@ export async function POST(request: Request) {
       err,
     );
     return NextResponse.json(
-      { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
+      {
+        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        debug: `config: ${describeLsError(err)}`,
+      },
       { status: 500 },
     );
   }
@@ -121,7 +148,10 @@ export async function POST(request: Request) {
         lsError: response?.error ?? null,
       });
       return NextResponse.json(
-        { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
+        {
+          error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+          debug: `LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
+        },
         { status: 502 },
       );
     }
@@ -138,7 +168,10 @@ export async function POST(request: Request) {
       },
     });
     return NextResponse.json(
-      { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
+      {
+        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        debug: `exception: ${describeLsError(err)}`,
+      },
       { status: 502 },
     );
   }
