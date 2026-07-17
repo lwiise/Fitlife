@@ -85,5 +85,13 @@ select * from (values
   ('00017 one-checkin-per-meal unique',
     (select case when exists (select 1 from pg_indexes where schemaname='public'
       and indexname='meal_checkins_one_per_meal')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00018 body photo column (body_logs.photo_path)',
+    (select case when exists (select 1 from information_schema.columns
+      where table_schema='public' and table_name='body_logs' and column_name='photo_path')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00018 private body-photos bucket',
+    (select case when exists (select 1 from storage.buckets
+      where id='body-photos' and public=false)
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);

@@ -36,10 +36,20 @@ const exceptionEntry = z.object({
   slot: z.enum(CHECKIN_SLOTS),
 });
 
-// وزنكِ الخاص — weekly mom weigh-in. Ranges mirror the 00017 DB CHECKs.
+// رحلتك الخاصة — weekly weigh-in, per eligible adult (member_id "mom" or a
+// family_members.id; eligibility is re-checked server-side in the action).
+// Ranges mirror the 00017 DB CHECKs. photo_path is the storage object path of
+// an already-uploaded progress photo — shape-checked here, OWNERSHIP-checked
+// in the action (it must sit inside the caller's own folder).
 export const logBodyWeightSchema = z.object({
+  member_id: memberId.default("mom"),
   weight_kg: z.number().min(20).max(300),
   waist_cm: z.number().min(30).max(250).nullish(),
+  photo_path: z
+    .string()
+    .max(300)
+    .regex(/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$/i)
+    .nullish(),
 });
 export type LogBodyWeightInput = z.infer<typeof logBodyWeightSchema>;
 

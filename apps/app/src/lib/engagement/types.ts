@@ -92,6 +92,16 @@ export interface BodyLogRow {
   recorded_on: string;
   weight_kg: number | null;
   waist_cm: number | null;
+  /** Optional progress photo: object path in the PRIVATE body-photos bucket
+   * (`<user_id>/<file>`). Rendered only via short-lived signed URLs on the
+   * private journey page — never in messages, share cards, or admin. */
+  photo_path: string | null;
   created_at: string;
   updated_at: string;
 }
+
+/** Private storage bucket for body progress photos (00018). Path convention:
+ * `<user_id>/<file>` — the first folder segment is the RLS owner key, and
+ * erasure removes the whole folder. */
+export const BODY_PHOTOS_BUCKET = "body-photos";
+
