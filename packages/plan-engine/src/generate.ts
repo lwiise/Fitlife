@@ -324,21 +324,32 @@ function sumDayTotal(meals: Meal[]) {
   };
 }
 
-// ── Per-day calorie-band enforcement ────────────────────────────────────────
-// The plan header promises each adult a daily calorie target; a generated day
-// must actually respect it. Three layers, cheapest-first:
-//   1. The prompt aims ±5% (AIM band).
-//   2. Code enforces a wider HARD band (±10%) and re-rolls the day with a
-//      corrective note when an adult lands outside it — a fresh roll produces
-//      naturally coherent portions, so it's preferred while attempts remain.
-//   3. DETERMINISTIC BACKSTOP: whatever slice is finally accepted, any adult
-//      still outside the AIM band is rescaled in code to the exact target —
-//      portions, calories and macros together — so a stubborn model miss can
-//      never ship a visibly inconsistent day (e.g. a 2030 day among 2700s).
+// ── Per-day calorie + protein band enforcement ──────────────────────────────
+// The plan header promises each adult a daily calorie target AND a protein
+// target; a generated day must actually respect both. Three layers,
+// cheapest-first:
+//   1. The prompt aims ±5% on calories and states the protein band, with
+//      distinct repair instructions (calories → portion sizes, protein →
+//      ingredient composition).
+//   2. Code enforces HARD bands (calories ±10%, protein ±10%/min 15g) and
+//      re-rolls the day with a corrective note when an adult lands outside
+//      either — a fresh roll produces naturally coherent recipes, so it's
+//      preferred while attempts remain. The best attempt is tracked by the
+//      COMBINED normalized deviation across both measures.
+//   3. DETERMINISTIC BACKSTOP (calories only): whatever slice is finally
+//      accepted, any adult still outside the calorie AIM band is rescaled in
+//      code to the exact target — portions, calories and macros together — so
+//      a stubborn calorie miss can never ship (e.g. a 2030 day among 2700s).
+//      This proportional rescale also repairs protein when the whole day ran
+//      small. A COMPOSITIONAL protein miss (right calories, low protein) has
+//      no honest code-side fix — scaling portions would break calories — so
+//      it is re-rolled hard and warn-logged if it still survives.
 export const DAY_CALORIE_BAND_PCT = 0.1;
 export const DAY_CALORIE_BAND_MIN_KCAL = 100;
 export const DAY_CALORIE_AIM_PCT = 0.05; // keep in sync with the prompt's aim band
 export const DAY_CALORIE_AIM_MIN_KCAL = 50;
+export const DAY_PROTEIN_BAND_PCT = 0.1;
+export const DAY_PROTEIN_BAND_MIN_G = 15;
 // Rescale clamp: beyond this the source attempt is garbage and blowing portions
 // up/down further would produce absurd recipes — scale this far and log.
 export const DAY_CALORIE_RESCALE_MAX_FACTOR = 2.5;
@@ -383,6 +394,57 @@ export function dayCalorieDeviations(
     }
   }
   return out;
+}
+
+/**
+ * Adults whose day PROTEIN sum misses the skeleton's protein target beyond the
+ * hard band. Same exemptions as the calorie check (children, missing/zero
+ * targets). Kept separate from the calorie check because the two feed
+ * DIFFERENT repair instructions in the corrective note. Pure — exported for
+ * unit tests.
+ */
+export function dayProteinDeviations(
+  slice: DaySlice,
+  skeleton: PlanSkeleton,
+  context: PlanPromptContext,
+): DayCalorieDeviation[] {
+  const out: DayCalorieDeviation[] = [];
+  for (const m of slice.members) {
+    const sk = skeleton.members.find((s) => s.member_id === m.member_id);
+    if (!sk) continue;
+    const isChild =
+      m.member_id === "mom"
+        ? context.mom.member_type === "child"
+        : (context.family_members.find((f) => f.id === m.member_id)?.is_child ?? false);
+    if (isChild) continue;
+    const target = sk.macros_target.protein_g;
+    if (!Number.isFinite(target) || target <= 0) continue;
+    const allowed = Math.max(
+      DAY_PROTEIN_BAND_MIN_G,
+      Math.round(target * DAY_PROTEIN_BAND_PCT),
+    );
+    const got = sumDayTotal(m.meals).protein_g;
+    if (Math.abs(got - target) > allowed) {
+      out.push({ member_id: m.member_id, got, target, allowed });
+    }
+  }
+  return out;
+}
+
+/**
+ * Combined size of a day's misses, normalized so a 60-kcal miss and a 60-g
+ * protein miss don't compare on raw magnitude. Used to keep the BEST attempt
+ * when every re-roll stays out of band. Pure — exported for unit tests.
+ */
+export function normalizedDayDeviation(
+  calorieDevs: DayCalorieDeviation[],
+  proteinDevs: DayCalorieDeviation[],
+): number {
+  let total = 0;
+  for (const d of [...calorieDevs, ...proteinDevs]) {
+    total += Math.abs(d.got - d.target) / Math.max(1, d.target);
+  }
+  return total;
 }
 
 /**
@@ -478,21 +540,39 @@ export function rescaleDayCalories(
 }
 
 /**
- * Corrective block appended to the day prompt on a calorie re-roll — telling
- * the model exactly how far the previous attempt landed converges far better
- * than a blind re-ask. Exported for unit tests.
+ * Corrective block appended to the day prompt on a re-roll — telling the model
+ * exactly how far the previous attempt landed converges far better than a
+ * blind re-ask. Calorie misses ask for portion-size changes; protein misses
+ * ask for COMPOSITION changes (swap/raise protein sources) while holding
+ * calories — the two need different repairs. Exported for unit tests.
  */
-export function buildDayCalorieCorrectiveNote(
-  deviations: DayCalorieDeviation[],
+export function buildDayCorrectiveNote(
+  calorieDevs: DayCalorieDeviation[],
+  proteinDevs: DayCalorieDeviation[] = [],
 ): string {
-  const lines = deviations.map(
-    (d) =>
-      `- member_id="${d.member_id}": مجموع المحاولة السابقة ${d.got} سعرة والهدف ${d.target} سعرة (المقبول من ${d.target - d.allowed} إلى ${d.target + d.allowed}).`,
-  );
-  return `# تصحيح إلزامي لهذه المحاولة
-في المحاولة السابقة خرج مجموع سعرات اليوم عن النطاق المقبول للأفراد التاليين:
+  const sections: string[] = [];
+  if (calorieDevs.length > 0) {
+    const lines = calorieDevs.map(
+      (d) =>
+        `- member_id="${d.member_id}": مجموع المحاولة السابقة ${d.got} سعرة والهدف ${d.target} سعرة (المقبول من ${d.target - d.allowed} إلى ${d.target + d.allowed}).`,
+    );
+    sections.push(`خرج مجموع سعرات اليوم عن النطاق المقبول للأفراد التاليين:
 ${lines.join("\n")}
-عدّلي أحجام الحصص والمقادير حتى يقع مجموع يوم كل فرد داخل نطاقه، مع إبقاء السعرات والماكروز متسقة مع المقادير المكتوبة، واجمعي سعرات كل فرد قبل الإخراج للتأكد.`;
+عدّلي أحجام الحصص والمقادير حتى يقع مجموع يوم كل فرد داخل نطاقه.`);
+  }
+  if (proteinDevs.length > 0) {
+    const lines = proteinDevs.map(
+      (d) =>
+        `- member_id="${d.member_id}": مجموع بروتين المحاولة السابقة ${d.got} جم والهدف ${d.target} جم (المقبول من ${d.target - d.allowed} إلى ${d.target + d.allowed}).`,
+    );
+    sections.push(`خرج مجموع بروتين اليوم عن النطاق المقبول للأفراد التاليين:
+${lines.join("\n")}
+عدّلي تركيبة المكونات — زيدي أو بدّلي مصادر البروتين (ومقابلها أنقصي الكارب أو الدهون) — حتى يقع بروتين يوم كل فرد داخل نطاقه مع بقاء السعرات داخل نطاقها؛ تغيير حجم الحصة وحده لا يصلح البروتين دون كسر السعرات.`);
+  }
+  return `# تصحيح إلزامي لهذه المحاولة
+في المحاولة السابقة:
+${sections.join("\n\n")}
+أبقي السعرات والماكروز متسقة مع المقادير المكتوبة، واجمعي سعرات وبروتين كل فرد قبل الإخراج للتأكد.`;
 }
 
 // ── Deterministic shared-meal assembly + re-sync ────────────────────────────
@@ -1640,13 +1720,13 @@ export async function generateMealPlan(params: {
       dayIndex,
       dayNameByIndex.get(dayIndex),
     );
-    let prompt = basePrompt; // calorie re-rolls append a corrective block
+    let prompt = basePrompt; // band re-rolls append a corrective block
     // Size this day's cap + timeout to the members actually missing it.
     let dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
     const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
     let apiAttempt = 0; // 429/529/5xx/overload/stream/timeout retries (honor Retry-After)
     let contentAttempt = 0; // re-rolls for a one-off malformed/invalid model response
-    let calorieAttempt = 0; // re-rolls (with corrective note) for out-of-band day calories
+    let bandAttempt = 0; // re-rolls (with corrective note) for out-of-band day calories/protein
     let bestOffBand: { slice: DaySlice; totalDev: number } | null = null;
     let tokensRetried = false; // one doubled-cap retry on truncation
     for (;;) {
@@ -1690,41 +1770,47 @@ export async function generateMealPlan(params: {
           );
         let slice = r.data;
 
-        // Per-day calorie-band enforcement (adults only). Skipped for a partial
-        // scope: there the slice is spliced into a carried frame, so the slice's
-        // own sum isn't the member's full day. Out of band → re-roll WITH a
-        // corrective note stating the previous total and the band; exhausted →
-        // accept the closest attempt — the deterministic rescale below then
-        // pulls it onto the target, so an off-band day never reaches the user.
+        // Per-day calorie + protein band enforcement (adults only). Skipped for
+        // a partial scope: there the slice is spliced into a carried frame, so
+        // the slice's own sum isn't the member's full day. Out of band on
+        // either measure → re-roll WITH a corrective note stating the previous
+        // totals and bands; exhausted → accept the attempt with the smallest
+        // COMBINED normalized deviation — the deterministic calorie rescale
+        // below then pulls calories onto the target (repairing protein too
+        // when the whole day ran small).
         if (!partialScope) {
-          const deviations = dayCalorieDeviations(slice, daySkeleton, context);
-          if (deviations.length > 0) {
-            const totalDev = deviations.reduce(
-              (s, d) => s + Math.abs(d.got - d.target),
-              0,
-            );
+          const calorieDevs = dayCalorieDeviations(slice, daySkeleton, context);
+          const proteinDevs = dayProteinDeviations(slice, daySkeleton, context);
+          if (calorieDevs.length > 0 || proteinDevs.length > 0) {
+            const totalDev = normalizedDayDeviation(calorieDevs, proteinDevs);
             if (!bestOffBand || totalDev < bestOffBand.totalDev) {
               bestOffBand = { slice, totalDev };
             }
-            if (calorieAttempt < CONTENT_MAX_RETRIES) {
-              calorieAttempt++;
-              prompt = `${basePrompt}\n\n${buildDayCalorieCorrectiveNote(deviations)}`;
-              await sleep(retryWaitMs(calorieAttempt));
+            if (bandAttempt < CONTENT_MAX_RETRIES) {
+              bandAttempt++;
+              prompt = `${basePrompt}\n\n${buildDayCorrectiveNote(calorieDevs, proteinDevs)}`;
+              await sleep(retryWaitMs(bandAttempt));
               continue;
             }
             console.warn(
-              `[plan-generate] day ${dayIndex} calories out of band after ${calorieAttempt} corrective re-rolls — accepting closest attempt`,
-              deviations
-                .map((d) => `${d.member_id}: ${d.got}/${d.target}±${d.allowed}`)
-                .join(", "),
+              `[plan-generate] day ${dayIndex} calories/protein out of band after ${bandAttempt} corrective re-rolls — accepting closest attempt`,
+              [
+                ...calorieDevs.map(
+                  (d) => `${d.member_id}: ${d.got}/${d.target}±${d.allowed} kcal`,
+                ),
+                ...proteinDevs.map(
+                  (d) => `${d.member_id}: ${d.got}/${d.target}±${d.allowed} g protein`,
+                ),
+              ].join(", "),
             );
             slice = bestOffBand.slice;
           }
           // Deterministic backstop: whatever was accepted above, any adult still
-          // outside the AIM band (±5%) is rescaled in code to the exact target,
-          // BEFORE shared-meal assembly so batch totals stay consistent. This is
-          // the guarantee that day totals match across the week — re-rolls only
-          // make the rescale rare, they no longer decide the outcome.
+          // outside the calorie AIM band (±5%) is rescaled in code to the exact
+          // target, BEFORE shared-meal assembly so batch totals stay consistent.
+          // This is the guarantee that day totals match across the week —
+          // re-rolls only make the rescale rare, they no longer decide the
+          // outcome.
           const offAim = dayCalorieDeviations(
             slice,
             daySkeleton,
@@ -1738,6 +1824,18 @@ export async function generateMealPlan(params: {
               `[plan-generate] day ${dayIndex} rescaled onto calorie targets:`,
               offAim
                 .map((d) => `${d.member_id}: ${d.got}→${d.target}`)
+                .join(", "),
+            );
+          }
+          // Protein has no honest code-side fix at correct calories — if a
+          // compositional miss survived the re-rolls (and the rescale above),
+          // surface it in logs so prompt/band tuning has a signal.
+          const residualProtein = dayProteinDeviations(slice, daySkeleton, context);
+          if (residualProtein.length > 0) {
+            console.warn(
+              `[plan-generate] day ${dayIndex} protein still off target (accepted):`,
+              residualProtein
+                .map((d) => `${d.member_id}: ${d.got}/${d.target}±${d.allowed} g`)
                 .join(", "),
             );
           }
