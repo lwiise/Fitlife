@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database.types";
+import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -93,12 +94,40 @@ export async function GET() {
     ],
   );
 
-  const [mealCheckins, memberExceptions, mealVerdicts, bodyLogs] =
-    await Promise.all(
-      ENGAGEMENT_TABLES.map((table) =>
-        fetchEngagementRows(supabase, table, user.id),
-      ),
-    );
+  const engagementRows = await Promise.all(
+    ENGAGEMENT_TABLES.map((table) =>
+      fetchEngagementRows(supabase, table, user.id),
+    ),
+  );
+  const [mealCheckins, memberExceptions, mealVerdicts] = engagementRows;
+  let bodyLogs = engagementRows[3] ?? [];
+
+  // Portability covers the photos too: each body log with a photo_path gets a
+  // 24-hour signed URL (the bucket is private — a bare path downloads nothing).
+  // Best-effort and tolerant of pre-00018 prod (no column / no bucket).
+  try {
+    const logRows = (bodyLogs ?? []) as Array<Record<string, unknown>>;
+    const photoPaths = logRows
+      .map((r) => r.photo_path)
+      .filter((p): p is string => typeof p === "string" && p.length > 0);
+    if (photoPaths.length > 0) {
+      const { data: signed } = await supabase.storage
+        .from(BODY_PHOTOS_BUCKET)
+        .createSignedUrls(photoPaths, 60 * 60 * 24);
+      const urlByPath = new Map(
+        (signed ?? [])
+          .filter((s) => s.signedUrl)
+          .map((s) => [s.path, s.signedUrl] as const),
+      );
+      bodyLogs = logRows.map((r) =>
+        typeof r.photo_path === "string" && urlByPath.has(r.photo_path)
+          ? { ...r, photo_url: urlByPath.get(r.photo_path) }
+          : r,
+      );
+    }
+  } catch {
+    // Signing is an enrichment — the rows themselves already exported.
+  }
 
   const data = {
     exported_at: new Date().toISOString(),

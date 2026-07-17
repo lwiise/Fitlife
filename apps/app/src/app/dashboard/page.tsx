@@ -461,15 +461,6 @@ export default async function DashboardPage() {
                 رسالتك الأسبوعية
               </Link>
             )}
-            {onboardingDone && (
-              <Link
-                href="/journey"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                <Lock className="size-4" aria-hidden="true" />
-                رحلتك الخاصة
-              </Link>
-            )}
           </div>
         )}
 

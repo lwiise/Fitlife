@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lock } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { setMealCheckin as setMealCheckinAction } from "@/lib/engagement/actions";
@@ -53,6 +53,7 @@ export function PlanViewer({
   locale,
   showWorkoutOptIn = false,
   checkins,
+  journeyMembers,
 }: {
   plan: MealPlan;
   planId: string;
@@ -84,6 +85,11 @@ export function PlanViewer({
     status: string;
     reason: string | null;
   }>;
+  // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
+  // household may open — "mom" plus eligible adult family_members ids (name
+  // null for the mom). The entry renders on the ACTIVE member's tab only;
+  // read-only/translated views never pass it.
+  journeyMembers?: Array<{ id: string; name: string | null }>;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -501,6 +507,36 @@ export function PlanViewer({
           </p>
         </div>
       </div>
+
+      {/* «رحلتك الخاصة» — the private weigh-in entry for the viewed member
+          (moved here from the dashboard). Renders only for eligible adults on
+          the interactive plan page; the destination page carries the privacy
+          contract, so the entry itself reveals nothing. */}
+      {(() => {
+        const journeyEntry =
+          journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
+        if (!journeyEntry || readOnly || translated) return null;
+        return (
+          <Link
+            href={
+              journeyEntry.id === "mom"
+                ? "/journey"
+                : `/journey?member=${journeyEntry.id}`
+            }
+            className="flex items-center justify-between gap-3 bg-brand-lavender/20 hover:bg-brand-lavender/30 rounded-2xl px-4 py-3.5 min-h-11 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+          >
+            <span className="flex items-center gap-2.5 text-sm font-bold text-brand-purple-900">
+              <Lock className="size-4 shrink-0" aria-hidden="true" />
+              {journeyEntry.name
+                ? `رحلة ${journeyEntry.name} الخاصة`
+                : "رحلتك الخاصة"}
+            </span>
+            <span className="text-xs text-brand-purple-900/70">
+              الوزن والمتابعة على انفراد
+            </span>
+          </Link>
+        );
+      })()}
 
       {/* Generation progress — real "day N of M" while the plan streams in.
           Hidden once the viewed member is complete (ready === total) so a full

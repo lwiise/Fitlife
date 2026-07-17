@@ -6,6 +6,10 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
+import {
+  isWeighInEligibleMember,
+  isWeighInEligibleMom,
+} from "@/lib/engagement/eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
@@ -105,6 +109,17 @@ export default async function PlanPage({
     planHasContent(latest.plan_data) &&
     !pendingBlocked &&
     (pendingMembers.length > 0 || hasIncompleteMember);
+  // «رحلتك الخاصة» entries — one per eligible adult (children never, the
+  // housekeeper never; the shared rule in engagement/eligibility.ts). The
+  // PlanViewer shows the entry on the matching member tab.
+  const journeyMembers = [
+    ...(isWeighInEligibleMom(profile?.birth_year ?? null)
+      ? [{ id: "mom", name: null as string | null }]
+      : []),
+    ...familyMembers
+      .filter((m) => isWeighInEligibleMember(m))
+      .map((m) => ({ id: m.id, name: m.name as string | null })),
+  ];
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =
@@ -298,6 +313,7 @@ export default async function PlanPage({
               housekeeperLocale={housekeeperLocale}
               showWorkoutOptIn={workout === null}
               checkins={checkins}
+              journeyMembers={journeyMembers}
             />
           </>
         )}

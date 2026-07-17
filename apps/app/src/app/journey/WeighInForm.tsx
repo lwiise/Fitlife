@@ -1,49 +1,129 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Camera, Eye, EyeOff, X } from "lucide-react";
 import { logBodyWeight } from "@/lib/engagement/actions";
+import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
+import { createClient } from "@/lib/supabase/client";
 
 const AR_NUM = new Intl.NumberFormat("ar-SA", {
   useGrouping: false,
   maximumFractionDigits: 1,
 });
 
+// Mirrors the bucket-level allowlist in migration 00018.
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const PHOTO_EXT_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
 /**
- * Weekly weigh-in. The last known weight renders MASKED by default — this
- * phone gets handed to children and the housekeeper; revealing is a deliberate
- * tap. Submitting again the same day corrects today's value; a second weigh-in
- * within the week is refused by the server with a gentle message.
+ * Weekly weigh-in for one member ("mom" or an eligible adult). The last known
+ * weight renders MASKED by default — this phone gets handed to children and
+ * the housekeeper; revealing is a deliberate tap. Submitting again the same
+ * day corrects today's value; a second weigh-in within the week is refused by
+ * the server with a gentle message.
+ *
+ * The optional progress photo uploads STRAIGHT to the private body-photos
+ * bucket from the browser (owner-scoped RLS; a photo never transits our
+ * server), then the object path rides along on the action. If the save is
+ * refused, the just-uploaded object is removed best-effort.
  */
-export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
+export function WeighInForm({
+  memberId,
+  memberName,
+  userId,
+  lastWeightKg,
+}: {
+  memberId: string;
+  memberName: string | null;
+  userId: string;
+  lastWeightKg: number | null;
+}) {
   const router = useRouter();
   const [revealed, setRevealed] = useState(false);
   const [weight, setWeight] = useState("");
   const [waist, setWaist] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Object URLs leak without an explicit revoke on replace/unmount.
+  useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
+  function pickPhoto(file: File | null) {
+    if (!file) {
+      setPhoto(null);
+      setPhotoPreview(null);
+      return;
+    }
+    if (!PHOTO_EXT_BY_MIME[file.type]) {
+      setMessage("اختاري صورة بصيغة JPG أو PNG أو WebP");
+      return;
+    }
+    if (file.size > PHOTO_MAX_BYTES) {
+      setMessage("الصورة كبيرة — الحد ٥ ميغابايت");
+      return;
+    }
+    setMessage(null);
+    setPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  }
 
   function submit() {
     const weightNum = Number(weight);
     if (!weight || Number.isNaN(weightNum)) {
-      setMessage("أدخلي وزنك بالأرقام");
+      setMessage("أدخلي الوزن بالأرقام");
       return;
     }
     const waistNum = waist ? Number(waist) : null;
     startTransition(async () => {
+      let photoPath: string | null = null;
+      if (photo) {
+        const ext = PHOTO_EXT_BY_MIME[photo.type]!;
+        photoPath = `${userId}/${memberId}-${crypto.randomUUID()}.${ext}`;
+        const supabase = createClient();
+        const { error: uploadError } = await supabase.storage
+          .from(BODY_PHOTOS_BUCKET)
+          .upload(photoPath, photo, { contentType: photo.type });
+        if (uploadError) {
+          setMessage("تعذر رفع الصورة، حاولي مرة أخرى أو احفظي بدونها");
+          return;
+        }
+      }
       const result = await logBodyWeight({
+        member_id: memberId,
         weight_kg: weightNum,
         waist_cm: waistNum,
+        photo_path: photoPath,
       });
       if (result.ok) {
         setSaved(true);
         setMessage(null);
         setWeight("");
         setWaist("");
+        pickPhoto(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
         router.refresh();
       } else {
+        // The save was refused — don't leave the fresh object stranded.
+        if (photoPath) {
+          const supabase = createClient();
+          await supabase.storage
+            .from(BODY_PHOTOS_BUCKET)
+            .remove([photoPath])
+            .catch(() => undefined);
+        }
         setMessage(result.error);
       }
     });
@@ -55,7 +135,9 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
       className="bg-white rounded-2xl border border-brand-ink/5 p-6 space-y-4"
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-bold text-brand-ink">وزنك اليوم؟</h2>
+        <h2 className="font-bold text-brand-ink">
+          {memberName ? `وزن ${memberName} اليوم؟` : "وزنك اليوم؟"}
+        </h2>
         {lastWeightKg !== null && (
           <button
             type="button"
@@ -116,6 +198,50 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
         </label>
       </div>
 
+      <div className="space-y-2">
+        <input
+          ref={fileInputRef}
+          id="body-photo-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
+        />
+        {photoPreview ? (
+          <div className="flex items-center gap-3">
+            <img
+              src={photoPreview}
+              alt="معاينة صورة المتابعة"
+              width={64}
+              height={85}
+              className="w-16 aspect-[3/4] object-cover rounded-xl border border-brand-ink/10"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                pickPhoto(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-full text-sm font-bold text-brand-ink-muted hover:bg-brand-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+            >
+              <X className="size-4" aria-hidden="true" />
+              إزالة الصورة
+            </button>
+          </div>
+        ) : (
+          <label
+            htmlFor="body-photo-input"
+            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-brand-purple-900 focus-within:ring-offset-2"
+          >
+            <Camera className="size-4" aria-hidden="true" />
+            صورة للمتابعة (اختياري)
+          </label>
+        )}
+        <p className="text-xs text-brand-ink-muted">
+          الصورة تبقى في هذه الصفحة الخاصة فقط، ولا تظهر إلا بلمسة منك.
+        </p>
+      </div>
+
       {message && (
         <p role="alert" className="text-sm font-bold text-red-700">
           {message}
@@ -123,7 +249,7 @@ export function WeighInForm({ lastWeightKg }: { lastWeightKg: number | null }) {
       )}
       {saved && !message && (
         <p role="status" className="text-sm font-bold text-brand-purple-900">
-          حُفظ وزنك — نلقاكِ الأسبوع القادم
+          {memberName ? "حُفظ الوزن — نلقاكِ الأسبوع القادم" : "حُفظ وزنك — نلقاكِ الأسبوع القادم"}
         </p>
       )}
 
