@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/Logo";
+import { BackButton } from "@/components/BackButton";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import {
   isWeighInEligibleMember,
@@ -205,7 +206,10 @@ export default async function JourneyPage({
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
         <div className="container-app py-4 flex items-center justify-between">
           <Logo />
-          <BackToDashboard />
+          <div className="flex items-center gap-2">
+            <BackButton href="/plan" />
+            <BackToDashboard />
+          </div>
         </div>
       </header>
 

@@ -4,6 +4,7 @@ import { Calendar, ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getPlanHistory } from "@/lib/plans/getPlanHistory";
 import { Logo } from "@/components/Logo";
+import { BackButton } from "@/components/BackButton";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { SettingsLink } from "@/components/SettingsLink";
 import { RestorePlanButton } from "./RestorePlanButton";
@@ -103,6 +104,7 @@ export default async function PlanHistoryPage({
             <Logo className="h-9 w-auto" />
           </a>
           <div className="flex items-center gap-2">
+            <BackButton href="/plan" />
             <BackToDashboard />
             <SettingsLink />
           </div>

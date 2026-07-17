@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { PregnantWizard } from "./wizards/PregnantWizard";
 import { LactatingWizard } from "./wizards/LactatingWizard";
 
@@ -73,16 +75,32 @@ export function PregLactSwitch({
           </button>
         </div>
 
-        {/* Family is optional — let her bail out and generate the plan now. */}
-        {onSkip && (
-          <button
-            type="button"
-            onClick={onSkip}
-            className="px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-          >
-            تخطّي الآن — أضيفهم لاحقاً
-          </button>
-        )}
+        <div className="flex items-center justify-between gap-3">
+          {!onComplete ? (
+            // URL-driven visit: exit to where she came from. The onboarding
+            // builder (onComplete set) has its own escapes — don't leave mid-flow.
+            <Link
+              href={onboarding ? "/onboarding/members" : "/family"}
+              className="inline-flex items-center gap-1 min-h-11 px-3 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+              {onboarding ? "رجوع" : "رجوع للعائلة"}
+            </Link>
+          ) : (
+            <span />
+          )}
+
+          {/* Family is optional — let her bail out and generate the plan now. */}
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="px-3 py-2 -me-3 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              تخطّي الآن — أضيفهم لاحقاً
+            </button>
+          )}
+        </div>
       </div>
     </main>
   );

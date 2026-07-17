@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getPlanById } from "@/lib/plans/getPlanHistory";
 import { Logo } from "@/components/Logo";
+import { BackButton } from "@/components/BackButton";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { PlanViewer } from "../../PlanViewer";
 import { RestorePlanButton } from "../RestorePlanButton";
@@ -48,13 +47,10 @@ export default async function HistoryPlanViewPage({
 
       <div className="container-app py-8 md:py-12">
         <div className="flex items-center justify-between gap-3 mb-6">
-          <Link
+          <BackButton
             href={member ? `/plan/history?member=${member}` : "/plan/history"}
-            className="inline-flex items-center gap-1 min-h-11 px-2 text-brand-ink-muted hover:text-brand-ink text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-          >
-            <ChevronRight className="size-4" aria-hidden="true" />
-            كل الخطط
-          </Link>
+            label="كل الخطط"
+          />
           {!result.isCurrent && member && (
             <RestorePlanButton planId={result.id} memberId={member} />
           )}
