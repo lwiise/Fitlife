@@ -16,3 +16,16 @@ export function setupLemonsqueezy(): void {
   lemonSqueezySetup({ apiKey: getLemonsqueezyApiKey() });
   _initialized = true;
 }
+
+/**
+ * LS rejects an ENTIRE checkout (422) when checkout_data.email is present but
+ * not a valid address — dev accounts like "test@test" and empty-string emails
+ * both trip it. The prefill is convenience only (custom.user_id maps the
+ * webhook back), so callers pass the result and a bad email is simply
+ * omitted; the hosted LS checkout page collects one itself.
+ */
+export function checkoutPrefillEmail(
+  email: string | undefined,
+): string | undefined {
+  return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
+}

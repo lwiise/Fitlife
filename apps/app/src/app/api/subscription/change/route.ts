@@ -6,7 +6,10 @@ import { getVariantId } from "@fitlife/config";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentSubscription } from "@/lib/subscription/state";
-import { setupLemonsqueezy } from "@/lib/lemonsqueezy/client";
+import {
+  setupLemonsqueezy,
+  checkoutPrefillEmail,
+} from "@/lib/lemonsqueezy/client";
 import { changeLSSubscriptionTier } from "@/lib/lemonsqueezy/subscription";
 import { env, getLemonsqueezyStoreId } from "@/lib/env";
 
@@ -90,7 +93,7 @@ export async function POST(request: Request) {
     const response = await createCheckout(storeId, variantId, {
       checkoutOptions: { embed: false, media: false, logo: true },
       checkoutData: {
-        email: user.email ?? undefined,
+        email: checkoutPrefillEmail(user.email),
         custom: {
           user_id: user.id,
           tier: parsed.tier,
@@ -104,6 +107,15 @@ export async function POST(request: Request) {
 
     const checkoutUrl = response?.data?.data?.attributes?.url;
     if (!checkoutUrl) {
+      // The SDK doesn't throw on API rejection — surface the reason in the
+      // function logs (same treatment as /api/checkout).
+      console.error("[subscription/change] LS did not return a checkout URL", {
+        tier: parsed.tier,
+        cadence: parsed.cadence,
+        variantId,
+        statusCode: response?.statusCode ?? null,
+        lsError: response?.error ?? null,
+      });
       return NextResponse.json(
         { error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية" },
         { status: 502 },
