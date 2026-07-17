@@ -17,9 +17,14 @@ export function CheckoutButton({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // TEMPORARY (pre-launch diagnosis): /api/checkout returns a `debug` string
+  // on failure so the cause is visible on-page without Netlify log access.
+  // Remove together with the `debug` field in the route once checkout works.
+  const [debugDetail, setDebugDetail] = useState<string | null>(null);
 
   function handleClick() {
     setErrorMessage(null);
+    setDebugDetail(null);
     startTransition(async () => {
       try {
         const res = await fetch("/api/checkout", {
@@ -36,6 +41,7 @@ export function CheckoutButton({
         const body = (await res.json().catch(() => ({}))) as {
           checkout_url?: string;
           error?: string;
+          debug?: string;
         };
 
         if (res.ok && body.checkout_url) {
@@ -44,6 +50,7 @@ export function CheckoutButton({
         }
 
         setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        if (body.debug) setDebugDetail(body.debug);
       } catch {
         setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
       }
@@ -77,6 +84,14 @@ export function CheckoutButton({
           className="mt-2 text-red-600 text-xs leading-relaxed"
         >
           {errorMessage}
+        </p>
+      )}
+      {debugDetail && (
+        <p
+          dir="ltr"
+          className="mt-1 text-brand-ink-muted text-[11px] leading-relaxed break-all text-start"
+        >
+          {debugDetail}
         </p>
       )}
     </div>
