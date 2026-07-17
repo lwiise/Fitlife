@@ -8,7 +8,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import {
   setupLemonsqueezy,
-  checkoutPrefillEmail,
   describeLsError,
 } from "@/lib/lemonsqueezy/client";
 import { changeLSSubscriptionTier } from "@/lib/lemonsqueezy/subscription";
@@ -120,8 +119,10 @@ export async function POST(request: Request) {
   try {
     const response = await createCheckout(storeId, variantId, {
       checkoutOptions: { embed: false, media: false, logo: true },
+      // No email prefill — see /api/checkout: LS 422s the whole checkout on
+      // emails it can't validate (nonexistent domains); the hosted page
+      // collects one itself and custom.user_id does the webhook mapping.
       checkoutData: {
-        email: checkoutPrefillEmail(user.email),
         custom: {
           user_id: user.id,
           tier: parsed.tier,

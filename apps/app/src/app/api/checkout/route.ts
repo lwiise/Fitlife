@@ -10,7 +10,6 @@ import {
 import { env, getLemonsqueezyStoreId } from "@/lib/env";
 import {
   setupLemonsqueezy,
-  checkoutPrefillEmail,
   describeLsError,
 } from "@/lib/lemonsqueezy/client";
 import { getVariantId } from "@fitlife/config";
@@ -101,13 +100,11 @@ export async function POST(request: Request) {
     new URL(request.url).origin ??
     env.NEXT_PUBLIC_APP_URL;
 
-  const prefillEmail = checkoutPrefillEmail(user.email);
-  if (user.email && !prefillEmail) {
-    console.warn("[checkout] omitting invalid account email from prefill", {
-      userId: user.id,
-    });
-  }
-
+  // NO email prefill: LS validates checkout_data.email far more strictly than
+  // any local format check (it 422s the ENTIRE checkout on emails with
+  // nonexistent domains — which is what dev/test accounts use). The prefill
+  // was convenience only; the hosted LS page collects the email itself and
+  // custom.user_id is what maps the webhook back to our subscription row.
   try {
     const response = await createCheckout(storeId, variantId, {
       checkoutOptions: {
@@ -116,7 +113,6 @@ export async function POST(request: Request) {
         logo: true,
       },
       checkoutData: {
-        email: prefillEmail,
         custom: {
           user_id: user.id,
           tier: parsed.tier,
