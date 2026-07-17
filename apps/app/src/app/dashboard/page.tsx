@@ -21,6 +21,7 @@ import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { CloseDayBand } from "./CloseDayBand";
 import { RenewalRecapCard } from "./RenewalRecapCard";
+import { InstallPrompt } from "./InstallPrompt";
 import {
   isWithinRenewalWindow,
   loadFamilyLedger,
@@ -478,6 +479,9 @@ export default async function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Home-screen install nudge — quiet, 30-day dismissal */}
+        {onboardingDone && <InstallPrompt />}
 
         {/* Renewal-week recap — celebratory bookkeeping, never a countdown */}
         {renewalRecap && <RenewalRecapCard {...renewalRecap} />}
