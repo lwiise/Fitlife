@@ -8,7 +8,10 @@ import {
   hasLiveLemonsqueezySubscription,
 } from "@/lib/subscription/state";
 import { env, getLemonsqueezyStoreId } from "@/lib/env";
-import { setupLemonsqueezy } from "@/lib/lemonsqueezy/client";
+import {
+  setupLemonsqueezy,
+  checkoutPrefillEmail,
+} from "@/lib/lemonsqueezy/client";
 import { getVariantId } from "@fitlife/config";
 
 export const runtime = "nodejs";
@@ -115,15 +118,7 @@ export async function POST(request: Request) {
     new URL(request.url).origin ??
     env.NEXT_PUBLIC_APP_URL;
 
-  // LS rejects the ENTIRE checkout (422) when data.email is present but not a
-  // valid address — dev accounts like "test@test" and empty-string emails both
-  // trip it. The prefill is convenience only (custom.user_id is what maps the
-  // webhook back), so omit a bad email instead of failing the checkout; the
-  // LS checkout page collects one itself.
-  const prefillEmail =
-    user.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)
-      ? user.email
-      : undefined;
+  const prefillEmail = checkoutPrefillEmail(user.email);
   if (user.email && !prefillEmail) {
     console.warn("[checkout] omitting invalid account email from prefill", {
       userId: user.id,
