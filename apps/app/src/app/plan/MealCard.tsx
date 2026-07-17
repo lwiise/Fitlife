@@ -218,62 +218,6 @@ export function MealCard({
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 pt-1 border-t border-brand-ink/5 space-y-4">
-              {onCheckin && (
-                <div className="pt-3 space-y-2" aria-label="تتبّع الوجبة">
-                  <div className="flex flex-wrap gap-1.5">
-                    {CHECKIN_STATUS_CHIPS.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() =>
-                          onCheckin(
-                            checkin?.status === c.value ? null : c.value,
-                            null,
-                          )
-                        }
-                        aria-pressed={checkin?.status === c.value}
-                        className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
-                          checkin?.status === c.value
-                            ? "bg-brand-purple-900 text-white"
-                            : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
-                        }`}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                  {(checkin?.status === "swapped" ||
-                    checkin?.status === "skipped") && (
-                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="السبب">
-                      {CHECKIN_REASON_CHIPS.map((r) => (
-                        <button
-                          key={r.value}
-                          type="button"
-                          onClick={() =>
-                            onCheckin(
-                              checkin.status,
-                              checkin.reason === r.value ? null : r.value,
-                            )
-                          }
-                          aria-pressed={checkin.reason === r.value}
-                          className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
-                            checkin.reason === r.value
-                              ? r.gold
-                                ? "bg-brand-yellow text-brand-ink"
-                                : "bg-brand-purple-900 text-white"
-                              : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
-                          }`}
-                        >
-                          {r.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-[11px] text-brand-ink-muted leading-relaxed">
-                    تسجيلك يُحسّن خطة الأسبوع القادم — والضغط مرة أخرى يمسح الاختيار.
-                  </p>
-                </div>
-              )}
               {metaBits.length > 0 && (
                 <p className="text-brand-ink-muted text-xs tabular-nums">
                   {metaBits.join(" · ")}
@@ -388,6 +332,67 @@ export function MealCard({
                 <p className="text-brand-ink-muted text-xs leading-relaxed bg-brand-surface/60 rounded-xl p-3">
                   {meal.notes_ar}
                 </p>
+              )}
+
+              {/* Per-meal tracking — the card's closing act, after the recipe. */}
+              {onCheckin && (
+                <div
+                  className="pt-3 border-t border-brand-ink/5 space-y-2"
+                  aria-label="تتبّع الوجبة"
+                >
+                  <div className="flex flex-wrap gap-1.5">
+                    {CHECKIN_STATUS_CHIPS.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() =>
+                          onCheckin(
+                            checkin?.status === c.value ? null : c.value,
+                            null,
+                          )
+                        }
+                        aria-pressed={checkin?.status === c.value}
+                        className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                          checkin?.status === c.value
+                            ? "bg-brand-purple-900 text-white"
+                            : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                  {(checkin?.status === "swapped" ||
+                    checkin?.status === "skipped") && (
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="السبب">
+                      {CHECKIN_REASON_CHIPS.map((r) => (
+                        <button
+                          key={r.value}
+                          type="button"
+                          onClick={() =>
+                            onCheckin(
+                              checkin.status,
+                              checkin.reason === r.value ? null : r.value,
+                            )
+                          }
+                          aria-pressed={checkin.reason === r.value}
+                          className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                            checkin.reason === r.value
+                              ? r.gold
+                                ? "bg-brand-yellow text-brand-ink"
+                                : "bg-brand-purple-900 text-white"
+                              : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+                    تسجيلك يُحسّن خطة الأسبوع القادم — والضغط مرة أخرى يمسح الاختيار.
+                  </p>
+                </div>
               )}
             </div>
           </motion.div>
