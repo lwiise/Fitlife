@@ -7,6 +7,8 @@
  * imports these back.
  */
 
+import { PRICING_TIERS } from "@fitlife/config";
+
 /**
  * Map a LemonSqueezy subscription status to our internal subscription status.
  * Returns null for unknown statuses.
@@ -42,10 +44,14 @@ export function mapLemonsqueezyStatus(
 export function deriveCadence(
   variantId: string | number,
 ): "monthly" | "annual" | null {
+  // Derived from the pricing config — the single source of variant IDs — so
+  // the pre-launch swap to LIVE-mode variants happens in pricing.ts ONCE and
+  // this mapping follows automatically. (A previous hardcoded duplicate list
+  // here would have silently broken cadence sync on that swap.)
   const id = String(variantId);
-  const monthly = ["1677645", "1677648", "1677653", "1677655"];
-  const annual = ["1677781", "1677755", "1677675", "1677749"];
-  if (monthly.includes(id)) return "monthly";
-  if (annual.includes(id)) return "annual";
+  for (const tier of Object.values(PRICING_TIERS)) {
+    if (tier.lemonsqueezy_variant_id_monthly === id) return "monthly";
+    if (tier.lemonsqueezy_variant_id_annual === id) return "annual";
+  }
   return null;
 }
