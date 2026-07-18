@@ -46,6 +46,12 @@ export type Verdict = (typeof VERDICTS)[number];
 /** "mom" for the account owner, otherwise a family_members.id UUID. */
 export type EngagementMemberId = string;
 
+/** meal_checkins.member_id sentinel: a row that speaks for the whole house.
+ * Pre-00019 rows carry it (they predate per-person status), and the ختام
+ * اليوم ritual still writes it on purpose. Readers treat it as a FALLBACK
+ * for every member of that meal until a per-member mark supersedes it. */
+export const HOUSEHOLD_CHECKIN_MEMBER = "household";
+
 export interface MealCheckinRow {
   id: string;
   user_id: string;
@@ -54,6 +60,9 @@ export interface MealCheckinRow {
   /** Riyadh-local calendar date (YYYY-MM-DD), stamped at write time. */
   local_date: string;
   slot: string;
+  /** "mom" | family_members.id — or HOUSEHOLD_CHECKIN_MEMBER (see above).
+   * 00019 column: per-person status on shared meals (each person separate). */
+  member_id: EngagementMemberId;
   status: CheckinStatus;
   reason: CheckinReason | null;
   created_at: string;

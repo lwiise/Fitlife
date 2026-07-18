@@ -10,8 +10,10 @@ import {
 
 // Recent-window aggregation source for «خطة تشبهك». Two weeks covers the
 // current plan plus the tail of the previous one across regen boundaries.
+// Check-in rows are per person since 00019 (14 days × 4 slots × household),
+// so the cap carries headroom for large households.
 const WINDOW_DAYS = 14;
-const ROW_CAP = 400;
+const ROW_CAP = 800;
 
 /**
  * Fetch and aggregate the household's recent check-ins/verdicts into the
@@ -32,7 +34,9 @@ export async function fetchEngagementDigest(
     const [checkins, verdicts] = await Promise.all([
       client
         .from("meal_checkins")
-        .select("slot,status,reason")
+        // local_date identifies the MEAL — rows are per person since 00019,
+        // and the aggregation collapses them so counts stay meal-true.
+        .select("slot,status,reason,local_date")
         .eq("user_id", userId)
         .gte("created_at", since)
         .limit(ROW_CAP),

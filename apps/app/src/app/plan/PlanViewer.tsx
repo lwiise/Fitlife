@@ -78,12 +78,15 @@ export function PlanViewer({
   showWorkoutOptIn?: boolean;
   // Inline per-meal tracking (main /plan page only): current marks for this
   // plan. Presence of the prop enables the controls; read-only/translated
-  // views never pass it.
+  // views never pass it. member_id: "mom" | family_members.id per person, or
+  // "household"/null for legacy whole-house rows (pre-00019) — those act as a
+  // fallback for every member of that meal.
   checkins?: Array<{
     day_index: number;
     slot: string;
     status: string;
     reason: string | null;
+    member_id?: string | null;
   }>;
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
@@ -113,7 +116,10 @@ export function PlanViewer({
   });
 
   // Inline per-meal tracking (see the checkins prop). Optimistic map keyed
-  // day|slot; the 48h window is enforced server-side too — the client gate
+  // day|slot|member — PER PERSON, so a shared meal carries a separate status
+  // for each participant. Legacy whole-house rows (member_id null/"household")
+  // sit under the "household" key and act as a fallback for every member of
+  // that meal. The 48h window is enforced server-side too — the client gate
   // just hides controls on future days so adherence can't be pre-marked.
   const [checkinMap, setCheckinMap] = useState<
     Map<string, { status: "cooked" | "swapped" | "skipped"; reason: string | null }>
@@ -125,7 +131,10 @@ export function PlanViewer({
             (c): c is typeof c & { status: "cooked" | "swapped" | "skipped" } =>
               c.status === "cooked" || c.status === "swapped" || c.status === "skipped",
           )
-          .map((c) => [`${c.day_index}|${c.slot}`, { status: c.status, reason: c.reason }]),
+          .map((c) => [
+            `${c.day_index}|${c.slot}|${c.member_id ?? "household"}`,
+            { status: c.status, reason: c.reason },
+          ]),
       ),
   );
   const [checkinError, setCheckinError] = useState<string | null>(null);
@@ -137,22 +146,43 @@ export function PlanViewer({
     activeDayIndex <= checkinTodayIdx &&
     activeDayIndex >= checkinTodayIdx - 2;
 
+  /** A member's effective mark: their own row, else the whole-house fallback. */
+  function checkinFor(dayIndex: number, slot: string, memberId: string) {
+    return (
+      checkinMap.get(`${dayIndex}|${slot}|${memberId}`) ??
+      checkinMap.get(`${dayIndex}|${slot}|household`) ??
+      null
+    );
+  }
+
   function handleCheckin(
+    memberId: string,
     slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
     status: "cooked" | "swapped" | "skipped" | null,
     reason: string | null,
   ) {
-    const key = `${activeDayIndex}|${slot}`;
+    const key = `${activeDayIndex}|${slot}|${memberId}`;
+    const householdKey = `${activeDayIndex}|${slot}|household`;
     const prev = checkinMap.get(key) ?? null;
+    const prevHousehold = checkinMap.get(householdKey) ?? null;
     const next = new Map(checkinMap);
-    if (status === null) next.delete(key);
-    else next.set(key, { status, reason });
+    if (status === null) {
+      // Mirror the server: clearing removes the member's own mark; un-tapping
+      // a chip lit only by the whole-house fallback retracts that row instead.
+      if (next.has(key)) next.delete(key);
+      else next.delete(householdKey);
+    } else {
+      // Setting never touches the whole-house row — it stays as the fallback
+      // for the other members of this meal.
+      next.set(key, { status, reason });
+    }
     setCheckinMap(next);
     setCheckinError(null);
     void setMealCheckinAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
       slot,
+      member_id: memberId,
       status,
       reason: reason as never,
     }).then((result) => {
@@ -161,6 +191,7 @@ export function PlanViewer({
           const reverted = new Map(cur);
           if (prev) reverted.set(key, prev);
           else reverted.delete(key);
+          if (prevHousehold) reverted.set(householdKey, prevHousehold);
           return reverted;
         });
         setCheckinError(result.error);
@@ -674,10 +705,25 @@ export function PlanViewer({
                   memberNames={memberNames}
                   locale={locale}
                   currentMemberId={activeMember.member_id}
-                  checkin={checkinMap.get(`${activeDayIndex}|${meal.slot}`) ?? null}
+                  checkin={checkinFor(
+                    activeDayIndex,
+                    meal.slot,
+                    activeMember.member_id,
+                  )}
+                  sharedCheckins={
+                    meal.shared_recipe && meal.per_member_portions?.length
+                      ? Object.fromEntries(
+                          meal.per_member_portions.map((p) => [
+                            p.member_id,
+                            checkinFor(activeDayIndex, meal.slot, p.member_id),
+                          ]),
+                        )
+                      : undefined
+                  }
                   onCheckin={
                     canCheckinActiveDay
-                      ? (status, reason) => handleCheckin(meal.slot, status, reason)
+                      ? (memberId, status, reason) =>
+                          handleCheckin(memberId, meal.slot, status, reason)
                       : undefined
                   }
                 />

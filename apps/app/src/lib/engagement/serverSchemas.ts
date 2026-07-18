@@ -54,11 +54,17 @@ export const logBodyWeightSchema = z.object({
 export type LogBodyWeightInput = z.infer<typeof logBodyWeightSchema>;
 
 // Inline per-meal marking on the plan page. status null = clear the mark
-// (a mis-tap must be reversible — honesty over accumulation).
+// (a mis-tap must be reversible — honesty over accumulation). member_id is
+// whose status this is — per-person on shared meals (00019). The "household"
+// default keeps already-open tabs from the pre-00019 client working: their
+// payloads carry no member_id and land as legacy whole-house rows.
 export const setMealCheckinSchema = z.object({
   meal_plan_id: uuid,
   day_index: z.number().int().min(0).max(6),
   slot: z.enum(CHECKIN_SLOTS),
+  member_id: z
+    .union([z.literal("mom"), z.literal("household"), uuid])
+    .default("household"),
   status: z.enum(CHECKIN_STATUSES).nullable(),
   reason: z.enum(CHECKIN_REASONS).nullish(),
 });

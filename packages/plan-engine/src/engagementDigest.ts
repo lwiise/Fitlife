@@ -23,7 +23,10 @@
 
 import { canonicalRecipeKey } from "./canonicalRecipeKey";
 
-/** Minimum real events (check-ins + verdicts) before any digest exists. */
+/** Minimum real events (checked-in MEALS + verdicts) before any digest
+ * exists. Check-in rows are per person since 00019, so the floor counts
+ * collapsed meals — a five-person family marking one shared dinner is one
+ * event, not five, and cannot activate the digest by itself. */
 export const MIN_SIGNAL_EVENTS = 5;
 /** A dish becomes "golden" at this many loved verdicts across the household. */
 export const GOLDEN_LOVED_THRESHOLD = 3;
@@ -35,6 +38,12 @@ export interface EngagementCheckinRow {
   slot: string;
   status: string; // "cooked" | "swapped" | "skipped" (Zod-validated upstream)
   reason: string | null;
+  /** Calendar day of the meal (YYYY-MM-DD). Since 00019 check-ins are PER
+   * PERSON, so one shared dinner can carry several rows — (local_date, slot)
+   * is the meal's identity and the aggregation collapses on it so a family
+   * of five skipping one dinner never reads as "dinner skipped five times".
+   * Optional: rows without it (older callers) count as one meal each. */
+  local_date?: string | null;
 }
 
 export interface EngagementVerdictRow {
@@ -65,7 +74,23 @@ export function computeEngagementDigest(
   checkins: EngagementCheckinRow[],
   verdicts: EngagementVerdictRow[],
 ): EngagementDigest | undefined {
-  const total = checkins.length + verdicts.length;
+  // Collapse per-person rows to MEALS first: check-ins are per member since
+  // 00019, and every count the model may cite must stay meal-true. A meal
+  // where anyone ate as planned counts cooked; else swapped if anyone
+  // swapped; only a meal skipped by everyone marked is a skip. Reasons
+  // describe the meal event → distinct reasons count once per meal.
+  const meals = new Map<string, EngagementCheckinRow[]>();
+  for (let i = 0; i < checkins.length; i++) {
+    const c = checkins[i]!;
+    const key = c.local_date ? `${c.local_date}|${c.slot}` : `row-${i}`;
+    const list = meals.get(key) ?? [];
+    list.push(c);
+    meals.set(key, list);
+  }
+
+  // The signal floor gates on MEALS + verdicts (post-collapse) — household
+  // size must never be able to buy the digest into existence.
+  const total = meals.size + verdicts.length;
   if (total < MIN_SIGNAL_EVENTS) return undefined;
 
   let cooked = 0;
@@ -73,14 +98,20 @@ export function computeEngagementDigest(
   const skippedBySlot: Record<string, number> = {};
   const reasons: Record<string, number> = {};
 
-  for (const c of checkins) {
-    if (c.status === "cooked") cooked++;
-    else if (c.status === "swapped") swapped++;
-    else if (c.status === "skipped") {
-      skippedBySlot[c.slot] = (skippedBySlot[c.slot] ?? 0) + 1;
+  for (const rows of meals.values()) {
+    const slot = rows[0]!.slot;
+    if (rows.some((r) => r.status === "cooked")) cooked++;
+    else if (rows.some((r) => r.status === "swapped")) swapped++;
+    else if (rows.some((r) => r.status === "skipped")) {
+      skippedBySlot[slot] = (skippedBySlot[slot] ?? 0) + 1;
     }
-    if (c.reason && c.status !== "cooked") {
-      reasons[c.reason] = (reasons[c.reason] ?? 0) + 1;
+    const mealReasons = new Set(
+      rows
+        .filter((r) => r.reason && r.status !== "cooked")
+        .map((r) => r.reason as string),
+    );
+    for (const reason of mealReasons) {
+      reasons[reason] = (reasons[reason] ?? 0) + 1;
     }
   }
   // Only patterns (≥2) are worth adapting to — a single skip is noise.

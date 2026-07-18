@@ -51,16 +51,25 @@ export default async function PlanPage({
   const workoutView = view === "workout" && workout != null;
 
   // Inline per-meal tracking marks for this plan (interactive page only —
-  // history/housekeeper views never receive them).
+  // history/housekeeper views never receive them). select("*") on purpose:
+  // member_id is a 00019 column — naming it would fail the whole read on a
+  // pre-apply prod, while * degrades to rows without it (house tolerance
+  // pattern). Rows are per (day, slot, member) → 7 days × 4 slots × household.
   let checkins;
   if (profile && latest?.status === "ready") {
     const supabase = await createClient();
     const { data } = await supabase
       .from("meal_checkins")
-      .select("day_index,slot,status,reason")
+      .select("*")
       .eq("meal_plan_id", latest.id)
-      .limit(60);
-    checkins = data ?? [];
+      .limit(400);
+    checkins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      day_index: r.day_index as number,
+      slot: r.slot as string,
+      status: r.status as string,
+      reason: (r.reason ?? null) as string | null,
+      member_id: (r.member_id ?? null) as string | null,
+    }));
   }
 
   const isOnboarded = !!profile?.onboarding_completed_at;

@@ -13,6 +13,8 @@ import { adminDb } from "./db";
 export interface EngagementStats {
   /** False until migration 00017 exists in prod. */
   eventsAvailable: boolean;
+  /** Distinct MEALS checked in (user, local_date, slot) — rows are per person
+   * since 00019, so a raw row count would scale with household size. */
   checkins7d: number;
   activeCheckinHouseholds7d: number;
   verdicts7d: number;
@@ -34,15 +36,14 @@ export async function loadEngagementStats(): Promise<EngagementStats> {
     Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const [checkins, checkinUsers, verdicts, weighIns, plans, subs] =
+  const [checkinRows, verdicts, weighIns, plans, subs] =
     await Promise.all([
+      // One fetch feeds both counters. Rows are per person since 00019, so
+      // the meal counter dedupes on (user, local_date, slot) — 2000 rows
+      // covers well past the current scale; revisit when it doesn't.
       db
         .from("meal_checkins")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", sinceIso),
-      db
-        .from("meal_checkins")
-        .select("user_id")
+        .select("user_id,local_date,slot")
         .gte("created_at", sinceIso)
         .limit(2000),
       db
@@ -66,12 +67,16 @@ export async function loadEngagementStats(): Promise<EngagementStats> {
         .limit(2000),
     ]);
 
-  const eventsAvailable = !checkins.error;
+  const eventsAvailable = !checkinRows.error;
 
-  const distinctUsers = new Set(
-    ((checkinUsers.data ?? []) as Array<{ user_id: string }>).map(
-      (r) => r.user_id,
-    ),
+  const rows = (checkinRows.data ?? []) as Array<{
+    user_id: string;
+    local_date: string;
+    slot: string;
+  }>;
+  const distinctUsers = new Set(rows.map((r) => r.user_id));
+  const distinctMeals = new Set(
+    rows.map((r) => `${r.user_id}|${r.local_date}|${r.slot}`),
   );
 
   const planRows = (plans.data ?? []) as Array<{ week_changes: unknown }>;
@@ -100,7 +105,7 @@ export async function loadEngagementStats(): Promise<EngagementStats> {
 
   return {
     eventsAvailable,
-    checkins7d: checkins.count ?? 0,
+    checkins7d: distinctMeals.size,
     activeCheckinHouseholds7d: distinctUsers.size,
     verdicts7d: verdicts.count ?? 0,
     weighIns7d: weighIns.count ?? 0,

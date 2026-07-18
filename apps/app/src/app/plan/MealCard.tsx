@@ -75,12 +75,74 @@ const CHECKIN_HEADER_LABEL: Record<MealCheckinState["status"], string> = {
   skipped: "تُجوّزت",
 };
 
+// One person's status chips (+ reason chips when swapped). Shared meals render
+// one row of these PER PARTICIPANT — each person's status is separate; an
+// individual meal renders a single row for the member whose tab is open.
+function CheckinChips({
+  state,
+  onChange,
+}: {
+  state: MealCheckinState | null;
+  onChange: (
+    status: MealCheckinState["status"] | null,
+    reason: string | null,
+  ) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {CHECKIN_STATUS_CHIPS.map((c) => (
+          <button
+            key={c.value}
+            type="button"
+            onClick={() =>
+              onChange(state?.status === c.value ? null : c.value, null)
+            }
+            aria-pressed={state?.status === c.value}
+            className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+              state?.status === c.value
+                ? "bg-brand-purple-900 text-white"
+                : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {state?.status === "swapped" && (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="السبب">
+          {CHECKIN_REASON_CHIPS.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() =>
+                onChange(state.status, state.reason === r.value ? null : r.value)
+              }
+              aria-pressed={state.reason === r.value}
+              className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                state.reason === r.value
+                  ? r.gold
+                    ? "bg-brand-yellow text-brand-ink"
+                    : "bg-brand-lavender text-brand-purple-900"
+                  : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MealCard({
   meal,
   memberNames,
   locale,
   currentMemberId,
   checkin,
+  sharedCheckins,
   onCheckin,
 }: {
   meal: Meal;
@@ -90,10 +152,19 @@ export function MealCard({
   // The member whose plan is currently open — used to highlight their portion in
   // a shared (family) recipe so "what you take" is obvious. Optional.
   currentMemberId?: string;
-  /** Current inline check-in mark, when the surface tracks (plan page only). */
+  /** The VIEWED member's inline mark (header badge + the single chip row on an
+   * individual meal), when the surface tracks (plan page only). */
   checkin?: MealCheckinState | null;
-  /** Present only on trackable days (today/48h back) — absent hides controls. */
-  onCheckin?: (status: MealCheckinState["status"] | null, reason: string | null) => void;
+  /** Shared meals only: each participant's own mark, keyed by member_id —
+   * statuses are per person, never one answer for the whole dish. */
+  sharedCheckins?: Record<string, MealCheckinState | null>;
+  /** Present only on trackable days (today/48h back) — absent hides controls.
+   * memberId says whose status is being set. */
+  onCheckin?: (
+    memberId: string,
+    status: MealCheckinState["status"] | null,
+    reason: string | null,
+  ) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -334,60 +405,57 @@ export function MealCard({
                 </p>
               )}
 
-              {/* Per-meal tracking — the card's closing act, after the recipe. */}
+              {/* Per-meal tracking — the card's closing act, after the recipe.
+                  A shared meal tracks EACH participant separately (Louis can
+                  skip the dish anas ate); an individual meal tracks the member
+                  whose tab is open. */}
               {onCheckin && (
                 <div
                   className="pt-3 border-t border-brand-ink/5 space-y-2"
                   aria-label="تتبّع الوجبة"
                 >
-                  <div className="flex flex-wrap gap-1.5">
-                    {CHECKIN_STATUS_CHIPS.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() =>
-                          onCheckin(
-                            checkin?.status === c.value ? null : c.value,
-                            null,
-                          )
-                        }
-                        aria-pressed={checkin?.status === c.value}
-                        className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
-                          checkin?.status === c.value
-                            ? "bg-brand-purple-900 text-white"
-                            : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
-                        }`}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                  {checkin?.status === "swapped" && (
-                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="السبب">
-                      {CHECKIN_REASON_CHIPS.map((r) => (
-                        <button
-                          key={r.value}
-                          type="button"
-                          onClick={() =>
-                            onCheckin(
-                              checkin.status,
-                              checkin.reason === r.value ? null : r.value,
-                            )
-                          }
-                          aria-pressed={checkin.reason === r.value}
-                          className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
-                            checkin.reason === r.value
-                              ? r.gold
-                                ? "bg-brand-yellow text-brand-ink"
-                                : "bg-brand-lavender text-brand-purple-900"
-                              : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
-                          }`}
-                        >
-                          {r.label}
-                        </button>
-                      ))}
+                  {sharedPortions && sharedCheckins ? (
+                    <div className="space-y-3">
+                      {sharedPortions.map((portion) => {
+                        const name =
+                          memberNames?.[portion.member_id] ?? portion.member_id;
+                        const isCurrent =
+                          currentMemberId != null &&
+                          portion.member_id === currentMemberId;
+                        return (
+                          <div
+                            key={portion.member_id}
+                            role="group"
+                            aria-label={`تتبّع ${name}`}
+                            className="space-y-1.5"
+                          >
+                            <p
+                              className={`text-xs font-bold ${
+                                isCurrent
+                                  ? "text-brand-purple-900"
+                                  : "text-brand-ink"
+                              }`}
+                            >
+                              {name}
+                            </p>
+                            <CheckinChips
+                              state={sharedCheckins[portion.member_id] ?? null}
+                              onChange={(status, reason) =>
+                                onCheckin(portion.member_id, status, reason)
+                              }
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
+                  ) : currentMemberId != null ? (
+                    <CheckinChips
+                      state={checkin ?? null}
+                      onChange={(status, reason) =>
+                        onCheckin(currentMemberId, status, reason)
+                      }
+                    />
+                  ) : null}
                   <p className="text-[11px] text-brand-ink-muted leading-relaxed">
                     تسجيلك يُحسّن خطة الأسبوع القادم — والضغط مرة أخرى يمسح الاختيار.
                   </p>

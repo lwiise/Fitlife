@@ -705,7 +705,9 @@ const handler = async (req: Request): Promise<Response> => {
           supabaseUrl,
           expected,
           "meal_checkins",
-          `user_id=eq.${userId}&created_at=gte.${sinceIso}&select=slot,status,reason&limit=400`,
+          // local_date identifies the MEAL — rows are per person since 00019;
+          // computeEngagementDigest collapses them so counts stay meal-true.
+          `user_id=eq.${userId}&created_at=gte.${sinceIso}&select=slot,status,reason,local_date&limit=800`,
         ),
         sbSelectMany(
           supabaseUrl,
