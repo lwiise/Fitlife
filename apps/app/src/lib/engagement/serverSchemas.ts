@@ -5,6 +5,7 @@ import {
   CHECKIN_SLOTS,
   CHECKIN_STATUSES,
   VERDICTS,
+  WORKOUT_CHECKIN_STATUSES,
 } from "./types";
 
 // Server-side validation for the engagement actions (ختام اليوم). Same stance
@@ -84,6 +85,18 @@ export const setMealVerdictSchema = z.object({
   verdict: z.enum(VERDICTS).nullable(),
 });
 export type SetMealVerdictInput = z.infer<typeof setMealVerdictSchema>;
+
+// Inline workout-session marking on the plan page (?view=workout). Per person,
+// keyed by (workout_plan, member, day_index) — day_index is WEEKDAY-anchored
+// (0=Sunday), so the action derives the session's calendar date from its
+// weekday within the 48h grace window (never a future day). status null clears.
+export const setWorkoutCheckinSchema = z.object({
+  workout_plan_id: uuid,
+  day_index: z.number().int().min(0).max(6),
+  member_id: memberId,
+  status: z.enum(WORKOUT_CHECKIN_STATUSES).nullable(),
+});
+export type SetWorkoutCheckinInput = z.infer<typeof setWorkoutCheckinSchema>;
 
 export const closeDayInputSchema = z.object({
   meal_plan_id: uuid,

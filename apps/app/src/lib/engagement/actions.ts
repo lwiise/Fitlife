@@ -17,10 +17,12 @@ import {
   logBodyWeightSchema,
   setMealCheckinSchema,
   setMealVerdictSchema,
+  setWorkoutCheckinSchema,
   type CloseDayInput,
   type LogBodyWeightInput,
   type SetMealCheckinInput,
   type SetMealVerdictInput,
+  type SetWorkoutCheckinInput,
 } from "./serverSchemas";
 
 const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، حاولي مرة أخرى";
@@ -195,6 +197,100 @@ export async function closeDay(rawInput: CloseDayInput) {
   revalidatePath("/dashboard");
   revalidatePath("/plan");
   return { ok: true as const, local_date: localDate };
+}
+
+/** Weekday (0=Sunday, matches JS getDay) of a Riyadh-local YYYY-MM-DD date. */
+function weekdayOfISO(dateISO: string): number {
+  return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
+}
+
+/**
+ * Inline workout-session marking from the plan page (?view=workout) — «هل
+ * أنجزت حصة اليوم؟» done/moved/skipped. The exercise pillar's honest signal:
+ * feeds «موسم بيتنا» and any future workout streaks. Same no-fabrication rules
+ * as meals — a session can't be marked before its day, and clearing (status
+ * null) removes the mark.
+ *
+ * Workout day_index is WEEKDAY-anchored (0=Sunday), so the session's calendar
+ * date is derived from its weekday within the 48h grace window: the one date in
+ * [today-2 .. today] whose weekday matches. No such date → the session is in
+ * the future this week or older than the grace window → rejected.
+ */
+export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
+
+  const parsed = setWorkoutCheckinSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  const input = parsed.data;
+
+  // Ownership (RLS-scoped): the workout plan must belong to the caller.
+  const { data: planRow, error: planError } = await supabase
+    .from("workout_plans")
+    .select("id")
+    .eq("id", input.workout_plan_id)
+    .eq("user_id", user.id)
+    .single();
+  if (planError || !planRow) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  // Derive the session's calendar date from its weekday within the grace
+  // window (never the future). At most one date in a 3-day span has a given
+  // weekday, so this resolves uniquely or not at all.
+  const today = riyadhTodayISO();
+  let localDate: string | null = null;
+  for (let off = 0; off <= GRACE_DAYS; off++) {
+    const candidate = addDaysISO(today, -off);
+    if (weekdayOfISO(candidate) === input.day_index) {
+      localDate = candidate;
+      break;
+    }
+  }
+  if (!localDate) return { ok: false as const, error: VALIDATION_ERROR_AR };
+
+  const db = supabase as unknown as SupabaseClient;
+
+  if (input.status === null) {
+    const { error } = await db
+      .from("workout_checkins")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("workout_plan_id", input.workout_plan_id)
+      .eq("member_id", input.member_id)
+      .eq("day_index", input.day_index);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "engagement", step: "workout-checkin-clear", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+    }
+    revalidatePath("/plan");
+    return { ok: true as const };
+  }
+
+  const { error } = await db.from("workout_checkins").upsert(
+    {
+      user_id: user.id,
+      workout_plan_id: input.workout_plan_id,
+      member_id: input.member_id,
+      day_index: input.day_index,
+      local_date: localDate,
+      status: input.status,
+    },
+    { onConflict: "workout_plan_id,member_id,day_index" },
+  );
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "engagement", step: "workout-checkin-upsert", userId: user.id },
+    });
+    return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+  }
+  revalidatePath("/plan");
+  return { ok: true as const };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { Trophy, Crown } from "lucide-react";
+import { Trophy, Crown, Dumbbell } from "lucide-react";
 
 // «موسم بيتنا» — the cooperative family season (Phase 1 of the engagement plan,
 // Option A). The owner's brief asked for a family "leaderboard"; the research
@@ -15,6 +15,7 @@ import { Trophy, Crown } from "lucide-react";
 //     invited, not behind — no designed shame state (guardrail 5);
 //   • built only from what was actually logged (unanswered = unknown, never a
 //     zero that counts against anyone).
+// Both pillars feed it: meal check-ins/verdicts and workout session marks.
 // Adults only (children are never compared; the housekeeper is never
 // surveilled); the caller hides it for solo households and read-only/translated
 // views.
@@ -28,37 +29,46 @@ const ar = (n: number) =>
 
 type Mark = { day_index: number; slot: string; member_id?: string | null };
 type VerdictMark = { member_id?: string | null };
+type WorkoutMark = { member_id?: string | null; status: string };
 
 export function FamilySeasonCard({
   members,
   checkins,
   verdicts,
+  workoutCheckins = [],
 }: {
   /** Eligible adults in this plan (mom + adult members), display names resolved. */
   members: Array<{ id: string; name: string }>;
   checkins: Mark[];
   verdicts: VerdictMark[];
+  /** Workout session marks (the exercise pillar); empty when no workout plan. */
+  workoutCheckins?: WorkoutMark[];
 }) {
   // Meal-true family headline: distinct (day, slot) the house engaged with —
   // a shared meal marked by three people is ONE followed meal, never three.
   const followedMeals = new Set(
     checkins.map((c) => `${c.day_index}|${c.slot}`),
   ).size;
-  // Days the house logged anything — the "honor the week" progress.
+  // Days the house logged meals — the "honor the week" progress.
   const activeDays = new Set(checkins.map((c) => c.day_index)).size;
   const honored = activeDays >= HONOR_DAYS_GOAL;
   const ringPct = Math.min(1, activeDays / HONOR_DAYS_GOAL);
+  // Workout sessions the house completed (the exercise pillar's headline).
+  const sessionsDone = workoutCheckins.filter((w) => w.status === "done").length;
 
-  // Per-adult engagement = their own marks + verdicts (personal rows only;
-  // whole-house rows aren't attributable to a person, children/housekeeper are
+  // Per-adult engagement = their own marks + verdicts + workout marks (personal
+  // rows only; whole-house rows aren't attributable, children/housekeeper are
   // not in `members` so they're excluded by construction).
   const contribution = (id: string) =>
     checkins.filter((c) => c.member_id === id).length +
-    verdicts.filter((v) => v.member_id === id).length;
+    verdicts.filter((v) => v.member_id === id).length +
+    workoutCheckins.filter((w) => w.member_id === id).length;
   const scored = members
     .map((m) => ({ ...m, score: contribution(m.id) }))
     .sort((a, b) => b.score - a.score);
   const leader = scored[0]?.score ? scored[0] : null;
+
+  const hasActivity = followedMeals > 0 || workoutCheckins.length > 0;
 
   const R = 20;
   const C = 2 * Math.PI * R;
@@ -93,57 +103,75 @@ export function FamilySeasonCard({
         )}
       </div>
 
-      {followedMeals === 0 ? (
+      {!hasActivity ? (
         // No marks yet — invite, never accuse (guardrail 7 spirit).
         <p className="text-brand-ink text-sm leading-relaxed">
-          موسمكم يبدأ بأول تسجيل — سجّلوا وجباتكم من الخطة، ويظهر تقدّم بيتكم هنا.
+          موسمكم يبدأ بأول تسجيل — سجّلوا وجباتكم وتمارينكم من الخطة، ويظهر تقدّم
+          بيتكم هنا.
         </p>
       ) : (
         <>
-          <div className="flex items-center gap-4">
-            <div className="relative shrink-0">
-              <svg
-                width="56"
-                height="56"
-                viewBox="0 0 56 56"
-                role="img"
-                aria-label={`سجّلتم في ${ar(activeDays)} من ${ar(HONOR_DAYS_GOAL)} أيام`}
-              >
-                <circle
-                  cx="28"
-                  cy="28"
-                  r={R}
-                  fill="none"
-                  stroke="var(--color-brand-lavender)"
-                  strokeWidth="6"
-                  opacity="0.4"
-                />
-                <circle
-                  cx="28"
-                  cy="28"
-                  r={R}
-                  fill="none"
-                  stroke="var(--color-brand-purple-900)"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  strokeDasharray={C}
-                  strokeDashoffset={C * (1 - ringPct)}
-                  transform="rotate(-90 28 28)"
-                />
-              </svg>
-              <span className="absolute inset-0 grid place-items-center text-xs font-extrabold text-brand-purple-900 tabular-nums">
-                {ar(activeDays)}
+          {followedMeals > 0 && (
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <svg
+                  width="56"
+                  height="56"
+                  viewBox="0 0 56 56"
+                  role="img"
+                  aria-label={`سجّلتم في ${ar(activeDays)} من ${ar(HONOR_DAYS_GOAL)} أيام`}
+                >
+                  <circle
+                    cx="28"
+                    cy="28"
+                    r={R}
+                    fill="none"
+                    stroke="var(--color-brand-lavender)"
+                    strokeWidth="6"
+                    opacity="0.4"
+                  />
+                  <circle
+                    cx="28"
+                    cy="28"
+                    r={R}
+                    fill="none"
+                    stroke="var(--color-brand-purple-900)"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={C}
+                    strokeDashoffset={C * (1 - ringPct)}
+                    transform="rotate(-90 28 28)"
+                  />
+                </svg>
+                <span className="absolute inset-0 grid place-items-center text-xs font-extrabold text-brand-purple-900 tabular-nums">
+                  {ar(activeDays)}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xl font-extrabold text-brand-ink tabular-nums leading-none">
+                  {ar(followedMeals)}
+                </p>
+                <p className="text-brand-ink-muted text-xs mt-1 leading-relaxed">
+                  وجبة تابعها بيتكم معاً هذا الأسبوع
+                </p>
+              </div>
+            </div>
+          )}
+
+          {sessionsDone > 0 && (
+            <p className="flex items-center gap-2 text-sm text-brand-ink">
+              <Dumbbell
+                className="size-4 shrink-0 text-brand-purple-900"
+                aria-hidden="true"
+              />
+              <span>
+                <span className="font-extrabold tabular-nums">
+                  {ar(sessionsDone)}
+                </span>{" "}
+                حصة تمرين أنجزها بيتكم
               </span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-2xl font-extrabold text-brand-ink tabular-nums leading-none">
-                {ar(followedMeals)}
-              </p>
-              <p className="text-brand-ink-muted text-xs mt-1 leading-relaxed">
-                وجبة تابعها بيتكم معاً هذا الأسبوع
-              </p>
-            </div>
-          </div>
+            </p>
+          )}
 
           {leader && (
             <p className="flex items-center gap-1.5 text-sm text-brand-ink">

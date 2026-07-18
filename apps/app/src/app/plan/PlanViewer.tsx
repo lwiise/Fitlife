@@ -59,6 +59,7 @@ export function PlanViewer({
   showWorkoutOptIn = false,
   checkins,
   verdicts,
+  workoutCheckins,
   journeyMembers,
 }: {
   plan: MealPlan;
@@ -102,6 +103,13 @@ export function PlanViewer({
     slot: string;
     member_id?: string | null;
     verdict: string;
+  }>;
+  // Workout session marks (main /plan page only) — the exercise pillar of
+  // «موسم بيتنا». member_id: "mom" | family_members.id; status done/moved/skipped.
+  workoutCheckins?: Array<{
+    day_index: number;
+    member_id: string;
+    status: string;
   }>;
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
@@ -551,6 +559,7 @@ export function PlanViewer({
           members={seasonRoster}
           checkins={checkins ?? []}
           verdicts={verdicts ?? []}
+          workoutCheckins={workoutCheckins ?? []}
         />
       )}
 

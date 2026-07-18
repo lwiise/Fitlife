@@ -10,6 +10,7 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
@@ -78,6 +79,27 @@ export default async function PlanPage({
       slot: r.slot as string,
       member_id: (r.member_id ?? null) as string | null,
       verdict: r.verdict as string,
+    }));
+  }
+
+  // Workout session marks (the exercise pillar). Untyped cast: workout_checkins
+  // (00020) isn't in the generated Database types until db:types is regenerated;
+  // select("*") degrades to [] on a pre-apply prod. Feeds WorkoutViewer's
+  // marking state AND «موسم بيتنا».
+  let workoutCheckins:
+    | Array<{ day_index: number; member_id: string; status: string }>
+    | undefined;
+  if (profile && workout?.status === "ready") {
+    const supabase = await createClient();
+    const { data } = await (supabase as unknown as SupabaseClient)
+      .from("workout_checkins")
+      .select("*")
+      .eq("workout_plan_id", workout.id)
+      .limit(400);
+    workoutCheckins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      day_index: r.day_index as number,
+      member_id: (r.member_id ?? "") as string,
+      status: r.status as string,
     }));
   }
 
@@ -304,7 +326,11 @@ export default async function PlanPage({
               </div>
             )}
             {workout.status === "ready" && workout.plan_data && (
-              <WorkoutViewer plan={workout.plan_data} />
+              <WorkoutViewer
+                plan={workout.plan_data}
+                planId={workout.id}
+                checkins={workoutCheckins}
+              />
             )}
           </>
         )}
@@ -332,6 +358,7 @@ export default async function PlanPage({
               showWorkoutOptIn={workout === null}
               checkins={checkins}
               verdicts={verdicts}
+              workoutCheckins={workoutCheckins}
               journeyMembers={journeyMembers}
             />
           </>

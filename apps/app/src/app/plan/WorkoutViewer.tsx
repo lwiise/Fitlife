@@ -2,8 +2,10 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon } from "lucide-react";
+import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check } from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
+import type { WorkoutCheckinStatus } from "@/lib/engagement/types";
+import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
 import { ExerciseLottie } from "./ExerciseLottie";
 
 // Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
@@ -17,6 +19,21 @@ const DAY_NAMES_AR = [
   "الجمعة",
   "السبت",
 ];
+
+// A session may be marked on its weekday and up to 2 days after (48h grace) —
+// mirrors the meal check-in window. The server re-derives + enforces this; the
+// client gate just hides the controls on future/stale days.
+const WORKOUT_GRACE_DAYS = 2;
+const WORKOUT_STATUS_CHIPS: { value: WorkoutCheckinStatus; label: string }[] = [
+  { value: "done", label: "أنجزتها" },
+  { value: "moved", label: "بدّلتها" },
+  { value: "skipped", label: "تجاوزتها" },
+];
+const WORKOUT_HEADER_LABEL: Record<WorkoutCheckinStatus, string> = {
+  done: "أنجزت",
+  moved: "بدّلت",
+  skipped: "تجاوزت",
+};
 
 function formatRest(restSeconds: number): string {
   return restSeconds >= 60
@@ -182,7 +199,18 @@ function SessionDetail({
  * (training session or rest state), with a home/gym variant toggle when the
  * member's plan includes home variants.
  */
-export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
+export function WorkoutViewer({
+  plan,
+  planId,
+  checkins,
+}: {
+  plan: WorkoutPlan;
+  /** workout_plans.id — needed to write session marks. */
+  planId?: string;
+  /** Session marks for this plan (interactive page only). member_id: "mom" |
+   * family_members.id; day_index weekday-anchored. Presence enables marking. */
+  checkins?: Array<{ day_index: number; member_id: string; status: string }>;
+}) {
   const [activeMemberId, setActiveMemberId] = useState(
     plan.members[0]?.member_id ?? "",
   );
@@ -193,6 +221,55 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
   );
   // Viewer-level so the choice survives switching days/members.
   const [homeMode, setHomeMode] = useState(false);
+
+  // Optimistic session marks, keyed member|day. Seeded from the checkins prop;
+  // clearing removes the mark (a mis-tap must be reversible). The 48h grace is
+  // enforced server-side — the client gate just hides controls on future days.
+  const [checkinMap, setCheckinMap] = useState<Map<string, WorkoutCheckinStatus>>(
+    () =>
+      new Map(
+        (checkins ?? [])
+          .filter(
+            (c): c is typeof c & { status: WorkoutCheckinStatus } =>
+              c.status === "done" || c.status === "moved" || c.status === "skipped",
+          )
+          .map((c) => [`${c.member_id}|${c.day_index}`, c.status]),
+      ),
+  );
+  const [checkinError, setCheckinError] = useState<string | null>(null);
+  // Weekday today (0=Sunday), once — matches defaultDayIndex's approach.
+  const [todayWeekday] = useState(() => new Date().getDay());
+
+  function handleWorkoutCheckin(
+    memberId: string,
+    dayIndex: number,
+    status: WorkoutCheckinStatus | null,
+  ) {
+    if (!planId) return;
+    const key = `${memberId}|${dayIndex}`;
+    const prev = checkinMap.get(key) ?? null;
+    const next = new Map(checkinMap);
+    if (status === null) next.delete(key);
+    else next.set(key, status);
+    setCheckinMap(next);
+    setCheckinError(null);
+    void setWorkoutCheckinAction({
+      workout_plan_id: planId,
+      day_index: dayIndex,
+      member_id: memberId,
+      status,
+    }).then((result) => {
+      if (!result.ok) {
+        setCheckinMap((cur) => {
+          const reverted = new Map(cur);
+          if (prev) reverted.set(key, prev);
+          else reverted.delete(key);
+          return reverted;
+        });
+        setCheckinError(result.error);
+      }
+    });
+  }
 
   const stats = useMemo(() => {
     if (!active) return null;
@@ -218,6 +295,14 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
   const activeSets = activeSession
     ? activeSession.exercises.reduce((sum, ex) => sum + ex.sets, 0)
     : 0;
+
+  // This member's mark for the open day, and whether it's within the markable
+  // window (its weekday, up to 2 days back — never a future session).
+  const activeStatus =
+    checkinMap.get(`${active.member_id}|${activeDayIndex}`) ?? null;
+  const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
+  const canMarkActive =
+    checkins !== undefined && !!planId && activeDayDist <= WORKOUT_GRACE_DAYS;
 
   return (
     <div className="space-y-6">
@@ -336,6 +421,20 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
             <span className="text-brand-ink text-xs tabular-nums">
               {activeSets} مجموعة
             </span>
+            {activeStatus && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  activeStatus === "done"
+                    ? "bg-brand-purple-900 text-white"
+                    : "bg-brand-lavender/40 text-brand-purple-900"
+                }`}
+              >
+                {activeStatus === "done" && (
+                  <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+                )}
+                {WORKOUT_HEADER_LABEL[activeStatus]}
+              </span>
+            )}
           </div>
         ) : (
           <div className="inline-flex items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
@@ -376,6 +475,51 @@ export function WorkoutViewer({ plan }: { plan: WorkoutPlan }) {
               <p className="text-brand-ink font-bold text-sm">يوم راحة واستشفاء</p>
               <p className="text-brand-ink-muted text-sm leading-relaxed max-w-xs">
                 العضلات تنمو أثناء الراحة. مشي خفيف ونوم جيد يدعمان تقدّمك.
+              </p>
+            </div>
+          )}
+
+          {/* Session marking — a training day within the 48h window. Honest
+              signal (done/moved/skipped); tapping again clears. Feeds «موسم
+              بيتنا». Server re-derives the date and enforces the window. */}
+          {activeSession && canMarkActive && (
+            <div
+              className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5 space-y-2"
+              aria-label="تتبّع الحصة"
+            >
+              <p className="text-xs font-bold text-brand-ink-muted">
+                هل أنجزت حصة اليوم؟
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {WORKOUT_STATUS_CHIPS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() =>
+                      handleWorkoutCheckin(
+                        active.member_id,
+                        activeDayIndex,
+                        activeStatus === c.value ? null : c.value,
+                      )
+                    }
+                    aria-pressed={activeStatus === c.value}
+                    className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                      activeStatus === c.value
+                        ? "bg-brand-purple-900 text-white"
+                        : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              {checkinError && (
+                <p role="alert" className="text-xs font-bold text-red-700">
+                  {checkinError}
+                </p>
+              )}
+              <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+                تسجيلك يُغذّي موسم بيتكم — والضغط مرة أخرى يمسح الاختيار.
               </p>
             </div>
           )}
