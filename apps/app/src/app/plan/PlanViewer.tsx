@@ -8,6 +8,7 @@ import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lo
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
+import { FamilySeasonCard } from "./FamilySeasonCard";
 import {
   setMealCheckin as setMealCheckinAction,
   setMealVerdict as setMealVerdictAction,
@@ -367,6 +368,18 @@ export function PlanViewer({
 
   const isSolo = plan.members.length === 1;
 
+  // «موسم بيتنا» roster: eligible adults (mom + adult members — journeyMembers
+  // already applies the children-never/housekeeper-never rule) who are in THIS
+  // plan, with display names resolved. The season renders only for a real
+  // household (≥2 adults) — a solo mom never sees a family board (guardrail 7).
+  const seasonRoster = useMemo(() => {
+    if (!journeyMembers) return [];
+    const inPlan = new Set(plan.members.map((m) => m.member_id));
+    return journeyMembers
+      .filter((j) => inPlan.has(j.id))
+      .map((j) => ({ id: j.id, name: memberNames[j.id] ?? j.name ?? j.id }));
+  }, [journeyMembers, plan.members, memberNames]);
+
   // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
   // Scope all loading UI to that member so a different member's empty/failed day
   // never shows a spinner — it falls through to the "failed — regenerate" box.
@@ -527,6 +540,18 @@ export function PlanViewer({
           translated view — it is the mom's فصحى adaptation narrative. */}
       {!translated && plan.week_changes && plan.week_changes.length > 0 && (
         <SaraChangesCard changes={plan.week_changes} />
+      )}
+
+      {/* «موسم بيتنا» — the cooperative family season. Interactive Arabic view
+          only (never read-only/history/housekeeper), and only for a real
+          household with ≥2 eligible adults. Built from the marks already
+          fetched; no numbers about anyone's body, no ranking, no last place. */}
+      {!readOnly && !translated && seasonRoster.length >= 2 && (
+        <FamilySeasonCard
+          members={seasonRoster}
+          checkins={checkins ?? []}
+          verdicts={verdicts ?? []}
+        />
       )}
 
       {/* Member tabs (hidden for a solo plan) */}
