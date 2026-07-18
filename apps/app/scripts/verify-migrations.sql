@@ -104,5 +104,9 @@ select * from (values
   ('00019 one-checkin-per-member-meal unique',
     (select case when exists (select 1 from pg_indexes where schemaname='public'
       and indexname='meal_checkins_one_per_member_meal')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00019 meal_checkins DELETE policy (clears were silent no-ops without it)',
+    (select case when exists (select 1 from pg_policies
+      where schemaname='public' and tablename='meal_checkins' and cmd='DELETE')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);

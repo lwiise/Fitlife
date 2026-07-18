@@ -203,8 +203,11 @@ export async function closeDay(rawInput: CloseDayInput) {
  *
  * PER-PERSON (00019): member_id says whose status this is — on a shared meal
  * each participant is marked separately (Louis can skip the dish anas ate).
- * A concrete member's write supersedes any legacy whole-house row for that
- * meal: the ambiguous mark is deleted so the two never contradict. On a
+ * A whole-house row ('household': legacy, or ختام اليوم) is NEVER destroyed
+ * by a per-member write — it is the kitchen's attestation and stays as the
+ * read-time fallback for members without their own row (member_exceptions
+ * also cascade off it). Clearing deletes the member's own row; un-tapping a
+ * chip lit only by the fallback retracts the household row itself. On a
  * pre-00019 prod the write degrades to the legacy household-level shape
  * (marking keeps working; per-person separation waits for the migration).
  */
@@ -254,16 +257,19 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
   const db = supabase as unknown as SupabaseClient;
 
   if (input.status === null) {
-    // Clear the member's mark AND the legacy whole-house row for this meal —
-    // otherwise the household fallback resurfaces and the tap looks ignored.
-    const { error: deleteError } = await db
+    // Clear the member's OWN row. select("id") reports what was deleted: if
+    // nothing was (the chip the user un-tapped was lit by the whole-house
+    // fallback), retract the household row itself — that is the mark they
+    // are pointing at, and leaving it would make the tap look ignored.
+    const { data: cleared, error: deleteError } = await db
       .from("meal_checkins")
       .delete()
       .eq("meal_plan_id", input.meal_plan_id)
       .eq("day_index", input.day_index)
       .eq("slot", input.slot)
       .eq("user_id", user.id)
-      .in("member_id", [memberId, HOUSEHOLD_CHECKIN_MEMBER]);
+      .eq("member_id", memberId)
+      .select("id");
     if (deleteError) {
       // Pre-00019 prod (no member_id column): legacy household-level clear.
       const { error: legacyError } = await supabase
@@ -275,6 +281,24 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
         .eq("user_id", user.id);
       if (legacyError) {
         Sentry.captureException(deleteError, {
+          tags: { area: "engagement", step: "checkin-clear", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
+      }
+    } else if (
+      ((cleared ?? []) as unknown[]).length === 0 &&
+      memberId !== HOUSEHOLD_CHECKIN_MEMBER
+    ) {
+      const { error: fallbackClearError } = await db
+        .from("meal_checkins")
+        .delete()
+        .eq("meal_plan_id", input.meal_plan_id)
+        .eq("day_index", input.day_index)
+        .eq("slot", input.slot)
+        .eq("user_id", user.id)
+        .eq("member_id", HOUSEHOLD_CHECKIN_MEMBER);
+      if (fallbackClearError) {
+        Sentry.captureException(fallbackClearError, {
           tags: { area: "engagement", step: "checkin-clear", userId: user.id },
         });
         return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
@@ -310,18 +334,11 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
         "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
         { level: "warning", tags: { area: "engagement", step: "checkin-inline" } },
       );
-    } else if (memberId !== HOUSEHOLD_CHECKIN_MEMBER) {
-      // Supersede the legacy whole-house row: a per-person mark is the more
-      // precise truth for this meal. Best-effort — its absence is the norm.
-      await db
-        .from("meal_checkins")
-        .delete()
-        .eq("meal_plan_id", input.meal_plan_id)
-        .eq("day_index", input.day_index)
-        .eq("slot", input.slot)
-        .eq("user_id", user.id)
-        .eq("member_id", HOUSEHOLD_CHECKIN_MEMBER);
     }
+    // A whole-house row for this meal, if any, is deliberately left in place:
+    // it keeps answering for members without their own row, and deleting it
+    // would cascade-destroy the day's member_exceptions and erase the
+    // kitchen's attestation from the digest.
   }
 
   revalidatePath("/plan");

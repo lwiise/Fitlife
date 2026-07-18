@@ -57,7 +57,8 @@ describe("computeEngagementDigest", () => {
 
   it("collapses per-person rows of one meal — a family skip is ONE skip, never N", () => {
     // One shared dinner, three members marked skipped (00019 per-person rows)
-    // + the same breakfast skipped on two separate days.
+    // + the same breakfast skipped on two separate days. Filler verdicts lift
+    // the sample over the signal floor without touching check-in counts.
     const digest = computeEngagementDigest(
       [
         checkin({ slot: "dinner", status: "skipped", reason: "guests", local_date: "2026-07-16" }),
@@ -66,13 +67,21 @@ describe("computeEngagementDigest", () => {
         checkin({ slot: "breakfast", status: "skipped", local_date: "2026-07-15" }),
         checkin({ slot: "breakfast", status: "skipped", local_date: "2026-07-16" }),
       ],
-      [],
+      [verdict("كبسة دجاج", "fine"), verdict("شوربة عدس", "fine")],
     );
     // The shared dinner is one meal → one skip; only breakfast crosses the
     // ≥2 pattern threshold via two distinct days.
     expect(digest!.skipped_by_slot).toEqual({ breakfast: 2 });
     // Distinct reasons count once per meal, not once per person.
     expect(digest!.reasons).toEqual({ guests: 1 });
+  });
+
+  it("gates the signal floor on collapsed meals — household size can't buy a digest", () => {
+    // Five per-person rows, but ONE meal and no verdicts → below the floor.
+    const oneSharedDinner = Array.from({ length: 5 }, () =>
+      checkin({ slot: "dinner", status: "cooked", local_date: "2026-07-16" }),
+    );
+    expect(computeEngagementDigest(oneSharedDinner, [])).toBeUndefined();
   });
 
   it("scores a mixed shared meal by the meal's best outcome (cooked > swapped > skipped)", () => {
@@ -86,7 +95,7 @@ describe("computeEngagementDigest", () => {
         checkin({ slot: "lunch", status: "skipped", local_date: "2026-07-16" }),
         checkin({ local_date: "2026-07-15" }),
       ],
-      [],
+      [verdict("كبسة دجاج", "fine"), verdict("شوربة عدس", "fine")],
     );
     expect(digest!.cooked_count).toBe(2);
     expect(digest!.swapped_count).toBe(1);

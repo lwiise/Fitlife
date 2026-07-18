@@ -12,13 +12,19 @@
 --   * member_id — who this status belongs to. Existing rows keep the
 --     'household' sentinel: they were written when one row spoke for the
 --     whole house, and the app treats them as a read-time FALLBACK for every
---     member of that meal until a per-member mark supersedes them. New writes
---     always carry a concrete member ("mom" | family_members.id); the
---     ختام اليوم ritual keeps writing 'household' rows on purpose (the
---     kitchen's attestation).
+--     member of that meal (a member's own row overrides it for that member;
+--     the row itself is never destroyed by a per-member write — it is the
+--     kitchen's attestation). New writes always carry a concrete member
+--     ("mom" | family_members.id); the ختام اليوم ritual keeps writing
+--     'household' rows on purpose.
 --   * unique key grows from (meal_plan_id, day_index, slot) to include
 --     member_id — the upsert conflict target in engagement/actions.ts moves
 --     with it (both writers updated in the same commit as this file).
+--   * DELETE policy — 00017 shipped meal_checkins with only SELECT/INSERT/
+--     UPDATE policies, so the clear-a-mistap path («الضغط مرة أخرى يمسح
+--     الاختيار») has been silently matching zero rows since launch (RLS
+--     default-deny returns success with no error). Per-person clearing makes
+--     DELETE load-bearing, so the missing policy lands here.
 --
 -- Unanswered is still UNKNOWN (absence of a row is never "skipped"), and the
 -- no-amounts / no-consumption-surveillance stance is unchanged — a status is
@@ -52,3 +58,11 @@ exception
   when duplicate_table then null;
   when duplicate_object then null;
 end $$;
+
+-- Clearing a mark is a first-class action (mis-taps must be reversible —
+-- honesty over accumulation). 00017 never created a DELETE policy, so every
+-- clear so far was a silent no-op; this makes the existing app code work.
+drop policy if exists "Users can delete own meal checkins" on public.meal_checkins;
+create policy "Users can delete own meal checkins"
+  on public.meal_checkins for delete
+  using (auth.uid() = user_id);

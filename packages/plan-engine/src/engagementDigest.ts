@@ -23,7 +23,10 @@
 
 import { canonicalRecipeKey } from "./canonicalRecipeKey";
 
-/** Minimum real events (check-ins + verdicts) before any digest exists. */
+/** Minimum real events (checked-in MEALS + verdicts) before any digest
+ * exists. Check-in rows are per person since 00019, so the floor counts
+ * collapsed meals — a five-person family marking one shared dinner is one
+ * event, not five, and cannot activate the digest by itself. */
 export const MIN_SIGNAL_EVENTS = 5;
 /** A dish becomes "golden" at this many loved verdicts across the household. */
 export const GOLDEN_LOVED_THRESHOLD = 3;
@@ -71,9 +74,6 @@ export function computeEngagementDigest(
   checkins: EngagementCheckinRow[],
   verdicts: EngagementVerdictRow[],
 ): EngagementDigest | undefined {
-  const total = checkins.length + verdicts.length;
-  if (total < MIN_SIGNAL_EVENTS) return undefined;
-
   // Collapse per-person rows to MEALS first: check-ins are per member since
   // 00019, and every count the model may cite must stay meal-true. A meal
   // where anyone ate as planned counts cooked; else swapped if anyone
@@ -87,6 +87,11 @@ export function computeEngagementDigest(
     list.push(c);
     meals.set(key, list);
   }
+
+  // The signal floor gates on MEALS + verdicts (post-collapse) — household
+  // size must never be able to buy the digest into existence.
+  const total = meals.size + verdicts.length;
+  if (total < MIN_SIGNAL_EVENTS) return undefined;
 
   let cooked = 0;
   let swapped = 0;

@@ -162,16 +162,20 @@ export function PlanViewer({
     reason: string | null,
   ) {
     const key = `${activeDayIndex}|${slot}|${memberId}`;
-    // A per-person interaction supersedes the legacy whole-house mark for this
-    // meal (the server deletes it) — mirror that so the fallback doesn't
-    // linger on screen for the other members.
     const householdKey = `${activeDayIndex}|${slot}|household`;
     const prev = checkinMap.get(key) ?? null;
     const prevHousehold = checkinMap.get(householdKey) ?? null;
     const next = new Map(checkinMap);
-    if (status === null) next.delete(key);
-    else next.set(key, { status, reason });
-    next.delete(householdKey);
+    if (status === null) {
+      // Mirror the server: clearing removes the member's own mark; un-tapping
+      // a chip lit only by the whole-house fallback retracts that row instead.
+      if (next.has(key)) next.delete(key);
+      else next.delete(householdKey);
+    } else {
+      // Setting never touches the whole-house row — it stays as the fallback
+      // for the other members of this meal.
+      next.set(key, { status, reason });
+    }
     setCheckinMap(next);
     setCheckinError(null);
     void setMealCheckinAction({
