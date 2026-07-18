@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutProfileSchema } from "@fitlife/plan-engine";
+import { isWorkoutEligibleMember } from "@/lib/plans/workoutEligibility";
 import { triggerWorkoutGeneration } from "@/lib/plans/dispatch";
 import { finishOnboardingToSubscription } from "../actions";
 
@@ -62,11 +63,11 @@ export async function saveWorkoutProfiles(
       // members already carry consulted_doctor=true from their add wizard).
       const { data: member } = await supabase
         .from("family_members")
-        .select("id, member_type, role")
+        .select("id, member_type, role, birth_year")
         .eq("id", entry.target)
         .eq("user_id", user.id)
         .maybeSingle();
-      if (!member || member.member_type === "child" || member.role === "housekeeper") {
+      if (!member || !isWorkoutEligibleMember(member)) {
         return { ok: false, error: "أحد الأفراد غير مؤهل لخطة التمارين" };
       }
       const { error } = await supabase

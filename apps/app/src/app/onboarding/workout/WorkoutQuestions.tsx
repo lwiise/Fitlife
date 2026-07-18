@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import type { WorkoutProfile } from "@fitlife/plan-engine";
 import { genderPick } from "@/lib/copy/gender";
+import type { WorkoutIneligibleReason } from "@/lib/plans/workoutEligibility";
 import { saveWorkoutProfiles, continueAfterWorkoutOptIn } from "./actions";
 
 export interface WorkoutPerson {
@@ -14,6 +16,20 @@ export interface WorkoutPerson {
   sex?: string | null;
   existing: WorkoutProfile | null;
 }
+
+/** A family member who cannot receive a workout plan — shown muted with the
+ * reason so the household list never looks mysteriously short. */
+export interface ExcludedPerson {
+  id: string;
+  name: string;
+  reason: WorkoutIneligibleReason;
+}
+
+const EXCLUDED_REASON: Record<WorkoutIneligibleReason, string> = {
+  child: "خطط التمارين مخصّصة للبالغين، والأطفال تكفيهم خطة الوجبات",
+  housekeeper:
+    "خطة التمارين مخصّصة لأفراد الأسرة، والعاملة المنزلية تكفيها خطة الوجبات بلغتها الخاصة",
+};
 
 const LOCATIONS = [
   { value: "home", label: "المنزل" },
@@ -178,12 +194,19 @@ function ScreenHeading({
 
 export function WorkoutQuestions({
   people,
+  excluded = [],
   ownerSex,
+  backHref,
 }: {
   people: WorkoutPerson[];
+  /** Ineligible family members, listed on the selection screen with a reason. */
+  excluded?: ExcludedPerson[];
   /** The account owner answers the form — imperatives follow their sex. */
   ownerSex?: string | null;
+  /** Where the first screen's back exits to (deterministic, PR #50 style). */
+  backHref: string;
 }) {
+  const router = useRouter();
   const g = genderPick(ownerSex);
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
@@ -192,8 +215,10 @@ export function WorkoutQuestions({
   const [selected, setSelected] = useState<Set<string>>(
     new Set(people.map((p) => p.target)),
   );
-  // Solo flows skip the selection screen — one pre-selected row is a wasted tap.
-  const hasSelectionScreen = people.length > 1;
+  // Solo flows skip the selection screen — one pre-selected row is a wasted
+  // tap — UNLESS someone is excluded: then the screen is what explains who
+  // the plan is for and why the list is shorter than the household.
+  const hasSelectionScreen = people.length > 1 || excluded.length > 0;
   const [personIndex, setPersonIndex] = useState(hasSelectionScreen ? -1 : 0); // -1 = selection screen
   const [stepIndex, setStepIndex] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
@@ -289,13 +314,15 @@ export function WorkoutQuestions({
 
   const back = () => {
     setError(null);
-    if (stepIndex > 0) return goTo(personIndex, stepIndex - 1);
+    if (personIndex >= 0 && stepIndex > 0) return goTo(personIndex, stepIndex - 1);
     if (personIndex > 0) return goTo(personIndex - 1, STEPS.length - 1);
     if (hasSelectionScreen && personIndex === 0) return goTo(-1, 0);
+    // First screen (the selection screen, or the first question of a solo
+    // flow): exit to the page before — plan-scope mid-onboarding, the
+    // dashboard afterwards. Deterministic push, never router.back().
+    router.push(backHref);
   };
 
-  const canGoBack =
-    personIndex >= 0 && (stepIndex > 0 || personIndex > 0 || hasSelectionScreen);
   const isLastScreen =
     personIndex >= 0 &&
     personIndex + 1 === chosen.length &&
@@ -364,6 +391,19 @@ export function WorkoutQuestions({
                   >
                     {p.name}
                   </OptionButton>
+                ))}
+                {excluded.map((p) => (
+                  <div
+                    key={p.id}
+                    className="rounded-2xl border-2 border-dashed border-brand-ink/10 px-4 py-3"
+                  >
+                    <p className="text-sm font-bold text-brand-ink-muted">
+                      {p.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-brand-ink-muted leading-relaxed">
+                      {EXCLUDED_REASON[p.reason]}
+                    </p>
+                  </div>
                 ))}
               </div>
             </>
@@ -543,17 +583,15 @@ export function WorkoutQuestions({
         {isLastScreen ? "حفظ ومتابعة" : "التالي"}
       </button>
 
-      {canGoBack && (
-        <button
-          type="button"
-          onClick={back}
-          disabled={isPending}
-          className="inline-flex items-center gap-1 min-h-11 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-        >
-          <ChevronRight className="size-4" aria-hidden="true" />
-          رجوع
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={back}
+        disabled={isPending}
+        className="inline-flex items-center gap-1 min-h-11 px-3 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface rounded-md"
+      >
+        <ChevronRight className="size-4" aria-hidden="true" />
+        رجوع
+      </button>
     </div>
   );
 }
