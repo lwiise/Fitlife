@@ -7,7 +7,7 @@
  *   * Children NEVER — the 00017 schema stance (adults only, no child body
  *     tracking), regardless of what birth_year says.
  *   * The housekeeper NEVER — the same dignity rule that keeps her out of
- *     workout plans (onboarding/workout/actions.ts): the employer does not
+ *     workout plans (lib/plans/workoutEligibility.ts): the employer does not
  *     track her body.
  *   * Under-18 by birth_year NEVER — even when typed as an adult.
  *   * Unknown birth_year on an adult type is allowed (the age gate cannot
