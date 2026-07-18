@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lock } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
+import { SaraChangesCard } from "./SaraChangesCard";
 import { setMealCheckin as setMealCheckinAction } from "@/lib/engagement/actions";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
@@ -447,6 +448,15 @@ export function PlanViewer({
           )}
         </div>
       </div>
+
+      {/* «سارة عدّلت خطتك» — the engagement-loop payoff: what Sara changed this
+          week and why, citing the family's real logged marks. Plan-wide (above
+          the member tabs). The minimum-signal guard already ran in the engine,
+          so a present week_changes is safe to show. Hidden on the housekeeper's
+          translated view — it is the mom's فصحى adaptation narrative. */}
+      {!translated && plan.week_changes && plan.week_changes.length > 0 && (
+        <SaraChangesCard changes={plan.week_changes} />
+      )}
 
       {/* Member tabs (hidden for a solo plan) */}
       {!isSolo && (
