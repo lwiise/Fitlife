@@ -56,19 +56,28 @@ export default async function PlanPage({
   // pre-apply prod, while * degrades to rows without it (house tolerance
   // pattern). Rows are per (day, slot, member) → 7 days × 4 slots × household.
   let checkins;
+  // Per-dish verdicts for this plan («كيف كانت؟» → golden dishes / vetoes).
+  // Same interactive-page-only scope and select("*") pre-apply tolerance as
+  // checkins (meal_verdicts is a 00017 table; a missing table degrades to []).
+  let verdicts;
   if (profile && latest?.status === "ready") {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("meal_checkins")
-      .select("*")
-      .eq("meal_plan_id", latest.id)
-      .limit(400);
-    checkins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    const [checkinRes, verdictRes] = await Promise.all([
+      supabase.from("meal_checkins").select("*").eq("meal_plan_id", latest.id).limit(400),
+      supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
+    ]);
+    checkins = ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
       day_index: r.day_index as number,
       slot: r.slot as string,
       status: r.status as string,
       reason: (r.reason ?? null) as string | null,
       member_id: (r.member_id ?? null) as string | null,
+    }));
+    verdicts = ((verdictRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      day_index: r.day_index as number,
+      slot: r.slot as string,
+      member_id: (r.member_id ?? null) as string | null,
+      verdict: r.verdict as string,
     }));
   }
 
@@ -322,6 +331,7 @@ export default async function PlanPage({
               housekeeperLocale={housekeeperLocale}
               showWorkoutOptIn={workout === null}
               checkins={checkins}
+              verdicts={verdicts}
               journeyMembers={journeyMembers}
             />
           </>

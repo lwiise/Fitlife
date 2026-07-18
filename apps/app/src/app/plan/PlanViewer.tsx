@@ -8,7 +8,10 @@ import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lo
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
-import { setMealCheckin as setMealCheckinAction } from "@/lib/engagement/actions";
+import {
+  setMealCheckin as setMealCheckinAction,
+  setMealVerdict as setMealVerdictAction,
+} from "@/lib/engagement/actions";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
@@ -54,6 +57,7 @@ export function PlanViewer({
   locale,
   showWorkoutOptIn = false,
   checkins,
+  verdicts,
   journeyMembers,
 }: {
   plan: MealPlan;
@@ -88,6 +92,15 @@ export function PlanViewer({
     status: string;
     reason: string | null;
     member_id?: string | null;
+  }>;
+  // Per-dish verdicts (main /plan page only, same scope as checkins). member_id
+  // is whose verdict it is — verdicts are personal, so there is NO whole-house
+  // fallback (unlike checkins). Feeds golden dishes / vetoes → «سارة عدّلت خطتك».
+  verdicts?: Array<{
+    day_index: number;
+    slot: string;
+    member_id?: string | null;
+    verdict: string;
   }>;
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
@@ -138,6 +151,26 @@ export function PlanViewer({
           ]),
       ),
   );
+  // Per-dish verdicts, keyed day|slot|member. Personal by design → no
+  // whole-house fallback (a verdict is never attested for someone else).
+  const [verdictMap, setVerdictMap] = useState<
+    Map<string, "loved" | "fine" | "not_again">
+  >(
+    () =>
+      new Map(
+        (verdicts ?? [])
+          .filter(
+            (v): v is typeof v & { verdict: "loved" | "fine" | "not_again" } =>
+              v.verdict === "loved" ||
+              v.verdict === "fine" ||
+              v.verdict === "not_again",
+          )
+          .map((v) => [
+            `${v.day_index}|${v.slot}|${v.member_id ?? "mom"}`,
+            v.verdict,
+          ]),
+      ),
+  );
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const checkinTodayIdx = dayIndexFromWeekStart(plan.week_start_date);
   const canCheckinActiveDay =
@@ -154,6 +187,44 @@ export function PlanViewer({
       checkinMap.get(`${dayIndex}|${slot}|household`) ??
       null
     );
+  }
+
+  /** A member's own verdict for a dish (no fallback — verdicts are personal). */
+  function verdictFor(dayIndex: number, slot: string, memberId: string) {
+    return verdictMap.get(`${dayIndex}|${slot}|${memberId}`) ?? null;
+  }
+
+  function handleVerdict(
+    memberId: string,
+    slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
+    recipeNameAr: string,
+    verdict: "loved" | "fine" | "not_again" | null,
+  ) {
+    const key = `${activeDayIndex}|${slot}|${memberId}`;
+    const prev = verdictMap.get(key) ?? null;
+    const next = new Map(verdictMap);
+    if (verdict === null) next.delete(key);
+    else next.set(key, verdict);
+    setVerdictMap(next);
+    setCheckinError(null);
+    void setMealVerdictAction({
+      meal_plan_id: planId,
+      day_index: activeDayIndex,
+      slot,
+      member_id: memberId,
+      recipe_name_ar: recipeNameAr,
+      verdict,
+    }).then((result) => {
+      if (!result.ok) {
+        setVerdictMap((cur) => {
+          const reverted = new Map(cur);
+          if (prev) reverted.set(key, prev);
+          else reverted.delete(key);
+          return reverted;
+        });
+        setCheckinError(result.error);
+      }
+    });
   }
 
   function handleCheckin(
@@ -734,6 +805,22 @@ export function PlanViewer({
                     canCheckinActiveDay
                       ? (memberId, status, reason) =>
                           handleCheckin(memberId, meal.slot, status, reason)
+                      : undefined
+                  }
+                  verdict={verdictFor(
+                    activeDayIndex,
+                    meal.slot,
+                    activeMember.member_id,
+                  )}
+                  onVerdict={
+                    canCheckinActiveDay
+                      ? (verdict) =>
+                          handleVerdict(
+                            activeMember.member_id,
+                            meal.slot,
+                            meal.recipe_name_ar,
+                            verdict,
+                          )
                       : undefined
                   }
                 />

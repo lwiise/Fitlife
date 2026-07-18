@@ -16,9 +16,11 @@ import {
   closeDayInputSchema,
   logBodyWeightSchema,
   setMealCheckinSchema,
+  setMealVerdictSchema,
   type CloseDayInput,
   type LogBodyWeightInput,
   type SetMealCheckinInput,
+  type SetMealVerdictInput,
 } from "./serverSchemas";
 
 const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، حاولي مرة أخرى";
@@ -193,6 +195,101 @@ export async function closeDay(rawInput: CloseDayInput) {
   revalidatePath("/dashboard");
   revalidatePath("/plan");
   return { ok: true as const, local_date: localDate };
+}
+
+/**
+ * Inline per-dish verdict from the plan page — «كيف كانت؟» on a dish the
+ * household actually cooked. Same table and calendar-honesty rules as the
+ * ختام اليوم sheet: server-derived date, 48h grace, never a future day. Feeds
+ * the engagement digest's golden dishes (loved) and vetoes (not_again), which
+ * drive «سارة عدّلت خطتك» and the weekly letter's dish of the week.
+ *
+ * PER PERSON: member_id is whose verdict this is — keyed (plan, member, day,
+ * slot), so a shared dish accrues one loved-vote per participant. The
+ * canonical_key is minted HERE (never client-side). verdict null clears a tap.
+ */
+export async function setMealVerdict(rawInput: SetMealVerdictInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
+
+  const parsed = setMealVerdictSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  const input = parsed.data;
+
+  // Ownership + week anchor (RLS-scoped). Archived plans stay valid targets so
+  // a mid-week regen never orphans yesterday's verdict.
+  const { data: planRow, error: planError } = await supabase
+    .from("meal_plans")
+    .select("week_start:plan_data->>week_start_date")
+    .eq("id", input.meal_plan_id)
+    .eq("user_id", user.id)
+    .single();
+  const weekStart = (planRow as { week_start?: string } | null)?.week_start;
+  if (planError || !weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  // A verdict cannot be cast on a day that hasn't happened yet (or beyond the
+  // 48h grace) — the same honesty gate as the check-in write. meal_verdicts
+  // carries no date column, so the window is checked from the derived date here.
+  const localDate = addDaysISO(weekStart, input.day_index);
+  const today = riyadhTodayISO();
+  if (localDate > today || localDate < addDaysISO(today, -GRACE_DAYS)) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  const db = supabase as unknown as SupabaseClient;
+
+  if (input.verdict === null) {
+    const { error } = await db
+      .from("meal_verdicts")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("member_id", input.member_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "engagement", step: "verdict-clear", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ رأيك، حاولي مرة أخرى" };
+    }
+    revalidatePath("/plan");
+    return { ok: true as const };
+  }
+
+  // A name that normalizes to nothing has no aggregatable identity (matches
+  // closeDay). Real plan dishes always canonicalize — this only guards a
+  // hand-crafted request; the optimistic UI reverts.
+  const canonicalKey = canonicalRecipeKey(input.recipe_name_ar);
+  if (canonicalKey.length === 0) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+  const { error } = await db.from("meal_verdicts").upsert(
+    {
+      user_id: user.id,
+      meal_plan_id: input.meal_plan_id,
+      member_id: input.member_id,
+      day_index: input.day_index,
+      slot: input.slot,
+      recipe_name_ar: input.recipe_name_ar,
+      canonical_key: canonicalKey,
+      verdict: input.verdict,
+    },
+    { onConflict: "meal_plan_id,member_id,day_index,slot" },
+  );
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { area: "engagement", step: "verdict-upsert", userId: user.id },
+    });
+    return { ok: false as const, error: "تعذر حفظ رأيك، حاولي مرة أخرى" };
+  }
+  revalidatePath("/plan");
+  return { ok: true as const };
 }
 
 /**

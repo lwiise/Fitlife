@@ -70,6 +70,21 @@ export const setMealCheckinSchema = z.object({
 });
 export type SetMealCheckinInput = z.infer<typeof setMealCheckinSchema>;
 
+// Inline per-dish verdict on the plan page — how a cooked dish landed, one at a
+// time, the same table the ختام اليوم sheet writes. Per person (member_id is
+// whose verdict it is), keyed by (plan, member, day, slot) like meal_verdicts.
+// verdict null = clear an accidental tap. canonical_key is minted server-side
+// in the action (never here), exactly as closeDay does.
+export const setMealVerdictSchema = z.object({
+  meal_plan_id: uuid,
+  day_index: z.number().int().min(0).max(6),
+  slot: z.enum(CHECKIN_SLOTS),
+  member_id: memberId,
+  recipe_name_ar: z.string().trim().min(1).max(200),
+  verdict: z.enum(VERDICTS).nullable(),
+});
+export type SetMealVerdictInput = z.infer<typeof setMealVerdictSchema>;
+
 export const closeDayInputSchema = z.object({
   meal_plan_id: uuid,
   day_index: z.number().int().min(0).max(6),
