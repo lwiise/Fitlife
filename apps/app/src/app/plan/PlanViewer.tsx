@@ -566,6 +566,7 @@ export function PlanViewer({
           verdicts={verdicts ?? []}
           workoutCheckins={workoutCheckins ?? []}
           goalReached={goalReached ?? []}
+          weekStartDate={plan.week_start_date}
         />
       )}
 
