@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Users } from "lucide-react";
 import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
+import type { Verdict } from "@/lib/engagement/types";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
 import { formatNameList } from "@/lib/plans/formatNames";
@@ -75,6 +76,15 @@ const CHECKIN_HEADER_LABEL: Record<MealCheckinState["status"], string> = {
   skipped: "تُجوّزت",
 };
 
+// «كيف كانت؟» — the dish verdict, offered once a dish was actually cooked.
+// Feeds golden dishes (loved) and vetoes (not_again) in the weekly digest.
+// «نحبّها» wears the gold of a golden dish; nothing here reads as shame.
+const VERDICT_CHIPS: { value: Verdict; label: string; selected: string }[] = [
+  { value: "loved", label: "نحبّها", selected: "bg-brand-yellow text-brand-ink" },
+  { value: "fine", label: "عادية", selected: "bg-brand-lavender text-brand-purple-900" },
+  { value: "not_again", label: "لا تكرّريها", selected: "bg-brand-ink text-white" },
+];
+
 // One person's status chips (+ reason chips when swapped). Shared meals render
 // one row of these PER PARTICIPANT — each person's status is separate; an
 // individual meal renders a single row for the member whose tab is open.
@@ -144,6 +154,8 @@ export function MealCard({
   checkin,
   sharedCheckins,
   onCheckin,
+  verdict,
+  onVerdict,
 }: {
   meal: Meal;
   memberNames?: Record<string, string>;
@@ -165,6 +177,12 @@ export function MealCard({
     status: MealCheckinState["status"] | null,
     reason: string | null,
   ) => void;
+  /** The viewed member's verdict on this dish (header/tracking); null = none. */
+  verdict?: Verdict | null;
+  /** Set the viewed member's verdict (null clears). Offered only once the dish
+   * was cooked — you can only judge a dish you actually made. Absent = no
+   * verdict control (untrackable day / read-only view). */
+  onVerdict?: (verdict: Verdict | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -456,6 +474,38 @@ export function MealCard({
                       }
                     />
                   ) : null}
+                  {/* Verdict — only for a dish that was actually cooked (you can
+                      only judge what you made). One row for the viewed member. */}
+                  {onVerdict && checkin?.status === "cooked" && (
+                    <div
+                      className="pt-1 space-y-1.5"
+                      role="group"
+                      aria-label="رأي العائلة في الطبق"
+                    >
+                      <p className="text-[11px] font-bold text-brand-ink-muted">
+                        كيف كانت؟
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {VERDICT_CHIPS.map((v) => (
+                          <button
+                            key={v.value}
+                            type="button"
+                            onClick={() =>
+                              onVerdict(verdict === v.value ? null : v.value)
+                            }
+                            aria-pressed={verdict === v.value}
+                            className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                              verdict === v.value
+                                ? v.selected
+                                : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                            }`}
+                          >
+                            {v.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[11px] text-brand-ink-muted leading-relaxed">
                     تسجيلك يُحسّن خطة الأسبوع القادم — والضغط مرة أخرى يمسح الاختيار.
                   </p>

@@ -7,7 +7,12 @@ import { motion, AnimatePresence } from "motion/react";
 import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lock } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
-import { setMealCheckin as setMealCheckinAction } from "@/lib/engagement/actions";
+import { SaraChangesCard } from "./SaraChangesCard";
+import { FamilySeasonCard } from "./FamilySeasonCard";
+import {
+  setMealCheckin as setMealCheckinAction,
+  setMealVerdict as setMealVerdictAction,
+} from "@/lib/engagement/actions";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
@@ -53,6 +58,9 @@ export function PlanViewer({
   locale,
   showWorkoutOptIn = false,
   checkins,
+  verdicts,
+  workoutCheckins,
+  goalReached,
   journeyMembers,
 }: {
   plan: MealPlan;
@@ -88,6 +96,26 @@ export function PlanViewer({
     reason: string | null;
     member_id?: string | null;
   }>;
+  // Per-dish verdicts (main /plan page only, same scope as checkins). member_id
+  // is whose verdict it is — verdicts are personal, so there is NO whole-house
+  // fallback (unlike checkins). Feeds golden dishes / vetoes → «سارة عدّلت خطتك».
+  verdicts?: Array<{
+    day_index: number;
+    slot: string;
+    member_id?: string | null;
+    verdict: string;
+  }>;
+  // Workout session marks (main /plan page only) — the exercise pillar of
+  // «موسم بيتنا». member_id: "mom" | family_members.id; status done/moved/skipped.
+  workoutCheckins?: Array<{
+    day_index: number;
+    member_id: string;
+    status: string;
+  }>;
+  // Eligible adults who reached their target weight — the family-visible
+  // «تحقّق الهدف» celebration on «موسم بيتنا». The achievement only (no number,
+  // no target); pregnant/lactating are never included (computed on the server).
+  goalReached?: Array<{ id: string; name: string }>;
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
   // null for the mom). The entry renders on the ACTIVE member's tab only;
@@ -137,6 +165,26 @@ export function PlanViewer({
           ]),
       ),
   );
+  // Per-dish verdicts, keyed day|slot|member. Personal by design → no
+  // whole-house fallback (a verdict is never attested for someone else).
+  const [verdictMap, setVerdictMap] = useState<
+    Map<string, "loved" | "fine" | "not_again">
+  >(
+    () =>
+      new Map(
+        (verdicts ?? [])
+          .filter(
+            (v): v is typeof v & { verdict: "loved" | "fine" | "not_again" } =>
+              v.verdict === "loved" ||
+              v.verdict === "fine" ||
+              v.verdict === "not_again",
+          )
+          .map((v) => [
+            `${v.day_index}|${v.slot}|${v.member_id ?? "mom"}`,
+            v.verdict,
+          ]),
+      ),
+  );
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const checkinTodayIdx = dayIndexFromWeekStart(plan.week_start_date);
   const canCheckinActiveDay =
@@ -153,6 +201,44 @@ export function PlanViewer({
       checkinMap.get(`${dayIndex}|${slot}|household`) ??
       null
     );
+  }
+
+  /** A member's own verdict for a dish (no fallback — verdicts are personal). */
+  function verdictFor(dayIndex: number, slot: string, memberId: string) {
+    return verdictMap.get(`${dayIndex}|${slot}|${memberId}`) ?? null;
+  }
+
+  function handleVerdict(
+    memberId: string,
+    slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
+    recipeNameAr: string,
+    verdict: "loved" | "fine" | "not_again" | null,
+  ) {
+    const key = `${activeDayIndex}|${slot}|${memberId}`;
+    const prev = verdictMap.get(key) ?? null;
+    const next = new Map(verdictMap);
+    if (verdict === null) next.delete(key);
+    else next.set(key, verdict);
+    setVerdictMap(next);
+    setCheckinError(null);
+    void setMealVerdictAction({
+      meal_plan_id: planId,
+      day_index: activeDayIndex,
+      slot,
+      member_id: memberId,
+      recipe_name_ar: recipeNameAr,
+      verdict,
+    }).then((result) => {
+      if (!result.ok) {
+        setVerdictMap((cur) => {
+          const reverted = new Map(cur);
+          if (prev) reverted.set(key, prev);
+          else reverted.delete(key);
+          return reverted;
+        });
+        setCheckinError(result.error);
+      }
+    });
   }
 
   function handleCheckin(
@@ -294,6 +380,18 @@ export function PlanViewer({
   );
 
   const isSolo = plan.members.length === 1;
+
+  // «موسم بيتنا» roster: eligible adults (mom + adult members — journeyMembers
+  // already applies the children-never/housekeeper-never rule) who are in THIS
+  // plan, with display names resolved. The season renders only for a real
+  // household (≥2 adults) — a solo mom never sees a family board (guardrail 7).
+  const seasonRoster = useMemo(() => {
+    if (!journeyMembers) return [];
+    const inPlan = new Set(plan.members.map((m) => m.member_id));
+    return journeyMembers
+      .filter((j) => inPlan.has(j.id))
+      .map((j) => ({ id: j.id, name: memberNames[j.id] ?? j.name ?? j.id }));
+  }, [journeyMembers, plan.members, memberNames]);
 
   // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
   // Scope all loading UI to that member so a different member's empty/failed day
@@ -447,6 +545,29 @@ export function PlanViewer({
           )}
         </div>
       </div>
+
+      {/* «سارة عدّلت خطتك» — the engagement-loop payoff: what Sara changed this
+          week and why, citing the family's real logged marks. Plan-wide (above
+          the member tabs). The minimum-signal guard already ran in the engine,
+          so a present week_changes is safe to show. Hidden on the housekeeper's
+          translated view — it is the mom's فصحى adaptation narrative. */}
+      {!translated && plan.week_changes && plan.week_changes.length > 0 && (
+        <SaraChangesCard changes={plan.week_changes} />
+      )}
+
+      {/* «موسم بيتنا» — the cooperative family season. Interactive Arabic view
+          only (never read-only/history/housekeeper), and only for a real
+          household with ≥2 eligible adults. Built from the marks already
+          fetched; no numbers about anyone's body, no ranking, no last place. */}
+      {!readOnly && !translated && seasonRoster.length >= 2 && (
+        <FamilySeasonCard
+          members={seasonRoster}
+          checkins={checkins ?? []}
+          verdicts={verdicts ?? []}
+          workoutCheckins={workoutCheckins ?? []}
+          goalReached={goalReached ?? []}
+        />
+      )}
 
       {/* Member tabs (hidden for a solo plan) */}
       {!isSolo && (
@@ -724,6 +845,22 @@ export function PlanViewer({
                     canCheckinActiveDay
                       ? (memberId, status, reason) =>
                           handleCheckin(memberId, meal.slot, status, reason)
+                      : undefined
+                  }
+                  verdict={verdictFor(
+                    activeDayIndex,
+                    meal.slot,
+                    activeMember.member_id,
+                  )}
+                  onVerdict={
+                    canCheckinActiveDay
+                      ? (verdict) =>
+                          handleVerdict(
+                            activeMember.member_id,
+                            meal.slot,
+                            meal.recipe_name_ar,
+                            verdict,
+                          )
                       : undefined
                   }
                 />

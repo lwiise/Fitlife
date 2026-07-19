@@ -43,6 +43,11 @@ export type MemberExceptionKind = (typeof MEMBER_EXCEPTION_KINDS)[number];
 export const VERDICTS = ["loved", "fine", "not_again"] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
+// Workout session status (00020). "moved" is the honest middle — trained, but
+// not this exact session; absence of a row is UNKNOWN, never "skipped".
+export const WORKOUT_CHECKIN_STATUSES = ["done", "moved", "skipped"] as const;
+export type WorkoutCheckinStatus = (typeof WORKOUT_CHECKIN_STATUSES)[number];
+
 /** "mom" for the account owner, otherwise a family_members.id UUID. */
 export type EngagementMemberId = string;
 
@@ -89,6 +94,21 @@ export interface MealVerdictRow {
   /** Minted server-side via canonicalRecipeKey() — never in the client. */
   canonical_key: string;
   verdict: Verdict;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkoutCheckinRow {
+  id: string;
+  user_id: string;
+  workout_plan_id: string;
+  /** "mom" | family_members.id (plan-JSON convention). */
+  member_id: EngagementMemberId;
+  /** Weekday-anchored 0..6 (0=Sunday, JS getDay) — matches the workout plan. */
+  day_index: number;
+  /** Riyadh-local calendar date (YYYY-MM-DD), stamped at write time. */
+  local_date: string;
+  status: WorkoutCheckinStatus;
   created_at: string;
   updated_at: string;
 }

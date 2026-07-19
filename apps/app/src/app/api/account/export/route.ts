@@ -102,6 +102,21 @@ export async function GET() {
   const [mealCheckins, memberExceptions, mealVerdicts] = engagementRows;
   let bodyLogs = engagementRows[3] ?? [];
 
+  // workout_checkins (00020) — not yet in the generated Database types, so it's
+  // read through an untyped cast; best-effort so a pre-apply prod exports []
+  // rather than failing the whole export.
+  let workoutCheckins: unknown[] = [];
+  try {
+    const { data } = await (supabase as unknown as SupabaseClient)
+      .from("workout_checkins")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    workoutCheckins = data ?? [];
+  } catch {
+    workoutCheckins = [];
+  }
+
   // Portability covers the photos too: each body log with a photo_path gets a
   // 24-hour signed URL (the bucket is private — a bare path downloads nothing).
   // Best-effort and tolerant of pre-00018 prod (no column / no bucket).
@@ -147,6 +162,7 @@ export async function GET() {
     member_exceptions: memberExceptions,
     meal_verdicts: mealVerdicts,
     body_logs: bodyLogs,
+    workout_checkins: workoutCheckins,
   };
 
   const date = new Date().toISOString().slice(0, 10);

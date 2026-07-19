@@ -10,6 +10,8 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
+import { hasReachedWeightGoal } from "@/lib/engagement/goalMilestone";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { LogoutButton } from "../dashboard/LogoutButton";
@@ -56,20 +58,89 @@ export default async function PlanPage({
   // pre-apply prod, while * degrades to rows without it (house tolerance
   // pattern). Rows are per (day, slot, member) → 7 days × 4 slots × household.
   let checkins;
+  // Per-dish verdicts for this plan («كيف كانت؟» → golden dishes / vetoes).
+  // Same interactive-page-only scope and select("*") pre-apply tolerance as
+  // checkins (meal_verdicts is a 00017 table; a missing table degrades to []).
+  let verdicts;
   if (profile && latest?.status === "ready") {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("meal_checkins")
-      .select("*")
-      .eq("meal_plan_id", latest.id)
-      .limit(400);
-    checkins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    const [checkinRes, verdictRes] = await Promise.all([
+      supabase.from("meal_checkins").select("*").eq("meal_plan_id", latest.id).limit(400),
+      supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
+    ]);
+    checkins = ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
       day_index: r.day_index as number,
       slot: r.slot as string,
       status: r.status as string,
       reason: (r.reason ?? null) as string | null,
       member_id: (r.member_id ?? null) as string | null,
     }));
+    verdicts = ((verdictRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      day_index: r.day_index as number,
+      slot: r.slot as string,
+      member_id: (r.member_id ?? null) as string | null,
+      verdict: r.verdict as string,
+    }));
+  }
+
+  // Workout session marks (the exercise pillar). Untyped cast: workout_checkins
+  // (00020) isn't in the generated Database types until db:types is regenerated;
+  // select("*") degrades to [] on a pre-apply prod. Feeds WorkoutViewer's
+  // marking state AND «موسم بيتنا».
+  let workoutCheckins:
+    | Array<{ day_index: number; member_id: string; status: string }>
+    | undefined;
+  if (profile && workout?.status === "ready") {
+    const supabase = await createClient();
+    const { data } = await (supabase as unknown as SupabaseClient)
+      .from("workout_checkins")
+      .select("*")
+      .eq("workout_plan_id", workout.id)
+      .limit(400);
+    workoutCheckins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      day_index: r.day_index as number,
+      member_id: (r.member_id ?? "") as string,
+      status: r.status as string,
+    }));
+  }
+
+  // Goal milestones for «موسم بيتنا» — eligible adults whose latest weigh-in
+  // reached their target. Loss-framing, so pregnant/lactating are NEVER
+  // celebrated on weight (children/housekeeper have no target and are excluded
+  // by eligibility). The number itself never leaves this computation — the
+  // season shows only the achievement, never a weight/target string.
+  const goalReached: Array<{ id: string; name: string }> = [];
+  if (profile && latest?.status === "ready") {
+    const supabase = await createClient();
+    const { data: logs } = await supabase
+      .from("body_logs")
+      .select("member_id, weight_kg, recorded_on")
+      .eq("user_id", profile.id)
+      .order("recorded_on", { ascending: true });
+    const seriesByMember = new Map<string, number[]>();
+    for (const r of (logs ?? []) as Array<{
+      member_id: string;
+      weight_kg: number | null;
+    }>) {
+      if (r.weight_kg == null) continue;
+      const arr = seriesByMember.get(r.member_id) ?? [];
+      arr.push(Number(r.weight_kg));
+      seriesByMember.set(r.member_id, arr);
+    }
+    if (
+      !profile.is_pregnant &&
+      isWeighInEligibleMom(profile.birth_year ?? null) &&
+      hasReachedWeightGoal(seriesByMember.get("mom") ?? [], profile.target_weight_kg)
+    ) {
+      goalReached.push({ id: "mom", name: profile.display_name ?? "أنتِ" });
+    }
+    for (const m of familyMembers) {
+      if (!isWeighInEligibleMember(m)) continue;
+      if (m.member_type === "pregnant" || m.member_type === "lactating") continue;
+      if (hasReachedWeightGoal(seriesByMember.get(m.id) ?? [], m.target_weight_kg)) {
+        goalReached.push({ id: m.id, name: m.name });
+      }
+    }
   }
 
   const isOnboarded = !!profile?.onboarding_completed_at;
@@ -295,7 +366,11 @@ export default async function PlanPage({
               </div>
             )}
             {workout.status === "ready" && workout.plan_data && (
-              <WorkoutViewer plan={workout.plan_data} />
+              <WorkoutViewer
+                plan={workout.plan_data}
+                planId={workout.id}
+                checkins={workoutCheckins}
+              />
             )}
           </>
         )}
@@ -322,6 +397,9 @@ export default async function PlanPage({
               housekeeperLocale={housekeeperLocale}
               showWorkoutOptIn={workout === null}
               checkins={checkins}
+              verdicts={verdicts}
+              workoutCheckins={workoutCheckins}
+              goalReached={goalReached}
               journeyMembers={journeyMembers}
             />
           </>

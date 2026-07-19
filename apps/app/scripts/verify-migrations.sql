@@ -108,5 +108,12 @@ select * from (values
   ('00019 meal_checkins DELETE policy (clears were silent no-ops without it)',
     (select case when exists (select 1 from pg_policies
       where schemaname='public' and tablename='meal_checkins' and cmd='DELETE')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00020 workout_checkins table',
+    (select case when to_regclass('public.workout_checkins') is not null
+      then 'APPLIED' else 'MISSING' end)),
+  ('00020 workout_checkins DELETE policy (shipped day one)',
+    (select case when exists (select 1 from pg_policies
+      where schemaname='public' and tablename='workout_checkins' and cmd='DELETE')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);
