@@ -64,7 +64,7 @@ const CHECKIN_STATUS_CHIPS = [
   { value: "skipped" as const, label: "تجاوزتها" },
 ];
 const CHECKIN_REASON_CHIPS = [
-  { value: "guests", label: "جاءنا ضيوف", gold: true },
+  { value: "guests", label: "جاءنا ضيوف" },
   { value: "ordered_in", label: "طلبنا اليوم" },
   { value: "ate_out", label: "خارج البيت" },
   { value: "missing_ingredients", label: "لم تتوفر المقادير" },
@@ -131,9 +131,7 @@ function CheckinChips({
               aria-pressed={state.reason === r.value}
               className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                 state.reason === r.value
-                  ? r.gold
-                    ? "bg-brand-yellow text-brand-ink"
-                    : "bg-brand-lavender text-brand-purple-900"
+                  ? "bg-brand-lavender text-brand-purple-900"
                   : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
               }`}
             >
