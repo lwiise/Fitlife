@@ -852,6 +852,7 @@ ${buildRoster(context, targetMemberIds)}${deepDiveText(context)}${momNotesText(c
 # المطلوب (المرحلة 1: الهيكل فقط)
 احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
 ثم خطّطي **أسبوعاً كاملاً (7 أيام متتالية)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}
+التنويع يكون في **الأطباق والنكهات فقط، لا في كمية البروتين**. حافظي على **ثبات البروتين اليومي (والسعرات) عبر الأيام السبعة** لكل فرد — نفس هدفه اليومي في كل يوم، بلا أيام «خفيفة» بروتيناً وأخرى «ثقيلة». وزّعي الأطباق الغنية بالبروتين على جميع الأيام بالتساوي حتى يقع بروتين كل يوم قرب الهدف نفسه.
 
 # الإخراج
 أرجعي JSON صالحاً فقط (لا نص قبله/بعده، لا أكواد محاطة). الشكل:
@@ -949,9 +950,12 @@ export function buildDayPrompt(
       // explicit band — days must match on protein too, and it can only be
       // steered here (composition), never fixed by the code-side rescale.
       const aimBand = Math.round(sm.daily_calories_target * 0.05);
+      // Kept in sync with DAY_PROTEIN_BAND_PCT / DAY_PROTEIN_BAND_MIN_G in
+      // generate.ts — the band shown to the model must match what the code
+      // enforces, so the model aims for the same window the re-roll checks.
       const proteinBand = Math.max(
         15,
-        Math.round(sm.macros_target.protein_g * 0.1),
+        Math.round(sm.macros_target.protein_g * 0.07),
       );
       const target = isChild
         ? "طفل — بالحصص، بدون هدف سعرات"
