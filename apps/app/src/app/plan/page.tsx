@@ -10,6 +10,7 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
+import { hasReachedWeightGoal } from "@/lib/engagement/goalMilestone";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
@@ -101,6 +102,45 @@ export default async function PlanPage({
       member_id: (r.member_id ?? "") as string,
       status: r.status as string,
     }));
+  }
+
+  // Goal milestones for «موسم بيتنا» — eligible adults whose latest weigh-in
+  // reached their target. Loss-framing, so pregnant/lactating are NEVER
+  // celebrated on weight (children/housekeeper have no target and are excluded
+  // by eligibility). The number itself never leaves this computation — the
+  // season shows only the achievement, never a weight/target string.
+  const goalReached: Array<{ id: string; name: string }> = [];
+  if (profile && latest?.status === "ready") {
+    const supabase = await createClient();
+    const { data: logs } = await supabase
+      .from("body_logs")
+      .select("member_id, weight_kg, recorded_on")
+      .eq("user_id", profile.id)
+      .order("recorded_on", { ascending: true });
+    const seriesByMember = new Map<string, number[]>();
+    for (const r of (logs ?? []) as Array<{
+      member_id: string;
+      weight_kg: number | null;
+    }>) {
+      if (r.weight_kg == null) continue;
+      const arr = seriesByMember.get(r.member_id) ?? [];
+      arr.push(Number(r.weight_kg));
+      seriesByMember.set(r.member_id, arr);
+    }
+    if (
+      !profile.is_pregnant &&
+      isWeighInEligibleMom(profile.birth_year ?? null) &&
+      hasReachedWeightGoal(seriesByMember.get("mom") ?? [], profile.target_weight_kg)
+    ) {
+      goalReached.push({ id: "mom", name: profile.display_name ?? "أنتِ" });
+    }
+    for (const m of familyMembers) {
+      if (!isWeighInEligibleMember(m)) continue;
+      if (m.member_type === "pregnant" || m.member_type === "lactating") continue;
+      if (hasReachedWeightGoal(seriesByMember.get(m.id) ?? [], m.target_weight_kg)) {
+        goalReached.push({ id: m.id, name: m.name });
+      }
+    }
   }
 
   const isOnboarded = !!profile?.onboarding_completed_at;
@@ -359,6 +399,7 @@ export default async function PlanPage({
               checkins={checkins}
               verdicts={verdicts}
               workoutCheckins={workoutCheckins}
+              goalReached={goalReached}
               journeyMembers={journeyMembers}
             />
           </>

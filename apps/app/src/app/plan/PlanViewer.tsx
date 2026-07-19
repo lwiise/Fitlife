@@ -60,6 +60,7 @@ export function PlanViewer({
   checkins,
   verdicts,
   workoutCheckins,
+  goalReached,
   journeyMembers,
 }: {
   plan: MealPlan;
@@ -111,6 +112,10 @@ export function PlanViewer({
     member_id: string;
     status: string;
   }>;
+  // Eligible adults who reached their target weight — the family-visible
+  // «تحقّق الهدف» celebration on «موسم بيتنا». The achievement only (no number,
+  // no target); pregnant/lactating are never included (computed on the server).
+  goalReached?: Array<{ id: string; name: string }>;
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
   // null for the mom). The entry renders on the ACTIVE member's tab only;
@@ -560,6 +565,7 @@ export function PlanViewer({
           checkins={checkins ?? []}
           verdicts={verdicts ?? []}
           workoutCheckins={workoutCheckins ?? []}
+          goalReached={goalReached ?? []}
         />
       )}
 

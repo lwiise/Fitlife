@@ -1,4 +1,4 @@
-import { Trophy, Crown, Dumbbell } from "lucide-react";
+import { Trophy, Crown, Dumbbell, Sparkles } from "lucide-react";
 
 // «موسم بيتنا» — the cooperative family season (Phase 1 of the engagement plan,
 // Option A). The owner's brief asked for a family "leaderboard"; the research
@@ -36,6 +36,7 @@ export function FamilySeasonCard({
   checkins,
   verdicts,
   workoutCheckins = [],
+  goalReached = [],
 }: {
   /** Eligible adults in this plan (mom + adult members), display names resolved. */
   members: Array<{ id: string; name: string }>;
@@ -43,6 +44,9 @@ export function FamilySeasonCard({
   verdicts: VerdictMark[];
   /** Workout session marks (the exercise pillar); empty when no workout plan. */
   workoutCheckins?: WorkoutMark[];
+  /** Adults who reached their target weight — the achievement ONLY (no number,
+   * no target); pregnant/lactating are never here (filtered on the server). */
+  goalReached?: Array<{ id: string; name: string }>;
 }) {
   // Meal-true family headline: distinct (day, slot) the house engaged with —
   // a shared meal marked by three people is ONE followed meal, never three.
@@ -102,6 +106,26 @@ export function FamilySeasonCard({
           </span>
         )}
       </div>
+
+      {/* «تحقّق الهدف» — the family-visible goal celebration. Gender-neutral
+          copy (the goal is the subject), the achievement ONLY: no weight, no
+          target, no delta ever reaches this surface. Positive-only — there is
+          no "hasn't reached" state. */}
+      {goalReached.length > 0 && (
+        <div className="flex items-start gap-2 rounded-xl bg-brand-yellow/20 border border-brand-yellow/50 px-3 py-2.5">
+          <Sparkles
+            className="size-4 shrink-0 mt-0.5 text-brand-purple-900"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-brand-ink leading-relaxed">
+            {goalReached.length === 1 ? "تحقّق هدف " : "تحقّقت الأهداف: "}
+            <span className="font-extrabold text-brand-purple-900">
+              {goalReached.map((g) => g.name).join("، ")}
+            </span>
+            {" — مبارك"}
+          </p>
+        </div>
+      )}
 
       {!hasActivity ? (
         // No marks yet — invite, never accuse (guardrail 7 spirit).
