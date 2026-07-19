@@ -11,6 +11,7 @@ export {
   runMealPlanGeneration,
   generateMealPlan,
   prepareSharedGroupRegen,
+  reconcileChildTargets,
   translateMealPlan,
   runMealPlanTranslation,
   hasPendingGeneration,

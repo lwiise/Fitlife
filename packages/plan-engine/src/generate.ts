@@ -324,6 +324,47 @@ function sumDayTotal(meals: Meal[]) {
   };
 }
 
+/**
+ * A child's daily_calories_target / macros_target are only a rough ESTIMATE. The
+ * skeleton must still emit the fields, but children are planned by PORTIONS — no
+ * BMR/TDEE, no calorie limit (see the skeleton prompt) — and the per-day calorie/
+ * protein enforcement below exempts them, so their real day totals never track that
+ * estimate. A teen entered with adult stats can even get an adult-sized estimate
+ * (e.g. 2730 kcal) while eating child portions (~1000), so the plan header advertised
+ * a "daily target" no day came near and every day looked different from it — the
+ * weekly-calorie inconsistency families reported. Reconcile the header to the MEAN of
+ * the child's ACTUAL generated day totals so every surface (plan view, PDF, dashboard,
+ * chat, admin) shows a number the week actually averages to. Adults are never passed
+ * here. Days without meals are ignored; with no mealed day yet (early progressive
+ * render) the estimate is kept. Pure — exported for unit tests.
+ */
+export function reconcileChildTargets(
+  days: Day[],
+  estimate: {
+    daily_calories_target: number;
+    macros_target: MemberPlan["macros_target"];
+  },
+): { daily_calories_target: number; macros_target: MemberPlan["macros_target"] } {
+  const mealed = days.filter((d) => d.meals.length > 0);
+  if (mealed.length === 0) return estimate;
+  const n = mealed.length;
+  const acc = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  for (const d of mealed) {
+    acc.calories += d.day_total.calories;
+    acc.protein_g += d.day_total.protein_g;
+    acc.carbs_g += d.day_total.carbs_g;
+    acc.fat_g += d.day_total.fat_g;
+  }
+  return {
+    daily_calories_target: Math.round(acc.calories / n),
+    macros_target: {
+      protein_g: Math.round(acc.protein_g / n),
+      carbs_g: Math.round(acc.carbs_g / n),
+      fat_g: Math.round(acc.fat_g / n),
+    },
+  };
+}
+
 // ── Per-day calorie + protein band enforcement ──────────────────────────────
 // The plan header promises each adult a daily calorie target AND a protein
 // target; a generated day must actually respect both. Three layers,
@@ -1293,7 +1334,23 @@ export async function generateMealPlan(params: {
   if (existingPlan && membersToGenerate.length === 0) {
     const members = beneficiaries.map((b) => {
       const m = priorById.get(b.member_id)!;
-      return { ...m, member_name_ar: nameById.get(b.member_id) ?? m.member_name_ar };
+      // Keep a carried child's header consistent with its portion-based days,
+      // and re-stamp is_child in case the member's age/type changed since the
+      // prior plan was written (or the prior plan predates the flag).
+      const isChild = isChildById.get(b.member_id) ?? false;
+      const display = isChild
+        ? reconcileChildTargets(m.days, {
+            daily_calories_target: m.daily_calories_target,
+            macros_target: m.macros_target,
+          })
+        : { daily_calories_target: m.daily_calories_target, macros_target: m.macros_target };
+      return {
+        ...m,
+        member_name_ar: nameById.get(b.member_id) ?? m.member_name_ar,
+        daily_calories_target: display.daily_calories_target,
+        macros_target: display.macros_target,
+        is_child: isChild,
+      };
     });
     const plan = MealPlanSchema.parse({
       week_start_date: weekStart,
@@ -1359,21 +1416,29 @@ export async function generateMealPlan(params: {
     const preMembers: MemberPlan[] = beneficiaries.map((b) => {
       const prior = priorById.get(b.member_id);
       const carried = carriedDays.get(b.member_id)!;
+      const days = familyDayIndices.map(
+        (di) =>
+          carried.get(di) ?? {
+            day_index: di,
+            day_name_ar: khaleejiDayName(weekStart, di),
+            meals: [],
+            day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+          },
+      );
+      const isChild = isChildById.get(b.member_id) ?? false;
+      const estimate = {
+        daily_calories_target: prior?.daily_calories_target ?? 0,
+        macros_target: prior?.macros_target ?? { protein_g: 0, carbs_g: 0, fat_g: 0 },
+      };
+      const display = isChild ? reconcileChildTargets(days, estimate) : estimate;
       return {
         member_id: b.member_id,
         member_name_ar: nameById.get(b.member_id) ?? prior?.member_name_ar ?? "",
         primary_goal: prior?.primary_goal,
-        daily_calories_target: prior?.daily_calories_target ?? 0,
-        macros_target: prior?.macros_target ?? { protein_g: 0, carbs_g: 0, fat_g: 0 },
-        days: familyDayIndices.map(
-          (di) =>
-            carried.get(di) ?? {
-              day_index: di,
-              day_name_ar: khaleejiDayName(weekStart, di),
-              meals: [],
-              day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-            },
-        ),
+        daily_calories_target: display.daily_calories_target,
+        macros_target: display.macros_target,
+        is_child: isChild,
+        days,
       };
     });
     const preShell: MealPlan = {
@@ -1627,15 +1692,21 @@ export async function generateMealPlan(params: {
     week_start_date: weekStart,
     members: beneficiaries.map((b) => {
       const t = targetsById.get(b.member_id)!;
+      const days = [...daysByMember.get(b.member_id)!.values()].sort(
+        (a, b2) => a.day_index - b2.day_index,
+      );
+      // Children are portion-based: show the average of their real days, not the
+      // meaningless skeleton estimate (see reconcileChildTargets).
+      const isChild = isChildById.get(b.member_id) ?? false;
+      const display = isChild ? reconcileChildTargets(days, t) : t;
       return {
         member_id: b.member_id,
         member_name_ar: nameById.get(b.member_id) ?? "",
         primary_goal: t.primary_goal,
-        daily_calories_target: t.daily_calories_target,
-        macros_target: t.macros_target,
-        days: [...daysByMember.get(b.member_id)!.values()].sort(
-          (a, b2) => a.day_index - b2.day_index,
-        ),
+        daily_calories_target: display.daily_calories_target,
+        macros_target: display.macros_target,
+        is_child: isChild,
+        days,
       };
     }),
     methodology_notes_ar:

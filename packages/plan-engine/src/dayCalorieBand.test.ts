@@ -15,12 +15,13 @@ import {
   buildDayCorrectiveNote,
   rescaleDayCalories,
   scaleIngredientAmount,
+  reconcileChildTargets,
   DAY_CALORIE_AIM_PCT,
   DAY_CALORIE_AIM_MIN_KCAL,
 } from "./generate";
 import { buildDayPrompt } from "./systemPrompt";
 import type { PlanPromptContext } from "./buildContext";
-import type { PlanSkeleton, DaySlice, Meal } from "./schema";
+import type { PlanSkeleton, DaySlice, Meal, Day } from "./schema";
 
 const mockedStream = vi.mocked(streamAnthropic);
 beforeEach(() => mockedStream.mockReset());
@@ -295,6 +296,57 @@ describe("rescaleDayCalories", () => {
     ]);
     // 2700/500 = 5.4 → clamped to 2.5.
     expect(out.members[0]!.meals[0]!.calories).toBe(1250);
+  });
+});
+
+describe("reconcileChildTargets", () => {
+  const dayWith = (
+    di: number,
+    calories: number,
+    protein_g: number,
+    carbs_g: number,
+    fat_g: number,
+    withMeals = true,
+  ): Day => ({
+    day_index: di,
+    day_name_ar: `اليوم ${di + 1}`,
+    meals: withMeals ? [mealOf(calories, `d${di}`, protein_g)] : [],
+    day_total: { calories, protein_g, carbs_g, fat_g },
+  });
+
+  const estimate = {
+    daily_calories_target: 2730,
+    macros_target: { protein_g: 205, carbs_g: 273, fat_g: 91 },
+  };
+
+  it("replaces an off estimate with the MEAN of the child's real day totals", () => {
+    const days = [
+      dayWith(0, 900, 55, 110, 20),
+      dayWith(1, 1100, 70, 130, 25),
+      dayWith(2, 1000, 61, 120, 21),
+    ];
+    // means: 1000 kcal, 62 protein, 120 carbs, 22 fat — nowhere near the 2730 estimate.
+    expect(reconcileChildTargets(days, estimate)).toEqual({
+      daily_calories_target: 1000,
+      macros_target: { protein_g: 62, carbs_g: 120, fat_g: 22 },
+    });
+  });
+
+  it("ignores empty (unmealed) days when averaging", () => {
+    const days = [
+      dayWith(0, 1000, 60, 120, 22),
+      dayWith(1, 0, 0, 0, 0, false), // still generating → excluded
+      dayWith(2, 1200, 72, 140, 26),
+    ];
+    expect(reconcileChildTargets(days, estimate)).toEqual({
+      daily_calories_target: 1100,
+      macros_target: { protein_g: 66, carbs_g: 130, fat_g: 24 },
+    });
+  });
+
+  it("keeps the estimate when no day has meals yet (early progressive render)", () => {
+    const days = [dayWith(0, 0, 0, 0, 0, false)];
+    expect(reconcileChildTargets(days, estimate)).toBe(estimate);
   });
 });
 
