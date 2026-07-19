@@ -331,7 +331,7 @@ function sumDayTotal(meals: Meal[]) {
 //   1. The prompt aims ±5% on calories and states the protein band, with
 //      distinct repair instructions (calories → portion sizes, protein →
 //      ingredient composition).
-//   2. Code enforces HARD bands (calories ±10%, protein ±10%/min 15g) and
+//   2. Code enforces HARD bands (calories ±10%, protein ±7%/min 15g) and
 //      re-rolls the day with a corrective note when an adult lands outside
 //      either — a fresh roll produces naturally coherent recipes, so it's
 //      preferred while attempts remain. The best attempt is tracked by the
@@ -348,7 +348,7 @@ export const DAY_CALORIE_BAND_PCT = 0.1;
 export const DAY_CALORIE_BAND_MIN_KCAL = 100;
 export const DAY_CALORIE_AIM_PCT = 0.05; // keep in sync with the prompt's aim band
 export const DAY_CALORIE_AIM_MIN_KCAL = 50;
-export const DAY_PROTEIN_BAND_PCT = 0.1;
+export const DAY_PROTEIN_BAND_PCT = 0.07;
 export const DAY_PROTEIN_BAND_MIN_G = 15;
 // Rescale clamp: beyond this the source attempt is garbage and blowing portions
 // up/down further would produce absurd recipes — scale this far and log.
