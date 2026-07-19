@@ -14,6 +14,7 @@ import { hasReachedWeightGoal } from "@/lib/engagement/goalMilestone";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
+import { applyChildDisplayTargets } from "@/lib/plans/childTargets";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -389,7 +390,17 @@ export default async function PlanPage({
           <>
             {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
             <PlanViewer
-              plan={latest.plan_data}
+              plan={
+                profile
+                  ? applyChildDisplayTargets(latest.plan_data, {
+                      mom: {
+                        member_type: profile.member_type,
+                        birth_year: profile.birth_year,
+                      },
+                      members: familyMembers,
+                    })
+                  : latest.plan_data
+              }
               planId={latest.id}
               generating={latest.in_progress}
               updatedAt={latest.updated_at}

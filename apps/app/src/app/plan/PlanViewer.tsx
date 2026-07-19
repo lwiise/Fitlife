@@ -660,6 +660,18 @@ export function PlanViewer({
         </div>
       </div>
 
+      {/* Children are planned by PORTIONS (healthy-plate servings), not a calorie
+          target — so the figures above are an APPROXIMATE weekly average and each
+          day naturally varies. Say so, so the numbers don't read as a fixed daily
+          goal every day misses. Interactive Arabic view only (the housekeeper view
+          just shows the averaged number). */}
+      {!translated && activeMember.is_child && (
+        <p className="text-brand-ink-muted text-xs leading-relaxed -mt-2">
+          خطة {activeMember.member_name_ar} بالحصص المناسبة للعمر — الأرقام أعلاه
+          متوسّط تقريبي للأسبوع، ويختلف إجمالي كل يوم حسب أطباق اليوم.
+        </p>
+      )}
+
       {/* «رحلتك الخاصة» — the private weigh-in entry for the viewed member
           (moved here from the dashboard). Renders only for eligible adults on
           the interactive plan page; the destination page carries the privacy

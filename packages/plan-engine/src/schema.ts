@@ -145,6 +145,12 @@ export const MemberPlanSchema = z.object({
   primary_goal: z.enum(PRIMARY_GOALS).nullish(),
   daily_calories_target: z.number(),
   macros_target: MacrosSchema,
+  // Children (incl. under-18 by birth_year) are planned by PORTIONS — no BMR/TDEE,
+  // no calorie limit, and day-level enforcement exempts them (see generate.ts).
+  // Stamped by the engine so every surface can present their calorie/macro figures
+  // as an approximate average rather than a hard daily target the days never hit.
+  // Optional: absent on older plans (treated as adult, the prior behavior).
+  is_child: z.boolean().optional(),
   // Prompt asks for exactly 7; tolerate an occasional short week (the UI fills
   // 7 day-tabs with fallbacks) rather than failing the whole plan.
   days: z.array(DaySchema).min(1).max(7),
