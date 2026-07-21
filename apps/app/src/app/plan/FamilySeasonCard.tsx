@@ -168,7 +168,10 @@ function StarIcon({ filled }: { filled: boolean }) {
   );
 }
 
-function UtensilsMark({
+/** A covered serving dish (سفرة) — the recurring warm-home-cooked metaphor in
+ * the copy, and a bolder, filled glyph that reads far better than a lone
+ * fork+knife at these small sizes. Colour rides on `currentColor`. */
+function DishMark({
   className = "size-[clamp(16px,2.4vw,26px)] text-white",
 }: {
   className?: string;
@@ -177,13 +180,15 @@ function UtensilsMark({
     <svg
       viewBox="0 0 24 24"
       className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.9}
-      strokeLinecap="round"
+      fill="currentColor"
       aria-hidden="true"
     >
-      <path d="M7 3v7a2 2 0 0 0 4 0V3M9 10v11M17 3c-1.7 0-3 2-3 5s1.3 4 3 4v9" />
+      {/* handle knob on top of the dome */}
+      <circle cx="12" cy="4.6" r="1.5" />
+      {/* the dome (a clean semicircle sitting on the plate) */}
+      <path d="M3.4 14.6a8.6 8.6 0 0 1 17.2 0z" />
+      {/* the plate the dome rests on */}
+      <rect x="2" y="14.9" width="20" height="2.5" rx="1.25" />
     </svg>
   );
 }
@@ -465,12 +470,12 @@ export function FamilySeasonCard({
                               <StarIcon key={s} filled={s < stars} />
                             ))}
                           </span>
-                          <UtensilsMark />
+                          <DishMark />
                         </>
                       ) : (
-                        // Ghost fork — an unmarked day reads as an invitation,
+                        // Ghost dish — an unmarked day reads as an invitation,
                         // not a hole (stronger on today, faint on the rest).
-                        <UtensilsMark
+                        <DishMark
                           className={
                             "size-[clamp(15px,2vw,22px)] text-brand-purple-900 " +
                             (isToday ? "opacity-45" : "opacity-15")
@@ -541,65 +546,69 @@ export function FamilySeasonCard({
           );
           if (isWinner) {
             return (
-              <li
-                key={m.id}
-                className="relative rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 text-brand-ink bg-[linear-gradient(150deg,#FFE08A,#F2BB16_45%,#E4A50E)] shadow-[0_16px_34px_-14px_rgba(242,187,22,0.6)]"
-                aria-label={`المركز الأول: ${m.name}`}
-              >
-                <WinnerCrown />
-                <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-[#8A5A00]" dir="ltr">
-                  #{ar(rank)}
-                </span>
-                <div className="flex-1 text-center min-w-0">
-                  {idCluster("border-[#6B4E06]/35")}
-                  <span className="mx-auto flex w-max items-center gap-1.5 mt-1 rounded-full bg-[#6B4E06]/18 px-2.5 py-1 text-[11px] font-extrabold text-[#6B4E06] whitespace-nowrap">
-                    <Crown className="size-3" aria-hidden="true" />
-                    فائز هذا الأسبوع
+              <li key={m.id}>
+                <Link
+                  href={`/plan?member=${m.id}`}
+                  aria-label={`المركز الأول: ${m.name} — عرض الخطة`}
+                  className="group relative w-full h-full rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 text-brand-ink bg-[linear-gradient(150deg,#FFE08A,#F2BB16_45%,#E4A50E)] shadow-[0_16px_34px_-14px_rgba(242,187,22,0.6)] transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                >
+                  <WinnerCrown />
+                  <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-[#8A5A00]" dir="ltr">
+                    #{ar(rank)}
                   </span>
-                </div>
-                <div className="relative shrink-0 size-16 sm:size-[76px]">
-                  <Ring frac={m.pct} color="#7A5200" track="rgba(107,78,6,0.22)" sw={7} r={30} />
-                  <span className="absolute inset-0 grid place-items-center text-sm sm:text-base font-extrabold text-brand-ink">
-                    {pctText}
-                  </span>
-                </div>
+                  <div className="flex-1 text-center min-w-0">
+                    {idCluster("border-[#6B4E06]/35")}
+                    <span className="mx-auto flex w-max items-center gap-1.5 mt-1 rounded-full bg-[#6B4E06]/18 px-2.5 py-1 text-[11px] font-extrabold text-[#6B4E06] whitespace-nowrap">
+                      <Crown className="size-3" aria-hidden="true" />
+                      فائز هذا الأسبوع
+                    </span>
+                  </div>
+                  <div className="relative shrink-0 size-16 sm:size-[76px]">
+                    <Ring frac={m.pct} color="#7A5200" track="rgba(107,78,6,0.22)" sw={7} r={30} />
+                    <span className="absolute inset-0 grid place-items-center text-sm sm:text-base font-extrabold text-brand-ink">
+                      {pctText}
+                    </span>
+                  </div>
+                </Link>
               </li>
             );
           }
           return (
-            <li
-              key={m.id}
-              className="relative rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 bg-brand-purple-900 text-white"
-              aria-label={`المركز ${ar(rank)}: ${m.name}`}
-            >
-              {/* Silver/bronze medal chips for #2/#3 — quiet rank identity. */}
-              {(rank === 2 || rank === 3) && (
-                <span
-                  aria-hidden="true"
-                  className={`absolute -top-2.5 start-3.5 grid size-6 place-items-center rounded-full text-[11px] font-extrabold shadow-md ${
-                    rank === 2
-                      ? "bg-gradient-to-br from-[#C9CDD6] to-[#9AA1AE] text-[#3D4350]"
-                      : "bg-gradient-to-br from-[#DDA173] to-[#B4713F] text-[#4A2C12]"
-                  }`}
-                >
-                  <Figure n={rank} />
+            <li key={m.id}>
+              <Link
+                href={`/plan?member=${m.id}`}
+                aria-label={`المركز ${ar(rank)}: ${m.name} — عرض الخطة`}
+                className="relative w-full h-full rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 bg-brand-purple-900 text-white transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              >
+                {/* Silver/bronze medal chips for #2/#3 — quiet rank identity. */}
+                {(rank === 2 || rank === 3) && (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute -top-2.5 start-3.5 grid size-6 place-items-center rounded-full text-[11px] font-extrabold shadow-md ${
+                      rank === 2
+                        ? "bg-gradient-to-br from-[#C9CDD6] to-[#9AA1AE] text-[#3D4350]"
+                        : "bg-gradient-to-br from-[#DDA173] to-[#B4713F] text-[#4A2C12]"
+                    }`}
+                  >
+                    <Figure n={rank} />
+                  </span>
+                )}
+                <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-brand-lavender" dir="ltr">
+                  #{ar(rank)}
                 </span>
-              )}
-              <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-brand-lavender" dir="ltr">
-                #{ar(rank)}
-              </span>
-              <div className="flex-1 text-center min-w-0">
-                {idCluster("border-white/55")}
-                <p className="text-[11.5px] text-brand-lavender mt-0.5">
-                  {m.score > 0 ? genderPick(m.sex)("حاضرة", "حاضر") : "بانتظار البداية"}
-                </p>
-              </div>
-              <div className="relative shrink-0 size-16 sm:size-[76px]">
-                <Ring frac={m.pct} color="var(--color-brand-lavender)" track="rgba(255,255,255,0.22)" sw={7} r={30} />
-                <span className="absolute inset-0 grid place-items-center text-sm sm:text-base font-extrabold text-white">
-                  {pctText}
-                </span>
-              </div>
+                <div className="flex-1 text-center min-w-0">
+                  {idCluster("border-white/55")}
+                  <p className="text-[11.5px] text-brand-lavender mt-0.5">
+                    {m.score > 0 ? genderPick(m.sex)("حاضرة", "حاضر") : "بانتظار البداية"}
+                  </p>
+                </div>
+                <div className="relative shrink-0 size-16 sm:size-[76px]">
+                  <Ring frac={m.pct} color="var(--color-brand-lavender)" track="rgba(255,255,255,0.22)" sw={7} r={30} />
+                  <span className="absolute inset-0 grid place-items-center text-sm sm:text-base font-extrabold text-white">
+                    {pctText}
+                  </span>
+                </div>
+              </Link>
             </li>
           );
         })}
