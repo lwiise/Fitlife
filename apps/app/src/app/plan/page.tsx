@@ -209,6 +209,25 @@ export default async function PlanPage({
         sex: m.sex as string | null,
       })),
   ];
+  // «موسم بيتنا» leaderboard roster — the WHOLE household (mom + adults +
+  // CHILDREN), excluding only the housekeeper (never surveilled). Owner
+  // directive (07/2026): children compete on the leaderboard exactly like
+  // adults — own rank card + weekly %, and eligible for the #1 «فائز» spot.
+  // Kept SEPARATE from journeyMembers on purpose: body/weight tracking (the
+  // private journey + goalReached celebration) stays adults-only via that
+  // eligibility rule. `sex` rides along so each member's own status label reads
+  // in the right gender (mom is the woman of the house; children carry their
+  // own sex from onboarding).
+  const seasonMembers = [
+    { id: "mom", name: null as string | null, sex: profile?.sex ?? null },
+    ...familyMembers
+      .filter((m) => m.role !== "housekeeper" && m.member_type !== "housekeeper")
+      .map((m) => ({
+        id: m.id,
+        name: m.name as string | null,
+        sex: m.sex as string | null,
+      })),
+  ];
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =
@@ -437,6 +456,7 @@ export default async function PlanPage({
               workoutCheckins={workoutCheckins}
               goalReached={goalReached}
               journeyMembers={journeyMembers}
+              seasonMembers={seasonMembers}
               ownerSex={profile?.sex}
             />
           </>

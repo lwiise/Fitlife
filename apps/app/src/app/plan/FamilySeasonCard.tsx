@@ -18,11 +18,16 @@ import { genderPick } from "@/lib/copy/gender";
 //   • Top card — the shared header: a family meal-total ring, the week's pride
 //     line, the most-consistent member, and a 7-day meal strip (a day the house
 //     cooked lights up with a star rating + a utensils mark; other days dashed).
-//   • Leaderboard — every eligible adult ranked by weekly participation
+//   • Leaderboard — every household member ranked by weekly participation
 //     (meal marks + verdicts + workout marks). #1 gets the gold winner card with
 //     a crown and a «فائز هذا الأسبوع» badge; the rest are purple rank cards.
-// Adults only (children/housekeeper are never in `members`); the caller hides it
-// for solo households and read-only/translated views.
+// The WHOLE household competes — mom, adults, and CHILDREN alike (owner
+// directive 07/2026: children rank exactly like adults and may take the #1 spot;
+// the earlier no-sibling-comparison stance is superseded here alongside the
+// cooperative guardrails above). The housekeeper is never in `members` (never
+// surveilled), and weight/goal celebration stays adults-only (goalReached is
+// filtered on the server). The caller hides the card for solo households and
+// read-only/translated views.
 
 const HONOR_DAYS_GOAL = 5; // meal days in a week to "honor" the season
 const CAP = 14; // invisible capacity the family meal ring fills toward
@@ -187,9 +192,10 @@ export function FamilySeasonCard({
   goalReached = [],
   weekStartDate,
 }: {
-  /** Eligible adults in this plan (mom + adult members), display names resolved.
-   * `sex` gives each member's own status label its correct Arabic gender
-   * (حاضر/حاضرة); null falls back to the feminine default. */
+  /** The household in this plan (mom + adults + children; never the
+   * housekeeper), display names resolved. `sex` gives each member's own status
+   * label its correct Arabic gender (حاضر/حاضرة); null falls back to the
+   * feminine default. */
   members: Array<{ id: string; name: string; sex?: string | null }>;
   checkins: Mark[];
   verdicts: VerdictMark[];
