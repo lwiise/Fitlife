@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
-export function ExportButton() {
+export function ExportButton({ ownerSex }: { ownerSex?: string | null }) {
+  const g = genderPick(ownerSex);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +20,7 @@ export function ExportButton() {
       setTimeout(() => setIsLoading(false), 2500);
     } catch {
       setIsLoading(false);
-      setError("ما قدرنا نجهّز الملف. حاولي مرة ثانية");
+      setError(g("ما قدرنا نجهّز الملف. حاولي مرة ثانية", "ما قدرنا نجهّز الملف. حاول مرة ثانية"));
     }
   }
 

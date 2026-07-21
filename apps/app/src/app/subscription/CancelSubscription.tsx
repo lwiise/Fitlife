@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PauseCircle, MessageCircleHeart, ArrowDownCircle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { genderPick } from "@/lib/copy/gender";
 
 const DATE_FMT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
   day: "numeric",
@@ -38,14 +39,17 @@ export function CancelSubscription({
   tierName,
   endsAt,
   ledgerLine,
+  ownerSex,
 }: {
   tierName: string;
   endsAt: string | null;
   /** Factual accumulated-value line («١٤ خطة أسبوعية لبيتٍ من ٥») — shown
    *  once in the reason step, never repeated, never dramatized. */
   ledgerLine?: string | null;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("reason");
   const [reason, setReason] = useState<CancelReason | null>(null);
@@ -72,9 +76,9 @@ export function CancelSubscription({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setError("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }
@@ -95,9 +99,9 @@ export function CancelSubscription({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setError("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }
@@ -106,7 +110,7 @@ export function CancelSubscription({
 
   const dialogTitle =
     step === "reason"
-      ? "قبل ما تلغين"
+      ? g("قبل ما تلغين", "قبل ما تلغي")
       : step === "offer"
         ? showPauseOffer
           ? "استراحة بدل الإلغاء؟"
@@ -117,9 +121,12 @@ export function CancelSubscription({
 
   const dialogBody =
     step === "reason"
-      ? "وش السبب؟ اختيارك يساعدنا نقترح الأنسب لك — وتقدرين تكملين الإلغاء مباشرة."
+      ? g(
+          "وش السبب؟ اختيارك يساعدنا نقترح الأنسب لك — وتقدرين تكملين الإلغاء مباشرة.",
+          "وش السبب؟ اختيارك يساعدنا نقترح الأنسب لك — وتقدر تكمل الإلغاء مباشرة.",
+        )
       : step === "confirm"
-        ? `بتلغين خطة ${tierName}. اشتراكك بيستمر شغّال حتى ${fmtDate(endsAt)}، وبعدها بيتوقف التجديد التلقائي. ما فيه استرداد للفترة الحالية.`
+        ? `${g("بتلغين", "بتلغي")} خطة ${tierName}. اشتراكك بيستمر شغّال حتى ${fmtDate(endsAt)}، وبعدها بيتوقف التجديد التلقائي. ما فيه استرداد للفترة الحالية.`
         : undefined;
 
   return (
@@ -232,15 +239,15 @@ export function CancelSubscription({
                 aria-hidden="true"
               />
               <p className="text-sm text-brand-ink leading-relaxed">
-                قولي للمستشارة وش اللي ما ناسبكم — أغلب الأحيان تعديل واحد في
-                الخطة القادمة يغيّر كل شيء.
+                {g("قولي", "قل")} للمستشارة وش اللي ما ناسبكم — أغلب الأحيان تعديل
+                واحد في الخطة القادمة يغيّر كل شيء.
               </p>
             </div>
             <a
               href="/chat"
               className="block w-full text-center min-h-11 leading-[2.75rem] rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
-              اكتبي للمستشارة
+              {g("اكتبي للمستشارة", "اكتب للمستشارة")}
             </a>
           </div>
         )}
@@ -250,8 +257,15 @@ export function CancelSubscription({
 }
 
 /** Shown instead of the cancel section while the subscription is paused. */
-export function PausedNotice({ resumesAt }: { resumesAt: string | null }) {
+export function PausedNotice({
+  resumesAt,
+  ownerSex,
+}: {
+  resumesAt: string | null;
+  ownerSex?: string | null;
+}) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -269,9 +283,9 @@ export function PausedNotice({ resumesAt }: { resumesAt: string | null }) {
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setError("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }

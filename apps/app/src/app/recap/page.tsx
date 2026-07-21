@@ -6,6 +6,7 @@ import { fetchWeeklyRecap, type WeeklyRecap } from "@/lib/engagement/recap";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { ShareWeekButton } from "./ShareWeekButton";
+import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = {
   title: "رسالتك الأسبوعية — فت لايف",
@@ -21,32 +22,47 @@ function dayInitial(dateISO: string): string {
 }
 
 // The letter body — deterministic فصحى built ONLY from computed numbers
-// (no model call in v1; every sentence is backed by a real count).
-function letterLines(recap: WeeklyRecap): string[] {
+// (no model call in v1; every sentence is backed by a real count). Addresses
+// the account OWNER, so it follows the owner's sex (g).
+function letterLines(
+  recap: WeeklyRecap,
+  g: (feminine: string, masculine: string) => string,
+): string[] {
   if (recap.baseline) {
     return [
-      "هذا أسبوعكِ الأول مع سجلّ المائدة — اعتبريه أساساً نقيس عليه.",
-      "حين تغلقين أيامك، تتحول إجاباتك إلى خطة تشبه بيتك أكثر كل أسبوع.",
+      g(
+        "هذا أسبوعكِ الأول مع سجلّ المائدة — اعتبريه أساساً نقيس عليه.",
+        "هذا أسبوعك الأول مع سجلّ المائدة — اعتبره أساساً نقيس عليه.",
+      ),
+      g(
+        "حين تغلقين أيامك، تتحول إجاباتك إلى خطة تشبه بيتك أكثر كل أسبوع.",
+        "حين تغلق أيامك، تتحول إجاباتك إلى خطة تشبه بيتك أكثر كل أسبوع.",
+      ),
     ];
   }
   const lines: string[] = [];
   if (recap.cooked_days > 0) {
     lines.push(
-      `هذا الأسبوع قامت سفرتكِ من مطبخكِ ${AR_NUM.format(recap.cooked_days)} ${recap.cooked_days === 1 ? "يوماً" : "أيام"}.`,
+      `${g("هذا الأسبوع قامت سفرتكِ من مطبخكِ", "هذا الأسبوع قامت سفرتك من مطبخك")} ${AR_NUM.format(recap.cooked_days)} ${recap.cooked_days === 1 ? "يوماً" : "أيام"}.`,
     );
   }
   if (recap.guest_days > 0) {
     lines.push(
       recap.guest_days === 1
-        ? "وليلة كرمٍ أضاءت بيتكِ — الضيف له المقام."
-        : `و${AR_NUM.format(recap.guest_days)} ليالي كرمٍ أضاءت بيتكِ.`,
+        ? g("وليلة كرمٍ أضاءت بيتكِ — الضيف له المقام.", "وليلة كرمٍ أضاءت بيتك — الضيف له المقام.")
+        : `و${AR_NUM.format(recap.guest_days)} ${g("ليالي كرمٍ أضاءت بيتكِ.", "ليالي كرمٍ أضاءت بيتك.")}`,
     );
   }
   if (recap.top_dish) {
-    lines.push(`طبق الأسبوع عندكِ: «${recap.top_dish.recipe_name_ar}».`);
+    lines.push(`${g("طبق الأسبوع عندكِ", "طبق الأسبوع عندك")}: «${recap.top_dish.recipe_name_ar}».`);
   }
   if (lines.length === 0) {
-    lines.push("أسبوع هادئ — وخطة الأسبوع القادم جاهزة متى ما كنتِ مستعدة.");
+    lines.push(
+      g(
+        "أسبوع هادئ — وخطة الأسبوع القادم جاهزة متى ما كنتِ مستعدة.",
+        "أسبوع هادئ — وخطة الأسبوع القادم جاهزة متى ما كنت مستعداً.",
+      ),
+    );
   }
   return lines;
 }
@@ -58,7 +74,12 @@ export default async function RecapPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const recap = await fetchWeeklyRecap(supabase, user.id);
+  const [recap, { data: ownerProfile }] = await Promise.all([
+    fetchWeeklyRecap(supabase, user.id),
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+  ]);
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  const g = genderPick(ownerSex);
 
   return (
     <main dir="rtl" className="min-h-screen bg-brand-surface">
@@ -106,7 +127,7 @@ export default async function RecapPage() {
                 </div>
               </div>
               <div className="space-y-2 text-brand-ink leading-loose">
-                {letterLines(recap).map((line) => (
+                {letterLines(recap, g).map((line) => (
                   <p key={line}>{line}</p>
                 ))}
               </div>
@@ -144,7 +165,7 @@ export default async function RecapPage() {
                 })}
               </ul>
               <p className="text-xs text-brand-ink-muted">
-                الذهبي يوم كرم — يُحسب لكِ، لا عليكِ.
+                {g("الذهبي يوم كرم — يُحسب لكِ، لا عليكِ.", "الذهبي يوم كرم — يُحسب لك، لا عليك.")}
               </p>
             </section>
 
@@ -208,6 +229,7 @@ export default async function RecapPage() {
             <ShareWeekButton
               cookedDays={recap.cooked_days}
               guestDays={recap.guest_days}
+              ownerSex={ownerSex}
             />
             <p className="text-xs text-brand-ink-muted text-center">
               تُشارك الأرقام العامة فقط — لا وزن ولا تفاصيل صحية.

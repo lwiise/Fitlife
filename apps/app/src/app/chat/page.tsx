@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import { SettingsLink } from "@/components/SettingsLink";
 import { ChatPanel } from "./ChatPanel";
+import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = {
   title: "المستشارة الغذائية — فت لايف",
@@ -19,7 +20,12 @@ export default async function ChatPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const access = await hasAdvisorAccess(user.id);
+  const [access, { data: ownerProfile }] = await Promise.all([
+    hasAdvisorAccess(user.id),
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+  ]);
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  const g = genderPick(ownerSex);
 
   return (
     <main
@@ -44,15 +50,18 @@ export default async function ChatPage() {
       </header>
 
       {access.allowed ? (
-        <ChatPanel />
+        <ChatPanel ownerSex={ownerSex} />
       ) : (
         <div className="container-app py-12 max-w-lg">
           <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
             <p className="font-bold text-brand-ink text-lg">
-              المستشارة الغذائية حق المشتركات
+              {g("المستشارة الغذائية حق المشتركات", "المستشارة الغذائية حق المشتركين")}
             </p>
             <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
-              اشتركي وسأليني مباشرة عن وجباتك وخطتك الغذائية.
+              {g(
+                "اشتركي وسأليني مباشرة عن وجباتك وخطتك الغذائية.",
+                "اشترك وسألني مباشرة عن وجباتك وخطتك الغذائية.",
+              )}
             </p>
             <Link
               href="/pricing"

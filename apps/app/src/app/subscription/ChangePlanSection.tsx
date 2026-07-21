@@ -9,6 +9,7 @@ import {
   type Tier,
   type Cadence,
 } from "@fitlife/config";
+import { genderPick } from "@/lib/copy/gender";
 
 const TIER_ORDER: Tier[] = ["starter", "pro", "family", "premium"];
 
@@ -16,12 +17,15 @@ export function ChangePlanSection({
   currentTier,
   currentCadence,
   isTrial,
+  ownerSex,
 }: {
   currentTier: Tier;
   currentCadence: Cadence;
   isTrial: boolean;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [cadence, setCadence] = useState<Cadence>(currentCadence);
   const [pendingTier, setPendingTier] = useState<Tier | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -59,10 +63,10 @@ export function ChangePlanSection({
           router.refresh();
           return;
         }
-        setError(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
         if (body.debug) setDebugDetail(body.debug);
       } catch {
-        setError("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       } finally {
         setPendingTier(null);
       }
@@ -73,7 +77,7 @@ export function ChangePlanSection({
     <section className="bg-white rounded-3xl border border-brand-ink/5 p-6 md:p-7">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="font-extrabold text-xl text-brand-ink leading-tight">
-          {isTrial ? "اختاري خطتك للاستمرار بعد التجربة" : "تغيير الخطة"}
+          {isTrial ? g("اختاري خطتك للاستمرار بعد التجربة", "اختر خطتك للاستمرار بعد التجربة") : "تغيير الخطة"}
         </h2>
         {/* Monthly / annual toggle */}
         <div className="inline-flex rounded-full border border-brand-ink/10 p-1 self-start">
@@ -179,7 +183,7 @@ export function ChangePlanSection({
                   {thisPending && (
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   )}
-                  {isTrial ? `اختاري ${t.name_ar}` : `التغيير إلى ${t.name_ar}`}
+                  {isTrial ? `${g("اختاري", "اختر")} ${t.name_ar}` : `التغيير إلى ${t.name_ar}`}
                 </button>
               )}
             </div>

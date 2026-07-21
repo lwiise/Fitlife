@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Send, Loader2, Salad } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -11,7 +12,8 @@ const SUGGESTIONS = [
   "وش الفطور الأنسب لهدفي؟",
 ];
 
-export function ChatPanel() {
+export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
+  const g = genderPick(ownerSex);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -38,7 +40,7 @@ export function ChatPanel() {
       });
       if (!res.ok || !res.body) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "صار خطأ. حاولي مرة ثانية.");
+        setError(body.error ?? g("صار خطأ. حاولي مرة ثانية.", "صار خطأ. حاول مرة ثانية."));
         setMessages(next); // drop the empty assistant placeholder
         return;
       }
@@ -56,7 +58,7 @@ export function ChatPanel() {
         });
       }
     } catch {
-      setError("صار خطأ في الاتصال. حاولي مرة ثانية.");
+      setError(g("صار خطأ في الاتصال. حاولي مرة ثانية.", "صار خطأ في الاتصال. حاول مرة ثانية."));
       setMessages(next);
     } finally {
       setStreaming(false);
@@ -75,10 +77,13 @@ export function ChatPanel() {
               <Salad className="size-7 text-brand-purple-900" aria-hidden="true" />
             </div>
             <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
-              اسألي المستشارة
+              {g("اسألي المستشارة", "اسأل المستشارة")}
             </h1>
             <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
-              اسأليني عن وجباتك أو خطة عائلتك — أجاوبكِ على أساس بياناتك المسجّلة.
+              {g(
+                "اسأليني عن وجباتك أو خطة عائلتك — أجاوبكِ على أساس بياناتك المسجّلة.",
+                "اسألني عن وجباتك أو خطة عائلتك — أجاوبك على أساس بياناتك المسجّلة.",
+              )}
             </p>
             <div className="mt-5 flex flex-col gap-2">
               {SUGGESTIONS.map((s) => (
@@ -144,7 +149,7 @@ export function ChatPanel() {
             }
           }}
           rows={1}
-          placeholder="اكتبي سؤالك…"
+          placeholder={g("اكتبي سؤالك…", "اكتب سؤالك…")}
           disabled={streaming}
           className="flex-1 min-h-11 resize-none bg-transparent px-2 py-2 text-brand-ink placeholder:text-brand-ink-muted/50 focus-visible:outline-none disabled:opacity-60"
         />
@@ -162,7 +167,7 @@ export function ChatPanel() {
         </button>
       </form>
       <p className="mt-2 text-brand-ink-muted text-sm text-center leading-relaxed">
-        إرشاد مساعِد فقط — راجعي طبيبك في الأمور الطبية.
+        {g("إرشاد مساعِد فقط — راجعي طبيبك في الأمور الطبية.", "إرشاد مساعِد فقط — راجع طبيبك في الأمور الطبية.")}
       </p>
     </div>
   );
