@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, UtensilsCrossed } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const POLL_INTERVAL_MS = 3000;
 const LONG_RUNNING_MS = 90_000;
@@ -31,9 +32,12 @@ export function WorkoutGeneratingState({
   // live (combined onboarding), the meals-first card shows from the very first
   // frame instead of flashing the generic card until the first poll lands.
   initialWaitingForMeals = false,
+  ownerSex,
 }: {
   initialWaitingForMeals?: boolean;
+  ownerSex?: string | null;
 }) {
+  const g = genderPick(ownerSex);
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
@@ -118,7 +122,10 @@ export function WorkoutGeneratingState({
           العملية تاخذ وقت أطول من المتوقع
         </h2>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-          حدّثي الصفحة عشان تشيكين إذا البرنامج جاهز، أو حاولي مرة ثانية بعد دقيقة.
+          {g(
+            "حدّثي الصفحة عشان تشيكين إذا البرنامج جاهز، أو حاولي مرة ثانية بعد دقيقة.",
+            "حدّث الصفحة عشان تشيك إذا البرنامج جاهز، أو حاول مرة ثانية بعد دقيقة.",
+          )}
         </p>
         <button
           type="button"
@@ -141,8 +148,11 @@ export function WorkoutGeneratingState({
           نجهّز وجباتك أولاً...
         </h2>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-          برنامج التمارين يبدأ فور اكتمال خطة الوجبات. تقدرين تتابعين الوجبات من تبويب
-          «الوجبات» وترجعين هنا.
+          برنامج التمارين يبدأ فور اكتمال خطة الوجبات.{" "}
+          {g(
+            "تقدرين تتابعين الوجبات من تبويب «الوجبات» وترجعين هنا.",
+            "تقدر تتابع الوجبات من تبويب «الوجبات» وترجع هنا.",
+          )}
         </p>
         <div
           className="mt-6 h-1.5 bg-brand-surface rounded-full overflow-hidden"
@@ -175,8 +185,14 @@ export function WorkoutGeneratingState({
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {isLong
-          ? "نجهّز برنامجاً مفصّلاً. يحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
-          : "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة."}
+          ? g(
+              "نجهّز برنامجاً مفصّلاً. يحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة.",
+              "نجهّز برنامجاً مفصّلاً. يحتاج دقيقة أو دقيقتين إضافية، لا تقفل الصفحة.",
+            )
+          : g(
+              "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة.",
+              "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفل الصفحة.",
+            )}
       </p>
       <div
         className="mt-6 h-1.5 bg-brand-surface rounded-full overflow-hidden"

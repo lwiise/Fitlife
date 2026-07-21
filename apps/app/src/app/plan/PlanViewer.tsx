@@ -24,6 +24,7 @@ import {
 } from "@/lib/plans/dayMapping";
 import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
 import { orderDayMeals } from "@/lib/plans/mealOrder";
+import { genderPick } from "@/lib/copy/gender";
 
 // A day stuck "preparing" this long with no new write means the worker died —
 // far longer than a healthy day stream (~1-2 min), far shorter than the 15-min
@@ -62,6 +63,7 @@ export function PlanViewer({
   workoutCheckins,
   goalReached,
   journeyMembers,
+  ownerSex,
 }: {
   plan: MealPlan;
   planId: string;
@@ -119,8 +121,12 @@ export function PlanViewer({
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
   // null for the mom). The entry renders on the ACTIVE member's tab only;
-  // read-only/translated views never pass it.
-  journeyMembers?: Array<{ id: string; name: string | null }>;
+  // read-only/translated views never pass it. `sex` genders each member's own
+  // status label in «موسم بيتنا» (حاضر/حاضرة).
+  journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
+  // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
+  // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -390,7 +396,11 @@ export function PlanViewer({
     const inPlan = new Set(plan.members.map((m) => m.member_id));
     return journeyMembers
       .filter((j) => inPlan.has(j.id))
-      .map((j) => ({ id: j.id, name: memberNames[j.id] ?? j.name ?? j.id }));
+      .map((j) => ({
+        id: j.id,
+        name: memberNames[j.id] ?? j.name ?? j.id,
+        sex: j.sex ?? null,
+      }));
   }, [journeyMembers, plan.members, memberNames]);
 
   // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
@@ -516,7 +526,7 @@ export function PlanViewer({
               className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
               <Dumbbell className="size-4" aria-hidden="true" />
-              أضيفي خطة التمارين
+              {genderPick(ownerSex)("أضيفي خطة التمارين", "أضِف خطة التمارين")}
             </Link>
           )}
           {!readOnly && housekeeperLocale && (
@@ -541,6 +551,7 @@ export function PlanViewer({
               memberName={activeMember.member_name_ar}
               hasSharedMeals={activeMemberHasShared}
               locale={locale}
+              ownerSex={ownerSex}
             />
           )}
         </div>
@@ -592,7 +603,9 @@ export function PlanViewer({
                 }`}
               >
                 {isMom && !translated && (
-                  <span className="text-brand-pink me-1">{t.you} ·</span>
+                  <span className="text-brand-pink me-1">
+                    {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                  </span>
                 )}
                 {memberLabel(m)}
                 {translated && transStatus === "translating" && (
@@ -912,6 +925,7 @@ export function PlanViewer({
                   memberName={activeMember.member_name_ar}
                   hasSharedMeals={activeMemberHasShared}
                   locale={locale}
+                  ownerSex={ownerSex}
                 />
               )}
             </div>

@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { applyChildDisplayTargets } from "@/lib/plans/childTargets";
+import { genderPick } from "@/lib/copy/gender";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
@@ -133,7 +134,10 @@ export default async function PlanPage({
       isWeighInEligibleMom(profile.birth_year ?? null) &&
       hasReachedWeightGoal(seriesByMember.get("mom") ?? [], profile.target_weight_kg)
     ) {
-      goalReached.push({ id: "mom", name: profile.display_name ?? "أنتِ" });
+      goalReached.push({
+        id: "mom",
+        name: profile.display_name ?? genderPick(profile.sex)("أنتِ", "أنتَ"),
+      });
     }
     for (const m of familyMembers) {
       if (!isWeighInEligibleMember(m)) continue;
@@ -195,11 +199,15 @@ export default async function PlanPage({
   // PlanViewer shows the entry on the matching member tab.
   const journeyMembers = [
     ...(isWeighInEligibleMom(profile?.birth_year ?? null)
-      ? [{ id: "mom", name: null as string | null }]
+      ? [{ id: "mom", name: null as string | null, sex: profile?.sex ?? null }]
       : []),
     ...familyMembers
       .filter((m) => isWeighInEligibleMember(m))
-      .map((m) => ({ id: m.id, name: m.name as string | null })),
+      .map((m) => ({
+        id: m.id,
+        name: m.name as string | null,
+        sex: m.sex as string | null,
+      })),
   ];
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
@@ -256,7 +264,7 @@ export default async function PlanPage({
 
       <div className="container-app py-8 md:py-12">
         <Suspense fallback={null}>
-          <PlanOnboardingBanner planReady={planReady} />
+          <PlanOnboardingBanner planReady={planReady} ownerSex={profile?.sex} />
         </Suspense>
 
         {/* Keep a continuous "preparing" indicator for queued members — while the
@@ -292,8 +300,9 @@ export default async function PlanPage({
               />
               <div className="flex-1">
                 <p className="text-brand-ink text-sm font-medium leading-relaxed">
-                  جهّزنا خطتك. خطط {queuedNames} متاحة مع الاشتراك — اشتركي
-                  ونجهّزها دفعة واحدة مع وجبات العائلة المنسقة.
+                  جهّزنا خطتك. خطط {queuedNames} متاحة مع الاشتراك —{" "}
+                  {genderPick(profile?.sex)("اشتركي", "اشترك")} ونجهّزها دفعة
+                  واحدة مع وجبات العائلة المنسقة.
                 </p>
                 <a
                   href="/pricing"
@@ -351,6 +360,7 @@ export default async function PlanPage({
                 initialWaitingForMeals={
                   !!latest && (latest.status === "generating" || latest.in_progress)
                 }
+                ownerSex={profile?.sex}
               />
             )}
             {workout.status === "failed" && (
@@ -361,9 +371,13 @@ export default async function PlanPage({
                 {/* Never surface the raw engine error (English/zod internals);
                     it stays on the DB row for debugging. */}
                 <p className="text-sm text-red-700 leading-relaxed">
-                  تعذّر إنشاء برنامج التمارين. أعيدي المحاولة، أو عدّلي إجاباتك من الملف الشخصي.
+                  تعذّر إنشاء برنامج التمارين.{" "}
+                  {genderPick(profile?.sex)(
+                    "أعيدي المحاولة، أو عدّلي إجاباتك من الملف الشخصي.",
+                    "أعِد المحاولة، أو عدّل إجاباتك من الملف الشخصي.",
+                  )}
                 </p>
-                <RetryWorkoutButton />
+                <RetryWorkoutButton ownerSex={profile?.sex} />
               </div>
             )}
             {workout.status === "ready" && workout.plan_data && (
@@ -371,19 +385,30 @@ export default async function PlanPage({
                 plan={workout.plan_data}
                 planId={workout.id}
                 checkins={workoutCheckins}
+                ownerSex={profile?.sex}
               />
             )}
           </>
         )}
 
-        {!workoutView && !latest && <EmptyState isOnboarded={isOnboarded} />}
+        {!workoutView && !latest && (
+          <EmptyState isOnboarded={isOnboarded} ownerSex={profile?.sex} />
+        )}
 
         {!workoutView && latest?.status === "generating" && (
-          <PlanGeneratingState planId={latest.id} name={generatingFor} />
+          <PlanGeneratingState
+            planId={latest.id}
+            name={generatingFor}
+            ownerSex={profile?.sex}
+          />
         )}
 
         {!workoutView && latest?.status === "failed" && (
-          <PlanFailedState planId={latest.id} reason={latest.error_message} />
+          <PlanFailedState
+            planId={latest.id}
+            reason={latest.error_message}
+            ownerSex={profile?.sex}
+          />
         )}
 
         {!workoutView && latest?.status === "ready" && latest.plan_data && (
@@ -412,6 +437,7 @@ export default async function PlanPage({
               workoutCheckins={workoutCheckins}
               goalReached={goalReached}
               journeyMembers={journeyMembers}
+              ownerSex={profile?.sex}
             />
           </>
         )}

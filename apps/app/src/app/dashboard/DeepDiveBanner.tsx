@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, X } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const KEY = "fitlife.deepDiveBanner.dismissed";
 
@@ -11,7 +12,8 @@ const KEY = "fitlife.deepDiveBanner.dismissed";
  * shown after the first plan is ready while deep_dive_completed_at is null.
  * Mirrors AddFamilyBanner (session-persistent dismissal).
  */
-export function DeepDiveBanner() {
+export function DeepDiveBanner({ ownerSex }: { ownerSex?: string | null }) {
+  const g = genderPick(ownerSex);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -31,13 +33,17 @@ export function DeepDiveBanner() {
       <ClipboardList className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900" aria-hidden="true" />
       <div className="flex-1">
         <p className="text-brand-ink text-sm font-medium leading-relaxed">
-          دقائق إضافية تجعل خطتك أدق. أجيبي عن أسئلة اختيارية عن نومك وعاداتك وتفضيلاتك.
+          دقائق إضافية تجعل خطتك أدق.{" "}
+          {g(
+            "أجيبي عن أسئلة اختيارية عن نومك وعاداتك وتفضيلاتك.",
+            "أجب عن أسئلة اختيارية عن نومك وعاداتك وتفضيلاتك.",
+          )}
         </p>
         <Link
           href="/profile/deep-dive"
           className="inline-flex items-center mt-2 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
         >
-          أكملي ملفك
+          {g("أكملي ملفك", "أكمل ملفك")}
         </Link>
       </div>
       <button

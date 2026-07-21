@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Dumbbell, X } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const KEY = "fitlife.workoutOptInBanner.dismissed";
 
@@ -10,7 +11,8 @@ const KEY = "fitlife.workoutOptInBanner.dismissed";
  * Once-per-session nudge to add the workout plan, shown to meals-only users
  * after their plan is ready. Mirrors the AddFamilyBanner pattern.
  */
-export function WorkoutOptInBanner() {
+export function WorkoutOptInBanner({ ownerSex }: { ownerSex?: string | null }) {
+  const g = genderPick(ownerSex);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -30,13 +32,13 @@ export function WorkoutOptInBanner() {
       <Dumbbell className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900" aria-hidden="true" />
       <div className="flex-1">
         <p className="text-brand-ink text-sm font-medium leading-relaxed">
-          أكملي منظومتك: برنامج تمارين أسبوعي مفصّل يوافق هدفك الغذائي، ببضع إجابات قصيرة.
+          {g("أكملي منظومتك", "أكمل منظومتك")}: برنامج تمارين أسبوعي مفصّل يوافق هدفك الغذائي، ببضع إجابات قصيرة.
         </p>
         <Link
           href="/onboarding/workout"
           className="inline-flex items-center mt-2 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
         >
-          أضيفي خطة التمارين
+          {g("أضيفي خطة التمارين", "أضِف خطة التمارين")}
         </Link>
       </div>
       <button

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Sparkles, Users, X } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const MOM_FIRST_KEY = "plan_banner_mom_first_dismissed";
 const DASHBOARD_KEY = "fitlife.addFamilyBanner.dismissed";
@@ -15,7 +16,13 @@ const DASHBOARD_KEY = "fitlife.addFamilyBanner.dismissed";
  *  - member-added: transient confirmation; strips its own query param on mount
  *    and auto-dismisses after 5s.
  */
-export function PlanOnboardingBanner({ planReady = false }: { planReady?: boolean }) {
+export function PlanOnboardingBanner({
+  planReady = false,
+  ownerSex,
+}: {
+  planReady?: boolean;
+  ownerSex?: string | null;
+}) {
   const params = useSearchParams();
   const mode = params.get("onboarding");
   const memberName = params.get("member");
@@ -78,7 +85,10 @@ export function PlanOnboardingBanner({ planReady = false }: { planReady?: boolea
       <Users className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900" aria-hidden="true" />
       <div className="flex-1">
         <p className="text-brand-ink text-sm font-medium leading-relaxed">
-          خطتك الشخصية جاهزة. شوفيها قبل ما تضيفي بقية العائلة
+          {genderPick(ownerSex)(
+            "خطتك الشخصية جاهزة. شوفيها قبل ما تضيفي بقية العائلة",
+            "خطتك الشخصية جاهزة. شوفها قبل ما تضيف بقية العائلة",
+          )}
         </p>
         <Link
           href="/family"

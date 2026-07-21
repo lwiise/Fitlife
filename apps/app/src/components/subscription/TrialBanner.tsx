@@ -3,6 +3,7 @@ import { Clock, AlertTriangle, Check, ChefHat } from "lucide-react";
 import type { SubscriptionRow } from "@/lib/subscription/state";
 import { getTrialDaysRemaining } from "@/lib/subscription/state";
 import { buildTrialEndsMessage } from "@/lib/subscription/strings";
+import { genderPick } from "@/lib/copy/gender";
 
 /**
  * The day-3 activation checklist inside the trial window. Health & Fitness
@@ -61,20 +62,23 @@ function ChecklistRow({
 export function TrialBanner({
   subscription,
   checklist,
+  ownerSex,
 }: {
   subscription: SubscriptionRow;
   checklist?: TrialChecklist;
+  ownerSex?: string | null;
 }) {
   if (subscription.status !== "trialing") return null;
 
+  const g = genderPick(ownerSex);
   const daysRemaining = getTrialDaysRemaining(subscription);
   const urgent = daysRemaining <= 2;
 
   const steps = checklist
     ? [
-        { done: checklist.planReady, href: "/plan", label: "أنشئي خطة بيتك" },
-        { done: checklist.advisorTried, href: "/chat", label: "اسألي المستشارة سؤالك الأول" },
-        { done: checklist.weightLogged, href: "/journey", label: "سجّلي وزنك الأول — لكِ وحدك" },
+        { done: checklist.planReady, href: "/plan", label: g("أنشئي خطة بيتك", "أنشئ خطة بيتك") },
+        { done: checklist.advisorTried, href: "/chat", label: g("اسألي المستشارة سؤالك الأول", "اسأل المستشارة سؤالك الأول") },
+        { done: checklist.weightLogged, href: "/journey", label: g("سجّلي وزنك الأول — لكِ وحدك", "سجّل وزنك الأول — لك وحدك") },
       ]
     : null;
   const showChecklist = steps !== null && steps.some((s) => !s.done);
@@ -86,7 +90,7 @@ export function TrialBanner({
 
   const Icon = urgent ? AlertTriangle : Clock;
   const message = urgent
-    ? "تجربتك تنتهي قريباً — اشتركي الآن"
+    ? g("تجربتك تنتهي قريباً — اشتركي الآن", "تجربتك تنتهي قريباً — اشترك الآن")
     : buildTrialEndsMessage(daysRemaining);
 
   return (
@@ -114,7 +118,10 @@ export function TrialBanner({
       {showChecklist && steps && (
         <div className="mt-3 pt-3 border-t border-brand-ink/10">
           <p className="text-xs font-bold text-brand-ink-muted mb-2">
-            جرّبي هذه الثلاث خلال تجربتك — لتقرري عن معرفة
+            {g(
+              "جرّبي هذه الثلاث خلال تجربتك — لتقرري عن معرفة",
+              "جرّب هذه الثلاث خلال تجربتك — لتقرّر عن معرفة",
+            )}
           </p>
           <ul className="space-y-1.5 list-none p-0 m-0">
             {steps.map((s) => (
@@ -132,7 +139,7 @@ export function TrialBanner({
                 >
                   وصفات الطبخ بلغة الخدامة
                 </a>{" "}
-                — أريها إياها مرة واحدة وتدبّر الباقي
+                — {g("أريها", "أرِها")} إياها مرة واحدة وتدبّر الباقي
               </span>
             </p>
           )}

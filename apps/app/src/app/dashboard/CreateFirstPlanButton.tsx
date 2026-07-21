@@ -3,9 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
-export function CreateFirstPlanButton() {
+export function CreateFirstPlanButton({ ownerSex }: { ownerSex?: string | null }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -27,9 +29,9 @@ export function CreateFirstPlanButton() {
           router.push("/plan");
           return;
         }
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }
@@ -50,7 +52,7 @@ export function CreateFirstPlanButton() {
         ) : (
           <Sparkles className="size-4" aria-hidden="true" />
         )}
-        أنشئي خطتك الأولى
+        {g("أنشئي خطتك الأولى", "أنشئ خطتك الأولى")}
       </button>
       {errorMessage && (
         <p

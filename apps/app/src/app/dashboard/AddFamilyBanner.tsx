@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, X } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const KEY = "fitlife.addFamilyBanner.dismissed";
 
@@ -11,7 +12,7 @@ const KEY = "fitlife.addFamilyBanner.dismissed";
  * but no other members exist. Respects the user's choice not to add anyone —
  * dismissal persists for the session.
  */
-export function AddFamilyBanner() {
+export function AddFamilyBanner({ ownerSex }: { ownerSex?: string | null }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -31,7 +32,10 @@ export function AddFamilyBanner() {
       <Users className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900" aria-hidden="true" />
       <div className="flex-1">
         <p className="text-brand-ink text-sm font-medium leading-relaxed">
-          خطتك جاهزة. تبين تضيفين فرد ثاني من عائلتك للحصول على وجبات منسقة؟
+          {genderPick(ownerSex)(
+            "خطتك جاهزة. تبين تضيفين فرد ثاني من عائلتك للحصول على وجبات منسقة؟",
+            "خطتك جاهزة. تبي تضيف فرد ثاني من عائلتك للحصول على وجبات منسقة؟",
+          )}
         </p>
         <Link
           href="/family"

@@ -7,6 +7,7 @@ import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-e
 import type { WorkoutCheckinStatus } from "@/lib/engagement/types";
 import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
 import { ExerciseLottie } from "./ExerciseLottie";
+import { genderPick } from "@/lib/copy/gender";
 
 // Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
 // Date#getDay, where 0 = Sunday).
@@ -203,6 +204,7 @@ export function WorkoutViewer({
   plan,
   planId,
   checkins,
+  ownerSex,
 }: {
   plan: WorkoutPlan;
   /** workout_plans.id — needed to write session marks. */
@@ -210,6 +212,8 @@ export function WorkoutViewer({
   /** Session marks for this plan (interactive page only). member_id: "mom" |
    * family_members.id; day_index weekday-anchored. Presence enables marking. */
   checkins?: Array<{ day_index: number; member_id: string; status: string }>;
+  /** Account owner's sex → the «أنتِ/أنتَ» mom-tab marker. */
+  ownerSex?: string | null;
 }) {
   const [activeMemberId, setActiveMemberId] = useState(
     plan.members[0]?.member_id ?? "",
@@ -332,7 +336,9 @@ export function WorkoutViewer({
                   }`}
                 >
                   {m.member_id === "mom" && (
-                    <span className="text-brand-pink me-1">أنتِ ·</span>
+                    <span className="text-brand-pink me-1">
+                      {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                    </span>
                   )}
                   {m.member_name_ar}
                   {isActive && (

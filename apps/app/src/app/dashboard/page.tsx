@@ -30,6 +30,7 @@ import { LogoutButton } from "./LogoutButton";
 import { CreateFirstPlanButton } from "./CreateFirstPlanButton";
 import { CheckoutSuccessHandler } from "./CheckoutSuccessHandler";
 import { BillingPortalButton } from "./BillingPortalButton";
+import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = {
   title: "لوحة التحكم",
@@ -74,6 +75,7 @@ export default async function DashboardPage() {
   }
 
   const displayName = profile.display_name || "أهلاً";
+  const g = genderPick(profile.sex);
   const onboardingDone = profile.onboarding_completed_at !== null;
   const beneficiaryCount = familyMembers.filter(
     (m) => m.role !== "housekeeper",
@@ -229,14 +231,18 @@ export default async function DashboardPage() {
         )}
 
         {subscription?.status === "trialing" && (
-          <TrialBanner subscription={subscription} checklist={trialChecklist} />
+          <TrialBanner
+            subscription={subscription}
+            checklist={trialChecklist}
+            ownerSex={profile.sex}
+          />
         )}
 
-        {showAddFamily && <AddFamilyBanner />}
+        {showAddFamily && <AddFamilyBanner ownerSex={profile.sex} />}
 
-        {showWorkoutOptIn && <WorkoutOptInBanner />}
+        {showWorkoutOptIn && <WorkoutOptInBanner ownerSex={profile.sex} />}
 
-        {showDeepDive && <DeepDiveBanner />}
+        {showDeepDive && <DeepDiveBanner ownerSex={profile.sex} />}
 
         {onboardingDone && needsFamilyPlan && !pendingBlocked && (
           <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
@@ -386,7 +392,7 @@ export default async function DashboardPage() {
               <>
                 <p className="font-extrabold text-xl text-brand-ink mt-1">—</p>
                 <p className="text-brand-ink-muted text-xs mt-1">ما عندك خطة بعد</p>
-                {onboardingDone && <CreateFirstPlanButton />}
+                {onboardingDone && <CreateFirstPlanButton ownerSex={profile.sex} />}
               </>
             )}
           </div>
@@ -396,6 +402,7 @@ export default async function DashboardPage() {
             <WorkoutPlanCard
               state={workoutState}
               waitingForMeals={planIsGenerating}
+              ownerSex={profile.sex}
             />
           )}
 
@@ -444,7 +451,7 @@ export default async function DashboardPage() {
                 className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
               >
                 <Sparkles className="size-4" aria-hidden="true" />
-                اسألي المستشارة
+                {g("اسألي المستشارة", "اسأل المستشارة")}
               </Link>
             )}
             {showHousekeeperLink && (
@@ -470,7 +477,13 @@ export default async function DashboardPage() {
 
         {/* What am I cooking today? */}
         <div className={`mb-10 ${onboardingDone || showHousekeeperLink ? "" : "mt-10"}`}>
-          {user && <TodaysMeals userId={user.id} isOnboarded={onboardingDone} />}
+          {user && (
+            <TodaysMeals
+              userId={user.id}
+              isOnboarded={onboardingDone}
+              ownerSex={profile.sex}
+            />
+          )}
         </div>
 
         {!onboardingDone && (
@@ -482,7 +495,10 @@ export default async function DashboardPage() {
                   خطتك على بعد دقيقتين
                 </h3>
                 <p className="text-white/80 text-sm mt-2 leading-relaxed">
-                  جاوبي على أسئلة سريعة عنك وعن عائلتك عشان نصمم لكِ خطة غذائية شخصية.
+                  {g(
+                    "جاوبي على أسئلة سريعة عنك وعن عائلتك عشان نصمم لكِ خطة غذائية شخصية.",
+                    "جاوب على أسئلة سريعة عنك وعن عائلتك عشان نصمم لك خطة غذائية شخصية.",
+                  )}
                 </p>
               </div>
             </div>
@@ -490,7 +506,7 @@ export default async function DashboardPage() {
               href="/onboarding"
               className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-5 py-2.5 rounded-full mt-2 transition-colors"
             >
-              ابدئي الآن
+              {g("ابدئي الآن", "ابدأ الآن")}
             </a>
           </div>
         )}
