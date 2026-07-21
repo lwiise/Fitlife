@@ -34,6 +34,24 @@ export const metadata = {
   title: "لوحة التحكم",
 };
 
+/** «١٧ يوليو — ٢٣ يوليو» for the greeting sub-line (null on a bad date). */
+function formatWeekRange(weekStart: string): string | null {
+  try {
+    const start = new Date(`${weekStart}T00:00:00Z`);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    const fmt = new Intl.DateTimeFormat("ar-SA", {
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    });
+    return `${fmt.format(start)} — ${fmt.format(end)}`;
+  } catch {
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
   const profile = await getCurrentUserProfile();
   const familyMembers = await getCurrentUserFamilyMembers();
@@ -255,6 +273,41 @@ export default async function DashboardPage() {
           </div>
         )}
 
+        {/* Greeting row — the page's anchor: warm opener + week range on the
+            start side, the two promoted quick actions on the end side. */}
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+          <div>
+            <h1 className="font-extrabold text-xl md:text-2xl text-brand-ink leading-tight">
+              {profile.display_name
+                ? `أهلاً، ${profile.display_name}`
+                : g("أهلاً بكِ", "أهلاً بك")}
+            </h1>
+            {seasonProps?.weekStartDate && (
+              <p className="text-brand-ink-muted text-xs mt-0.5 tabular-nums">
+                أسبوع {formatWeekRange(seasonProps.weekStartDate)}
+              </p>
+            )}
+          </div>
+          {onboardingDone && (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/chat"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                <Sparkles className="size-4" aria-hidden="true" />
+                {g("اسألي المستشارة", "اسأل المستشارة")}
+              </Link>
+              <Link
+                href="/recap"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                <MailOpen className="size-4" aria-hidden="true" />
+                رسالتك الأسبوعية
+              </Link>
+            </div>
+          )}
+        </div>
+
         {/* «موسم بيتنا» leaderboard — the dashboard's centerpiece. Hidden for
             solo households / before a plan is ready (seasonProps is null then). */}
         {seasonProps && <FamilySeasonCard {...seasonProps} />}
@@ -263,26 +316,6 @@ export default async function DashboardPage() {
         {renewalRecap && (
           <div className="mt-6">
             <RenewalRecapCard {...renewalRecap} />
-          </div>
-        )}
-
-        {/* Two quick actions — the advisor and the weekly letter. */}
-        {onboardingDone && (
-          <div className="flex flex-wrap gap-2 mt-8">
-            <Link
-              href="/chat"
-              className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <Sparkles className="size-4" aria-hidden="true" />
-              {g("اسألي المستشارة", "اسأل المستشارة")}
-            </Link>
-            <Link
-              href="/recap"
-              className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <MailOpen className="size-4" aria-hidden="true" />
-              رسالتك الأسبوعية
-            </Link>
           </div>
         )}
 

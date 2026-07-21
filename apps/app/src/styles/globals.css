@@ -304,6 +304,34 @@
   background-size: 180px 180px;
 }
 
+/* «موسم بيتنا» mount beat — one restrained reveal (ring sweep + crown drop).
+   Pure CSS on server-rendered SVG; the global reduced-motion rule above
+   collapses both to their end state. --fs-len is set per-ring (the arc length
+   the sweep starts hidden from). */
+@keyframes fs-sweep {
+  from {
+    stroke-dashoffset: var(--fs-len, 0);
+  }
+}
+.fs-sweep {
+  animation-name: fs-sweep;
+  animation-duration: 0.8s;
+  animation-timing-function: var(--ease-settle);
+}
+@keyframes fs-crown-drop {
+  from {
+    opacity: 0;
+    translate: 50% -14px;
+  }
+}
+.fs-crown-drop {
+  animation-name: fs-crown-drop;
+  animation-duration: 0.5s;
+  animation-delay: 0.25s;
+  animation-timing-function: var(--ease-settle);
+  animation-fill-mode: backwards;
+}
+
 @keyframes pulse-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(242, 187, 22, 0.5);

@@ -33,6 +33,33 @@ export interface FamilySeasonProps {
   workoutCheckins: Array<{ day_index: number; member_id: string; status: string }>;
   goalReached: Array<{ id: string; name: string }>;
   weekStartDate?: string;
+  /** Plan day_index of TODAY (Riyadh calendar), or null when the plan week
+   * doesn't contain today — drives the strip's «اليوم» marker. */
+  todayIndex?: number | null;
+  /** The «اليوم» action panel (today's dish + the invitation to mark it).
+   * Absent when today isn't in the plan week or has no meals yet. */
+  today?: {
+    dateLabel: string;
+    slotLabel: string;
+    dishName: string;
+    alreadyLit: boolean;
+  } | null;
+  /** Account owner's sex → gendered فصحى in the today panel («علّمي/علّم»). */
+  ownerSex?: string | null;
+}
+
+const SLOT_LABELS_AR: Record<string, string> = {
+  breakfast: "فطور",
+  lunch: "غداء",
+  dinner: "عشاء",
+  snack: "وجبة خفيفة",
+};
+
+/** Today's date in Riyadh as YYYY-MM-DD (the plan week is Riyadh-anchored). */
+function riyadhTodayISO(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(
+    new Date(),
+  );
 }
 
 /**
@@ -143,12 +170,48 @@ export async function getFamilySeasonProps(
     }
   }
 
+  // «اليوم» — which plan day is today (Riyadh), and today's headline dish for
+  // the action panel. Both degrade to null/undefined when the plan week doesn't
+  // contain today (stale plan) or today's meals haven't generated yet.
+  const weekStartDate = latestPlan.plan_data.week_start_date;
+  let todayIndex: number | null = null;
+  const startMs = Date.parse(weekStartDate);
+  if (!Number.isNaN(startMs)) {
+    const diff = Math.round((Date.parse(riyadhTodayISO()) - startMs) / 86_400_000);
+    if (diff >= 0 && diff <= 6) todayIndex = diff;
+  }
+  let today: FamilySeasonProps["today"] = null;
+  if (todayIndex !== null) {
+    const momPlan =
+      latestPlan.plan_data.members.find((m) => m.member_id === "mom") ??
+      latestPlan.plan_data.members[0];
+    const day = momPlan?.days.find((d) => d.day_index === todayIndex);
+    const meals = day?.meals ?? [];
+    if (meals.length > 0) {
+      const pick = meals.find((m) => m.slot === "lunch") ?? meals[0]!;
+      today = {
+        dateLabel: new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+          timeZone: "Asia/Riyadh",
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        }).format(new Date()),
+        slotLabel: SLOT_LABELS_AR[pick.slot] ?? "وجبة",
+        dishName: pick.recipe_name_ar,
+        alreadyLit: checkins.some((c) => c.day_index === todayIndex),
+      };
+    }
+  }
+
   return {
     members,
     checkins,
     verdicts,
     workoutCheckins,
     goalReached,
-    weekStartDate: latestPlan.plan_data.week_start_date,
+    weekStartDate,
+    todayIndex,
+    today,
+    ownerSex: profile.sex ?? null,
   };
 }

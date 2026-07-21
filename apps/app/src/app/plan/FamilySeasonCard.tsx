@@ -1,4 +1,5 @@
-import { Trophy, Crown } from "lucide-react";
+import Link from "next/link";
+import { Trophy, Crown, ChevronLeft } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
 
 // «موسم بيتنا» — the family season, rendered as a competitive LEADERBOARD.
@@ -35,6 +36,27 @@ const WEEKLY_TARGET = 10; // per-member denominator for the leaderboard %
 
 const DAY_INITIALS = ["ح", "ن", "ث", "ر", "خ", "ج", "س"]; // getUTCDay 0=Sun
 
+// Feminine ordinals for «خليتكم …» (the next cell the house would light).
+const CELL_ORDINALS = [
+  "الأولى",
+  "الثانية",
+  "الثالثة",
+  "الرابعة",
+  "الخامسة",
+  "السادسة",
+  "السابعة",
+];
+
+// Stable avatar colours by ROSTER order (never by rank, so a member keeps their
+// colour week to week). Static class strings so Tailwind can see them.
+const AVATAR_BG = [
+  "bg-[#4E2490]",
+  "bg-[#C5458F]",
+  "bg-[#8A5FC4]",
+  "bg-[#E89B5A]",
+  "bg-[#059669]",
+];
+
 const ar = (n: number) =>
   new Intl.NumberFormat("ar-SA", { useGrouping: false }).format(n);
 const pctFmt = new Intl.NumberFormat("ar-SA", {
@@ -48,6 +70,15 @@ function weekdayInitial(weekStartDate: string | undefined, dayIndex: number) {
   if (Number.isNaN(d.getTime())) return ar(dayIndex + 1);
   d.setUTCDate(d.getUTCDate() + dayIndex);
   return DAY_INITIALS[d.getUTCDay()] ?? "";
+}
+
+/** Day-of-month numeral for a strip cell (null when no week date is known). */
+function dayOfMonth(weekStartDate: string | undefined, dayIndex: number) {
+  if (!weekStartDate) return null;
+  const d = new Date(`${weekStartDate}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() + dayIndex);
+  return ar(d.getUTCDate());
 }
 
 /** An LTR-isolated numeral, so bidi never reverses a count inside the RTL frame. */
@@ -107,6 +138,11 @@ function Ring({
     <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full" aria-hidden="true">
       <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={sw} />
       <circle
+        // fs-sweep: one restrained mount reveal (CSS-only; reduced-motion
+        // collapses it globally). --fs-len carries the arc length the keyframe
+        // sweeps from — a CSS var, not a visual inline style.
+        className="fs-sweep"
+        style={{ "--fs-len": `${len.toFixed(2)}px` } as React.CSSProperties}
         cx={c}
         cy={c}
         r={r}
@@ -132,11 +168,15 @@ function StarIcon({ filled }: { filled: boolean }) {
   );
 }
 
-function UtensilsMark() {
+function UtensilsMark({
+  className = "size-[clamp(16px,2.4vw,26px)] text-white",
+}: {
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="size-[clamp(16px,2.4vw,26px)] text-white"
+      className={className}
       fill="none"
       stroke="currentColor"
       strokeWidth={1.9}
@@ -153,7 +193,9 @@ function WinnerCrown() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="absolute -top-6 start-1/2 -translate-x-1/2 w-14 h-11 drop-shadow-[0_6px_8px_rgba(180,120,0,0.45)]"
+      // start-1/2 anchors the RIGHT edge to center in RTL, so +50% translate
+      // centers it; fs-crown-drop is the one-time mount drop.
+      className="fs-crown-drop absolute -top-6 start-1/2 translate-x-1/2 w-14 h-11 drop-shadow-[0_6px_8px_rgba(180,120,0,0.45)]"
       fill="none"
       aria-hidden="true"
     >
@@ -191,6 +233,9 @@ export function FamilySeasonCard({
   workoutCheckins = [],
   goalReached = [],
   weekStartDate,
+  todayIndex = null,
+  today = null,
+  ownerSex = null,
 }: {
   /** The household in this plan (mom + adults + children; never the
    * housekeeper), display names resolved. `sex` gives each member's own status
@@ -206,6 +251,17 @@ export function FamilySeasonCard({
   goalReached?: Array<{ id: string; name: string }>;
   /** Plan week start (YYYY-MM-DD) → real weekday initials on the strip. */
   weekStartDate?: string;
+  /** Plan day_index of TODAY (Riyadh) → the strip's «اليوم» marker. */
+  todayIndex?: number | null;
+  /** The «اليوم» action panel: today's dish + the invitation to mark it. */
+  today?: {
+    dateLabel: string;
+    slotLabel: string;
+    dishName: string;
+    alreadyLit: boolean;
+  } | null;
+  /** Account owner's sex → gendered فصحى in the today panel («علّمي/علّم»). */
+  ownerSex?: string | null;
 }) {
   const memberIds = new Set(members.map((m) => m.id));
 
@@ -260,6 +316,34 @@ export function FamilySeasonCard({
 
   const hasActivity = followedMeals > 0 || workoutActs > 0;
 
+  // «اليوم» panel — fills the hero's second column with the next action (and
+  // restores the dashboard's path to /plan). Absent when today isn't in the
+  // plan week: the hero collapses to a single column.
+  const g = genderPick(ownerSex);
+  const nextCellOrdinal = CELL_ORDINALS[Math.min(activeDays, 6)]!;
+  const todayPanel = today ? (
+    <div className="flex flex-col justify-center items-start gap-2 rounded-2xl bg-white/70 border border-brand-purple-900/10 px-4 py-3.5">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-lavender/35 px-2.5 py-1 text-[11px] font-extrabold text-brand-purple-700">
+        اليوم · {today.dateLabel}
+      </span>
+      <p className="text-brand-ink font-extrabold text-sm sm:text-[15px] leading-relaxed">
+        {today.alreadyLit
+          ? "أضاءت خلية اليوم — تابعوا تسجيل بقية وجبات اليوم"
+          : `سفرة اليوم بانتظاركم — ${g("علّمي", "علّم")} وجبات اليوم وتضيء خليتكم ${nextCellOrdinal}`}
+      </p>
+      <p className="text-brand-ink-muted text-xs leading-relaxed">
+        {today.slotLabel} اليوم: {today.dishName}
+      </p>
+      <Link
+        href="/plan"
+        className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-brand-ink hover:bg-brand-purple-900 px-4 py-2 min-h-10 text-xs font-extrabold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+      >
+        إلى خطة اليوم
+        <ChevronLeft className="size-3.5" aria-hidden="true" />
+      </Link>
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4">
       {/* ── Top card: the shared season header (compact — fits one screen) ─ */}
@@ -292,39 +376,46 @@ export function FamilySeasonCard({
 
         {hasActivity ? (
           <>
-            <div className="flex items-center justify-start gap-4 sm:gap-6 mt-3">
-              <div className="relative shrink-0 size-20 sm:size-24">
-                <Ring frac={fillFrac} color="var(--color-brand-purple-900)" track="rgba(217,176,252,0.5)" sw={7} r={38} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl sm:text-2xl font-extrabold text-brand-purple-900 leading-none">
-                    <Figure n={followedMeals} />
-                  </span>
-                  <span className="text-[10px] text-brand-ink-muted mt-0.5">وجبات معاً</span>
+            {/* Hero — the pride cluster (start/right) with the «اليوم» action
+                panel filling the second column (the old dead space). */}
+            <div
+              className={`grid gap-4 sm:gap-5 items-stretch mt-3 ${todayPanel ? "md:grid-cols-2" : ""}`}
+            >
+              <div className="flex items-center justify-start gap-4 sm:gap-6">
+                <div className="relative shrink-0 size-20 sm:size-24">
+                  <Ring frac={fillFrac} color="var(--color-brand-purple-900)" track="rgba(217,176,252,0.5)" sw={7} r={38} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-xl sm:text-2xl font-extrabold text-brand-purple-900 leading-none">
+                      <Figure n={followedMeals} />
+                    </span>
+                    <span className="text-[10px] text-brand-ink-muted mt-0.5">وجبات معاً</span>
+                  </div>
+                </div>
+                <div className="min-w-0 text-start">
+                  <p className="text-sm sm:text-[17px] leading-snug text-brand-ink">
+                    هذا الأسبوع اجتمع بيتكم على{" "}
+                    <Count n={mealsHappened} one="وجبة واحدة" two="وجبتين" few="وجبات" many="وجبة" />{" "}
+                    معاً
+                    <span className="block text-brand-ink-muted text-[12.5px] mt-0.5">
+                      أضاء <Count n={activeDays} one="يوماً واحداً" two="يومين" few="أيام" many="يوماً" />
+                      {sessionsDone > 0 && (
+                        <>
+                          ، ومعها{" "}
+                          <Count n={sessionsDone} one="حصة حركة" two="حصتَي حركة" few="حصص حركة" many="حصة حركة" />
+                        </>
+                      )}
+                      .
+                    </span>
+                  </p>
+                  {leaderName && (
+                    <span className="inline-flex items-center gap-1.5 mt-2 rounded-full bg-brand-lavender/40 px-3 py-1.5 text-[12px] sm:text-[13px] font-extrabold text-brand-purple-700">
+                      <Crown className="size-3.5 text-brand-yellow" aria-hidden="true" />
+                      الأكثر مواظبة هذا الأسبوع: {leaderName}
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="min-w-0 text-start">
-                <p className="text-sm sm:text-[17px] leading-snug text-brand-ink">
-                  هذا الأسبوع اجتمع بيتكم على{" "}
-                  <Count n={mealsHappened} one="وجبة واحدة" two="وجبتين" few="وجبات" many="وجبة" />{" "}
-                  معاً
-                  <span className="block text-brand-ink-muted text-[12.5px] mt-0.5">
-                    أضاء <Count n={activeDays} one="يوماً واحداً" two="يومين" few="أيام" many="يوماً" />
-                    {sessionsDone > 0 && (
-                      <>
-                        ، ومعها{" "}
-                        <Count n={sessionsDone} one="حصة حركة" two="حصتَي حركة" few="حصص حركة" many="حصة حركة" />
-                      </>
-                    )}
-                    .
-                  </span>
-                </p>
-                {leaderName && (
-                  <span className="inline-flex items-center gap-1.5 mt-2 rounded-full bg-brand-lavender/40 px-3 py-1.5 text-[12px] sm:text-[13px] font-extrabold text-brand-purple-700">
-                    <Crown className="size-3.5 text-brand-yellow" aria-hidden="true" />
-                    الأكثر مواظبة هذا الأسبوع: {leaderName}
-                  </span>
-                )}
-              </div>
+              {todayPanel}
             </div>
 
             {/* 7-day meal strip — earliest day on the RIGHT (RTL-native). A day
@@ -334,21 +425,40 @@ export function FamilySeasonCard({
             <ul className="grid grid-cols-7 gap-1.5 sm:gap-2.5 mt-4 list-none p-0 m-0" aria-label="أيام الأسبوع">
               {Array.from({ length: 7 }, (_, i) => {
                 const cooked = mealDays.has(i);
+                const isToday = todayIndex === i;
                 const stars = Math.min(3, slotsPerDay.get(i)?.size ?? 0);
                 const label = weekdayInitial(weekStartDate, i);
+                const dateNum = dayOfMonth(weekStartDate, i);
                 return (
                   <li key={i} className="flex flex-col items-center gap-1.5">
                     <div
                       role="img"
-                      aria-label={`${label}: ${cooked ? "طُبخ من الخطة" : "بلا تسجيل"}`}
+                      aria-label={`${label}: ${
+                        cooked
+                          ? "طُبخ من الخطة"
+                          : isToday
+                            ? "اليوم — بانتظار التسجيل"
+                            : "بلا تسجيل"
+                      }`}
                       className={
-                        "w-full h-12 sm:h-[60px] rounded-xl flex flex-col items-center justify-center gap-1 " +
+                        "relative w-full h-12 sm:h-[60px] rounded-xl flex flex-col items-center justify-center gap-1 " +
                         (cooked
                           ? "bg-[linear-gradient(160deg,#6A38B0,#4E2490_60%,#3D1C73)] shadow-[0_8px_18px_-12px_rgba(78,36,144,0.7)]"
-                          : "bg-white/50 border-[1.5px] border-dashed border-brand-purple-900/20")
+                          : isToday
+                            ? "bg-white border-2 border-brand-purple-900 shadow-[0_8px_20px_-14px_rgba(78,36,144,0.6)]"
+                            : "bg-white/50 border-[1.5px] border-dashed border-brand-purple-900/20")
                       }
                     >
-                      {cooked && (
+                      {/* «اليوم» tag — the invitation marker, shown lit or not. */}
+                      {isToday && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -top-2 start-1/2 translate-x-1/2 rounded-full bg-brand-purple-900 px-2 py-px text-[9.5px] font-extrabold leading-relaxed text-white"
+                        >
+                          اليوم
+                        </span>
+                      )}
+                      {cooked ? (
                         <>
                           <span className="flex gap-0.5">
                             {[0, 1, 2].map((s) => (
@@ -357,21 +467,44 @@ export function FamilySeasonCard({
                           </span>
                           <UtensilsMark />
                         </>
+                      ) : (
+                        // Ghost fork — an unmarked day reads as an invitation,
+                        // not a hole (stronger on today, faint on the rest).
+                        <UtensilsMark
+                          className={
+                            "size-[clamp(15px,2vw,22px)] text-brand-purple-900 " +
+                            (isToday ? "opacity-45" : "opacity-15")
+                          }
+                        />
                       )}
                     </div>
-                    <span aria-hidden="true" className="text-[11px] sm:text-sm font-extrabold text-brand-ink">
+                    <span aria-hidden="true" className="text-[11px] sm:text-sm font-extrabold text-brand-ink leading-tight">
                       {label}
                     </span>
+                    {dateNum && (
+                      <span
+                        aria-hidden="true"
+                        dir="ltr"
+                        className="-mt-1 text-[10px] text-brand-ink-muted tabular-nums leading-tight"
+                      >
+                        {dateNum}
+                      </span>
+                    )}
                   </li>
                 );
               })}
             </ul>
           </>
         ) : (
-          <p className="text-brand-ink text-sm leading-relaxed mt-3">
-            موسم بيتكم يبدأ بأول تسجيل — سجّلوا وجباتكم وتمارينكم من الخطة، وتبدأ
-            لوحة الصدارة هنا.
-          </p>
+          // First-time: the invitation, with the «اليوم» panel as the concrete
+          // first step when today's meals exist.
+          <div className={`grid gap-4 sm:gap-5 items-center mt-3 ${todayPanel ? "md:grid-cols-2" : ""}`}>
+            <p className="text-brand-ink text-sm leading-relaxed">
+              موسم بيتكم يبدأ بأول تسجيل — سجّلوا وجباتكم وتمارينكم من الخطة،
+              وتبدأ لوحة الصدارة هنا.
+            </p>
+            {todayPanel}
+          </div>
         )}
       </section>
 
@@ -383,9 +516,27 @@ export function FamilySeasonCard({
         {ranked.map((m, idx) => {
           const rank = idx + 1;
           const isWinner = hasWinner && idx === 0;
+          // Avatar colour is stable by ROSTER order (never by rank), so each
+          // member keeps their colour week to week.
+          const rosterIdx = members.findIndex((x) => x.id === m.id);
+          const avatarBg = AVATAR_BG[(rosterIdx < 0 ? 0 : rosterIdx) % AVATAR_BG.length]!;
+          const initial = m.name.trim().charAt(0).toLocaleUpperCase();
           const pctText = (
             <span dir="ltr" className="tabular-nums">
               {pctFmt.format(m.pct)}
+            </span>
+          );
+          const idCluster = (borderCls: string) => (
+            <span className="inline-flex max-w-full items-center justify-center gap-2">
+              <span
+                aria-hidden="true"
+                className={`grid size-[30px] shrink-0 place-items-center rounded-full text-[13px] font-extrabold text-white border-2 ${borderCls} ${avatarBg}`}
+              >
+                {initial}
+              </span>
+              <span className="truncate max-w-[12ch] [unicode-bidi:plaintext] text-base sm:text-lg font-extrabold">
+                {m.name}
+              </span>
             </span>
           );
           if (isWinner) {
@@ -400,8 +551,8 @@ export function FamilySeasonCard({
                   #{ar(rank)}
                 </span>
                 <div className="flex-1 text-center min-w-0">
-                  <p className="text-base sm:text-lg font-extrabold text-brand-ink truncate">{m.name}</p>
-                  <span className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-[#6B4E06]/18 px-2.5 py-1 text-[11.5px] font-extrabold text-[#6B4E06]">
+                  {idCluster("border-[#6B4E06]/35")}
+                  <span className="mx-auto flex w-max items-center gap-1.5 mt-1 rounded-full bg-[#6B4E06]/18 px-2.5 py-1 text-[11px] font-extrabold text-[#6B4E06] whitespace-nowrap">
                     <Crown className="size-3" aria-hidden="true" />
                     فائز هذا الأسبوع
                   </span>
@@ -418,14 +569,27 @@ export function FamilySeasonCard({
           return (
             <li
               key={m.id}
-              className="rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 bg-brand-purple-900 text-white"
+              className="relative rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 bg-brand-purple-900 text-white"
               aria-label={`المركز ${ar(rank)}: ${m.name}`}
             >
+              {/* Silver/bronze medal chips for #2/#3 — quiet rank identity. */}
+              {(rank === 2 || rank === 3) && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute -top-2.5 start-3.5 grid size-6 place-items-center rounded-full text-[11px] font-extrabold shadow-md ${
+                    rank === 2
+                      ? "bg-gradient-to-br from-[#C9CDD6] to-[#9AA1AE] text-[#3D4350]"
+                      : "bg-gradient-to-br from-[#DDA173] to-[#B4713F] text-[#4A2C12]"
+                  }`}
+                >
+                  <Figure n={rank} />
+                </span>
+              )}
               <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-brand-lavender" dir="ltr">
                 #{ar(rank)}
               </span>
               <div className="flex-1 text-center min-w-0">
-                <p className="text-base sm:text-lg font-extrabold truncate">{m.name}</p>
+                {idCluster("border-white/55")}
                 <p className="text-[11.5px] text-brand-lavender mt-0.5">
                   {m.score > 0 ? genderPick(m.sex)("حاضرة", "حاضر") : "بانتظار البداية"}
                 </p>
@@ -440,6 +604,12 @@ export function FamilySeasonCard({
           );
         })}
       </ul>
+
+      {/* One line explaining the ranking metric — kills the mystery %. */}
+      <p className="text-center text-brand-ink-muted text-[11.5px] leading-relaxed">
+        النسبة = تسجيلات الأسبوع (وجبات وآراء وتمارين) من هدف{" "}
+        <Figure n={WEEKLY_TARGET} /> تسجيلات
+      </p>
 
       {/* Goal achievements (kept as an achievement event only — no numbers). */}
       {goalReached.length > 0 && (
