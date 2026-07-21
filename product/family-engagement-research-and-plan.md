@@ -2,7 +2,8 @@
 
 **Status:** Working draft (07/2026). Companion to `product/engagement-layer-brainstorm.md`.
 Branch: `claude/family-leaderboard-design-48yt9l`.
-**Central decision still open** — see §5. Nothing here is committed to build until the cooperative-vs-competitive fork is settled.
+
+> **DECISION (07/2026 — owner):** The §5 fork is **settled: Option B — a competitive head-to-head ranked leaderboard.** The owner reviewed the cooperative build (`«بيتنا يُضيء»`) and the evidence below and directed the ranked leaderboard from the §0 brief (celebrated gold #1 «فائز هذا الأسبوع», per-member rank + weekly %). This **overrides** the doc's recommendation (Option A) and supersedes the cooperative guardrails in `engagement-layer-brainstorm.md` §6 and `CLAUDE.md` (no last place / no per-person numbers) **for this surface only**. Shipped in `FamilySeasonCard.tsx`. The research below is retained as the record of the trade-offs the owner weighed — it is not a description of what ships.
 
 **Owner brief that started this:** _"A leaderboard where all the family members compete with each other in achieving goals… it should not be private… the leaderboard is first in terms of following the meals + following the exercises + achieving the goals. Most important is we keep the user engaged and paying — whatever works best with human behavior."_
 
