@@ -47,7 +47,7 @@ export default function GlobalError({
                 marginBottom: "1.5rem",
               }}
             >
-              حاولي تحديث الصفحة. لو استمر الخطأ، تواصلي معنا.
+              يرجى تحديث الصفحة. وإن استمر الخطأ، يرجى التواصل معنا.
             </p>
             <button
               type="button"

@@ -357,7 +357,7 @@ export default async function DashboardPage() {
                   href="/plan"
                   className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
                 >
-                  اعرضي الخطة
+                  {g("اعرضي الخطة", "اعرض الخطة")}
                 </a>
               </>
             )}

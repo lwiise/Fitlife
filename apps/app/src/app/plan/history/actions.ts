@@ -110,7 +110,7 @@ export async function restorePlan(
     Sentry.captureException(error, {
       tags: { area: "plan-restore", userId: user.id },
     });
-    return { ok: false, error: "فشلت الاستعادة. حاولي مرة ثانية" };
+    return { ok: false, error: "فشلت الاستعادة. يرجى المحاولة مرة أخرى" };
   }
 
   revalidatePath("/plan");
@@ -167,7 +167,7 @@ export async function deletePlan(
     Sentry.captureException(error, {
       tags: { area: "plan-delete", userId: user.id },
     });
-    return { ok: false, error: "فشل الحذف. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحذف. يرجى المحاولة مرة أخرى" };
   }
 
   revalidatePath("/plan/history");

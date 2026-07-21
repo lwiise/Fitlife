@@ -4,15 +4,19 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { removeFamilyMember } from "@/app/onboarding/actions";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { genderPick } from "@/lib/copy/gender";
 
 export function RemoveMemberButton({
   memberId,
   name,
+  ownerSex,
 }: {
   memberId: string;
   name: string;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -47,7 +51,7 @@ export function RemoveMemberButton({
       <ConfirmDialog
         open={confirmOpen}
         title={`حذف ${name}`}
-        body="بنعيد تنسيق خطط العائلة بعد الحذف. تأكدين؟"
+        body={g("بنعيد تنسيق خطط العائلة بعد الحذف. تأكدين؟", "بنعيد تنسيق خطط العائلة بعد الحذف. تأكد؟")}
         confirmLabel="حذف"
         cancelLabel="إلغاء"
         isPending={isPending}

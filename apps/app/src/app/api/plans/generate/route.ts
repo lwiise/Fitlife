@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 // The route only gates, inserts rows, and fires the background function — fast.
 export const maxDuration = 30;
 
-const GENERIC_502 = "حدث خطأ في إنشاء الخطة. حاولي مرة ثانية";
+const GENERIC_502 = "حدث خطأ في إنشاء الخطة. يرجى المحاولة مرة أخرى";
 
 /**
  * POST /api/plans/generate — manual generation (the "إنشاء خطة جديدة" button).
@@ -137,8 +137,8 @@ async function handleGenerate(req: Request) {
           // Per-member regenerate quota (3/week per member) vs the account-wide
           // new-plan pool — show the matching message.
           const error = access.details?.member_regen
-            ? `وصلتي للحد الأقصى لإعادة إنشاء خطة هذا الفرد هذا الأسبوع (٣ مرات). حاولي بعد ${days} أيام`
-            : `وصلتي للحد الأقصى من الخطط هذا الأسبوع. حاولي مرة ثانية بعد ${days} أيام`;
+            ? `تم بلوغ الحد الأقصى لإعادة إنشاء خطة هذا الفرد هذا الأسبوع (٣ مرات). يرجى المحاولة بعد ${days} أيام`
+            : `تم بلوغ الحد الأقصى من الخطط هذا الأسبوع. يرجى المحاولة بعد ${days} أيام`;
           return NextResponse.json({ error }, { status: 429 });
         }
       }
@@ -146,7 +146,7 @@ async function handleGenerate(req: Request) {
     }
     case "onboarding":
       return NextResponse.json(
-        { error: "أكملي بياناتك أولاً قبل إنشاء الخطة" },
+        { error: "يرجى إكمال بياناتك أولاً قبل إنشاء الخطة" },
         { status: 400 },
       );
     case "medical":

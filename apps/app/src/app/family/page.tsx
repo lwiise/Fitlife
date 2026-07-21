@@ -81,6 +81,7 @@ export default async function FamilyPage() {
               name={m.name}
               memberType={m.member_type ?? "adult"}
               primaryGoal={m.primary_goal}
+              ownerSex={profile.sex}
             />
           ))}
 
@@ -89,6 +90,7 @@ export default async function FamilyPage() {
               id={housekeeper.id}
               name={housekeeper.name}
               preferredLanguage={housekeeper.preferred_language}
+              ownerSex={profile.sex}
             />
           )}
         </div>

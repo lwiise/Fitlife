@@ -406,7 +406,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
           />
         </div>
         <div>
-          <p className="text-sm font-bold text-brand-ink mb-2">أطعمة لا تحبينها شخصياً؟</p>
+          <p className="text-sm font-bold text-brand-ink mb-2">{g("أطعمة لا تحبينها شخصياً؟", "أطعمة لا تحبها شخصياً؟")}</p>
           <ChipInput
             value={dislikes}
             onChange={setDislikes}

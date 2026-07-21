@@ -5,17 +5,21 @@ import { useRouter } from "next/navigation";
 import { Trash2, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { deletePlan } from "./actions";
+import { genderPick } from "@/lib/copy/gender";
 
 export function DeletePlanButton({
   planId,
   memberId,
   className = "",
+  ownerSex,
 }: {
   planId: string;
   memberId: string;
   className?: string;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +59,10 @@ export function DeletePlanButton({
       <ConfirmDialog
         open={open}
         title="حذف هذه الخطة"
-        body="بتنحذف هذه الخطة من سجلك ولا تقدرين تستعيدينها. تأكدين؟"
+        body={g(
+          "بتنحذف هذه الخطة من سجلك ولا تقدرين تستعيدينها. تأكدين؟",
+          "بتنحذف هذه الخطة من سجلك ولا تقدر تستعيدها. تأكد؟",
+        )}
         confirmLabel="حذف"
         cancelLabel="إلغاء"
         isPending={isPending}

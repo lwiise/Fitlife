@@ -37,7 +37,7 @@ export async function POST() {
       tags: { area: "subscription-cancel", userId: user.id },
     });
     return NextResponse.json(
-      { error: "تعذّر إلغاء الاشتراك. حاولي بعد قليل" },
+      { error: "تعذّر إلغاء الاشتراك. يرجى المحاولة بعد قليل" },
       { status: 502 },
     );
   }

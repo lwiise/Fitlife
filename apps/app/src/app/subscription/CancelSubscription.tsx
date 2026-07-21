@@ -217,8 +217,11 @@ export function CancelSubscription({
                 aria-hidden="true"
               />
               <p className="text-sm text-brand-ink leading-relaxed">
-                تقدرين تنزلين لخطة أصغر وأوفر بدل ما تخسرين كل شيء — التبديل
-                فوري ومن نفس الصفحة.
+                {g(
+                  "تقدرين تنزلين لخطة أصغر وأوفر بدل ما تخسرين كل شيء",
+                  "تقدر تنزل لخطة أصغر وأوفر بدل ما تخسر كل شيء",
+                )}{" "}
+                — التبديل فوري ومن نفس الصفحة.
               </p>
             </div>
             <a
@@ -226,7 +229,7 @@ export function CancelSubscription({
               onClick={close}
               className="block w-full text-center min-h-11 leading-[2.75rem] rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
-              شوفي الخطط الأصغر
+              {g("شوفي الخطط الأصغر", "شوف الخطط الأصغر")}
             </a>
           </div>
         )}

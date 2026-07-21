@@ -10,6 +10,7 @@ import { SettingsLink } from "@/components/SettingsLink";
 import { RestorePlanButton } from "./RestorePlanButton";
 import { DeletePlanButton } from "./DeletePlanButton";
 import { MemberHistorySelect } from "./MemberHistorySelect";
+import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = {
   title: "الخطط السابقة — فت لايف",
@@ -49,6 +50,14 @@ export default async function PlanHistoryPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
+
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("sex")
+    .eq("id", user.id)
+    .single();
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  const g = genderPick(ownerSex);
 
   const history = await getPlanHistory(user.id);
 
@@ -117,7 +126,10 @@ export default async function PlanHistoryPage({
             الخطط السابقة
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            اختاري الفرد وشوفي خططه السابقة، واستعيدي أي وحدة تبينها لهذا الأسبوع.
+            {g(
+              "اختاري الفرد وشوفي خططه السابقة، واستعيدي أي وحدة تبينها لهذا الأسبوع.",
+              "اختر الفرد وشوف خططه السابقة، واستعِد أي وحدة تبيها لهذا الأسبوع.",
+            )}
           </p>
         </header>
 
@@ -134,7 +146,7 @@ export default async function PlanHistoryPage({
         ) : (
           <>
             {members.length > 1 && (
-              <MemberHistorySelect members={members} selected={selected} />
+              <MemberHistorySelect members={members} selected={selected} ownerSex={ownerSex} />
             )}
 
             {deduped.length === 0 ? (
@@ -182,9 +194,9 @@ export default async function PlanHistoryPage({
                     <ChevronLeft className="size-4" aria-hidden="true" />
                   </Link>
                   {!isCurrentForMember && (
-                    <RestorePlanButton planId={item.id} memberId={selected} />
+                    <RestorePlanButton planId={item.id} memberId={selected} ownerSex={ownerSex} />
                   )}
-                  <DeletePlanButton planId={item.id} memberId={selected} />
+                  <DeletePlanButton planId={item.id} memberId={selected} ownerSex={ownerSex} />
                 </div>
               </div>
                   );

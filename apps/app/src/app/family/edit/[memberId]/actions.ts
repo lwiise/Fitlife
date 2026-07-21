@@ -48,7 +48,7 @@ async function loadMember(
 const PersonalSchema = z.object({
   name: z.string().min(2, "الاسم لازم يكون حرفين أو أكثر").max(50),
   birth_year: z
-    .number({ invalid_type_error: "اكتبي سنة الميلاد" })
+    .number({ invalid_type_error: "يرجى إدخال سنة الميلاد" })
     .int()
     .min(1940, "السنة لازم تكون بعد 1940")
     .max(currentYear, `سنة الميلاد لازم تكون قبل ${currentYear + 1}`),
@@ -106,7 +106,7 @@ export async function updateMemberPersonal(
     Sentry.captureException(error, {
       tags: { area: "member-edit-personal", userId },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/family");
   revalidatePath(`/family/edit/${memberId}`);
@@ -249,7 +249,7 @@ export async function updateMemberHealth(
     Sentry.captureException(error, {
       tags: { area: "member-edit-health", userId },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/family");
   revalidatePath(`/family/edit/${memberId}`);

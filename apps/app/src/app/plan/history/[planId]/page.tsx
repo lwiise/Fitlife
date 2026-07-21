@@ -30,6 +30,13 @@ export default async function HistoryPlanViewPage({
   const result = await getPlanById(user.id, planId);
   if (!result) notFound();
 
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("sex")
+    .eq("id", user.id)
+    .single();
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -52,7 +59,7 @@ export default async function HistoryPlanViewPage({
             label="كل الخطط"
           />
           {!result.isCurrent && member && (
-            <RestorePlanButton planId={result.id} memberId={member} />
+            <RestorePlanButton planId={result.id} memberId={member} ownerSex={ownerSex} />
           )}
         </div>
 
@@ -61,6 +68,7 @@ export default async function HistoryPlanViewPage({
           planId={result.id}
           readOnly
           preselectedMember={member}
+          ownerSex={ownerSex}
         />
       </div>
     </main>

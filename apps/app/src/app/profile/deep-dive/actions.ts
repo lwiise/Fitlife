@@ -77,7 +77,7 @@ export async function saveDeepDive(input: DeepDiveInput): Promise<SaveResult> {
     Sentry.captureException(error, {
       tags: { area: "profile-deep-dive", userId: user.id },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة أخرى" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
 
   revalidatePath("/profile");

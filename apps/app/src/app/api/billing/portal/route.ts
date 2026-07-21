@@ -47,7 +47,7 @@ export async function POST() {
     if (!portalUrl) {
       console.error("[billing/portal] customer_portal URL missing from LS response");
       return NextResponse.json(
-        { error: "تعذر فتح بوابة الإدارة. حاولي بعد قليل" },
+        { error: "تعذر فتح بوابة الإدارة. يرجى المحاولة بعد قليل" },
         { status: 502 },
       );
     }
@@ -56,7 +56,7 @@ export async function POST() {
   } catch (err) {
     console.error("[billing/portal] LS error:", err);
     return NextResponse.json(
-      { error: "تعذر فتح بوابة الإدارة. حاولي بعد قليل" },
+      { error: "تعذر فتح بوابة الإدارة. يرجى المحاولة بعد قليل" },
       { status: 502 },
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { genderPick } from "@/lib/copy/gender";
 
 /**
  * Per-member history lens: pick a family member to browse their own past plans.
@@ -9,9 +10,11 @@ import { useRouter } from "next/navigation";
 export function MemberHistorySelect({
   members,
   selected,
+  ownerSex,
 }: {
   members: { id: string; name: string }[];
   selected: string;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
 
@@ -21,7 +24,7 @@ export function MemberHistorySelect({
         htmlFor="history-member"
         className="block text-xs font-bold text-brand-ink-muted mb-1.5"
       >
-        اختاري الفرد
+        {genderPick(ownerSex)("اختاري الفرد", "اختر الفرد")}
       </label>
       <select
         id="history-member"

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     );
     if (!success) {
       return NextResponse.json(
-        { error: "تعذّر استئناف الاشتراك. حاولي بعد قليل" },
+        { error: "تعذّر استئناف الاشتراك. يرجى المحاولة بعد قليل" },
         { status: 502 },
       );
     }
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       tags: { area: "subscription-pause", userId: user.id },
     });
     return NextResponse.json(
-      { error: "تعذّر إيقاف الاشتراك مؤقتاً. حاولي بعد قليل" },
+      { error: "تعذّر إيقاف الاشتراك مؤقتاً. يرجى المحاولة بعد قليل" },
       { status: 502 },
     );
   }
