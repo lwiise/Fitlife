@@ -201,6 +201,46 @@ export default async function PlanPage({
     planHasContent(latest.plan_data) &&
     !latest.in_progress;
 
+  // The meal-ready view renders PlanViewer, which hosts the plan-type toggle in
+  // the same row as the «الوزن والمتابعة» journey link. Every other state renders
+  // the toggle standalone above its content.
+  const mealReadyView =
+    !workoutView && latest?.status === "ready" && !!latest.plan_data;
+
+  const planTypeToggle =
+    workout != null ? (
+      <div
+        className="inline-flex rounded-full border border-brand-ink/10 bg-white p-1"
+        role="tablist"
+        aria-label="نوع الخطة"
+      >
+        <Link
+          href="/plan"
+          role="tab"
+          aria-selected={!workoutView}
+          className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+            !workoutView
+              ? "bg-brand-ink text-white"
+              : "text-brand-ink-muted hover:text-brand-ink"
+          }`}
+        >
+          الوجبات
+        </Link>
+        <Link
+          href="/plan?view=workout"
+          role="tab"
+          aria-selected={workoutView}
+          className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+            workoutView
+              ? "bg-brand-ink text-white"
+              : "text-brand-ink-muted hover:text-brand-ink"
+          }`}
+        >
+          التمارين
+        </Link>
+      </div>
+    ) : null;
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -273,38 +313,9 @@ export default async function PlanPage({
           </div>
         )}
 
-        {workout != null && (
-          <div
-            className="inline-flex rounded-full border border-brand-ink/10 bg-white p-1 mb-6"
-            role="tablist"
-            aria-label="نوع الخطة"
-          >
-            <Link
-              href="/plan"
-              role="tab"
-              aria-selected={!workoutView}
-              className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                !workoutView
-                  ? "bg-brand-ink text-white"
-                  : "text-brand-ink-muted hover:text-brand-ink"
-              }`}
-            >
-              الوجبات
-            </Link>
-            <Link
-              href="/plan?view=workout"
-              role="tab"
-              aria-selected={workoutView}
-              className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-                workoutView
-                  ? "bg-brand-ink text-white"
-                  : "text-brand-ink-muted hover:text-brand-ink"
-              }`}
-            >
-              التمارين
-            </Link>
-          </div>
-        )}
+        {/* Standalone in every state except the meal-ready view, where
+            PlanViewer renders it inline with the journey link. */}
+        {planTypeToggle && !mealReadyView && <div className="mb-6">{planTypeToggle}</div>}
 
         {workoutView && workout && (
           <>
@@ -393,6 +404,7 @@ export default async function PlanPage({
               checkins={checkins}
               verdicts={verdicts}
               journeyMembers={journeyMembers}
+              planTypeToggle={planTypeToggle}
               ownerSex={profile?.sex}
             />
           </>

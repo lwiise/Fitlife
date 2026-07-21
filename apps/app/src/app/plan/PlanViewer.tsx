@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lock } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
@@ -60,6 +60,7 @@ export function PlanViewer({
   checkins,
   verdicts,
   journeyMembers,
+  planTypeToggle,
   ownerSex,
 }: {
   plan: MealPlan;
@@ -109,6 +110,10 @@ export function PlanViewer({
   // null for the mom). The entry renders on the ACTIVE member's tab only;
   // read-only/translated views never pass it. `sex` genders the entry copy.
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
+  // The meal/workout plan-type toggle, rendered by the server page and hosted
+  // here so it shares a row with the «الوزن والمتابعة» journey link. Null when
+  // no workout plan exists (nothing to toggle) or on read-only/translated views.
+  planTypeToggle?: ReactNode;
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
   // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
   ownerSex?: string | null;
@@ -462,6 +467,33 @@ export function PlanViewer({
 
   return (
     <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
+      {/* Plan-type toggle (meals/workout) + the private «الوزن والمتابعة»
+          journey link, sharing one row. The journey entry is member-aware —
+          it follows the active tab and only shows for eligible adults. */}
+      {(() => {
+        const journeyEntry =
+          journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
+        const showJourney = !!journeyEntry && !readOnly && !translated;
+        if (!planTypeToggle && !showJourney) return null;
+        return (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {planTypeToggle ?? <span />}
+            {showJourney && journeyEntry && (
+              <Link
+                href={
+                  journeyEntry.id === "mom"
+                    ? "/journey"
+                    : `/journey?member=${journeyEntry.id}`
+                }
+                className="inline-flex items-center min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                الوزن والمتابعة
+              </Link>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Top strip: week range + actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -639,36 +671,6 @@ export function PlanViewer({
           متوسّط تقريبي للأسبوع، ويختلف إجمالي كل يوم حسب أطباق اليوم.
         </p>
       )}
-
-      {/* «رحلتك الخاصة» — the private weigh-in entry for the viewed member
-          (moved here from the dashboard). Renders only for eligible adults on
-          the interactive plan page; the destination page carries the privacy
-          contract, so the entry itself reveals nothing. */}
-      {(() => {
-        const journeyEntry =
-          journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
-        if (!journeyEntry || readOnly || translated) return null;
-        return (
-          <Link
-            href={
-              journeyEntry.id === "mom"
-                ? "/journey"
-                : `/journey?member=${journeyEntry.id}`
-            }
-            className="flex items-center justify-between gap-3 bg-brand-lavender/20 hover:bg-brand-lavender/30 rounded-2xl px-4 py-3.5 min-h-11 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-          >
-            <span className="flex items-center gap-2.5 text-sm font-bold text-brand-purple-900">
-              <Lock className="size-4 shrink-0" aria-hidden="true" />
-              {journeyEntry.name
-                ? `رحلة ${journeyEntry.name} الخاصة`
-                : "رحلتك الخاصة"}
-            </span>
-            <span className="text-xs text-brand-purple-900/70">
-              الوزن والمتابعة على انفراد
-            </span>
-          </Link>
-        );
-      })()}
 
       {/* Generation progress — real "day N of M" while the plan streams in.
           Hidden once the viewed member is complete (ready === total) so a full
