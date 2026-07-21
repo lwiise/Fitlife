@@ -22,6 +22,7 @@ import {
 } from "@/lib/plans/activityLevel";
 import type { MemberType } from "@/app/onboarding/actions";
 import { updateMemberHealth } from "../actions";
+import { genderPick } from "@/lib/copy/gender";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 import {
   ACTIVITY_OPTIONS,
@@ -106,12 +107,16 @@ export function MemberHealthEditForm({
   memberId,
   type,
   initial,
+  ownerSex,
 }: {
   memberId: string;
   type: MemberType;
   initial: MemberHealthInitial;
+  // Account owner's sex → the form addresses the owner ("عدّلي/عدّل").
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -173,15 +178,15 @@ export function MemberHealthEditForm({
 
   const submit = () => {
     setError(null);
-    if (isChild && !activity) return setError("اختاري مستوى النشاط");
+    if (isChild && !activity) return setError(g("اختاري مستوى النشاط", "اختر مستوى النشاط"));
     if (isAdult && !activity && !(dayNature && exerciseDays))
-      return setError("أكملي أسئلة النشاط");
+      return setError(g("أكملي أسئلة النشاط", "أكمل أسئلة النشاط"));
     if (isAdult && dayNature && exerciseDays && exerciseDays !== "none" && !exerciseType)
-      return setError("اختاري نوع الرياضة");
-    if (isAdult && !userGoal) return setError("اختاري الهدف الرئيسي");
+      return setError(g("اختاري نوع الرياضة", "اختر نوع الرياضة"));
+    if (isAdult && !userGoal) return setError(g("اختاري الهدف الرئيسي", "اختر الهدف الرئيسي"));
     if (isPregnant && (trimester == null || highRisk == null))
-      return setError("أكملي تفاصيل الحمل");
-    if (isLactating && !monthsPP) return setError("اكتبي كم شهراً مضى على الولادة");
+      return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
+    if (isLactating && !monthsPP) return setError(g("اكتبي كم شهراً مضى على الولادة", "اكتب كم شهراً مضى على الولادة"));
     if (doctorNeeded && !consultedDoctor)
       return setError("يلزم تأكيد استشارة الطبيب أولاً");
 
@@ -229,7 +234,7 @@ export function MemberHealthEditForm({
           الصحة والأهداف
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          عدّلي النشاط والهدف والحالة الصحية.
+          {g("عدّلي النشاط والهدف والحالة الصحية.", "عدّل النشاط والهدف والحالة الصحية.")}
         </p>
       </header>
 
@@ -318,7 +323,7 @@ export function MemberHealthEditForm({
                     <span className="font-bold text-brand-ink">
                       {ACTIVITY_OPTIONS.find((o) => o.value === activity)?.label ?? activity}
                     </span>
-                    {" — "}أجيبي عن السؤالين أعلاه لتحديثه.
+                    {" — "}{g("أجيبي عن السؤالين أعلاه لتحديثه.", "أجب عن السؤالين أعلاه لتحديثه.")}
                   </p>
                 ) : null}
                 <div>
@@ -641,7 +646,7 @@ export function MemberHealthEditForm({
             spellCheck={false}
             className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             placeholder={
-              isChild ? "مثلاً: ربو" : isLactating ? "مثلاً: حديد، فيتامين د" : "اكتبيها هنا"
+              isChild ? "مثلاً: ربو" : isLactating ? "مثلاً: حديد، فيتامين د" : g("اكتبيها هنا", "اكتبها هنا")
             }
           />
         </div>

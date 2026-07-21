@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { updateMemberPersonal } from "../actions";
+import { genderPick } from "@/lib/copy/gender";
 
 const currentYear = new Date().getFullYear();
 
@@ -22,12 +23,16 @@ export function MemberPersonalEditForm({
   memberId,
   showSex,
   initial,
+  ownerSex,
 }: {
   memberId: string;
   showSex: boolean;
   initial: MemberPersonalInitial;
+  // Account owner's sex → the form addresses the owner ("عدّلي/عدّل").
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +54,7 @@ export function MemberPersonalEditForm({
     if (trimmedName.length < 2) return setError("الاسم لازم يكون حرفين أو أكثر");
 
     const year = Number(birthYear);
-    if (!birthYear || Number.isNaN(year)) return setError("اكتبي سنة الميلاد");
+    if (!birthYear || Number.isNaN(year)) return setError(g("اكتبي سنة الميلاد", "اكتب سنة الميلاد"));
     if (year < 1940 || year > currentYear)
       return setError(`سنة الميلاد لازم تكون بين 1940 و${currentYear}`);
 
@@ -81,7 +86,7 @@ export function MemberPersonalEditForm({
           المعلومات الشخصية
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          عدّلي الاسم والبيانات الأساسية.
+          {g("عدّلي الاسم والبيانات الأساسية.", "عدّل الاسم والبيانات الأساسية.")}
         </p>
       </header>
 

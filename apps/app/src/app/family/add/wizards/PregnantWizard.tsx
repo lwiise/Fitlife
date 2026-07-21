@@ -10,6 +10,7 @@ export function PregnantWizard(props: {
   count?: number;
   onComplete?: () => void;
   onSkip?: () => void;
+  ownerSex?: string | null;
 }) {
   return <MemberWizard type="pregnant" {...props} />;
 }

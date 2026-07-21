@@ -40,6 +40,14 @@ export default async function MemberHealthEditPage({
   if (!m) redirect("/family");
   if (m.role === "housekeeper") redirect(`/family/edit/${memberId}`);
 
+  // The form addresses the account OWNER, so its copy follows the owner's sex.
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("sex")
+    .eq("id", user.id)
+    .single();
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+
   const type = (m.member_type ?? "adult") as
     | "adult"
     | "child"
@@ -85,6 +93,7 @@ export default async function MemberHealthEditPage({
         <MemberHealthEditForm
           memberId={memberId}
           type={type}
+          ownerSex={ownerSex}
           initial={{
             activity_level: m.activity_level,
             day_nature: m.day_nature,

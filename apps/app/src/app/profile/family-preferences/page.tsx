@@ -55,6 +55,7 @@ export default async function FamilyPreferencesEditPage() {
             meal_out_frequency: profile.meal_out_frequency || "",
           }}
           housekeeper={housekeeper}
+          ownerSex={profile.sex}
         />
       </div>
     </main>

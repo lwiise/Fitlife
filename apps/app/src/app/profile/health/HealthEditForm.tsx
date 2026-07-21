@@ -22,6 +22,7 @@ import {
 import { ACTIVITY_OPTIONS, GOALS } from "../labels";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 import { saveMomHealthInfo } from "../actions";
+import { genderPick } from "@/lib/copy/gender";
 
 type PregStatus = "none" | "pregnant" | "lactating";
 type ActivityValue = (typeof ACTIVITY_OPTIONS)[number]["value"];
@@ -92,6 +93,7 @@ function GroupHeading({ children }: { children: React.ReactNode }) {
 
 export function HealthEditForm({ initial }: { initial: HealthInitial }) {
   const router = useRouter();
+  const g = genderPick(initial.sex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -156,14 +158,14 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
     // Legacy rows keep their stored level until the exercise questions are
     // answered; new saves require either the stored level or full answers.
     if (!activity && !(dayNature && exerciseDays))
-      return setError("أكملي أسئلة النشاط");
+      return setError(g("أكملي أسئلة النشاط", "أكمل أسئلة النشاط"));
     if (dayNature && exerciseDays && exerciseDays !== "none" && !exerciseType)
-      return setError("اختاري نوع الرياضة");
-    if (!userGoal) return setError("اختاري هدفك");
+      return setError(g("اختاري نوع الرياضة", "اختر نوع الرياضة"));
+    if (!userGoal) return setError(g("اختاري هدفك", "اختر هدفك"));
     if (pregStatus === "pregnant" && (trimester == null || highRisk == null))
-      return setError("أكملي تفاصيل الحمل");
+      return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
     if (pregStatus === "lactating" && !monthsPP)
-      return setError("اكتبي كم شهراً مضى على الولادة");
+      return setError(g("اكتبي كم شهراً مضى على الولادة", "اكتب كم شهراً مضى على الولادة"));
 
     startTransition(async () => {
       const result = await saveMomHealthInfo({
@@ -202,7 +204,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
           الصحة والأهداف
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          عدّلي نشاطك وهدفك وحالتك الصحية.
+          {g("عدّلي نشاطك وهدفك وحالتك الصحية.", "عدّل نشاطك وهدفك وحالتك الصحية.")}
         </p>
       </header>
 
@@ -275,7 +277,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               <span className="font-bold text-brand-ink">
                 {ACTIVITY_OPTIONS.find((o) => o.value === activity)?.label ?? activity}
               </span>
-              {" — "}أجيبي عن السؤالين أعلاه لتحديثه.
+              {" — "}{g("أجيبي عن السؤالين أعلاه لتحديثه.", "أجب عن السؤالين أعلاه لتحديثه.")}
             </p>
           ) : null}
           <div>
@@ -344,7 +346,10 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
             </div>
             <div>
               <p className="text-sm font-bold text-brand-ink mb-2">
-                أطعمة تسبب لكِ الغثيان حالياً (اختياري)
+                {g(
+                  "أطعمة تسبب لكِ الغثيان حالياً (اختياري)",
+                  "أطعمة تسبب لك الغثيان حالياً (اختياري)",
+                )}
               </p>
               <ChipInput
                 value={nauseaFoods}
@@ -415,7 +420,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
       <section className="space-y-4">
         <GroupHeading>الأدوية والمكملات</GroupHeading>
         <div>
-          <p className="text-sm font-bold text-brand-ink mb-2">أدوية تستخدمينها بانتظام (اختياري)</p>
+          <p className="text-sm font-bold text-brand-ink mb-2">{g("أدوية تستخدمينها بانتظام (اختياري)", "أدوية تستخدمها بانتظام (اختياري)")}</p>
           <ChipInput
             value={medications}
             onChange={setMedications}
@@ -491,7 +496,10 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
       <section className="space-y-3">
         <GroupHeading>نمط الوجبات</GroupHeading>
         <p className="text-brand-ink-muted text-sm leading-relaxed">
-          اختاري مشاركة وجبات العائلة، أو خطة مستقلة بأطباق خاصة بكِ.
+          {g(
+            "اختاري مشاركة وجبات العائلة، أو خطة مستقلة بأطباق خاصة بكِ.",
+            "اختر مشاركة وجبات العائلة، أو خطة مستقلة بأطباق خاصة بك.",
+          )}
         </p>
         <div className="space-y-2">
           <OptionButton
@@ -543,7 +551,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
             onChange={(e) => setOtherCondition(e.target.value)}
             spellCheck={false}
             className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-            placeholder="اكتبيها هنا"
+            placeholder={g("اكتبيها هنا", "اكتبها هنا")}
           />
         </div>
 

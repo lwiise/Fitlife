@@ -1,34 +1,38 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { saveMomPersonalInfo } from "../actions";
+import { genderPick } from "@/lib/copy/gender";
 
 const currentYear = new Date().getFullYear();
 
-const schema = z.object({
-  display_name: z.string().min(2, "الاسم لازم يكون حرفين أو أكثر").max(50),
-  birth_year: z
-    .number({ invalid_type_error: "اكتبي سنة الميلاد" })
-    .int()
-    .min(1940, "السنة لازم تكون بعد 1940")
-    .max(currentYear - 13, "لازم تكوني فوق 13 سنة"),
-  sex: z.enum(["female", "male"]),
-  height_cm: z
-    .number({ invalid_type_error: "اكتبي طولك" })
-    .min(120, "الطول قليل")
-    .max(220, "الطول مرتفع"),
-  weight_kg: z
-    .number({ invalid_type_error: "اكتبي وزنك" })
-    .min(30, "الوزن قليل")
-    .max(250, "الوزن مرتفع"),
-});
+// Validation copy is gendered too — a male owner shouldn't be told "اكتبي".
+// The schema is built per-owner from the answered sex.
+const makeSchema = (g: (feminine: string, masculine: string) => string) =>
+  z.object({
+    display_name: z.string().min(2, "الاسم لازم يكون حرفين أو أكثر").max(50),
+    birth_year: z
+      .number({ invalid_type_error: g("اكتبي سنة الميلاد", "اكتب سنة الميلاد") })
+      .int()
+      .min(1940, "السنة لازم تكون بعد 1940")
+      .max(currentYear - 13, g("لازم تكوني فوق 13 سنة", "لازم تكون فوق 13 سنة")),
+    sex: z.enum(["female", "male"]),
+    height_cm: z
+      .number({ invalid_type_error: g("اكتبي طولك", "اكتب طولك") })
+      .min(120, "الطول قليل")
+      .max(220, "الطول مرتفع"),
+    weight_kg: z
+      .number({ invalid_type_error: g("اكتبي وزنك", "اكتب وزنك") })
+      .min(30, "الوزن قليل")
+      .max(250, "الوزن مرتفع"),
+  });
 
-type FormData = z.infer<typeof schema>;
+type FormData = z.infer<ReturnType<typeof makeSchema>>;
 
 const FIELD =
   "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors";
@@ -39,6 +43,8 @@ export function PersonalEditForm({
   initial: Partial<FormData>;
 }) {
   const router = useRouter();
+  const g = genderPick(initial.sex);
+  const schema = useMemo(() => makeSchema(genderPick(initial.sex)), [initial.sex]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -74,7 +80,7 @@ export function PersonalEditForm({
           المعلومات الشخصية
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          عدّلي اسمك وبياناتك الأساسية.
+          {g("عدّلي اسمك وبياناتك الأساسية.", "عدّل اسمك وبياناتك الأساسية.")}
         </p>
       </header>
 

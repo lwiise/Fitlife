@@ -39,6 +39,14 @@ export default async function MemberPersonalEditPage({
   // Sex is fixed for the husband (male); everyone else can set it.
   const showSex = !(type === "adult" && m.role === "dad");
 
+  // The form addresses the account OWNER, so its copy follows the owner's sex.
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("sex")
+    .eq("id", user.id)
+    .single();
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+
   return (
     <main className="min-h-screen bg-brand-surface">
       <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -58,6 +66,7 @@ export default async function MemberPersonalEditPage({
         <MemberPersonalEditForm
           memberId={memberId}
           showSex={showSex}
+          ownerSex={ownerSex}
           initial={{
             name: m.name,
             birth_year: m.birth_year,

@@ -29,6 +29,7 @@ import {
   type FamilyMemberInput,
   type MemberType,
 } from "@/app/onboarding/actions";
+import { genderPick } from "@/lib/copy/gender";
 
 const GOALS: { value: UserGoal; label: string }[] = [
   { value: "lose_weight", label: "خسارة الدهون" },
@@ -209,11 +210,15 @@ export function MemberWizard({
   onComplete,
   onSkip,
   terminalLabel,
+  ownerSex,
 }: {
   type: MemberType;
   role: string;
   editMemberId?: string;
   initial?: MemberWizardInitial;
+  // The ACCOUNT OWNER's sex (not this member's) → the wizard addresses the
+  // owner ("اكتبي/اكتب الاسم"), so its copy follows the owner's gender.
+  ownerSex?: string | null;
   // During the onboarding add-a-member loop: generation is deferred (added members
   // are only saved), so on success return to the loop's pop-up instead of /plan.
   onboarding?: boolean;
@@ -232,6 +237,7 @@ export function MemberWizard({
   terminalLabel?: string;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
@@ -419,8 +425,8 @@ export function MemberWizard({
 
   const submit = () => {
     const input = assemble();
-    if (!input.name || input.name.length < 2) return setError("اكتبي الاسم");
-    if (!input.birth_year) return setError("اكتبي سنة الميلاد");
+    if (!input.name || input.name.length < 2) return setError(g("اكتبي الاسم", "اكتب الاسم"));
+    if (!input.birth_year) return setError(g("اكتبي سنة الميلاد", "اكتب سنة الميلاد"));
     // Bounds mirror the DB check constraints (numeric(5,2)) — guard here so an
     // out-of-range value gets a clear message instead of a raw "numeric field
     // overflow" from Postgres.
@@ -495,7 +501,7 @@ export function MemberWizard({
   // More members of this type still to collect → the final action continues to
   // the next one rather than finishing.
   const moreToCome = memberIndex + 1 < count;
-  const finalLabel = moreToCome ? "التالي" : (terminalLabel ?? "أنشئي الخطة");
+  const finalLabel = moreToCome ? "التالي" : (terminalLabel ?? g("أنشئي الخطة", "أنشئ الخطة"));
   const nextLabel =
     isLastBeforeDoctor && !doctorNeeded ? finalLabel : "التالي";
 
@@ -608,7 +614,7 @@ export function MemberWizard({
                 <PrimaryButton
                   onClick={() => {
                     if (name.trim().length < 2 || !birthYear)
-                      return setError("أكملي الاسم وسنة الميلاد");
+                      return setError(g("أكملي الاسم وسنة الميلاد", "أكمل الاسم وسنة الميلاد"));
                     const yearError = birthYearError(Number(birthYear));
                     if (yearError) return setError(yearError);
                     goNext();
@@ -631,7 +637,7 @@ export function MemberWizard({
                   <OptionButton active={sex === "male"} onClick={() => setSex("male")}>ذكر</OptionButton>
                   <OptionButton active={sex === "female"} onClick={() => setSex("female")}>أنثى</OptionButton>
                 </div>
-                <PrimaryButton onClick={() => (sex ? goNext() : setError("اختاري الجنس"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (sex ? goNext() : setError(g("اختاري الجنس", "اختر الجنس")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -660,7 +666,7 @@ export function MemberWizard({
                 )}
                 <PrimaryButton
                   onClick={() => {
-                    if (!heightCm || !weightKg) return setError("أكملي الطول والوزن");
+                    if (!heightCm || !weightKg) return setError(g("أكملي الطول والوزن", "أكمل الطول والوزن"));
                     const rangeError = physicalRangeError(Number(heightCm), Number(weightKg));
                     if (rangeError) return setError(rangeError);
                     goNext();
@@ -746,10 +752,10 @@ export function MemberWizard({
                 )}
                 <PrimaryButton
                   onClick={() => {
-                    if (!dayNature) return setError("اختاري طبيعة اليوم");
-                    if (!exerciseDays) return setError("حدّدي أيام الرياضة");
+                    if (!dayNature) return setError(g("اختاري طبيعة اليوم", "اختر طبيعة اليوم"));
+                    if (!exerciseDays) return setError(g("حدّدي أيام الرياضة", "حدّد أيام الرياضة"));
                     if (exerciseDays !== "none" && !exerciseType)
-                      return setError("اختاري نوع الرياضة");
+                      return setError(g("اختاري نوع الرياضة", "اختر نوع الرياضة"));
                     goNext();
                   }}
                 >
@@ -771,7 +777,7 @@ export function MemberWizard({
                     <OptionButton key={a.value} active={activity === a.value} onClick={() => setActivity(a.value)}>{a.label}</OptionButton>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (activity ? goNext() : setError("اختاري مستوى النشاط"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (activity ? goNext() : setError(g("اختاري مستوى النشاط", "اختر مستوى النشاط")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -788,7 +794,7 @@ export function MemberWizard({
                     <OptionButton key={g.value} full active={userGoal === g.value} onClick={() => setUserGoal(g.value)}>{g.label}</OptionButton>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (userGoal ? goNext() : setError("اختاري الهدف"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (userGoal ? goNext() : setError(g("اختاري الهدف", "اختر الهدف")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -805,7 +811,7 @@ export function MemberWizard({
                     <OptionButton key={s.value} full active={schoolMeal === s.value} onClick={() => setSchoolMeal(s.value)}>{s.label}</OptionButton>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (schoolMeal ? goNext() : setError("اختاري طريقة الأكل في المدرسة"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (schoolMeal ? goNext() : setError(g("اختاري طريقة الأكل في المدرسة", "اختر طريقة الأكل في المدرسة")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -840,7 +846,7 @@ export function MemberWizard({
                     </OptionButton>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (trimester ? goNext() : setError("اختاري الثلث"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (trimester ? goNext() : setError(g("اختاري الثلث", "اختر الثلث")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -856,7 +862,7 @@ export function MemberWizard({
                   <OptionButton active={highRisk === false} onClick={() => setHighRisk(false)}>لا</OptionButton>
                   <OptionButton active={highRisk === true} onClick={() => setHighRisk(true)}>نعم</OptionButton>
                 </div>
-                <PrimaryButton onClick={() => (highRisk == null ? setError("اختاري") : goNext())}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (highRisk == null ? setError(g("اختاري", "اختر")) : goNext())}>التالي</PrimaryButton>
               </>
             )}
 
@@ -869,7 +875,7 @@ export function MemberWizard({
                   </p>
                 </header>
                 <NumberField id="m-pp" label="عدد الأشهر" value={monthsPP} onChange={setMonthsPP} placeholder="3" />
-                <PrimaryButton onClick={() => (monthsPP ? goNext() : setError("اكتبي عدد الأشهر"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (monthsPP ? goNext() : setError(g("اكتبي عدد الأشهر", "اكتب عدد الأشهر")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -886,7 +892,7 @@ export function MemberWizard({
                     <OptionButton key={f.value} full active={feedingMode === f.value} onClick={() => setFeedingMode(f.value)}>{f.label}</OptionButton>
                   ))}
                 </div>
-                <PrimaryButton onClick={() => (feedingMode ? goNext() : setError("اختاري طريقة الرضاعة"))}>التالي</PrimaryButton>
+                <PrimaryButton onClick={() => (feedingMode ? goNext() : setError(g("اختاري طريقة الرضاعة", "اختر طريقة الرضاعة")))}>التالي</PrimaryButton>
               </>
             )}
 
@@ -895,7 +901,7 @@ export function MemberWizard({
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">أي حالة صحية؟</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري ما ينطبق، أو تجاوزي.
+                    {g("اختاري ما ينطبق، أو تجاوزي.", "اختر ما ينطبق، أو تجاوز.")}
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
@@ -923,7 +929,7 @@ export function MemberWizard({
               <>
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الحساسيات الغذائية</h2>
-                  <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">اكتبي أي حساسية باسمها.</p>
+                  <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">{g("اكتبي أي حساسية باسمها.", "اكتب أي حساسية باسمها.")}</p>
                 </header>
                 <ChipInput value={allergies} onChange={setAllergies} disabled={isPending} placeholder="مثلاً: مكسرات، روبيان" />
                 <PrimaryButton onClick={advanceOrSubmit} isPending={isPending && key !== "allergies"}>{nextLabel}</PrimaryButton>
@@ -965,7 +971,7 @@ export function MemberWizard({
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الحالات الصحية</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    اختاري ما ينطبق، أو تجاوزي.
+                    {g("اختاري ما ينطبق، أو تجاوزي.", "اختر ما ينطبق، أو تجاوز.")}
                   </p>
                 </header>
                 <div className="flex flex-wrap gap-2">
@@ -985,7 +991,7 @@ export function MemberWizard({
                     </button>
                   ))}
                 </div>
-                <TextField id="m-other" label="حالة أخرى (اختياري)" value={otherCondition} onChange={setOtherCondition} placeholder="اكتبيها هنا" />
+                <TextField id="m-other" label="حالة أخرى (اختياري)" value={otherCondition} onChange={setOtherCondition} placeholder={g("اكتبيها هنا", "اكتبها هنا")} />
                 <PrimaryButton onClick={advanceOrSubmit} isPending={isPending && !doctorNeeded}>{nextLabel}</PrimaryButton>
               </>
             )}
@@ -1008,7 +1014,7 @@ export function MemberWizard({
                     أطعمة تسبب لها الغثيان حالياً؟
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نتجنبها مؤقتاً في خطتها حتى يزول الغثيان، أو تجاوزي.
+                    نتجنبها مؤقتاً في خطتها حتى يزول الغثيان، أو {g("تجاوزي", "تجاوز")}.
                   </p>
                 </header>
                 <ChipInput value={nauseaFoods} onChange={setNauseaFoods} disabled={isPending} placeholder="مثلاً: بيض، دجاج" />
@@ -1023,7 +1029,7 @@ export function MemberWizard({
                     الأدوية والمكملات
                   </h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    ننسّق توقيت الوجبات معها. تجاوزي إن لم يوجد شيء.
+                    ننسّق توقيت الوجبات معها. {g("تجاوزي", "تجاوز")} إن لم يوجد شيء.
                   </p>
                 </header>
                 <div>

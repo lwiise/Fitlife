@@ -38,7 +38,9 @@ type SaveResult = { ok: true } | { ok: false; error: string };
 export async function saveDeepDive(input: DeepDiveInput): Promise<SaveResult> {
   const parsed = DeepDiveSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "بيانات غير صالحة. تحققي من الحقول وأعيدي المحاولة" };
+    // Server-side error → gender-neutral فصحى (verbal nouns, no gendered
+    // imperative) so it reads right for a male owner too.
+    return { ok: false, error: "بيانات غير صالحة. الرجاء مراجعة الحقول وإعادة المحاولة" };
   }
   const data = parsed.data;
 
