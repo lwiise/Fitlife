@@ -55,7 +55,7 @@ export function ChangePlanSection({
           debug?: string;
         };
         if (res.ok && body.checkout_url) {
-          window.location.href = body.checkout_url;
+          window.location.assign(body.checkout_url);
           return;
         }
         if (res.ok && body.updated) {

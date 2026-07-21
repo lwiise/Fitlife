@@ -23,7 +23,7 @@ export function BillingPortalButton({
           error?: string;
         };
         if (res.ok && body.portal_url) {
-          window.location.href = body.portal_url;
+          window.location.assign(body.portal_url);
           return;
         }
         setErrorMessage(body.error ?? "حدث خطأ. يرجى المحاولة مرة أخرى");

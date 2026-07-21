@@ -59,7 +59,7 @@ export function DeleteAccountButton({
     try {
       const res = await fetch("/api/account/delete", { method: "POST" });
       if (res.ok) {
-        window.location.href = "/auth/login?deleted=1";
+        window.location.assign("/auth/login?deleted=1");
         return;
       }
       const body = (await res.json().catch(() => null)) as { error?: string } | null;

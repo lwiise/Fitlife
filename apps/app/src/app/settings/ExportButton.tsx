@@ -15,7 +15,7 @@ export function ExportButton({ ownerSex }: { ownerSex?: string | null }) {
     try {
       // The endpoint responds with Content-Disposition: attachment, so the
       // browser downloads it without navigating away.
-      window.location.href = "/api/account/export";
+      window.location.assign("/api/account/export");
       // Re-enable shortly; the download itself doesn't fire a JS event.
       setTimeout(() => setIsLoading(false), 2500);
     } catch {
