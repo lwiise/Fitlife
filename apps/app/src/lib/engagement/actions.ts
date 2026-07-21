@@ -28,7 +28,14 @@ import {
 const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، يرجى المحاولة مرة أخرى";
 const AUTH_ERROR_AR = "انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى";
 
-/** How many days back a day may still be closed («retroactive-first», 48h). */
+/**
+ * The floor of the retroactive marking window, in days. Meal marks now stay
+ * open for the WHOLE plan week — any elapsed day, never the future (owner
+ * directive 07/2026), so a mom can complete or correct earlier days anytime
+ * before the week rolls over into history. Weekday-anchored workout sessions
+ * stay markable for the whole current week too, with this as the floor so the
+ * last couple days of the previous week keep their grace.
+ */
 const GRACE_DAYS = 2;
 
 /** YYYY-MM-DD + n days → YYYY-MM-DD (pure calendar math, no TZ). */
@@ -44,9 +51,10 @@ function addDaysISO(dateISO: string, days: number): string {
  * never client-side), and dish-directed member exceptions.
  *
  * The day's calendar identity is DERIVED server-side (plan.week_start_date +
- * day_index) and gated to a 48-hour grace window — the client never supplies
- * a date. Resubmitting the same day upserts: answers are corrections, not
- * duplicates. Unanswered slots are simply absent (unknown ≠ skipped).
+ * day_index) and gated to the plan week — any elapsed day is markable, never a
+ * future one; the client never supplies a date. Resubmitting the same day
+ * upserts: answers are corrections, not duplicates. Unanswered slots are simply
+ * absent (unknown ≠ skipped).
  */
 export async function closeDay(rawInput: CloseDayInput) {
   const supabase = await createClient();
@@ -72,10 +80,12 @@ export async function closeDay(rawInput: CloseDayInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
+  // Markable = any elapsed day of the plan week, never a future day (adherence
+  // can't be pre-marked). day_index ∈ [0,6] ⇒ localDate ∈ [weekStart,
+  // weekStart+6], so the whole week stays open until it rolls over into history.
   const localDate = addDaysISO(weekStart, input.day_index);
   const today = riyadhTodayISO();
-  const oldestAllowed = addDaysISO(today, -GRACE_DAYS);
-  if (localDate > today || localDate < oldestAllowed) {
+  if (localDate > today) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
@@ -212,9 +222,10 @@ function weekdayOfISO(dateISO: string): number {
  * null) removes the mark.
  *
  * Workout day_index is WEEKDAY-anchored (0=Sunday), so the session's calendar
- * date is derived from its weekday within the 48h grace window: the one date in
- * [today-2 .. today] whose weekday matches. No such date → the session is in
- * the future this week or older than the grace window → rejected.
+ * date is derived from its weekday within the current week (Sunday-anchored,
+ * with a 48h floor for the previous week's tail): the most recent past-or-today
+ * date whose weekday matches. No such date → the session is in the future this
+ * week → rejected. This mirrors the meal window (the whole plan week).
  */
 export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
   const supabase = await createClient();
@@ -238,12 +249,15 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
-  // Derive the session's calendar date from its weekday within the grace
-  // window (never the future). At most one date in a 3-day span has a given
-  // weekday, so this resolves uniquely or not at all.
+  // Derive the session's calendar date from its weekday, scanning back over the
+  // whole current week (Sunday-anchored), with GRACE_DAYS as a floor so the tail
+  // of the previous week keeps its grace. Never the future: within any ≤7-day
+  // span a given weekday occurs at most once, so this resolves uniquely or not
+  // at all, and a future session this week has no past date to resolve to.
   const today = riyadhTodayISO();
+  const maxBack = Math.max(weekdayOfISO(today), GRACE_DAYS);
   let localDate: string | null = null;
-  for (let off = 0; off <= GRACE_DAYS; off++) {
+  for (let off = 0; off <= maxBack; off++) {
     const candidate = addDaysISO(today, -off);
     if (weekdayOfISO(candidate) === input.day_index) {
       localDate = candidate;
@@ -268,7 +282,10 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
       });
       return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
     }
+    // Workout marks feed the «موسم بيتنا» leaderboard (on the dashboard), so
+    // refresh both surfaces — the board must change as exercise state changes.
     revalidatePath("/plan");
+    revalidatePath("/dashboard");
     return { ok: true as const };
   }
 
@@ -289,16 +306,19 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
     });
     return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
   }
+  // Workout marks feed the «موسم بيتنا» leaderboard (on the dashboard).
   revalidatePath("/plan");
+  revalidatePath("/dashboard");
   return { ok: true as const };
 }
 
 /**
  * Inline per-dish verdict from the plan page — «كيف كانت؟» on a dish the
  * household actually cooked. Same table and calendar-honesty rules as the
- * ختام اليوم sheet: server-derived date, 48h grace, never a future day. Feeds
- * the engagement digest's golden dishes (loved) and vetoes (not_again), which
- * drive «سارة عدّلت خطتك» and the weekly letter's dish of the week.
+ * ختام اليوم sheet: server-derived date, any elapsed day of the plan week,
+ * never a future day. Feeds the engagement digest's golden dishes (loved) and
+ * vetoes (not_again), which drive «سارة عدّلت خطتك» and the weekly letter's
+ * dish of the week.
  *
  * PER PERSON: member_id is whose verdict this is — keyed (plan, member, day,
  * slot), so a shared dish accrues one loved-vote per participant. The
@@ -328,12 +348,14 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
-  // A verdict cannot be cast on a day that hasn't happened yet (or beyond the
-  // 48h grace) — the same honesty gate as the check-in write. meal_verdicts
-  // carries no date column, so the window is checked from the derived date here.
+  // A verdict cannot be cast on a day that hasn't happened yet — the same
+  // honesty gate as the check-in write (never the future). The whole plan week
+  // stays open, so a cooked dish can be judged any elapsed day before the week
+  // rolls over. meal_verdicts carries no date column, so the window is checked
+  // from the derived date here.
   const localDate = addDaysISO(weekStart, input.day_index);
   const today = riyadhTodayISO();
-  if (localDate > today || localDate < addDaysISO(today, -GRACE_DAYS)) {
+  if (localDate > today) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
@@ -354,7 +376,11 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
       });
       return { ok: false as const, error: "تعذر حفظ رأيك، يرجى المحاولة مرة أخرى" };
     }
+    // A verdict counts toward the «موسم بيتنا» leaderboard (on the dashboard),
+    // so refresh both surfaces — otherwise the board stays stale until an
+    // unrelated refresh.
     revalidatePath("/plan");
+    revalidatePath("/dashboard");
     return { ok: true as const };
   }
 
@@ -384,15 +410,18 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
     });
     return { ok: false as const, error: "تعذر حفظ رأيك، يرجى المحاولة مرة أخرى" };
   }
+  // A verdict counts toward the «موسم بيتنا» leaderboard (on the dashboard).
   revalidatePath("/plan");
+  revalidatePath("/dashboard");
   return { ok: true as const };
 }
 
 /**
  * Inline per-meal marking from the plan page — one slot at a time, same
  * table and same rules as the «ختام اليوم» sheet: server-derived calendar
- * date, 48-hour grace window, never a future day (adherence cannot be
- * fabricated ahead of time). status null clears an accidental mark.
+ * date, the whole plan week stays markable — any elapsed day, never a future
+ * day (adherence cannot be fabricated ahead of time). status null clears an
+ * accidental mark.
  *
  * PER-PERSON (00019): member_id says whose status this is — on a shared meal
  * each participant is marked separately (Louis can skip the dish anas ate).
@@ -427,9 +456,12 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
+  // The whole plan week stays markable until it rolls over — any elapsed day,
+  // never a future one (adherence can't be pre-marked). day_index ∈ [0,6] keeps
+  // localDate inside the plan week.
   const localDate = addDaysISO(weekStart, input.day_index);
   const today = riyadhTodayISO();
-  if (localDate > today || localDate < addDaysISO(today, -GRACE_DAYS)) {
+  if (localDate > today) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
@@ -691,6 +723,11 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
       .eq("user_id", user.id);
   }
 
+  // A weigh-in can trip a goal-milestone badge on the «موسم بيتنا» leaderboard
+  // (goalReached is derived from body_logs in seasonProps), so refresh the
+  // dashboard too — the board should reflect a reached goal without waiting for
+  // an unrelated refresh.
   revalidatePath("/journey");
+  revalidatePath("/dashboard");
   return { ok: true as const, recorded_on: today };
 }
