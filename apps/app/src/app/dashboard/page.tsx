@@ -1,33 +1,31 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Sparkles, Users, Calendar, Lock, AlertTriangle, ChevronLeft, ChefHat, MailOpen } from "lucide-react";
+import { Sparkles, Users, AlertTriangle, MailOpen } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { DeepDiveBanner } from "./DeepDiveBanner";
 import { WorkoutOptInBanner } from "./WorkoutOptInBanner";
-import { WorkoutPlanCard } from "./WorkoutPlanCard";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
-import { TodaysMeals } from "./TodaysMeals";
+import { FamilySeasonCard } from "../plan/FamilySeasonCard";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
   getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
-import { planHasContent, workoutPlanHasContent } from "@fitlife/plan-engine";
+import { planHasContent } from "@fitlife/plan-engine";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
-import { TIER_DISPLAY_NAMES_AR } from "@/lib/subscription/strings";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { RenewalRecapCard } from "./RenewalRecapCard";
 import {
   isWithinRenewalWindow,
   loadFamilyLedger,
 } from "@/lib/engagement/ledger";
+import { getFamilySeasonProps } from "@/lib/engagement/seasonProps";
 import { Logo } from "@/components/Logo";
 import { SettingsLink } from "@/components/SettingsLink";
 import { LogoutButton } from "./LogoutButton";
-import { CreateFirstPlanButton } from "./CreateFirstPlanButton";
 import { CheckoutSuccessHandler } from "./CheckoutSuccessHandler";
 import { BillingPortalButton } from "./BillingPortalButton";
 import { genderPick } from "@/lib/copy/gender";
@@ -42,14 +40,11 @@ export default async function DashboardPage() {
   const latestPlan = await getCurrentUserLatestPlan();
 
   // A 'ready' plan with empty day shells isn't usable yet — treat it as still
-  // generating so the card shows the loader instead of "نشطة".
+  // generating so downstream gates don't fire early.
   const planHasMeals = latestPlan?.plan_data
     ? planHasContent(latestPlan.plan_data)
     : false;
   const planIsReady = latestPlan?.status === "ready" && planHasMeals;
-  const planIsGenerating =
-    latestPlan?.status === "generating" ||
-    (latestPlan?.status === "ready" && !planHasMeals);
 
   const supabase = await createClient();
   const {
@@ -61,8 +56,6 @@ export default async function DashboardPage() {
         getLatestWorkoutPlan(user.id),
       ])
     : [null, null];
-  const subStatus = subscription?.status ?? null;
-  const isPaywalled = subStatus === "cancelled" || subStatus === "expired";
 
   if (!profile) {
     return (
@@ -74,50 +67,26 @@ export default async function DashboardPage() {
     );
   }
 
-  const displayName = profile.display_name || "أهلاً";
   const g = genderPick(profile.sex);
   const onboardingDone = profile.onboarding_completed_at !== null;
   const beneficiaryCount = familyMembers.filter(
     (m) => m.role !== "housekeeper",
   ).length;
-  // The mom (account owner) lives in `profiles`, not `family_members`, but she
-  // is a member of the household and the /family page always renders her card.
-  // Count her so the dashboard total matches what that page shows.
-  const familyCount = familyMembers.length + 1;
   // Mom's plan exists but no other family members yet → nudge to add family.
-  // Gate on real readiness (content present, not still generating) so the
-  // "خطتك جاهزة" banner never shows over the generating loader.
   const showAddFamily =
     profile.mom_profile_completed_at !== null &&
     planIsReady &&
     !latestPlan?.in_progress &&
     beneficiaryCount === 0;
 
-  // Meals-only user with a ready plan → nudge the workout opt-in. One banner
-  // at a time: family > workout > deep-dive. Once a workout plan exists (even
-  // one another family member opted into), the quick-glance card carries its
-  // state — don't nag over it.
+  // Meals-only user with a ready plan → nudge the workout opt-in. One banner at
+  // a time: family > workout > deep-dive.
   const showWorkoutOptIn =
     !showAddFamily &&
     planIsReady &&
     !latestPlan?.in_progress &&
     profile.workout_profile === null &&
     workoutPlan === null;
-
-  // Exercise plan quick-glance card: persistent (unlike the dismissible
-  // banner) so the add-workout path is always reachable post-onboarding.
-  const workoutHasContent = workoutPlan?.plan_data
-    ? workoutPlanHasContent(workoutPlan.plan_data)
-    : false;
-  const workoutState =
-    workoutPlan === null
-      ? ("optin" as const)
-      : workoutPlan.status === "failed"
-        ? ("failed" as const)
-        : workoutPlan.status === "ready" && workoutHasContent
-          ? ("ready" as const)
-          : ("generating" as const);
-  const showWorkoutCard = onboardingDone && !isPaywalled;
 
   // First plan ready + the optional deep-dive questionnaire not done → nudge.
   const showDeepDive =
@@ -127,32 +96,34 @@ export default async function DashboardPage() {
     !latestPlan?.in_progress &&
     profile.deep_dive_completed_at === null;
 
-  // Members who exist but aren't in the current plan yet (e.g. added while a
-  // tier upgrade was pending) → offer one-click generation, named for them.
+  // Members who exist but aren't in the current plan yet → auto-generate.
   const planMemberIds = latestPlan?.member_ids ?? [];
   const pendingMembers = familyMembers.filter(
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
-  // Gate on real content, not bare status: the plan flips to 'ready' on the
-  // first emit (an empty shell), so `planIsReady` (status + planHasContent)
-  // keeps the banner/drain from firing while the family is still generating.
   const needsFamilyPlan = planIsReady && pendingMembers.length > 0;
   const pendingNames = pendingMembers.map((m) => m.name);
-  // Pending members generate automatically (DeferredMemberDrain). The only case
-  // that can't be automated is exceeding the tier's people limit — surface an
-  // upgrade prompt then, otherwise a passive "being created" notice.
   const familyChangeAccess =
     needsFamilyPlan && user ? await canGenerateForFamilyChange(user.id) : null;
   const pendingBlocked = familyChangeAccess?.allowed === false;
   const pendingNamesText = pendingNames.join("، ");
 
-  // Housekeeper recipe view: show only when a non-Arabic housekeeper exists AND
-  // there's a ready plan (the /plan/housekeeper page redirects otherwise).
+  // Housekeeper recipe view existence — only used to add a step to the trial
+  // checklist (the dashboard shortcut link itself lives on /plan now).
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const showHousekeeperLink =
     latestPlan?.status === "ready" &&
     !!housekeeper &&
     housekeeper.preferred_language !== "ar";
+
+  // «موسم بيتنا» leaderboard — the dashboard's centerpiece (first thing to see).
+  // Null for solo households or before a plan is ready.
+  const seasonProps = await getFamilySeasonProps(
+    profile,
+    familyMembers,
+    latestPlan,
+    workoutPlan,
+  );
 
   // Renewal-week recap — active paid subs within 7 days of period end.
   let renewalRecap = null;
@@ -170,8 +141,7 @@ export default async function DashboardPage() {
     };
   }
 
-  // Day-3 trial activation checklist — DB-derived, computed only while
-  // trialing.
+  // Day-3 trial activation checklist — DB-derived, only while trialing.
   let trialChecklist;
   if (user && subscription?.status === "trialing") {
     const [chatCount, weightCount] = await Promise.all([
@@ -285,206 +255,36 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        <h2 className="font-extrabold text-xl md:text-2xl text-brand-ink mb-6 leading-tight">
-          أهلاً، {displayName}
-        </h2>
-
-        <p className="text-brand-ink-muted text-xs font-bold mb-3">نظرة سريعة</p>
-        <div
-          className={`grid grid-cols-1 gap-3 ${
-            showWorkoutCard ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"
-          }`}
-        >
-          <Link
-            href="/family"
-            className="block bg-white rounded-2xl p-4 border border-brand-ink/5 hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center">
-                <Users className="size-5 text-brand-purple-900" />
-              </div>
-              <p className="text-brand-ink-muted text-sm font-medium">أفراد العائلة</p>
-            </div>
-            <p className="font-extrabold text-xl text-brand-ink mt-1 tabular-nums">
-              {familyCount}
-            </p>
-            <p className="inline-flex items-center gap-1 text-brand-purple-900 text-xs font-bold mt-1">
-              إدارة العائلة
-              <ChevronLeft className="size-3.5" aria-hidden="true" />
-            </p>
-          </Link>
-
-          {isPaywalled ? (
-            <div className="bg-brand-purple-900 text-white rounded-2xl p-4 flex flex-col">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="size-10 rounded-full bg-white/15 flex items-center justify-center">
-                  <Lock className="size-5 text-brand-yellow" aria-hidden="true" />
-                </div>
-                <p className="text-white/80 text-sm font-medium">الاشتراك</p>
-              </div>
-              <p className="font-extrabold text-2xl mt-1 leading-tight">
-                اشتراكك انتهى
-              </p>
-              <p className="text-white/80 text-xs mt-1">
-                للوصول لخطتك الغذائية
-              </p>
-              <div className="mt-auto pt-3">
-                <a
-                  href="/pricing"
-                  className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-4 py-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900 min-h-[2.75rem]"
-                >
-                  اشتركي للاستمرار
-                </a>
-              </div>
-            </div>
-          ) : (
-          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center">
-                <Calendar className="size-5 text-brand-pink" aria-hidden="true" />
-              </div>
-              <p className="text-brand-ink-muted text-sm font-medium">الخطة الحالية</p>
-            </div>
-            {planIsReady && (
-              <>
-                <p className="font-extrabold text-xl text-brand-ink mt-1">نشطة</p>
-                <p className="text-brand-ink-muted text-xs mt-1">
-                  {latestPlan.week_start_date
-                    ? `تبدأ ${new Date(latestPlan.week_start_date).toLocaleDateString("ar-SA")}`
-                    : "خطة حالية جاهزة"}
-                </p>
-                <a
-                  href="/plan"
-                  className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
-                >
-                  {g("اعرضي الخطة", "اعرض الخطة")}
-                </a>
-              </>
-            )}
-            {planIsGenerating && (
-              <>
-                <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
-                  جاري إنشاء خطتك
-                </p>
-                <p className="text-brand-ink-muted text-xs mt-1">قد تاخذ دقيقة</p>
-                <a
-                  href="/plan"
-                  className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
-                >
-                  متابعة الحالة
-                </a>
-              </>
-            )}
-            {latestPlan?.status === "failed" && (
-              <>
-                <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
-                  آخر محاولة فشلت
-                </p>
-                <a
-                  href="/plan"
-                  className="inline-flex items-center mt-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
-                >
-                  إعادة المحاولة
-                </a>
-              </>
-            )}
-            {!latestPlan && (
-              <>
-                <p className="font-extrabold text-xl text-brand-ink mt-1">—</p>
-                <p className="text-brand-ink-muted text-xs mt-1">ما عندك خطة بعد</p>
-                {onboardingDone && <CreateFirstPlanButton ownerSex={profile.sex} />}
-              </>
-            )}
-          </div>
-          )}
-
-          {showWorkoutCard && (
-            <WorkoutPlanCard
-              state={workoutState}
-              waitingForMeals={planIsGenerating}
-              ownerSex={profile.sex}
-            />
-          )}
-
-          {/* flex-col + mt-auto on the CTA keeps this button level with the
-              workout card's — the grid stretches cards to equal height. */}
-          <div className="bg-white rounded-2xl p-4 border border-brand-ink/5 flex flex-col">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="size-10 rounded-full bg-brand-yellow/20 flex items-center justify-center">
-                <Sparkles className="size-5 text-brand-yellow" aria-hidden="true" />
-              </div>
-              <p className="text-brand-ink-muted text-sm font-medium">الاشتراك</p>
-            </div>
-            <p className="font-extrabold text-2xl text-brand-ink mt-1 leading-tight">
-              {subscription ? TIER_DISPLAY_NAMES_AR[subscription.tier] : "—"}
-            </p>
-            <p className="text-brand-ink-muted text-xs mt-1">
-              {subStatus === "trialing" ? "فترة تجريبية" : subStatus === "active" ? "نشط" : subStatus === "past_due" ? "تأخر السداد" : subStatus === "cancelled" ? "مُلغى" : subStatus === "expired" ? "منتهي" : "—"}
-            </p>
-            {subStatus === "active" && subscription?.current_period_end && (
-              <p className="text-brand-ink-muted text-xs mt-1">
-                التجديد القادم: {new Date(subscription.current_period_end).toLocaleDateString("ar-SA")}
-              </p>
-            )}
-            {subscription && (
-              <div className="mt-auto pt-3">
-                <Link
-                  href="/subscription"
-                  className="inline-flex items-center gap-2 bg-brand-ink text-white hover:bg-brand-purple-900 font-bold text-sm px-4 py-2 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                >
-                  إدارة الاشتراك
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* «موسم بيتنا» leaderboard — the dashboard's centerpiece. Hidden for
+            solo households / before a plan is ready (seasonProps is null then). */}
+        {seasonProps && <FamilySeasonCard {...seasonProps} />}
 
         {/* Renewal-week recap — celebratory bookkeeping, never a countdown */}
-        {renewalRecap && <RenewalRecapCard {...renewalRecap} />}
-
-        {/* Quick entry links (advisor + optional cook view) — above today's meals. */}
-        {(onboardingDone || showHousekeeperLink) && (
-          <div className="flex flex-wrap gap-2 mt-10 mb-4">
-            {onboardingDone && (
-              <Link
-                href="/chat"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                <Sparkles className="size-4" aria-hidden="true" />
-                {g("اسألي المستشارة", "اسأل المستشارة")}
-              </Link>
-            )}
-            {showHousekeeperLink && (
-              <Link
-                href="/plan/housekeeper"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                <ChefHat className="size-4" aria-hidden="true" />
-                وصفات الطبخ بلغة الخدامة
-              </Link>
-            )}
-            {onboardingDone && (
-              <Link
-                href="/recap"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                <MailOpen className="size-4" aria-hidden="true" />
-                رسالتك الأسبوعية
-              </Link>
-            )}
+        {renewalRecap && (
+          <div className="mt-6">
+            <RenewalRecapCard {...renewalRecap} />
           </div>
         )}
 
-        {/* What am I cooking today? */}
-        <div className={`mb-10 ${onboardingDone || showHousekeeperLink ? "" : "mt-10"}`}>
-          {user && (
-            <TodaysMeals
-              userId={user.id}
-              isOnboarded={onboardingDone}
-              ownerSex={profile.sex}
-            />
-          )}
-        </div>
+        {/* Two quick actions — the advisor and the weekly letter. */}
+        {onboardingDone && (
+          <div className="flex flex-wrap gap-2 mt-8">
+            <Link
+              href="/chat"
+              className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              <Sparkles className="size-4" aria-hidden="true" />
+              {g("اسألي المستشارة", "اسأل المستشارة")}
+            </Link>
+            <Link
+              href="/recap"
+              className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+            >
+              <MailOpen className="size-4" aria-hidden="true" />
+              رسالتك الأسبوعية
+            </Link>
+          </div>
+        )}
 
         {!onboardingDone && (
           <div className="bg-brand-purple-900 text-white rounded-3xl p-6 md:p-8 mb-8">

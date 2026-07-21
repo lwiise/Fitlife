@@ -10,7 +10,6 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
-import { hasReachedWeightGoal } from "@/lib/engagement/goalMilestone";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
@@ -88,7 +87,8 @@ export default async function PlanPage({
   // Workout session marks (the exercise pillar). Untyped cast: workout_checkins
   // (00020) isn't in the generated Database types until db:types is regenerated;
   // select("*") degrades to [] on a pre-apply prod. Feeds WorkoutViewer's
-  // marking state AND «موسم بيتنا».
+  // inline session marking (the «موسم بيتنا» leaderboard now lives on the
+  // dashboard and fetches its own marks via getFamilySeasonProps).
   let workoutCheckins:
     | Array<{ day_index: number; member_id: string; status: string }>
     | undefined;
@@ -104,48 +104,6 @@ export default async function PlanPage({
       member_id: (r.member_id ?? "") as string,
       status: r.status as string,
     }));
-  }
-
-  // Goal milestones for «موسم بيتنا» — eligible adults whose latest weigh-in
-  // reached their target. Loss-framing, so pregnant/lactating are NEVER
-  // celebrated on weight (children/housekeeper have no target and are excluded
-  // by eligibility). The number itself never leaves this computation — the
-  // season shows only the achievement, never a weight/target string.
-  const goalReached: Array<{ id: string; name: string }> = [];
-  if (profile && latest?.status === "ready") {
-    const supabase = await createClient();
-    const { data: logs } = await supabase
-      .from("body_logs")
-      .select("member_id, weight_kg, recorded_on")
-      .eq("user_id", profile.id)
-      .order("recorded_on", { ascending: true });
-    const seriesByMember = new Map<string, number[]>();
-    for (const r of (logs ?? []) as Array<{
-      member_id: string;
-      weight_kg: number | null;
-    }>) {
-      if (r.weight_kg == null) continue;
-      const arr = seriesByMember.get(r.member_id) ?? [];
-      arr.push(Number(r.weight_kg));
-      seriesByMember.set(r.member_id, arr);
-    }
-    if (
-      !profile.is_pregnant &&
-      isWeighInEligibleMom(profile.birth_year ?? null) &&
-      hasReachedWeightGoal(seriesByMember.get("mom") ?? [], profile.target_weight_kg)
-    ) {
-      goalReached.push({
-        id: "mom",
-        name: profile.display_name ?? genderPick(profile.sex)("أنتِ", "أنتَ"),
-      });
-    }
-    for (const m of familyMembers) {
-      if (!isWeighInEligibleMember(m)) continue;
-      if (m.member_type === "pregnant" || m.member_type === "lactating") continue;
-      if (hasReachedWeightGoal(seriesByMember.get(m.id) ?? [], m.target_weight_kg)) {
-        goalReached.push({ id: m.id, name: m.name });
-      }
-    }
   }
 
   const isOnboarded = !!profile?.onboarding_completed_at;
@@ -203,25 +161,6 @@ export default async function PlanPage({
       : []),
     ...familyMembers
       .filter((m) => isWeighInEligibleMember(m))
-      .map((m) => ({
-        id: m.id,
-        name: m.name as string | null,
-        sex: m.sex as string | null,
-      })),
-  ];
-  // «موسم بيتنا» leaderboard roster — the WHOLE household (mom + adults +
-  // CHILDREN), excluding only the housekeeper (never surveilled). Owner
-  // directive (07/2026): children compete on the leaderboard exactly like
-  // adults — own rank card + weekly %, and eligible for the #1 «فائز» spot.
-  // Kept SEPARATE from journeyMembers on purpose: body/weight tracking (the
-  // private journey + goalReached celebration) stays adults-only via that
-  // eligibility rule. `sex` rides along so each member's own status label reads
-  // in the right gender (mom is the woman of the house; children carry their
-  // own sex from onboarding).
-  const seasonMembers = [
-    { id: "mom", name: null as string | null, sex: profile?.sex ?? null },
-    ...familyMembers
-      .filter((m) => m.role !== "housekeeper" && m.member_type !== "housekeeper")
       .map((m) => ({
         id: m.id,
         name: m.name as string | null,
@@ -453,10 +392,7 @@ export default async function PlanPage({
               showWorkoutOptIn={workout === null}
               checkins={checkins}
               verdicts={verdicts}
-              workoutCheckins={workoutCheckins}
-              goalReached={goalReached}
               journeyMembers={journeyMembers}
-              seasonMembers={seasonMembers}
               ownerSex={profile?.sex}
             />
           </>

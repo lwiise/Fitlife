@@ -8,7 +8,6 @@ import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Lo
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
-import { FamilySeasonCard } from "./FamilySeasonCard";
 import {
   setMealCheckin as setMealCheckinAction,
   setMealVerdict as setMealVerdictAction,
@@ -60,10 +59,7 @@ export function PlanViewer({
   showWorkoutOptIn = false,
   checkins,
   verdicts,
-  workoutCheckins,
-  goalReached,
   journeyMembers,
-  seasonMembers,
   ownerSex,
 }: {
   plan: MealPlan;
@@ -108,28 +104,11 @@ export function PlanViewer({
     member_id?: string | null;
     verdict: string;
   }>;
-  // Workout session marks (main /plan page only) — the exercise pillar of
-  // «موسم بيتنا». member_id: "mom" | family_members.id; status done/moved/skipped.
-  workoutCheckins?: Array<{
-    day_index: number;
-    member_id: string;
-    status: string;
-  }>;
-  // Eligible adults who reached their target weight — the family-visible
-  // «تحقّق الهدف» celebration on «موسم بيتنا». The achievement only (no number,
-  // no target); pregnant/lactating are never included (computed on the server).
-  goalReached?: Array<{ id: string; name: string }>;
   // «رحلتك الخاصة» entries (main /plan page only): the weigh-in journeys this
   // household may open — "mom" plus eligible adult family_members ids (name
   // null for the mom). The entry renders on the ACTIVE member's tab only;
-  // read-only/translated views never pass it. `sex` genders each member's own
-  // status label in «موسم بيتنا» (حاضر/حاضرة).
+  // read-only/translated views never pass it. `sex` genders the entry copy.
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
-  // «موسم بيتنا» leaderboard roster (main /plan page only): the WHOLE household
-  // — "mom" plus every non-housekeeper family member (adults AND children; owner
-  // directive). Distinct from journeyMembers, which stays adults-only for
-  // private weight tracking. `sex` genders each member's own status label.
-  seasonMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
   // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
   ownerSex?: string | null;
@@ -393,22 +372,6 @@ export function PlanViewer({
 
   const isSolo = plan.members.length === 1;
 
-  // «موسم بيتنا» roster: the whole household (mom + adults + children — the
-  // server's seasonMembers applies only the housekeeper-never rule) who are in
-  // THIS plan, with display names resolved. The leaderboard renders only for a
-  // real household (≥2 members) — a solo mom never sees a family board.
-  const seasonRoster = useMemo(() => {
-    if (!seasonMembers) return [];
-    const inPlan = new Set(plan.members.map((m) => m.member_id));
-    return seasonMembers
-      .filter((j) => inPlan.has(j.id))
-      .map((j) => ({
-        id: j.id,
-        name: memberNames[j.id] ?? j.name ?? j.id,
-        sex: j.sex ?? null,
-      }));
-  }, [seasonMembers, plan.members, memberNames]);
-
   // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
   // Scope all loading UI to that member so a different member's empty/failed day
   // never shows a spinner — it falls through to the "failed — regenerate" box.
@@ -499,22 +462,6 @@ export function PlanViewer({
 
   return (
     <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
-      {/* «موسم بيتنا» — the family season leaderboard (owner-directed ranked
-          shape). Placed FIRST on the page. Interactive Arabic view only (never
-          read-only/history/housekeeper), and only for a real household with ≥2
-          members (mom + adults + children; the housekeeper is never in the
-          roster). Built from the marks already fetched; still no body numbers. */}
-      {!readOnly && !translated && seasonRoster.length >= 2 && (
-        <FamilySeasonCard
-          members={seasonRoster}
-          checkins={checkins ?? []}
-          verdicts={verdicts ?? []}
-          workoutCheckins={workoutCheckins ?? []}
-          goalReached={goalReached ?? []}
-          weekStartDate={plan.week_start_date}
-        />
-      )}
-
       {/* Top strip: week range + actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
