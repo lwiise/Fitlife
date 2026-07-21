@@ -499,6 +499,22 @@ export function PlanViewer({
 
   return (
     <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
+      {/* «موسم بيتنا» — the family season leaderboard (owner-directed ranked
+          shape). Placed FIRST on the page. Interactive Arabic view only (never
+          read-only/history/housekeeper), and only for a real household with ≥2
+          members (mom + adults + children; the housekeeper is never in the
+          roster). Built from the marks already fetched; still no body numbers. */}
+      {!readOnly && !translated && seasonRoster.length >= 2 && (
+        <FamilySeasonCard
+          members={seasonRoster}
+          checkins={checkins ?? []}
+          verdicts={verdicts ?? []}
+          workoutCheckins={workoutCheckins ?? []}
+          goalReached={goalReached ?? []}
+          weekStartDate={plan.week_start_date}
+        />
+      )}
+
       {/* Top strip: week range + actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -570,22 +586,6 @@ export function PlanViewer({
           translated view — it is the mom's فصحى adaptation narrative. */}
       {!translated && plan.week_changes && plan.week_changes.length > 0 && (
         <SaraChangesCard changes={plan.week_changes} />
-      )}
-
-      {/* «موسم بيتنا» — the family season leaderboard (owner-directed ranked
-          shape). Interactive Arabic view only (never read-only/history/
-          housekeeper), and only for a real household with ≥2 members (mom +
-          adults + children; the housekeeper is never in the roster). Built from
-          the marks already fetched; still no numbers about anyone's body. */}
-      {!readOnly && !translated && seasonRoster.length >= 2 && (
-        <FamilySeasonCard
-          members={seasonRoster}
-          checkins={checkins ?? []}
-          verdicts={verdicts ?? []}
-          workoutCheckins={workoutCheckins ?? []}
-          goalReached={goalReached ?? []}
-          weekStartDate={plan.week_start_date}
-        />
       )}
 
       {/* Member tabs (hidden for a solo plan) */}

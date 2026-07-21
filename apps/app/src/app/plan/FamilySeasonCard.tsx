@@ -261,29 +261,29 @@ export function FamilySeasonCard({
   const hasActivity = followedMeals > 0 || workoutActs > 0;
 
   return (
-    <div className="space-y-5">
-      {/* ── Top card: the shared season header ─────────────────────────── */}
+    <div className="space-y-4">
+      {/* ── Top card: the shared season header (compact — fits one screen) ─ */}
       <section
         aria-labelledby="family-season-heading"
-        className="rounded-3xl border border-brand-purple-900/10 bg-[linear-gradient(160deg,#F5F0FC,#EFE9F8)] p-4 sm:p-6 shadow-[0_1px_0_#fff_inset,0_18px_40px_-26px_rgba(78,36,144,0.35)]"
+        className="rounded-3xl border border-brand-purple-900/10 bg-[linear-gradient(160deg,#F5F0FC,#EFE9F8)] p-4 sm:p-5 shadow-[0_1px_0_#fff_inset,0_14px_32px_-24px_rgba(78,36,144,0.35)]"
       >
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="grid place-items-center size-11 shrink-0 rounded-full bg-brand-purple-900 text-brand-yellow"
+              className="grid place-items-center size-9 shrink-0 rounded-full bg-brand-purple-900 text-brand-yellow"
             >
-              <Trophy className="size-[22px]" />
+              <Trophy className="size-[19px]" />
             </span>
             <h2
               id="family-season-heading"
-              className="font-extrabold text-brand-ink text-lg sm:text-2xl leading-tight"
+              className="font-extrabold text-brand-ink text-lg sm:text-xl leading-tight"
             >
               موسم بيتنا
             </h2>
           </div>
           {honored && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-yellow px-3 py-1.5 text-xs font-extrabold text-brand-ink">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-yellow px-3 py-1 text-[11px] font-extrabold text-brand-ink">
               <Crown className="size-3.5" aria-hidden="true" />
               أتممتم موسمكم
             </span>
@@ -292,22 +292,22 @@ export function FamilySeasonCard({
 
         {hasActivity ? (
           <>
-            <div className="flex items-center justify-start gap-4 sm:gap-7 mt-4">
-              <div className="relative shrink-0 size-24 sm:size-28">
-                <Ring frac={fillFrac} color="var(--color-brand-purple-900)" track="rgba(217,176,252,0.5)" sw={8} r={44} />
+            <div className="flex items-center justify-start gap-4 sm:gap-6 mt-3">
+              <div className="relative shrink-0 size-20 sm:size-24">
+                <Ring frac={fillFrac} color="var(--color-brand-purple-900)" track="rgba(217,176,252,0.5)" sw={7} r={38} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl sm:text-3xl font-extrabold text-brand-purple-900 leading-none">
+                  <span className="text-xl sm:text-2xl font-extrabold text-brand-purple-900 leading-none">
                     <Figure n={followedMeals} />
                   </span>
-                  <span className="text-[11px] text-brand-ink-muted mt-0.5">وجبات معاً</span>
+                  <span className="text-[10px] text-brand-ink-muted mt-0.5">وجبات معاً</span>
                 </div>
               </div>
               <div className="min-w-0 text-start">
-                <p className="text-[15px] sm:text-lg leading-relaxed text-brand-ink">
+                <p className="text-sm sm:text-[17px] leading-snug text-brand-ink">
                   هذا الأسبوع اجتمع بيتكم على{" "}
                   <Count n={mealsHappened} one="وجبة واحدة" two="وجبتين" few="وجبات" many="وجبة" />{" "}
                   معاً
-                  <span className="block text-brand-ink-muted text-[13px] mt-1">
+                  <span className="block text-brand-ink-muted text-[12.5px] mt-0.5">
                     أضاء <Count n={activeDays} one="يوماً واحداً" two="يومين" few="أيام" many="يوماً" />
                     {sessionsDone > 0 && (
                       <>
@@ -319,8 +319,8 @@ export function FamilySeasonCard({
                   </span>
                 </p>
                 {leaderName && (
-                  <span className="inline-flex items-center gap-2 mt-3 rounded-full bg-brand-lavender/40 px-3.5 py-2 text-[13px] sm:text-sm font-extrabold text-brand-purple-700">
-                    <Crown className="size-4 text-brand-yellow" aria-hidden="true" />
+                  <span className="inline-flex items-center gap-1.5 mt-2 rounded-full bg-brand-lavender/40 px-3 py-1.5 text-[12px] sm:text-[13px] font-extrabold text-brand-purple-700">
+                    <Crown className="size-3.5 text-brand-yellow" aria-hidden="true" />
                     الأكثر مواظبة هذا الأسبوع: {leaderName}
                   </span>
                 )}
@@ -329,21 +329,22 @@ export function FamilySeasonCard({
 
             {/* 7-day meal strip — earliest day on the RIGHT (RTL-native). A day
                 the house cooked lights up with its star rating + a utensils
-                mark; a day without a meal mark is a dashed placeholder. */}
-            <ul className="grid grid-cols-7 gap-1.5 sm:gap-3 mt-5 list-none p-0 m-0" aria-label="أيام الأسبوع">
+                mark; a day without a meal mark is a dashed placeholder. Fixed
+                compact height so the whole section fits a laptop screen. */}
+            <ul className="grid grid-cols-7 gap-1.5 sm:gap-2.5 mt-4 list-none p-0 m-0" aria-label="أيام الأسبوع">
               {Array.from({ length: 7 }, (_, i) => {
                 const cooked = mealDays.has(i);
                 const stars = Math.min(3, slotsPerDay.get(i)?.size ?? 0);
                 const label = weekdayInitial(weekStartDate, i);
                 return (
-                  <li key={i} className="flex flex-col items-center gap-2">
+                  <li key={i} className="flex flex-col items-center gap-1.5">
                     <div
                       role="img"
                       aria-label={`${label}: ${cooked ? "طُبخ من الخطة" : "بلا تسجيل"}`}
                       className={
-                        "w-full aspect-[1/0.92] rounded-2xl flex flex-col items-center justify-center gap-1.5 " +
+                        "w-full h-12 sm:h-[60px] rounded-xl flex flex-col items-center justify-center gap-1 " +
                         (cooked
-                          ? "bg-[linear-gradient(160deg,#6A38B0,#4E2490_60%,#3D1C73)] shadow-[0_10px_22px_-12px_rgba(78,36,144,0.7)]"
+                          ? "bg-[linear-gradient(160deg,#6A38B0,#4E2490_60%,#3D1C73)] shadow-[0_8px_18px_-12px_rgba(78,36,144,0.7)]"
                           : "bg-white/50 border-[1.5px] border-dashed border-brand-purple-900/20")
                       }
                     >
@@ -358,7 +359,7 @@ export function FamilySeasonCard({
                         </>
                       )}
                     </div>
-                    <span aria-hidden="true" className="text-xs sm:text-[15px] font-extrabold text-brand-ink">
+                    <span aria-hidden="true" className="text-[11px] sm:text-sm font-extrabold text-brand-ink">
                       {label}
                     </span>
                   </li>
@@ -367,15 +368,18 @@ export function FamilySeasonCard({
             </ul>
           </>
         ) : (
-          <p className="text-brand-ink text-sm leading-relaxed mt-4">
+          <p className="text-brand-ink text-sm leading-relaxed mt-3">
             موسم بيتكم يبدأ بأول تسجيل — سجّلوا وجباتكم وتمارينكم من الخطة، وتبدأ
             لوحة الصدارة هنا.
           </p>
         )}
       </section>
 
-      {/* ── Leaderboard: eligible adults ranked by weekly participation ─── */}
-      <ul className="grid gap-3.5 sm:gap-5 grid-cols-1 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] list-none p-0 m-0">
+      {/* ── Leaderboard: household members ranked by weekly participation.
+          All cards are one compact row of the SAME height (items-stretch);
+          the gold #1 gets the crown + a «فائز» pill rather than a taller card.
+          pt-5 leaves room for the crown to sit above the winner card. ─── */}
+      <ul className="grid gap-3 sm:gap-4 grid-cols-1 sm:[grid-template-columns:repeat(auto-fit,minmax(210px,1fr))] items-stretch pt-5 list-none p-0 m-0">
         {ranked.map((m, idx) => {
           const rank = idx + 1;
           const isWinner = hasWinner && idx === 0;
@@ -388,50 +392,47 @@ export function FamilySeasonCard({
             return (
               <li
                 key={m.id}
-                className="relative rounded-3xl p-4 sm:p-5 mt-5 flex flex-col gap-3.5 text-brand-ink bg-[linear-gradient(150deg,#FFE08A,#F2BB16_45%,#E4A50E)] shadow-[0_18px_40px_-14px_rgba(242,187,22,0.65)]"
+                className="relative rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 text-brand-ink bg-[linear-gradient(150deg,#FFE08A,#F2BB16_45%,#E4A50E)] shadow-[0_16px_34px_-14px_rgba(242,187,22,0.6)]"
                 aria-label={`المركز الأول: ${m.name}`}
               >
                 <WinnerCrown />
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-4xl sm:text-5xl font-extrabold leading-none text-[#8A5A00]" dir="ltr">
-                    #{ar(rank)}
-                  </span>
-                  <div className="flex-1 text-center min-w-0">
-                    <p className="text-base sm:text-xl font-extrabold text-brand-ink truncate">{m.name}</p>
-                    <p className="text-xs text-[#6B4E06]">{genderPick(m.sex)("حاضرة", "حاضر")}</p>
-                  </div>
-                  <div className="relative shrink-0 size-[72px] sm:size-[88px]">
-                    <Ring frac={m.pct} color="#7A5200" track="rgba(107,78,6,0.22)" sw={7} r={34} />
-                    <span className="absolute inset-0 grid place-items-center text-base sm:text-lg font-extrabold text-brand-ink">
-                      {pctText}
-                    </span>
-                  </div>
-                </div>
-                <span className="inline-flex items-center justify-center gap-2 self-center rounded-full bg-[#6B4E06]/15 px-4 py-2 text-[13px] sm:text-sm font-extrabold text-[#6B4E06]">
-                  <Crown className="size-4" aria-hidden="true" />
-                  فائز هذا الأسبوع
+                <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-[#8A5A00]" dir="ltr">
+                  #{ar(rank)}
                 </span>
+                <div className="flex-1 text-center min-w-0">
+                  <p className="text-base sm:text-lg font-extrabold text-brand-ink truncate">{m.name}</p>
+                  <span className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-[#6B4E06]/18 px-2.5 py-1 text-[11.5px] font-extrabold text-[#6B4E06]">
+                    <Crown className="size-3" aria-hidden="true" />
+                    فائز هذا الأسبوع
+                  </span>
+                </div>
+                <div className="relative shrink-0 size-16 sm:size-[76px]">
+                  <Ring frac={m.pct} color="#7A5200" track="rgba(107,78,6,0.22)" sw={7} r={30} />
+                  <span className="absolute inset-0 grid place-items-center text-sm sm:text-base font-extrabold text-brand-ink">
+                    {pctText}
+                  </span>
+                </div>
               </li>
             );
           }
           return (
             <li
               key={m.id}
-              className="rounded-3xl p-4 sm:p-5 flex items-center justify-between gap-3.5 bg-brand-purple-900 text-white min-h-[120px]"
+              className="rounded-2xl p-3 sm:p-4 min-h-[92px] flex items-center justify-between gap-3 bg-brand-purple-900 text-white"
               aria-label={`المركز ${ar(rank)}: ${m.name}`}
             >
-              <span className="text-4xl sm:text-5xl font-extrabold leading-none text-brand-lavender" dir="ltr">
+              <span className="text-3xl sm:text-[2.5rem] font-extrabold leading-none text-brand-lavender" dir="ltr">
                 #{ar(rank)}
               </span>
               <div className="flex-1 text-center min-w-0">
-                <p className="text-base sm:text-xl font-extrabold truncate">{m.name}</p>
-                <p className="text-xs text-brand-lavender">
+                <p className="text-base sm:text-lg font-extrabold truncate">{m.name}</p>
+                <p className="text-[11.5px] text-brand-lavender mt-0.5">
                   {m.score > 0 ? genderPick(m.sex)("حاضرة", "حاضر") : "بانتظار البداية"}
                 </p>
               </div>
-              <div className="relative shrink-0 size-[72px] sm:size-[88px]">
-                <Ring frac={m.pct} color="var(--color-brand-lavender)" track="rgba(255,255,255,0.22)" sw={7} r={34} />
-                <span className="absolute inset-0 grid place-items-center text-base sm:text-lg font-extrabold text-white">
+              <div className="relative shrink-0 size-16 sm:size-[76px]">
+                <Ring frac={m.pct} color="var(--color-brand-lavender)" track="rgba(255,255,255,0.22)" sw={7} r={30} />
+                <span className="absolute inset-0 grid place-items-center text-sm sm:text-base font-extrabold text-white">
                   {pctText}
                 </span>
               </div>
