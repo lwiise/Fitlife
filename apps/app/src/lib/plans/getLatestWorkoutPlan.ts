@@ -85,7 +85,7 @@ export async function getLatestWorkoutPlan(
     });
     finalStatus = "failed";
     validated = null;
-    errorMessage = errorMessage ?? "تعذّر إكمال إنشاء خطة التمارين. حاولي مرة أخرى.";
+    errorMessage = errorMessage ?? "تعذّر إكمال إنشاء خطة التمارين. يرجى المحاولة مرة أخرى.";
   }
 
   return {

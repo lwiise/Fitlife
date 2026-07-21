@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   // ── Existing subscriber: swap the variant in place (no double-billing) ──
   if (sub?.lemonsqueezy_subscription_id) {
     if (sub.tier === parsed.tier && sub.cadence === parsed.cadence) {
-      return NextResponse.json({ error: "أنتِ على هذه الخطة" }, { status: 400 });
+      return NextResponse.json({ error: "هذه خطتك الحالية بالفعل" }, { status: 400 });
     }
 
     const { success, errorDetail } = await changeLSSubscriptionTier(
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(
         {
-          error: "تعذّر تغيير الخطة. حاولي بعد قليل",
+          error: "تعذّر تغيير الخطة. يرجى المحاولة بعد قليل",
           debug: `update-path (LS sub ${sub.lemonsqueezy_subscription_id}, variant ${variantId}): ${errorDetail ?? "unknown"}`,
         },
         { status: 502 },
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     );
     return NextResponse.json(
       {
-        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
         debug: `config: ${describeLsError(err)}`,
       },
       { status: 500 },
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(
         {
-          error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+          error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
           debug: `checkout-path LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
         },
         { status: 502 },
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       {
-        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
         debug: `checkout-path exception: ${describeLsError(err)}`,
       },
       { status: 502 },

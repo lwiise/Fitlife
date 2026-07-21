@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     );
     return NextResponse.json(
       {
-        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
         debug: `config: ${describeLsError(err)}`,
       },
       { status: 500 },
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(
         {
-          error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+          error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
           debug: `LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
         },
         { status: 502 },
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       {
-        error: "حدث خطأ في تجهيز الدفع. حاولي مرة ثانية",
+        error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
         debug: `exception: ${describeLsError(err)}`,
       },
       { status: 502 },

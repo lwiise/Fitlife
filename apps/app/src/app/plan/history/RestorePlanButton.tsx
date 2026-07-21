@@ -5,17 +5,21 @@ import { useRouter } from "next/navigation";
 import { RotateCcw, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { restorePlan } from "./actions";
+import { genderPick } from "@/lib/copy/gender";
 
 export function RestorePlanButton({
   planId,
   memberId,
   className = "",
+  ownerSex,
 }: {
   planId: string;
   memberId: string;
   className?: string;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +59,10 @@ export function RestorePlanButton({
       <ConfirmDialog
         open={open}
         title="استعادة هذه الخطة"
-        body="بتصير خطتك الحالية لهذا الأسبوع، بنفس الوجبات. تأكدين؟"
+        body={g(
+          "بتصير خطتك الحالية لهذا الأسبوع، بنفس الوجبات. تأكدين؟",
+          "بتصير خطتك الحالية لهذا الأسبوع، بنفس الوجبات. تأكد؟",
+        )}
         confirmLabel="استعادة"
         cancelLabel="إلغاء"
         isPending={isPending}

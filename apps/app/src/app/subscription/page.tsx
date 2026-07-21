@@ -14,6 +14,7 @@ import { CardOnFile } from "./CardOnFile";
 import { ChangePlanSection } from "./ChangePlanSection";
 import { BillingHistory } from "./BillingHistory";
 import { CancelSubscription, PausedNotice } from "./CancelSubscription";
+import { genderPick } from "@/lib/copy/gender";
 import { loadFamilyLedger } from "@/lib/engagement/ledger";
 
 const LEDGER_NUM = new Intl.NumberFormat("ar-SA", { useGrouping: false });
@@ -62,7 +63,12 @@ export default async function SubscriptionPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const sub = await getCurrentSubscription(user.id);
+  const [sub, { data: ownerProfile }] = await Promise.all([
+    getCurrentSubscription(user.id),
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+  ]);
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  const g = genderPick(ownerSex);
 
   const header = (
     <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
@@ -94,7 +100,7 @@ export default async function SubscriptionPage({
               href="/pricing"
               className="inline-flex items-center justify-center min-h-11 mt-4 px-5 rounded-full bg-brand-ink hover:bg-brand-purple-900 text-white text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
-              اختاري خطتك
+              {g("اختاري خطتك", "اختر خطتك")}
             </Link>
           </div>
         </div>
@@ -139,6 +145,7 @@ export default async function SubscriptionPage({
           currentTier={sub.tier}
           currentCadence={cadence}
           isTrial={!hasLSSub}
+          ownerSex={ownerSex}
         />
 
         {/* Section 3 — Billing history */}
@@ -156,7 +163,7 @@ export default async function SubscriptionPage({
             </Suspense>
           ) : (
             <p className="text-brand-ink-muted text-sm leading-relaxed">
-              ما فيه فواتير بعد — أنتِ في الفترة التجريبية
+              {g("ما فيه فواتير بعد — أنتِ في الفترة التجريبية", "ما فيه فواتير بعد — أنتَ في الفترة التجريبية")}
             </p>
           )}
         </SectionShell>
@@ -177,13 +184,15 @@ export default async function SubscriptionPage({
           !sub.cancel_at_period_end && (
             <SectionShell title="إلغاء الاشتراك">
               <p className="text-brand-ink-muted text-sm leading-relaxed mb-4">
-                تقدرين تلغين في أي وقت. الخدمة تستمر حتى نهاية فترتك الحالية —
-                وإن كان السبب سفراً أو انشغالاً، فالاستراحة المؤقتة متاحة أيضاً.
+                {g("تقدرين تلغين في أي وقت.", "تقدر تلغي في أي وقت.")} الخدمة تستمر
+                حتى نهاية فترتك الحالية — وإن كان السبب سفراً أو انشغالاً،
+                فالاستراحة المؤقتة متاحة أيضاً.
               </p>
               <CancelSubscription
                 tierName={PRICING_TIERS[sub.tier].name_ar}
                 endsAt={sub.current_period_end}
                 ledgerLine={await buildLedgerLine(supabase, user.id)}
+                ownerSex={ownerSex}
               />
             </SectionShell>
           )}
@@ -191,7 +200,7 @@ export default async function SubscriptionPage({
         {/* Paused state — resume early, or let it auto-resume */}
         {hasLSSub && sub.status === "paused" && (
           <SectionShell title="اشتراكك في استراحة">
-            <PausedNotice resumesAt={sub.current_period_end} />
+            <PausedNotice resumesAt={sub.current_period_end} ownerSex={ownerSex} />
           </SectionShell>
         )}
       </div>

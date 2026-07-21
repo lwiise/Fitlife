@@ -8,6 +8,7 @@ import { BackToDashboard } from "@/components/BackToDashboard";
 import { AccountInfoCard } from "./AccountInfoCard";
 import { DataSection } from "./DataSection";
 import { LegalSection } from "./LegalSection";
+import { genderPick } from "@/lib/copy/gender";
 import { SupportSection } from "./SupportSection";
 
 export const metadata = {
@@ -22,7 +23,12 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const subscription = await getCurrentSubscription(user.id);
+  const [subscription, { data: ownerProfile }] = await Promise.all([
+    getCurrentSubscription(user.id),
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+  ]);
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  const g = genderPick(ownerSex);
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -78,7 +84,7 @@ export default async function SettingsPage() {
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-brand-ink text-base">أفراد العائلة</h2>
             <p className="text-brand-ink-muted text-sm mt-0.5">
-              أضيفي وعدّلي بيانات أفراد العائلة والخدامة
+              {g("أضيفي وعدّلي بيانات أفراد العائلة والخدامة", "أضِف وعدّل بيانات أفراد العائلة والخدامة")}
             </p>
           </div>
           <ChevronLeft
@@ -93,7 +99,7 @@ export default async function SettingsPage() {
           subscription={subscription}
         />
 
-        <DataSection userEmail={user.email ?? ""} />
+        <DataSection userEmail={user.email ?? ""} ownerSex={ownerSex} />
 
         <LegalSection />
 

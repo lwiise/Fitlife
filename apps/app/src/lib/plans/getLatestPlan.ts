@@ -105,7 +105,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     finalStatus = "failed";
     validatedPlanData = null;
     errorMessage =
-      errorMessage ?? "تعذّر إكمال إنشاء الخطة. حاولي مرة أخرى.";
+      errorMessage ?? "تعذّر إكمال إنشاء الخطة. يرجى المحاولة مرة أخرى.";
   }
 
   return {

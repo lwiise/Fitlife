@@ -7,6 +7,7 @@ import type { MemberPlan } from "@fitlife/plan-engine";
 import { dayIndexFromWeekStart } from "@/lib/plans/dayMapping";
 import { orderDayMeals } from "@/lib/plans/mealOrder";
 import { MealCard } from "@/app/plan/MealCard";
+import { genderPick } from "@/lib/copy/gender";
 
 /**
  * Client-side "today" selection. The plan's week is anchored to its generation
@@ -20,11 +21,14 @@ export function TodaysMealsClient({
   members,
   planId: _planId,
   weekStartDate,
+  ownerSex,
 }: {
   members: MemberPlan[];
   planId: string;
   weekStartDate: string | null;
+  ownerSex?: string | null;
 }) {
+  const g = genderPick(ownerSex);
   // null = not mounted yet; -1 = the plan's 7 days have ended.
   const [dayIndex, setDayIndex] = useState<number | null>(null);
   useEffect(() => {
@@ -55,7 +59,7 @@ export function TodaysMealsClient({
       <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
         <p className="font-bold text-brand-ink">انتهت أيام خطتك لهذا الأسبوع</p>
         <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
-          أنشئي خطة جديدة لأسبوع جديد
+          {g("أنشئي خطة جديدة لأسبوع جديد", "أنشئ خطة جديدة لأسبوع جديد")}
         </p>
         <Link
           href="/plan"
@@ -79,7 +83,10 @@ export function TodaysMealsClient({
       <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
         <p className="font-bold text-brand-ink">ما فيه وجبات لهذا اليوم في خطتك</p>
         <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
-          تحققي من الخطة الكاملة أو أنشئي خطة جديدة
+          {g(
+            "تحققي من الخطة الكاملة أو أنشئي خطة جديدة",
+            "تحقق من الخطة الكاملة أو أنشئ خطة جديدة",
+          )}
         </p>
         <Link
           href="/plan"
@@ -110,7 +117,11 @@ export function TodaysMealsClient({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-brand-ink truncate">
-                  {isMom && <span className="text-brand-pink me-1">أنتِ ·</span>}
+                  {isMom && (
+                    <span className="text-brand-pink me-1">
+                      {g("أنتِ", "أنتَ")} ·
+                    </span>
+                  )}
                   {member.member_name_ar}
                 </p>
                 <p className="text-brand-ink-muted text-xs mt-0.5 tabular-nums">

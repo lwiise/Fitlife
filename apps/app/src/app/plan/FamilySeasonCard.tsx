@@ -1,4 +1,5 @@
 import { Trophy, Crown } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 // «موسم بيتنا» — the family season, rendered as a competitive LEADERBOARD.
 //
@@ -186,8 +187,10 @@ export function FamilySeasonCard({
   goalReached = [],
   weekStartDate,
 }: {
-  /** Eligible adults in this plan (mom + adult members), display names resolved. */
-  members: Array<{ id: string; name: string }>;
+  /** Eligible adults in this plan (mom + adult members), display names resolved.
+   * `sex` gives each member's own status label its correct Arabic gender
+   * (حاضر/حاضرة); null falls back to the feminine default. */
+  members: Array<{ id: string; name: string; sex?: string | null }>;
   checkins: Mark[];
   verdicts: VerdictMark[];
   /** Workout session marks (the exercise pillar); empty when no workout plan. */
@@ -389,7 +392,7 @@ export function FamilySeasonCard({
                   </span>
                   <div className="flex-1 text-center min-w-0">
                     <p className="text-base sm:text-xl font-extrabold text-brand-ink truncate">{m.name}</p>
-                    <p className="text-xs text-[#6B4E06]">حاضرة</p>
+                    <p className="text-xs text-[#6B4E06]">{genderPick(m.sex)("حاضرة", "حاضر")}</p>
                   </div>
                   <div className="relative shrink-0 size-[72px] sm:size-[88px]">
                     <Ring frac={m.pct} color="#7A5200" track="rgba(107,78,6,0.22)" sw={7} r={34} />
@@ -417,7 +420,7 @@ export function FamilySeasonCard({
               <div className="flex-1 text-center min-w-0">
                 <p className="text-base sm:text-xl font-extrabold truncate">{m.name}</p>
                 <p className="text-xs text-brand-lavender">
-                  {m.score > 0 ? "حاضرة" : "بانتظار البداية"}
+                  {m.score > 0 ? genderPick(m.sex)("حاضرة", "حاضر") : "بانتظار البداية"}
                 </p>
               </div>
               <div className="relative shrink-0 size-[72px] sm:size-[88px]">

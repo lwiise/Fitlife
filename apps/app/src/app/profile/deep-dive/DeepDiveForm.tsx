@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import { saveDeepDive, type DeepDiveInput } from "./actions";
+import { genderPick } from "@/lib/copy/gender";
 
 // Option lists (فصحى). Values are the Zod-enforced slugs stored in 00013.
 const EXERCISE_DURATION = [
@@ -99,8 +100,15 @@ function useToggle<T extends string>(initial: T | null) {
   return [value, toggle] as const;
 }
 
-export function DeepDiveForm({ initial }: { initial: DeepDiveInitial }) {
+export function DeepDiveForm({
+  initial,
+  ownerSex,
+}: {
+  initial: DeepDiveInitial;
+  ownerSex?: string | null;
+}) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -182,10 +190,10 @@ export function DeepDiveForm({ initial }: { initial: DeepDiveInitial }) {
       </Group>
 
       <Group title="عاداتك الغذائية">
-        <Field label="أطعمة تحبينها">
+        <Field label={g("أطعمة تحبينها", "أطعمة تحبها")}>
           <ChipInput value={likedFoods} onChange={setLikedFoods} disabled={isPending} placeholder="مثلاً: سلمون، أفوكادو" />
         </Field>
-        <Field label="كم وجبة تفضلين يومياً؟">
+        <Field label={g("كم وجبة تفضلين يومياً؟", "كم وجبة تفضّل يومياً؟")}>
           <div className="grid grid-cols-4 gap-2">
             {MEALS_PER_DAY.map((n) => (
               <OptionButton key={n} active={mealsPerDay === n} onClick={() => setMealsPerDay((cur) => (cur === n ? null : n))}>
@@ -195,14 +203,14 @@ export function DeepDiveForm({ initial }: { initial: DeepDiveInitial }) {
           </div>
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="هل تتناولين وجبات خفيفة؟">
+          <Field label={g("هل تتناولين وجبات خفيفة؟", "هل تتناول وجبات خفيفة؟")}>
             <div className="grid grid-cols-2 gap-2">
               {YES_NO.map((o) => (
                 <OptionButton key={o.value} active={snacks === o.value} onClick={() => toggleSnacks(o.value)}>{o.label}</OptionButton>
               ))}
             </div>
           </Field>
-          <Field label="هل تطبقين الصيام المتقطع؟">
+          <Field label={g("هل تطبقين الصيام المتقطع؟", "هل تطبّق الصيام المتقطع؟")}>
             <div className="grid grid-cols-2 gap-2">
               {YES_NO.map((o) => (
                 <OptionButton key={o.value} active={fasting === o.value} onClick={() => toggleFasting(o.value)}>{o.label}</OptionButton>
@@ -210,27 +218,27 @@ export function DeepDiveForm({ initial }: { initial: DeepDiveInitial }) {
             </div>
           </Field>
         </div>
-        <Field label="هل تتناولين الإفطار؟">
+        <Field label={g("هل تتناولين الإفطار؟", "هل تتناول الإفطار؟")}>
           <div className="grid grid-cols-3 gap-2">
             {BREAKFAST.map((o) => (
               <OptionButton key={o.value} active={breakfast === o.value} onClick={() => toggleBreakfast(o.value)}>{o.label}</OptionButton>
             ))}
           </div>
         </Field>
-        <Field label="ماذا تناولتِ خلال آخر 24 ساعة؟ (مع المشروبات إن أمكن)">
-          <textarea value={recall} onChange={(e) => setRecall(e.target.value)} maxLength={1000} rows={3} className={textArea} placeholder="اكتبي يومك الغذائي هنا" />
+        <Field label={g("ماذا تناولتِ خلال آخر 24 ساعة؟ (مع المشروبات إن أمكن)", "ماذا تناولت خلال آخر 24 ساعة؟ (مع المشروبات إن أمكن)")}>
+          <textarea value={recall} onChange={(e) => setRecall(e.target.value)} maxLength={1000} rows={3} className={textArea} placeholder={g("اكتبي يومك الغذائي هنا", "اكتب يومك الغذائي هنا")} />
         </Field>
       </Group>
 
       <Group title="النوم والتوتر">
-        <Field label="كيف تصفين جودة نومك؟">
+        <Field label={g("كيف تصفين جودة نومك؟", "كيف تصف جودة نومك؟")}>
           <div className="grid grid-cols-4 gap-2">
             {SLEEP_QUALITY.map((o) => (
               <OptionButton key={o.value} active={sleepQuality === o.value} onClick={() => toggleSleepQuality(o.value)}>{o.label}</OptionButton>
             ))}
           </div>
         </Field>
-        <Field label="كيف تصفين مستوى التوتر لديكِ؟">
+        <Field label={g("كيف تصفين مستوى التوتر لديكِ؟", "كيف تصف مستوى التوتر لديك؟")}>
           <div className="grid grid-cols-3 gap-2">
             {STRESS.map((o) => (
               <OptionButton key={o.value} active={stress === o.value} onClick={() => toggleStress(o.value)}>{o.label}</OptionButton>
@@ -254,8 +262,8 @@ export function DeepDiveForm({ initial }: { initial: DeepDiveInitial }) {
             ))}
           </div>
         </Field>
-        <Field label="هل سبق أن اتبعتِ نظاماً غذائياً؟ ما الذي نجح وما الذي لم ينجح؟">
-          <textarea value={previousDiets} onChange={(e) => setPreviousDiets(e.target.value)} maxLength={1000} rows={3} className={textArea} placeholder="اكتبي تجربتك باختصار" />
+        <Field label={g("هل سبق أن اتبعتِ نظاماً غذائياً؟ ما الذي نجح وما الذي لم ينجح؟", "هل سبق أن اتبعت نظاماً غذائياً؟ ما الذي نجح وما الذي لم ينجح؟")}>
+          <textarea value={previousDiets} onChange={(e) => setPreviousDiets(e.target.value)} maxLength={1000} rows={3} className={textArea} placeholder={g("اكتبي تجربتك باختصار", "اكتب تجربتك باختصار")} />
         </Field>
         <Field label="ميزانية الطعام (اختياري)">
           <input type="text" value={budget} onChange={(e) => setBudget(e.target.value)} maxLength={200} className={numberInput.replace(" tabular-nums", "")} placeholder="مثلاً: نحو 2000 ريال شهرياً" />

@@ -7,6 +7,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
+import { genderPick } from "@/lib/copy/gender";
 import { HousekeeperForm } from "../../add/HousekeeperForm";
 import { MemberEditedBanner } from "./MemberEditedBanner";
 import {
@@ -79,6 +80,15 @@ export default async function EditMemberPage({
 
   if (!m) redirect("/family");
 
+  // The hub addresses the account OWNER ("عدّلي/عدّل بيانات …"), so its copy
+  // follows the owner's sex — not the member's.
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("sex")
+    .eq("id", user.id)
+    .single();
+  const g = genderPick((ownerProfile as { sex?: string | null } | null)?.sex);
+
   // The maid isn't a plan beneficiary — she has only a name + reading language, so
   // she's edited via the HousekeeperForm (prefilled), not the member sections.
   if (m.role === "housekeeper") {
@@ -105,7 +115,7 @@ export default async function EditMemberPage({
       m.weight_kg ? `${m.weight_kg} كجم` : null,
     ]
       .filter(Boolean)
-      .join("، ") || "أكملي المعلومات";
+      .join("، ") || g("أكملي المعلومات", "أكمل المعلومات");
 
   const goalLabel =
     type === "pregnant"
@@ -131,7 +141,7 @@ export default async function EditMemberPage({
       allergyCount > 0 ? `${allergyCount} حساسية` : null,
     ]
       .filter(Boolean)
-      .join("، ") || "أضيفي التفاصيل الصحية";
+      .join("، ") || g("أضيفي التفاصيل الصحية", "أضِف التفاصيل الصحية");
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -154,12 +164,15 @@ export default async function EditMemberPage({
             تعديل بيانات {m.name}
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            اختاري القسم اللي تبين تعدّلينه.
+            {g(
+              "اختاري القسم اللي تبين تعدّلينه.",
+              "اختر القسم اللي تبي تعدّله.",
+            )}
           </p>
         </header>
 
         <Suspense fallback={null}>
-          <MemberEditedBanner memberId={memberId} />
+          <MemberEditedBanner memberId={memberId} ownerSex={(ownerProfile as { sex?: string | null } | null)?.sex} />
         </Suspense>
 
         <div className="space-y-3">

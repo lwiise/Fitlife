@@ -11,6 +11,7 @@ import { SettingsLink } from "@/components/SettingsLink";
 import { FamilyMemberCard } from "./FamilyMemberCard";
 import { HousekeeperCard } from "./HousekeeperCard";
 import { FamilyAddBuilder } from "./FamilyAddBuilder";
+import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = { title: "عائلتك" };
 
@@ -19,6 +20,7 @@ export default async function FamilyPage() {
   if (!profile) redirect("/auth/login");
   // Mom must finish her own profile before managing the family.
   if (!profile.mom_profile_completed_at) redirect("/onboarding");
+  const g = genderPick(profile.sex);
 
   const allMembers = await getCurrentUserFamilyMembers();
   const members = allMembers.filter((m) => m.role !== "housekeeper");
@@ -42,7 +44,10 @@ export default async function FamilyPage() {
             عائلتك
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            كل فرد تضيفينه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.
+            {g(
+              "كل فرد تضيفينه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.",
+              "كل فرد تضيفه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.",
+            )}
           </p>
         </header>
 
@@ -54,10 +59,12 @@ export default async function FamilyPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-brand-ink truncate">
-                <span className="text-brand-pink">أنتِ</span>
+                <span className="text-brand-pink">{g("أنتِ", "أنتَ")}</span>
                 {profile.display_name ? ` — ${profile.display_name}` : ""}
               </p>
-              <p className="text-brand-ink-muted text-xs mt-0.5">صاحبة الحساب</p>
+              <p className="text-brand-ink-muted text-xs mt-0.5">
+                {g("صاحبة الحساب", "صاحب الحساب")}
+              </p>
             </div>
             <Link
               href="/profile"
@@ -74,6 +81,7 @@ export default async function FamilyPage() {
               name={m.name}
               memberType={m.member_type ?? "adult"}
               primaryGoal={m.primary_goal}
+              ownerSex={profile.sex}
             />
           ))}
 
@@ -82,6 +90,7 @@ export default async function FamilyPage() {
               id={housekeeper.id}
               name={housekeeper.name}
               preferredLanguage={housekeeper.preferred_language}
+              ownerSex={profile.sex}
             />
           )}
         </div>
@@ -89,6 +98,7 @@ export default async function FamilyPage() {
         <FamilyAddBuilder
           canAddHusband={!members.some((m) => m.role === "dad")}
           canAddHousekeeper={!housekeeper}
+          ownerSex={profile.sex}
         />
       </div>
     </main>

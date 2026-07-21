@@ -12,10 +12,12 @@ export function HousekeeperCard({
   id,
   name,
   preferredLanguage,
+  ownerSex,
 }: {
   id: string;
   name: string;
   preferredLanguage: string;
+  ownerSex?: string | null;
 }) {
   const langLabel = isLocaleCode(preferredLanguage)
     ? LOCALE_INFO[preferredLanguage].ar_name
@@ -39,7 +41,7 @@ export function HousekeeperCard({
         >
           تعديل
         </Link>
-        <RemoveMemberButton memberId={id} name={name} />
+        <RemoveMemberButton memberId={id} name={name} ownerSex={ownerSex} />
       </div>
     </div>
   );

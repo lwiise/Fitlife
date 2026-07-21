@@ -78,7 +78,7 @@ export function DownloadPDFButton({
       )}
       <span className="truncate max-w-[12rem]">
         {status === "error"
-          ? "تعذّر التحميل، حاولي مرة ثانية"
+          ? "تعذّر التحميل، يرجى المحاولة مرة أخرى"
           : `تحميل PDF لـ ${memberPlan.member_name_ar}`}
       </span>
     </button>

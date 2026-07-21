@@ -4,8 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Trash2, Loader2, TriangleAlert } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
-export function DeleteAccountButton({ userEmail }: { userEmail: string }) {
+export function DeleteAccountButton({
+  userEmail,
+  ownerSex,
+}: {
+  userEmail: string;
+  ownerSex?: string | null;
+}) {
+  const g = genderPick(ownerSex);
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -55,10 +63,10 @@ export function DeleteAccountButton({ userEmail }: { userEmail: string }) {
         return;
       }
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "حدث خطأ في حذف حسابك. حاولي مرة ثانية");
+      setError(body?.error ?? g("حدث خطأ في حذف حسابك. حاولي مرة ثانية", "حدث خطأ في حذف حسابك. حاول مرة ثانية"));
       setIsDeleting(false);
     } catch {
-      setError("تعذّر الاتصال. تأكدي من اتصالك وحاولي مرة ثانية");
+      setError(g("تعذّر الاتصال. تأكدي من اتصالك وحاولي مرة ثانية", "تعذّر الاتصال. تأكد من اتصالك وحاول مرة ثانية"));
       setIsDeleting(false);
     }
   }
@@ -129,7 +137,7 @@ export function DeleteAccountButton({ userEmail }: { userEmail: string }) {
                     htmlFor="delete-confirm-email"
                     className="block mt-5 text-sm text-brand-ink leading-relaxed"
                   >
-                    لتأكيد الحذف، اكتبي بريدك الإلكتروني في الحقل أدناه:
+                    {g("لتأكيد الحذف، اكتبي بريدك الإلكتروني في الحقل أدناه:", "لتأكيد الحذف، اكتب بريدك الإلكتروني في الحقل أدناه:")}
                   </label>
                   <input
                     id="delete-confirm-email"

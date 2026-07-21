@@ -7,6 +7,7 @@ import { MemberWizard } from "./add/MemberWizard";
 import { PregLactSwitch } from "./add/PregLactSwitch";
 import { HousekeeperForm } from "./add/HousekeeperForm";
 import { CheckRow, StepperRow } from "./add/FamilyComposerControls";
+import { genderPick } from "@/lib/copy/gender";
 
 // One step of the guided sequence. Husband and maid are singular; the rest carry a count.
 type Task =
@@ -31,11 +32,14 @@ type Task =
 export function FamilyAddBuilder({
   canAddHusband = true,
   canAddHousekeeper = true,
+  ownerSex,
 }: {
   canAddHusband?: boolean;
   canAddHousekeeper?: boolean;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [phase, setPhase] = useState<"select" | "fill" | "finalizing">("select");
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
@@ -92,7 +96,7 @@ export function FamilyAddBuilder({
     const task = queue[index]!;
     const isLastTask = index === queue.length - 1;
     // Label the very last member "أنشئي الخطة"; earlier ones continue with "التالي".
-    const terminalLabel = isLastTask ? "أنشئي الخطة" : "التالي";
+    const terminalLabel = isLastTask ? g("أنشئي الخطة", "أنشئ الخطة") : "التالي";
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-brand-surface">
         {task.kind === "husband" && (
@@ -103,6 +107,7 @@ export function FamilyAddBuilder({
             count={1}
             onComplete={advance}
             terminalLabel={terminalLabel}
+            ownerSex={ownerSex}
           />
         )}
         {task.kind === "adult" && (
@@ -113,6 +118,7 @@ export function FamilyAddBuilder({
             count={task.count}
             onComplete={advance}
             terminalLabel={terminalLabel}
+            ownerSex={ownerSex}
           />
         )}
         {task.kind === "child" && (
@@ -123,10 +129,16 @@ export function FamilyAddBuilder({
             count={task.count}
             onComplete={advance}
             terminalLabel={terminalLabel}
+            ownerSex={ownerSex}
           />
         )}
         {task.kind === "preg" && (
-          <PregLactSwitch key={`preg-${index}`} count={task.count} onComplete={advance} />
+          <PregLactSwitch
+            key={`preg-${index}`}
+            count={task.count}
+            onComplete={advance}
+            ownerSex={ownerSex}
+          />
         )}
         {task.kind === "maid" && (
           <HousekeeperForm key={`maid-${index}`} onComplete={advance} />
@@ -139,13 +151,16 @@ export function FamilyAddBuilder({
     <div className="bg-white rounded-2xl p-5 border border-dashed border-brand-purple-900/30">
       <p className="font-bold text-brand-ink text-sm">إضافة أفراد جدد</p>
       <p className="mt-1 mb-4 text-brand-ink-muted text-xs leading-relaxed">
-        اختاري مين تضيفين، وكل فرد ياخذ خطته ضمن وجبات العائلة.
+        {g(
+          "اختاري مين تضيفين، وكل فرد ياخذ خطته ضمن وجبات العائلة.",
+          "اختر مين تضيف، وكل فرد ياخذ خطته ضمن وجبات العائلة.",
+        )}
       </p>
 
       <div className="space-y-2">
         {canAddHusband && (
           <CheckRow
-            label="زوج"
+            label={g("زوج", "زوجة")}
             Icon={User}
             checked={husband}
             onToggle={() => setHusband((v) => !v)}
@@ -175,7 +190,9 @@ export function FamilyAddBuilder({
         disabled={totalSelected === 0}
         className="mt-4 w-full flex items-center justify-center gap-2 min-h-11 bg-brand-ink hover:bg-brand-purple-900 disabled:bg-brand-ink/30 disabled:cursor-not-allowed text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
       >
-        {totalSelected > 0 ? "التالي — أكملي بيانات العائلة" : "اختاري فرداً للإضافة"}
+        {totalSelected > 0
+          ? g("التالي — أكملي بيانات العائلة", "التالي — أكمل بيانات العائلة")
+          : g("اختاري فرداً للإضافة", "اختر فرداً للإضافة")}
       </button>
     </div>
   );

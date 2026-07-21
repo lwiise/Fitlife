@@ -49,7 +49,7 @@ export async function saveMomPersonalInfo(
     Sentry.captureException(error, {
       tags: { area: "profile-edit-personal", userId: user.id },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/profile");
   return { ok: true };
@@ -190,7 +190,7 @@ export async function saveMomHealthInfo(
     Sentry.captureException(error, {
       tags: { area: "profile-edit-health", userId: user.id },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/profile");
   return { ok: true };
@@ -240,7 +240,7 @@ export async function saveMomFamilyPreferences(
     Sentry.captureException(error, {
       tags: { area: "profile-edit-family-prefs", userId: user.id },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/profile");
   return { ok: true };
@@ -278,7 +278,7 @@ export async function saveHousekeeperLanguage(
     Sentry.captureException(error, {
       tags: { area: "profile-edit-housekeeper-lang", userId: user.id },
     });
-    return { ok: false, error: "فشل الحفظ. حاولي مرة ثانية" };
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
 
   // Re-translate the existing plan into the new language (in place, no regen).

@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { Dumbbell } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 interface WorkoutPlanCardProps {
   state: "optin" | "generating" | "ready" | "failed";
   /** Meals-first: a live meal generation holds the workout run, so the
    * generating state names the real wait instead of a generic timer. */
   waitingForMeals?: boolean;
+  /** Account owner's sex → owner-directed CTA copy (أكملي/اعرضي …). */
+  ownerSex?: string | null;
 }
 
 const viewLinkClass =
@@ -19,7 +22,9 @@ const viewLinkClass =
 export function WorkoutPlanCard({
   state,
   waitingForMeals = false,
+  ownerSex,
 }: WorkoutPlanCardProps) {
+  const g = genderPick(ownerSex);
   return (
     // flex-col + mt-auto on the CTA: the quick-glance grid stretches cards to
     // equal height, so bottom-pinning keeps this button on the same baseline
@@ -35,7 +40,7 @@ export function WorkoutPlanCard({
       {state === "optin" && (
         <>
           <p className="font-extrabold text-xl text-brand-ink mt-1">
-            أكملي منظومتك
+            {g("أكملي منظومتك", "أكمل منظومتك")}
           </p>
           <p className="text-brand-ink-muted text-xs mt-1">
             برنامج تمارين أسبوعي يوافق هدفك الغذائي
@@ -46,7 +51,7 @@ export function WorkoutPlanCard({
               className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-4 py-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-h-[2.75rem]"
             >
               <Dumbbell className="size-4" aria-hidden="true" />
-              أضيفي خطة التمارين
+              {g("أضيفي خطة التمارين", "أضِف خطة التمارين")}
             </Link>
           </div>
         </>
@@ -73,7 +78,7 @@ export function WorkoutPlanCard({
             برنامجك الأسبوعي جاهز
           </p>
           <a href="/plan?view=workout" className={viewLinkClass}>
-            اعرضي التمارين
+            {g("اعرضي التمارين", "اعرض التمارين")}
           </a>
         </>
       )}

@@ -6,6 +6,7 @@ import { Sparkles, Loader2 } from "lucide-react";
 import type { LocaleCode } from "@fitlife/plan-engine";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getPlanActionStrings } from "@/lib/plans/locales";
+import { genderPick } from "@/lib/copy/gender";
 
 type RegenScope = "both" | "shared" | "individual";
 
@@ -15,6 +16,7 @@ export function RegenerateButton({
   memberName,
   hasSharedMeals = false,
   locale,
+  ownerSex,
 }: {
   className?: string;
   // Scope the regen to the member being viewed (others kept untouched).
@@ -24,9 +26,12 @@ export function RegenerateButton({
   // both). When false, a plain confirm (nothing to scope).
   hasSharedMeals?: boolean;
   locale?: LocaleCode;
+  // Account owner's sex → owner-directed Arabic copy (the one tapping regen).
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
   const t = getPlanActionStrings(locale ?? "ar");
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -79,9 +84,9 @@ export function RegenerateButton({
           return;
         }
         // Keep the dialog open and surface the error inside it.
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }
@@ -120,10 +125,13 @@ export function RegenerateButton({
         title={memberName ? `إنشاء خطة جديدة لـ ${memberName}` : "إنشاء خطة جديدة"}
         body={
           memberName
-            ? `بننشئ خطة جديدة لـ ${memberName} فقط — باقي الأفراد ما تتغيّر خططهم. الخطة الحالية تنحفظ في السجل. قوليلنا ايش تبين نغيّر.`
-            : "عشان نصمم لكِ خطة أنسب، قوليلنا ايش تبين نغيّر. الخطة الحالية بتنحفظ في السجل."
+            ? `بننشئ خطة جديدة لـ ${memberName} فقط — باقي الأفراد ما تتغيّر خططهم. الخطة الحالية تنحفظ في السجل. ${g("قوليلنا ايش تبين نغيّر.", "قل لنا ايش تبي نغيّر.")}`
+            : g(
+                "عشان نصمم لكِ خطة أنسب، قوليلنا ايش تبين نغيّر. الخطة الحالية بتنحفظ في السجل.",
+                "عشان نصمم لك خطة أنسب، قل لنا ايش تبي نغيّر. الخطة الحالية بتنحفظ في السجل.",
+              )
         }
-        confirmLabel="أنشئي الخطة"
+        confirmLabel={g("أنشئي الخطة", "أنشئ الخطة")}
         cancelLabel="إلغاء"
         isPending={isPending}
         error={errorMessage}
@@ -179,7 +187,7 @@ export function RegenerateButton({
               htmlFor="regen-issues"
               className="block text-sm font-bold text-brand-ink mb-1.5"
             >
-              ايش ما عجبك في الخطة الحالية؟ <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+              {g("ايش ما عجبكِ في الخطة الحالية؟", "ايش ما عجبك في الخطة الحالية؟")} <span className="text-brand-ink-muted font-medium">(اختياري)</span>
             </label>
             <textarea
               id="regen-issues"
@@ -196,7 +204,7 @@ export function RegenerateButton({
               htmlFor="regen-improvements"
               className="block text-sm font-bold text-brand-ink mb-1.5"
             >
-              ايش تحبين نغيّر أو نحسّن؟ <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+              {g("ايش تحبين نغيّر أو نحسّن؟", "ايش تحب نغيّر أو نحسّن؟")} <span className="text-brand-ink-muted font-medium">(اختياري)</span>
             </label>
             <textarea
               id="regen-improvements"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const POLL_INTERVAL_MS = 3000;
 // Generation runs one concurrent Anthropic call per family member; the slowest
@@ -24,10 +25,13 @@ const GENERATING_STEPS = [
 export function PlanGeneratingState({
   planId,
   name,
+  ownerSex,
 }: {
   planId: string;
   name?: string | null;
+  ownerSex?: string | null;
 }) {
+  const g = genderPick(ownerSex);
   const [timedOut, setTimedOut] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
@@ -98,7 +102,10 @@ export function PlanGeneratingState({
           العملية تاخذ وقت أطول من المتوقع
         </h2>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-          حدّثي الصفحة عشان تشيكين إذا الخطة جاهزة، أو حاولي مرة ثانية بعد دقيقة.
+          {g(
+            "حدّثي الصفحة عشان تشيكين إذا الخطة جاهزة، أو حاولي مرة ثانية بعد دقيقة.",
+            "حدّث الصفحة عشان تشيك إذا الخطة جاهزة، أو حاول مرة ثانية بعد دقيقة.",
+          )}
         </p>
         <button
           type="button"
@@ -124,8 +131,14 @@ export function PlanGeneratingState({
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {isLong
-          ? "نجهّز خطة مفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة."
-          : "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة."}
+          ? g(
+              "نجهّز خطة مفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة.",
+              "نجهّز خطة مفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفل الصفحة.",
+            )
+          : g(
+              "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة.",
+              "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفل الصفحة.",
+            )}
       </p>
       <div
         className="mt-6 h-1.5 bg-brand-surface rounded-full overflow-hidden"

@@ -10,6 +10,7 @@ export function LactatingWizard(props: {
   count?: number;
   onComplete?: () => void;
   onSkip?: () => void;
+  ownerSex?: string | null;
 }) {
   return <MemberWizard type="lactating" {...props} />;
 }

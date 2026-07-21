@@ -3,15 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 export function PlanFailedState({
   planId: _planId,
   reason,
+  ownerSex,
 }: {
   planId: string;
   reason?: string | null;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -25,9 +29,9 @@ export function PlanFailedState({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }
@@ -44,7 +48,10 @@ export function PlanFailedState({
         ما قدرنا ننشئ خطتك
       </h2>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-        صار خطأ غير متوقع. حاولي مرة ثانية، وإذا تكرر تواصلي معنا.
+        {g(
+          "صار خطأ غير متوقع. حاولي مرة ثانية، وإذا تكرر تواصلي معنا.",
+          "صار خطأ غير متوقع. حاول مرة ثانية، وإذا تكرر تواصل معنا.",
+        )}
       </p>
 
       {errorMessage && (
@@ -87,7 +94,7 @@ export function PlanFailedState({
           href="/dashboard"
           className="flex-1 inline-flex items-center justify-center bg-brand-surface hover:bg-brand-ink/5 text-brand-ink font-bold py-3 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
         >
-          ارجعي للوحة
+          {g("ارجعي للوحة", "ارجع للوحة")}
         </a>
       </div>
     </div>

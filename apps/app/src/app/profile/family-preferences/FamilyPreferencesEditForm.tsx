@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import { CUISINES, DIETARY, COOKING, MEAL_OUT } from "../labels";
 import { saveMomFamilyPreferences, saveHousekeeperLanguage } from "../actions";
+import { genderPick } from "@/lib/copy/gender";
 import {
   LOCALE_CODES_ORDERED,
   LOCALE_INFO,
@@ -92,11 +93,14 @@ function toggle(list: string[], value: string): string[] {
 export function FamilyPreferencesEditForm({
   initial,
   housekeeper = null,
+  ownerSex,
 }: {
   initial: FamilyPrefsInitial;
   housekeeper?: { id: string; locale: LocaleCode } | null;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -109,8 +113,8 @@ export function FamilyPreferencesEditForm({
 
   const submit = () => {
     setError(null);
-    if (!cuisine) return setError("اختاري المطبخ المفضل");
-    if (!mealOut) return setError("اختاري كم مرة تأكلون خارج البيت");
+    if (!cuisine) return setError(g("اختاري المطبخ المفضل", "اختر المطبخ المفضل"));
+    if (!mealOut) return setError(g("اختاري كم مرة تأكلون خارج البيت", "اختر كم مرة تأكلون خارج البيت"));
 
     startTransition(async () => {
       const result = await saveMomFamilyPreferences({

@@ -57,6 +57,7 @@ export default async function DeepDivePage() {
             previous_diets: profile.previous_diets,
             food_budget: profile.food_budget,
           }}
+          ownerSex={profile.sex}
         />
       </div>
     </main>

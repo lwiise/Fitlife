@@ -26,9 +26,9 @@ export function BillingPortalButton({
           window.location.href = body.portal_url;
           return;
         }
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setErrorMessage(body.error ?? "حدث خطأ. يرجى المحاولة مرة أخرى");
       } catch {
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setErrorMessage("حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى");
       }
     });
   }

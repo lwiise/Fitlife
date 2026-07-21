@@ -16,6 +16,7 @@ export function PregLactSwitch({
   count = 1,
   onComplete,
   onSkip,
+  ownerSex,
 }: {
   onboarding?: boolean;
   count?: number;
@@ -23,6 +24,8 @@ export function PregLactSwitch({
   // When provided (the onboarding family builder), renders a "skip for now" escape
   // hatch so she can generate the plan now and add this member later.
   onSkip?: () => void;
+  // Account owner's sex → the member wizard's owner-directed copy.
+  ownerSex?: string | null;
 }) {
   const [choice, setChoice] = useState<"pregnant" | "lactating" | null>(null);
 
@@ -34,6 +37,7 @@ export function PregLactSwitch({
         count={count}
         onComplete={onComplete}
         onSkip={onSkip}
+        ownerSex={ownerSex}
       />
     );
   if (choice === "lactating")
@@ -44,6 +48,7 @@ export function PregLactSwitch({
         count={count}
         onComplete={onComplete}
         onSkip={onSkip}
+        ownerSex={ownerSex}
       />
     );
 

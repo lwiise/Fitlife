@@ -6,6 +6,7 @@ import { Camera, Eye, EyeOff, X } from "lucide-react";
 import { logBodyWeight } from "@/lib/engagement/actions";
 import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
 import { createClient } from "@/lib/supabase/client";
+import { genderPick } from "@/lib/copy/gender";
 
 const AR_NUM = new Intl.NumberFormat("ar-SA", {
   useGrouping: false,
@@ -37,13 +38,17 @@ export function WeighInForm({
   memberName,
   userId,
   lastWeightKg,
+  ownerSex,
 }: {
   memberId: string;
   memberName: string | null;
   userId: string;
   lastWeightKg: number | null;
+  // The form addresses the account OWNER (the one logging) → owner's sex.
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [revealed, setRevealed] = useState(false);
   const [weight, setWeight] = useState("");
   const [waist, setWaist] = useState("");
@@ -68,7 +73,7 @@ export function WeighInForm({
       return;
     }
     if (!PHOTO_EXT_BY_MIME[file.type]) {
-      setMessage("اختاري صورة بصيغة JPG أو PNG أو WebP");
+      setMessage(g("اختاري صورة بصيغة JPG أو PNG أو WebP", "اختر صورة بصيغة JPG أو PNG أو WebP"));
       return;
     }
     if (file.size > PHOTO_MAX_BYTES) {
@@ -83,7 +88,7 @@ export function WeighInForm({
   function submit() {
     const weightNum = Number(weight);
     if (!weight || Number.isNaN(weightNum)) {
-      setMessage("أدخلي الوزن بالأرقام");
+      setMessage(g("أدخلي الوزن بالأرقام", "أدخل الوزن بالأرقام"));
       return;
     }
     const waistNum = waist ? Number(waist) : null;
@@ -97,7 +102,7 @@ export function WeighInForm({
           .from(BODY_PHOTOS_BUCKET)
           .upload(photoPath, photo, { contentType: photo.type });
         if (uploadError) {
-          setMessage("تعذر رفع الصورة، حاولي مرة أخرى أو احفظي بدونها");
+          setMessage(g("تعذر رفع الصورة، حاولي مرة أخرى أو احفظي بدونها", "تعذر رفع الصورة، حاول مرة أخرى أو احفظ بدونها"));
           return;
         }
       }
@@ -249,7 +254,9 @@ export function WeighInForm({
       )}
       {saved && !message && (
         <p role="status" className="text-sm font-bold text-brand-purple-900">
-          {memberName ? "حُفظ الوزن — نلقاكِ الأسبوع القادم" : "حُفظ وزنك — نلقاكِ الأسبوع القادم"}
+          {memberName
+            ? g("حُفظ الوزن — نلقاكِ الأسبوع القادم", "حُفظ الوزن — نلقاك الأسبوع القادم")
+            : g("حُفظ وزنك — نلقاكِ الأسبوع القادم", "حُفظ وزنك — نلقاك الأسبوع القادم")}
         </p>
       )}
 

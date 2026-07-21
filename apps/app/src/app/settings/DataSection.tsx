@@ -1,8 +1,16 @@
 import { Database } from "lucide-react";
 import { ExportButton } from "./ExportButton";
 import { DeleteAccountButton } from "./DeleteAccountButton";
+import { genderPick } from "@/lib/copy/gender";
 
-export function DataSection({ userEmail }: { userEmail: string }) {
+export function DataSection({
+  userEmail,
+  ownerSex,
+}: {
+  userEmail: string;
+  ownerSex?: string | null;
+}) {
+  const g = genderPick(ownerSex);
   return (
     <section className="bg-white rounded-2xl border border-brand-ink/5 p-6 md:p-7">
       <div className="flex items-center gap-3 mb-5">
@@ -14,13 +22,13 @@ export function DataSection({ userEmail }: { userEmail: string }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <ExportButton />
+          <ExportButton ownerSex={ownerSex} />
           <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
-            احصلي على نسخة من بياناتك بصيغة JSON
+            {g("احصلي على نسخة من بياناتك بصيغة JSON", "احصل على نسخة من بياناتك بصيغة JSON")}
           </p>
         </div>
         <div>
-          <DeleteAccountButton userEmail={userEmail} />
+          <DeleteAccountButton userEmail={userEmail} ownerSex={ownerSex} />
           <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
             حذف حسابك وكل بياناتك بشكل نهائي. لا يمكن التراجع
           </p>

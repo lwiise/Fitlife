@@ -3,9 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
-export function EmptyState({ isOnboarded }: { isOnboarded: boolean }) {
+export function EmptyState({
+  isOnboarded,
+  ownerSex,
+}: {
+  isOnboarded: boolean;
+  ownerSex?: string | null;
+}) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -20,9 +28,9 @@ export function EmptyState({ isOnboarded }: { isOnboarded: boolean }) {
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }
@@ -34,10 +42,13 @@ export function EmptyState({ isOnboarded }: { isOnboarded: boolean }) {
           <Sparkles className="size-7 text-brand-purple-900" aria-hidden="true" />
         </div>
         <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
-          أكملي بياناتك أولاً
+          {g("أكملي بياناتك أولاً", "أكمل بياناتك أولاً")}
         </h2>
         <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
-          نحتاج بعض المعلومات عشان نحضّر لكِ خطة على مقاسك.
+          {g(
+            "نحتاج بعض المعلومات عشان نحضّر لكِ خطة على مقاسك.",
+            "نحتاج بعض المعلومات عشان نحضّر لك خطة على مقاسك.",
+          )}
         </p>
         <a
           href="/onboarding"
@@ -55,7 +66,7 @@ export function EmptyState({ isOnboarded }: { isOnboarded: boolean }) {
         <Sparkles className="size-7 text-brand-yellow" aria-hidden="true" />
       </div>
       <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
-        جاهزة لخطتك الأولى
+        {g("جاهزة لخطتك الأولى", "جاهز لخطتك الأولى")}
       </h2>
       <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
         خطة غذائية أسبوعية لكل أفراد العائلة، مصممة على مقاسكم.

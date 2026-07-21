@@ -82,7 +82,9 @@ const CHECKIN_HEADER_LABEL: Record<MealCheckinState["status"], string> = {
 const VERDICT_CHIPS: { value: Verdict; label: string; selected: string }[] = [
   { value: "loved", label: "نحبّها", selected: "bg-brand-yellow text-brand-ink" },
   { value: "fine", label: "عادية", selected: "bg-brand-lavender text-brand-purple-900" },
-  { value: "not_again", label: "لا تكرّريها", selected: "bg-brand-ink text-white" },
+  // First-person plural (family voice, matching «نحبّها») so it stays gender-
+  // neutral for the cook rather than a feminine imperative.
+  { value: "not_again", label: "لا نكرّرها", selected: "bg-brand-ink text-white" },
 ];
 
 // One person's status chips (+ reason chips when swapped). Shared meals render

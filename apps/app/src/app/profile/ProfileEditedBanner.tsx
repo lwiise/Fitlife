@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Sparkles } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 const STORAGE_KEY = "fitlife.profileEdited";
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -11,7 +12,7 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // Shows a transient "saved" confirmation and, after a health/family-prefs edit,
 // a sticky nudge to regenerate the plan. The nudge persists across refreshes via
 // sessionStorage (max 24h) until the user heads to /plan.
-export function ProfileEditedBanner() {
+export function ProfileEditedBanner({ ownerSex }: { ownerSex?: string | null }) {
   const params = useSearchParams();
   const [saved, setSaved] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
@@ -67,7 +68,10 @@ export function ProfileEditedBanner() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-brand-lavender/60 bg-brand-lavender/20 px-4 py-3">
           <Sparkles className="size-5 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
           <p className="flex-1 text-brand-ink text-sm leading-relaxed">
-            عدّلتِ بياناتك. أنشئي خطة جديدة لتطبيق التعديلات على خطتك
+            {genderPick(ownerSex)(
+              "عدّلتِ بياناتك. أنشئي خطة جديدة لتطبيق التعديلات على خطتك",
+              "عدّلت بياناتك. أنشئ خطة جديدة لتطبيق التعديلات على خطتك",
+            )}
           </p>
           <Link
             href="/plan"

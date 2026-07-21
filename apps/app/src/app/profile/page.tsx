@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, Utensils, ClipboardList, Dumbbell, ChevronLeft } from "lucide-react";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
+import { genderPick } from "@/lib/copy/gender";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { SettingsLink } from "@/components/SettingsLink";
@@ -58,6 +59,7 @@ export default async function ProfilePage() {
   const profile = await getCurrentUserProfile();
   if (!profile) redirect("/onboarding");
 
+  const g = genderPick(profile.sex);
   const age = profile.birth_year ? currentYear - profile.birth_year : null;
   const personalSummary = [
     profile.display_name,
@@ -66,7 +68,7 @@ export default async function ProfilePage() {
     profile.weight_kg ? `${profile.weight_kg} كجم` : null,
   ]
     .filter(Boolean)
-    .join("، ") || "أكملي معلوماتك";
+    .join("، ") || g("أكملي معلوماتك", "أكمل معلوماتك");
 
   const activityLabel = labelFor(ACTIVITY_OPTIONS, profile.activity_level);
   const goalLabel = profile.primary_goal
@@ -82,7 +84,7 @@ export default async function ProfilePage() {
       allergyCount > 0 ? `${allergyCount} حساسية` : null,
     ]
       .filter(Boolean)
-      .join("، ") || "أضيفي تفاصيلك الصحية";
+      .join("، ") || g("أضيفي تفاصيلك الصحية", "أضِف تفاصيلك الصحية");
 
   const cuisineLabel = labelFor(CUISINES, profile.cuisine_preference);
   const dietaryCount = asStringArray(profile.family_dietary_restrictions).filter(
@@ -96,7 +98,7 @@ export default async function ProfilePage() {
       cookingCount > 0 ? `${cookingCount} طرق طبخ` : null,
     ]
       .filter(Boolean)
-      .join("، ") || "حددي تفضيلات عائلتك";
+      .join("، ") || g("حددي تفضيلات عائلتك", "حدّد تفضيلات عائلتك");
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -122,12 +124,15 @@ export default async function ProfilePage() {
             ملفي الشخصي
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            عدّلي معلوماتك ساعة ما تبين. اختاري القسم اللي تبين تعدّلينه.
+            {g(
+              "عدّلي معلوماتك ساعة ما تبين. اختاري القسم اللي تبين تعدّلينه.",
+              "عدّل معلوماتك ساعة ما تبي. اختر القسم اللي تبي تعدّله.",
+            )}
           </p>
         </header>
 
         <Suspense fallback={null}>
-          <ProfileEditedBanner />
+          <ProfileEditedBanner ownerSex={profile.sex} />
         </Suspense>
 
         <div className="space-y-3">
@@ -165,7 +170,7 @@ export default async function ProfilePage() {
 
         <div className="rounded-2xl bg-white/60 border border-brand-ink/5 px-4 py-3">
           <p className="text-brand-ink-muted text-sm leading-relaxed">
-            أي تعديل لن يطبق على خطتك حتى تنشئي{" "}
+            أي تعديل لن يطبق على خطتك حتى {g("تنشئي", "تنشئ")}{" "}
             <Link
               href="/plan"
               className="text-brand-purple-900 font-bold underline underline-offset-4 hover:text-brand-purple-700 transition-colors"

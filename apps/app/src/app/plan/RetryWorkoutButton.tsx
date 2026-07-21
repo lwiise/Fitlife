@@ -3,8 +3,9 @@
 import { useTransition } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { retryWorkoutGeneration } from "@/app/onboarding/workout/actions";
+import { genderPick } from "@/lib/copy/gender";
 
-export function RetryWorkoutButton() {
+export function RetryWorkoutButton({ ownerSex }: { ownerSex?: string | null }) {
   const [isPending, startTransition] = useTransition();
   return (
     <button
@@ -18,7 +19,7 @@ export function RetryWorkoutButton() {
       ) : (
         <RefreshCw className="size-4" aria-hidden="true" />
       )}
-      أعيدي المحاولة
+      {genderPick(ownerSex)("أعيدي المحاولة", "أعِد المحاولة")}
     </button>
   );
 }

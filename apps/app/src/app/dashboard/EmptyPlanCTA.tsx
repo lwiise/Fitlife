@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Sparkles, RotateCcw } from "lucide-react";
+import { genderPick } from "@/lib/copy/gender";
 
 /**
  * Triggers plan generation from the dashboard's empty / failed state.
@@ -13,11 +14,14 @@ import { Loader2, Sparkles, RotateCcw } from "lucide-react";
 export function EmptyPlanCTA({
   isOnboarded,
   variant = "empty",
+  ownerSex,
 }: {
   isOnboarded: boolean;
   variant?: "empty" | "failed";
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
+  const g = genderPick(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -51,9 +55,9 @@ export function EmptyPlanCTA({
           router.push("/plan");
           return;
         }
-        setError(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
       } catch {
-        setError("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       }
     });
   }

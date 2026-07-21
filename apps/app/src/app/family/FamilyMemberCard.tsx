@@ -28,11 +28,13 @@ export function FamilyMemberCard({
   name,
   memberType,
   primaryGoal,
+  ownerSex,
 }: {
   id: string;
   name: string;
   memberType: string;
   primaryGoal: string | null;
+  ownerSex?: string | null;
 }) {
   const meta = TYPE_META[memberType] ?? TYPE_META.adult!;
   const { Icon } = meta;
@@ -58,7 +60,7 @@ export function FamilyMemberCard({
         >
           تعديل
         </Link>
-        <RemoveMemberButton memberId={id} name={name} />
+        <RemoveMemberButton memberId={id} name={name} ownerSex={ownerSex} />
       </div>
     </div>
   );

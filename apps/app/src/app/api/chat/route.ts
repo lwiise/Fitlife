@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       .gte("created_at", since);
     if (!error && (count ?? 0) >= DAILY_CAP) {
       return NextResponse.json(
-        { error: "وصلتِ للحد اليومي من الأسئلة. حاولي مرة ثانية باكر." },
+        { error: "تم بلوغ الحد اليومي من الأسئلة. يرجى المحاولة غداً." },
         { status: 429 },
       );
     }
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
           tags: { area: "advisor-chat", userId: user.id },
         });
         controller.enqueue(
-          encoder.encode("\n\nصار خطأ غير متوقع. حاولي مرة ثانية."),
+          encoder.encode("\n\nصار خطأ غير متوقع. يرجى المحاولة مرة أخرى."),
         );
       } finally {
         controller.close();

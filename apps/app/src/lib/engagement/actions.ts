@@ -25,8 +25,8 @@ import {
   type SetWorkoutCheckinInput,
 } from "./serverSchemas";
 
-const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، حاولي مرة أخرى";
-const AUTH_ERROR_AR = "انتهت الجلسة، سجّلي الدخول مرة أخرى";
+const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، يرجى المحاولة مرة أخرى";
+const AUTH_ERROR_AR = "انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى";
 
 /** How many days back a day may still be closed («retroactive-first», 48h). */
 const GRACE_DAYS = 2;
@@ -112,7 +112,7 @@ export async function closeDay(rawInput: CloseDayInput) {
       Sentry.captureException(checkinError, {
         tags: { area: "engagement", step: "checkin-upsert", userId: user.id },
       });
-      return { ok: false as const, error: "تعذر حفظ يومك، حاولي مرة أخرى" };
+      return { ok: false as const, error: "تعذر حفظ يومك، يرجى المحاولة مرة أخرى" };
     }
     Sentry.captureMessage(
       "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
@@ -142,7 +142,7 @@ export async function closeDay(rawInput: CloseDayInput) {
         Sentry.captureException(verdictError, {
           tags: { area: "engagement", step: "verdict-upsert", userId: user.id },
         });
-        return { ok: false as const, error: "تعذر حفظ الآراء، حاولي مرة أخرى" };
+        return { ok: false as const, error: "تعذر حفظ الآراء، يرجى المحاولة مرة أخرى" };
       }
     }
   }
@@ -266,7 +266,7 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
       Sentry.captureException(error, {
         tags: { area: "engagement", step: "workout-checkin-clear", userId: user.id },
       });
-      return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+      return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
     }
     revalidatePath("/plan");
     return { ok: true as const };
@@ -287,7 +287,7 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
     Sentry.captureException(error, {
       tags: { area: "engagement", step: "workout-checkin-upsert", userId: user.id },
     });
-    return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+    return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/plan");
   return { ok: true as const };
@@ -352,7 +352,7 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
       Sentry.captureException(error, {
         tags: { area: "engagement", step: "verdict-clear", userId: user.id },
       });
-      return { ok: false as const, error: "تعذر حفظ رأيك، حاولي مرة أخرى" };
+      return { ok: false as const, error: "تعذر حفظ رأيك، يرجى المحاولة مرة أخرى" };
     }
     revalidatePath("/plan");
     return { ok: true as const };
@@ -382,7 +382,7 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
     Sentry.captureException(error, {
       tags: { area: "engagement", step: "verdict-upsert", userId: user.id },
     });
-    return { ok: false as const, error: "تعذر حفظ رأيك، حاولي مرة أخرى" };
+    return { ok: false as const, error: "تعذر حفظ رأيك، يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/plan");
   return { ok: true as const };
@@ -476,7 +476,7 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
         Sentry.captureException(deleteError, {
           tags: { area: "engagement", step: "checkin-clear", userId: user.id },
         });
-        return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
+        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
       }
     } else if (
       ((cleared ?? []) as unknown[]).length === 0 &&
@@ -494,7 +494,7 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
         Sentry.captureException(fallbackClearError, {
           tags: { area: "engagement", step: "checkin-clear", userId: user.id },
         });
-        return { ok: false as const, error: "تعذر مسح التسجيل، حاولي مرة أخرى" };
+        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
       }
     }
   } else {
@@ -521,7 +521,7 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
         Sentry.captureException(upsertError, {
           tags: { area: "engagement", step: "checkin-inline", userId: user.id },
         });
-        return { ok: false as const, error: "تعذر حفظ التسجيل، حاولي مرة أخرى" };
+        return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
       }
       Sentry.captureMessage(
         "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
@@ -674,7 +674,7 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
     Sentry.captureException(logError, {
       tags: { area: "engagement", step: "body-log-upsert", userId: user.id },
     });
-    return { ok: false as const, error: "تعذر حفظ الوزن، حاولي مرة أخرى" };
+    return { ok: false as const, error: "تعذر حفظ الوزن، يرجى المحاولة مرة أخرى" };
   }
 
   // Best-effort scalar mirror — generation reads the member's weight_kg.

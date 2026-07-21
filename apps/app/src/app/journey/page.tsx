@@ -10,6 +10,7 @@ import {
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
 import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
+import { genderPick } from "@/lib/copy/gender";
 import { WeighInForm } from "./WeighInForm";
 import { PhotoStrip } from "./PhotoStrip";
 
@@ -109,7 +110,7 @@ export default async function JourneyPage({
       searchParams,
       supabase
         .from("profiles")
-        .select("target_weight_kg, is_pregnant, weight_kg, birth_year")
+        .select("target_weight_kg, is_pregnant, weight_kg, birth_year, sex")
         .eq("id", user.id)
         .single(),
       supabase
@@ -134,6 +135,8 @@ export default async function JourneyPage({
   if (!selectedMember && !momEligible) redirect("/dashboard");
   const memberId = selectedMember?.id ?? "mom";
   const memberName = selectedMember?.name ?? null;
+  // The weigh-in form + privacy note address the account OWNER (the one logging).
+  const g = genderPick(profile?.sex);
 
   // Target line: the mom's own target only — family adults carry no target
   // weight, and pregnancy gets no loss-framing at all.
@@ -224,8 +227,8 @@ export default async function JourneyPage({
         >
           <Lock className="size-4 text-brand-purple-900 mt-1 shrink-0" aria-hidden="true" />
           <p className="text-sm text-brand-purple-900 leading-relaxed">
-            هذه الصفحة لكِ وحدك — لا تظهر في الرسائل ولا بطاقات المشاركة ولا أي
-            شاشة مشتركة.
+            {g("هذه الصفحة لكِ وحدك", "هذه الصفحة لك وحدك")} — لا تظهر في الرسائل
+            ولا بطاقات المشاركة ولا أي شاشة مشتركة.
           </p>
         </section>
 
@@ -241,7 +244,7 @@ export default async function JourneyPage({
                     : "border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30"
                 }`}
               >
-                أنتِ
+                {g("أنتِ", "أنتَ")}
               </Link>
             )}
             {eligibleMembers.map((m) => (
@@ -266,6 +269,7 @@ export default async function JourneyPage({
           memberName={memberName}
           userId={user.id}
           lastWeightKg={lastKnownWeight}
+          ownerSex={profile?.sex}
         />
 
         {logs.length >= 2 && (

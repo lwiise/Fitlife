@@ -489,7 +489,10 @@ export function MomWizard() {
                     </div>
                     <div>
                       <p className="text-sm font-bold text-brand-ink mb-2">
-                        أطعمة تسبب لكِ الغثيان حالياً (اختياري)
+                        {g(
+                          "أطعمة تسبب لكِ الغثيان حالياً (اختياري)",
+                          "أطعمة تسبب لك الغثيان حالياً (اختياري)",
+                        )}
                       </p>
                       <ChipInput
                         value={nauseaFoods}
@@ -542,13 +545,13 @@ export function MomWizard() {
 
                 <PrimaryButton
                   onClick={() => {
-                    if (!pregStatus) return setError("اختاري حالتك");
+                    if (!pregStatus) return setError(g("اختاري حالتك", "اختر حالتك"));
                     if (pregStatus === "pregnant" && (pregMonth == null || highRisk == null))
-                      return setError("أكملي تفاصيل الحمل");
+                      return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
                     if (pregStatus === "lactating") {
                       const mpp = Number(monthsPP);
                       if (!feedingMode || !monthsPP || Number.isNaN(mpp) || mpp < 0 || mpp > 24)
-                        return setError("أكملي تفاصيل الرضاعة — عمر الطفل بين 0 و24 شهراً");
+                        return setError(g("أكملي تفاصيل الرضاعة — عمر الطفل بين 0 و24 شهراً", "أكمل تفاصيل الرضاعة — عمر الطفل بين 0 و24 شهراً"));
                     }
                     goNext();
                   }}
