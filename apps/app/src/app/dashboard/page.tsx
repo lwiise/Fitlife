@@ -13,7 +13,7 @@ import {
 } from "@/lib/supabase/queries";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
 import { planHasContent } from "@fitlife/plan-engine";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
@@ -53,9 +53,16 @@ function formatWeekRange(weekStart: string): string | null {
 }
 
 export default async function DashboardPage() {
-  const profile = await getCurrentUserProfile();
-  const familyMembers = await getCurrentUserFamilyMembers();
-  const latestPlan = await getCurrentUserLatestPlan();
+  // Everything in this batch is independent — one parallel round-trip instead
+  // of a sequential waterfall (the auth lookup inside each helper is deduped
+  // per-request via React.cache).
+  const [profile, familyMembers, latestPlan, user, supabase] = await Promise.all([
+    getCurrentUserProfile(),
+    getCurrentUserFamilyMembers(),
+    getCurrentUserLatestPlan(),
+    getAuthUser(),
+    createClient(),
+  ]);
 
   // A 'ready' plan with empty day shells isn't usable yet — treat it as still
   // generating so downstream gates don't fire early.
@@ -64,10 +71,6 @@ export default async function DashboardPage() {
     : false;
   const planIsReady = latestPlan?.status === "ready" && planHasMeals;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const [subscription, workoutPlan] = user
     ? await Promise.all([
         getCurrentSubscription(user.id),
@@ -121,9 +124,6 @@ export default async function DashboardPage() {
   );
   const needsFamilyPlan = planIsReady && pendingMembers.length > 0;
   const pendingNames = pendingMembers.map((m) => m.name);
-  const familyChangeAccess =
-    needsFamilyPlan && user ? await canGenerateForFamilyChange(user.id) : null;
-  const pendingBlocked = familyChangeAccess?.allowed === false;
   const pendingNamesText = pendingNames.join("، ");
 
   // Housekeeper recipe view existence — only used to add a step to the trial
@@ -134,46 +134,51 @@ export default async function DashboardPage() {
     !!housekeeper &&
     housekeeper.preferred_language !== "ar";
 
-  // «موسم بيتنا» leaderboard — the dashboard's centerpiece (first thing to see).
-  // Null for solo households or before a plan is ready.
-  const seasonProps = await getFamilySeasonProps(
-    profile,
-    familyMembers,
-    latestPlan,
-    workoutPlan,
-  );
-
   // Renewal-week recap — active paid subs within 7 days of period end.
-  let renewalRecap = null;
-  if (
-    user &&
+  const showRenewalRecap =
+    !!user &&
     subscription?.status === "active" &&
-    subscription.lemonsqueezy_subscription_id &&
+    !!subscription.lemonsqueezy_subscription_id &&
     !subscription.cancel_at_period_end &&
-    subscription.current_period_end &&
-    isWithinRenewalWindow(subscription.current_period_end)
-  ) {
-    renewalRecap = {
-      ledger: await loadFamilyLedger(supabase, user.id),
-      cadence: subscription.cadence,
-    };
-  }
+    !!subscription.current_period_end &&
+    isWithinRenewalWindow(subscription.current_period_end);
 
-  // Day-3 trial activation checklist — DB-derived, only while trialing.
-  let trialChecklist;
-  if (user && subscription?.status === "trialing") {
-    const [chatCount, weightCount] = await Promise.all([
-      supabase
-        .from("chat_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .limit(1),
-      supabase
-        .from("body_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .limit(1),
+  // The remaining reads are independent of each other — fetch them in one
+  // parallel batch instead of four sequential stages.
+  const [familyChangeAccess, seasonProps, renewalLedger, trialCounts] =
+    await Promise.all([
+      // Family-change access gate (only matters when members are pending).
+      needsFamilyPlan && user ? canGenerateForFamilyChange(user.id) : null,
+      // «موسم بيتنا» leaderboard — the dashboard's centerpiece (first thing to
+      // see). Null for solo households or before a plan is ready.
+      getFamilySeasonProps(profile, familyMembers, latestPlan, workoutPlan),
+      showRenewalRecap && user ? loadFamilyLedger(supabase, user.id) : null,
+      // Day-3 trial activation checklist counts — only while trialing.
+      user && subscription?.status === "trialing"
+        ? Promise.all([
+            supabase
+              .from("chat_messages")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .limit(1),
+            supabase
+              .from("body_logs")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .limit(1),
+          ])
+        : null,
     ]);
+
+  const pendingBlocked = familyChangeAccess?.allowed === false;
+
+  const renewalRecap = renewalLedger
+    ? { ledger: renewalLedger, cadence: subscription?.cadence ?? null }
+    : null;
+
+  let trialChecklist;
+  if (trialCounts) {
+    const [chatCount, weightCount] = trialCounts;
     trialChecklist = {
       planReady: planIsReady,
       advisorTried: (chatCount.count ?? 0) > 0,

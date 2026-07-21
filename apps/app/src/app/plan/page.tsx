@@ -48,64 +48,6 @@ export default async function PlanPage({
     getCurrentUserLatestPlan(),
     getCurrentUserFamilyMembers(),
   ]);
-  // Workout plan (opt-in). The toggle renders only when a row exists; the
-  // meal view is untouched otherwise.
-  const workout = profile ? await getLatestWorkoutPlan(profile.id) : null;
-  const workoutView = view === "workout" && workout != null;
-
-  // Inline per-meal tracking marks for this plan (interactive page only —
-  // history/housekeeper views never receive them). select("*") on purpose:
-  // member_id is a 00019 column — naming it would fail the whole read on a
-  // pre-apply prod, while * degrades to rows without it (house tolerance
-  // pattern). Rows are per (day, slot, member) → 7 days × 4 slots × household.
-  let checkins;
-  // Per-dish verdicts for this plan («كيف كانت؟» → golden dishes / vetoes).
-  // Same interactive-page-only scope and select("*") pre-apply tolerance as
-  // checkins (meal_verdicts is a 00017 table; a missing table degrades to []).
-  let verdicts;
-  if (profile && latest?.status === "ready") {
-    const supabase = await createClient();
-    const [checkinRes, verdictRes] = await Promise.all([
-      supabase.from("meal_checkins").select("*").eq("meal_plan_id", latest.id).limit(400),
-      supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
-    ]);
-    checkins = ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      day_index: r.day_index as number,
-      slot: r.slot as string,
-      status: r.status as string,
-      reason: (r.reason ?? null) as string | null,
-      member_id: (r.member_id ?? null) as string | null,
-    }));
-    verdicts = ((verdictRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      day_index: r.day_index as number,
-      slot: r.slot as string,
-      member_id: (r.member_id ?? null) as string | null,
-      verdict: r.verdict as string,
-    }));
-  }
-
-  // Workout session marks (the exercise pillar). Untyped cast: workout_checkins
-  // (00020) isn't in the generated Database types until db:types is regenerated;
-  // select("*") degrades to [] on a pre-apply prod. Feeds WorkoutViewer's
-  // inline session marking (the «موسم بيتنا» leaderboard now lives on the
-  // dashboard and fetches its own marks via getFamilySeasonProps).
-  let workoutCheckins:
-    | Array<{ day_index: number; member_id: string; status: string }>
-    | undefined;
-  if (profile && workout?.status === "ready") {
-    const supabase = await createClient();
-    const { data } = await (supabase as unknown as SupabaseClient)
-      .from("workout_checkins")
-      .select("*")
-      .eq("workout_plan_id", workout.id)
-      .limit(400);
-    workoutCheckins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      day_index: r.day_index as number,
-      member_id: (r.member_id ?? "") as string,
-      status: r.status as string,
-    }));
-  }
-
   const isOnboarded = !!profile?.onboarding_completed_at;
   // Members saved but not yet in the plan (deferred while a prior gen was in
   // flight). When onboarding is done and the plan is ready, a lazy drain fills
@@ -114,12 +56,80 @@ export default async function PlanPage({
   const pendingMembers = familyMembers.filter(
     (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
   );
-  // Deferred members the tier can't cover → don't auto-drain or show "preparing"
-  // (it never completes); show an upgrade nudge instead. (profiles.id = user id.)
-  const pendingBlocked =
+
+  // The workout chain, the meal marks, and the access gate are mutually
+  // independent — fetch them in one parallel batch instead of four stages.
+  const [workoutBundle, mealMarks, familyChangeAccess] = await Promise.all([
+    // Workout plan (opt-in) + its session marks (the exercise pillar). The
+    // toggle renders only when a row exists; the meal view is untouched
+    // otherwise. Untyped cast: workout_checkins (00020) isn't in the generated
+    // Database types until db:types is regenerated; select("*") degrades to []
+    // on a pre-apply prod. Feeds WorkoutViewer's inline session marking (the
+    // «موسم بيتنا» leaderboard now lives on the dashboard and fetches its own
+    // marks via getFamilySeasonProps).
+    (async () => {
+      const workout = profile ? await getLatestWorkoutPlan(profile.id) : null;
+      let workoutCheckins:
+        | Array<{ day_index: number; member_id: string; status: string }>
+        | undefined;
+      if (profile && workout?.status === "ready") {
+        const supabase = await createClient();
+        const { data } = await (supabase as unknown as SupabaseClient)
+          .from("workout_checkins")
+          .select("*")
+          .eq("workout_plan_id", workout.id)
+          .limit(400);
+        workoutCheckins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          day_index: r.day_index as number,
+          member_id: (r.member_id ?? "") as string,
+          status: r.status as string,
+        }));
+      }
+      return { workout, workoutCheckins };
+    })(),
+    // Inline per-meal tracking marks + per-dish verdicts («كيف كانت؟») for this
+    // plan (interactive page only — history/housekeeper views never receive
+    // them). select("*") on purpose: member_id is a 00019 column — naming it
+    // would fail the whole read on a pre-apply prod, while * degrades to rows
+    // without it (house tolerance pattern). Rows are per (day, slot, member) →
+    // 7 days × 4 slots × household. meal_verdicts is a 00017 table; a missing
+    // table degrades to [].
+    (async () => {
+      if (!profile || latest?.status !== "ready") return null;
+      const supabase = await createClient();
+      const [checkinRes, verdictRes] = await Promise.all([
+        supabase.from("meal_checkins").select("*").eq("meal_plan_id", latest.id).limit(400),
+        supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
+      ]);
+      return {
+        checkins: ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          day_index: r.day_index as number,
+          slot: r.slot as string,
+          status: r.status as string,
+          reason: (r.reason ?? null) as string | null,
+          member_id: (r.member_id ?? null) as string | null,
+        })),
+        verdicts: ((verdictRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          day_index: r.day_index as number,
+          slot: r.slot as string,
+          member_id: (r.member_id ?? null) as string | null,
+          verdict: r.verdict as string,
+        })),
+      };
+    })(),
+    // Deferred members the tier can't cover → don't auto-drain or show
+    // "preparing" (it never completes); show an upgrade nudge instead.
+    // (profiles.id = user id.)
     pendingMembers.length > 0 && profile
-      ? !(await canGenerateForFamilyChange(profile.id)).allowed
-      : false;
+      ? canGenerateForFamilyChange(profile.id)
+      : null,
+  ]);
+
+  const { workout, workoutCheckins } = workoutBundle;
+  const workoutView = view === "workout" && workout != null;
+  const checkins = mealMarks?.checkins;
+  const verdicts = mealMarks?.verdicts;
+  const pendingBlocked = familyChangeAccess ? !familyChangeAccess.allowed : false;
   // Order by add order so the banner shows the member being prepared NOW vs the
   // rest still queued (the drain generates them one at a time, in this order).
   const addOrder = Array.isArray(profile?.member_addition_order)

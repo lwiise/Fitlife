@@ -15,14 +15,12 @@ if (dsn) {
     release,
     tracesSampleRate: 0.1,
     // Replays: nothing on normal sessions, full capture when an error occurs.
+    // The Replay integration itself is attached lazily below — it is the
+    // heaviest piece of the Sentry client and must stay out of the critical
+    // bundle.
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
-    integrations: [
-      Sentry.replayIntegration({
-        maskAllText: true,
-        blockAllMedia: true,
-      }),
-    ],
+    integrations: [],
     ignoreErrors: [
       "AbortError",
       "NetworkError",
@@ -52,6 +50,31 @@ if (dsn) {
       return event;
     },
   });
+
+  // Attach Replay after the page goes idle. Referencing Sentry.replayIntegration
+  // statically would pull ~50KB+ (gz) of replay code into every page's initial
+  // bundle; lazyLoadIntegration fetches it off the critical path instead.
+  // Trade-off: an error thrown before the idle attach reports without a replay
+  // — acceptable for the bundle/hydration win on every single page load.
+  const attachReplay = () => {
+    Sentry.lazyLoadIntegration("replayIntegration")
+      .then((replayIntegration) => {
+        Sentry.addIntegration(
+          replayIntegration({
+            maskAllText: true,
+            blockAllMedia: true,
+          }),
+        );
+      })
+      .catch(() => {
+        // CDN blocked/offline — errors still report, just without replays.
+      });
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(attachReplay, { timeout: 5000 });
+  } else {
+    window.setTimeout(attachReplay, 3000);
+  }
 }
 
 // Required by @sentry/nextjs to instrument client-side navigations.

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import {
   PRICING_TIERS,
@@ -33,10 +34,14 @@ export interface SubscriptionRow {
 }
 
 /**
- * Fetch the user's most recent subscription row (any status).
+ * Uncached fetch of the user's most recent subscription row (any status).
  * No `unique(user_id)` constraint, so we sort by created_at desc.
+ *
+ * Use this ONLY in write-then-read flows that must observe rows updated
+ * earlier in the same request (e.g. reconcile). Everything else should use
+ * getCurrentSubscription below.
  */
-export async function getCurrentSubscription(
+export async function getCurrentSubscriptionFresh(
   userId: string,
 ): Promise<SubscriptionRow | null> {
   const supabase = await createClient();
@@ -54,6 +59,14 @@ export async function getCurrentSubscription(
   if (error || !data || data.length === 0) return null;
   return data[0] ?? null;
 }
+
+/**
+ * The user's most recent subscription row, memoized per request with
+ * React.cache: pages often need the subscription both directly (banners) and
+ * inside access checks (canGenerateForFamilyChange) within one request — one
+ * query serves both.
+ */
+export const getCurrentSubscription = cache(getCurrentSubscriptionFresh);
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

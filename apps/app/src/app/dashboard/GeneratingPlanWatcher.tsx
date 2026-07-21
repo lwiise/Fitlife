@@ -15,6 +15,11 @@ export function GeneratingPlanWatcher() {
 
   useEffect(() => {
     let active = true;
+    // Refresh the server tree only when the plan row actually changed — a day
+    // landing rewrites plan_data and bumps updated_at. Blind per-tick refreshes
+    // re-rendered the whole dashboard (and re-ran all its queries) every 3s for
+    // minutes at a time.
+    let lastSeen: string | null = null;
     const poll = setInterval(async () => {
       try {
         const res = await fetch("/api/plans/status", { cache: "no-store" });
@@ -22,6 +27,7 @@ export function GeneratingPlanWatcher() {
         const body = (await res.json()) as {
           status?: string;
           in_progress?: boolean;
+          updated_at?: string;
         };
         // Status flips to "ready" on the first (empty) shell, long before the
         // days finish — so don't stop there. Keep polling until generation has
@@ -32,10 +38,14 @@ export function GeneratingPlanWatcher() {
         if (active && done) {
           clearInterval(poll);
           router.refresh();
-        } else if (active) {
+          return;
+        }
+        const seen = `${body.status}:${body.in_progress}:${body.updated_at}`;
+        if (active && lastSeen !== null && seen !== lastSeen) {
           // Pull the freshly-persisted days in as they land (progressive fill).
           router.refresh();
         }
+        lastSeen = seen;
       } catch {
         // transient — keep polling
       }

@@ -1,7 +1,3 @@
-"use client";
-
-import { ChevronLeft } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 
 import {
@@ -9,9 +5,17 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/marketing/components/ui/carousel";
-import { track } from "@/marketing/lib/analytics";
+import { TrackedButton, TrackedLink } from "@/marketing/components/TrackedLink";
 import { getSignupUrl } from "@/marketing/lib/appUrls";
 import { cn } from "@/marketing/lib/utils";
+
+// Server component on purpose: the hero is the LCP surface, so its headline and
+// card photos must be in the first HTML paint. Entrance animation is pure CSS
+// (`hero-rise` in globals.css) instead of motion/react — the old JS-driven
+// entrance server-rendered everything at opacity:0 and kept the whole viewport
+// invisible until hydration finished (plus up to ~2s of stagger delays).
+// Interactivity (analytics clicks, the mobile carousel) lives in small client
+// leaves.
 
 // TODO: Replace 5 placeholder SVG silhouettes with real cutout photography
 // (transparent-background PNGs) before launch. Real photos: women/men in Gulf/Filipino
@@ -71,21 +75,14 @@ const familyMembers: FamilyMember[] = [
   },
 ];
 
-const line1Words = "خطة غذائية للعائلة.".split(" ");
-const line2Words = "وتعليمات الطبخ".split(" ");
-const line3Words = "توصل للخدامة بلغتها.".split(" ");
-
-const easeOut = "easeOut" as const;
-
-const wordContainer = { hidden: {}, visible: {} };
-const wordItem = {
-  hidden: { opacity: 0, y: 15 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.4, ease: easeOut },
-  },
-};
+// Literal class strings so Tailwind's scanner picks them up.
+const cardDelays = [
+  "[animation-delay:240ms]",
+  "[animation-delay:320ms]",
+  "[animation-delay:400ms]",
+  "[animation-delay:480ms]",
+  "[animation-delay:560ms]",
+];
 
 function PlayIcon({ className }: { className?: string }) {
   return (
@@ -137,34 +134,15 @@ function DecorativeLeaves({ textColorClass }: { textColorClass: string }) {
   );
 }
 
-function FamilyCard({
-  member,
-  index,
-  reduced,
-}: {
-  member: FamilyMember;
-  index: number;
-  reduced: boolean;
-}) {
+function FamilyCard({ member, index }: { member: FamilyMember; index: number }) {
   return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={
-        reduced
-          ? { duration: 0 }
-          : { duration: 0.5, ease: easeOut, delay: 1.8 + index * 0.08 }
-      }
-      whileHover={
-        reduced
-          ? undefined
-          : {
-              y: -10,
-              transition: { duration: 0.3, ease: easeOut },
-            }
-      }
+    <div
       style={{ backgroundColor: member.accentColor }}
-      className="group relative aspect-[3/4] cursor-default overflow-hidden rounded-3xl shadow-xl"
+      className={cn(
+        "group relative aspect-[3/4] cursor-default overflow-hidden rounded-3xl shadow-xl",
+        "hero-rise transition-transform duration-300 ease-out hover:-translate-y-2.5",
+        cardDelays[index],
+      )}
     >
       {/* Photo fills entire card */}
       <div className="absolute inset-0 z-0">
@@ -173,6 +151,9 @@ function FamilyCard({
           alt={member.imageAlt}
           fill
           sizes="(max-width: 768px) 60vw, 20vw"
+          // The first two cards are in the initial viewport on both layouts —
+          // preload them (LCP candidates on mobile). The rest lazy-load.
+          priority={index < 2}
           className="object-cover object-top"
         />
       </div>
@@ -218,32 +199,22 @@ function FamilyCard({
 
       {member.hasPlayButton && (
         <div className="absolute inset-x-0 bottom-6 z-30 flex justify-center">
-          <button
-            type="button"
-            onClick={() => track("hero_video_clicked")}
+          <TrackedButton
+            event="hero_video_clicked"
             className="inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-primary shadow-lg transition-colors hover:bg-[#1A1023] hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <PlayIcon className="size-4" />
             <span>شغّلي الفيديو</span>
-          </button>
+          </TrackedButton>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
-function MomFloatingCard({ reduced }: { reduced: boolean }) {
+function MomFloatingCard() {
   return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, x: -30, y: -20 }}
-      animate={{ opacity: 1, x: 0, y: 0 }}
-      transition={
-        reduced
-          ? { duration: 0 }
-          : { duration: 0.6, ease: easeOut, delay: 1.4 }
-      }
-      className="absolute top-[150px] start-[3%] z-20 hidden w-[235px] -rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 xl:block"
-    >
+    <div className="hero-rise [animation-delay:400ms] absolute top-[150px] start-[3%] z-20 hidden w-[235px] -rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 xl:block">
       <div className="rounded-2xl border border-[#1A1023]/5 bg-white p-4 shadow-xl">
         <div className="flex flex-row items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-pink to-brand-lavender text-sm font-bold text-white">
@@ -265,22 +236,13 @@ function MomFloatingCard({ reduced }: { reduced: boolean }) {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
+function HousekeeperFloatingCard() {
   return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, x: 30, y: -20 }}
-      animate={{ opacity: 1, x: 0, y: 0 }}
-      transition={
-        reduced
-          ? { duration: 0 }
-          : { duration: 0.6, ease: easeOut, delay: 1.6 }
-      }
-      className="absolute top-[180px] end-[3%] z-20 hidden w-[235px] rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 xl:block"
-    >
+    <div className="hero-rise [animation-delay:520ms] absolute top-[180px] end-[3%] z-20 hidden w-[235px] rotate-[3deg] transition-transform duration-300 motion-safe:hover:rotate-0 xl:block">
       <div className="rounded-2xl border border-[#1A1023]/5 bg-white p-4 shadow-xl">
         <div className="flex flex-row items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-yellow to-[#E89B5A] text-sm font-bold text-white">
@@ -304,22 +266,13 @@ function HousekeeperFloatingCard({ reduced }: { reduced: boolean }) {
           </p>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-function SaraPill({ reduced }: { reduced: boolean }) {
+function SaraPill() {
   return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={
-        reduced
-          ? { duration: 0 }
-          : { duration: 0.5, ease: easeOut, delay: 1.8 }
-      }
-      className="absolute bottom-[5%] start-[5%] z-10 hidden lg:block"
-    >
+    <div className="hero-rise [animation-delay:520ms] absolute bottom-[5%] start-[5%] z-10 hidden lg:block">
       <div className="inline-flex items-center gap-2.5 rounded-full bg-[#1A1023] px-4 py-2 text-white shadow-lg">
         <div className="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-pink to-brand-lavender text-xs font-bold">
           س
@@ -331,7 +284,7 @@ function SaraPill({ reduced }: { reduced: boolean }) {
           </p>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -355,8 +308,6 @@ function WaveSVG() {
 }
 
 export default function Hero() {
-  const reduced = useReducedMotion() ?? false;
-
   return (
     <section
       aria-label="القسم الرئيسي"
@@ -390,123 +341,60 @@ export default function Hero() {
       {/* Floating cards are positioned against the full-width section (not the
           1280px container) so they sit in the viewport gutters, clear of the
           centred headline. */}
-      <MomFloatingCard reduced={reduced} />
-      <HousekeeperFloatingCard reduced={reduced} />
+      <MomFloatingCard />
+      <HousekeeperFloatingCard />
 
       <div className="container-page relative pb-32">
         <div className="relative mx-auto max-w-5xl pt-6 text-center md:pt-20">
-          {reduced ? (
-            <h1 className="font-extrabold leading-[0.95] tracking-tight">
-              <span className="block text-[clamp(34px,7vw,96px)] text-[#1A1023]">
-                خطة غذائية للعائلة.
-              </span>
-              <span className="mt-2 block text-[clamp(34px,7vw,96px)] text-[#1A1023]">
-                وتعليمات الطبخ
-              </span>
-              <span className="mt-2 block text-[clamp(34px,7vw,96px)] text-primary">
-                توصل للخدامة بلغتها.
-              </span>
-            </h1>
-          ) : (
-            <motion.h1
-              variants={wordContainer}
-              initial="hidden"
-              animate="visible"
-              transition={{ staggerChildren: 0.06 }}
-              className="font-extrabold leading-[0.95] tracking-tight"
-            >
-              <motion.span
-                variants={wordContainer}
-                transition={{ staggerChildren: 0.06, delayChildren: 0.1 }}
-                className="block text-[clamp(34px,7vw,96px)] text-[#1A1023]"
-              >
-                {line1Words.map((word, i) => (
-                  <motion.span
-                    key={i}
-                    variants={wordItem}
-                    className="me-4 inline-block last:me-0"
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </motion.span>
-              <motion.span
-                variants={wordContainer}
-                transition={{ staggerChildren: 0.06, delayChildren: 0.4 }}
-                className="mt-2 block text-[clamp(34px,7vw,96px)] text-[#1A1023]"
-              >
-                {line2Words.map((word, i) => (
-                  <motion.span
-                    key={i}
-                    variants={wordItem}
-                    className="me-4 inline-block last:me-0"
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </motion.span>
-              <motion.span
-                variants={wordContainer}
-                transition={{ staggerChildren: 0.06, delayChildren: 0.7 }}
-                className="mt-2 block text-[clamp(34px,7vw,96px)] text-primary"
-              >
-                {line3Words.map((word, i) => (
-                  <motion.span
-                    key={i}
-                    variants={wordItem}
-                    className="me-4 inline-block last:me-0"
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </motion.span>
-            </motion.h1>
-          )}
+          <h1 className="font-extrabold leading-[0.95] tracking-tight">
+            <span className="hero-rise block text-[clamp(34px,7vw,96px)] text-[#1A1023]">
+              خطة غذائية للعائلة.
+            </span>
+            <span className="hero-rise [animation-delay:120ms] mt-2 block text-[clamp(34px,7vw,96px)] text-[#1A1023]">
+              وتعليمات الطبخ
+            </span>
+            <span className="hero-rise [animation-delay:240ms] mt-2 block text-[clamp(34px,7vw,96px)] text-primary">
+              توصل للخدامة بلغتها.
+            </span>
+          </h1>
 
-          <motion.p
-            initial={reduced ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { duration: 0.5, ease: easeOut, delay: 1.0 }
-            }
-            className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-[#1A1023]/70 md:mt-8 md:text-xl"
-          >
+          <p className="hero-rise [animation-delay:360ms] mx-auto mt-5 max-w-2xl text-base leading-relaxed text-[#1A1023]/70 md:mt-8 md:text-xl">
             ذكاء اصطناعي يصمم خطة لكل فرد في عائلتك بلغته، بإشراف خبيرة تغذية سعودية. كل فرد بـ ٨ أسئلة، والعائلة كوحدة.
-          </motion.p>
+          </p>
 
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { duration: 0.5, ease: easeOut, delay: 1.2 }
-            }
-            className="mt-6 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row"
-          >
-            <a
+          <div className="hero-rise [animation-delay:440ms] mt-6 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row">
+            <TrackedLink
+              event="hero_cta_clicked"
               href={getSignupUrl()}
-              onClick={() => track("hero_cta_clicked")}
               className="inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-full bg-[#1A1023] px-7 py-3.5 text-base font-bold text-white shadow-lg transition-colors duration-200 hover:bg-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
             >
               <span>ابدئي خطتك المجانية</span>
-              <ChevronLeft className="size-4" aria-hidden="true" />
-            </a>
-            <a
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-4"
+                aria-hidden="true"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </TrackedLink>
+            <TrackedLink
+              event="secondary_cta_clicked"
+              eventProps={{ section: "hero" }}
               href="#how-it-works"
-              onClick={() =>
-                track("secondary_cta_clicked", { section: "hero" })
-              }
               className="inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-full border border-[#1A1023]/10 bg-white px-7 py-3.5 text-base font-bold text-[#1A1023] shadow-md transition-colors duration-200 hover:bg-surface focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
             >
               <span>شوفي كيف يشتغل</span>
-            </a>
-          </motion.div>
+            </TrackedLink>
+          </div>
         </div>
 
-        <SaraPill reduced={reduced} />
+        <SaraPill />
       </div>
 
       <div className="relative">
@@ -518,11 +406,7 @@ export default function Hero() {
                   key={idx}
                   className={cn(idx % 2 === 1 ? "md:-translate-y-5" : "")}
                 >
-                  <FamilyCard
-                    member={member}
-                    index={idx}
-                    reduced={reduced}
-                  />
+                  <FamilyCard member={member} index={idx} />
                 </div>
               ))}
             </div>
@@ -535,11 +419,7 @@ export default function Hero() {
               <CarouselContent>
                 {familyMembers.map((member, idx) => (
                   <CarouselItem key={idx} className="basis-[60%]">
-                    <FamilyCard
-                      member={member}
-                      index={idx}
-                      reduced={reduced}
-                    />
+                    <FamilyCard member={member} index={idx} />
                   </CarouselItem>
                 ))}
               </CarouselContent>
