@@ -6,7 +6,10 @@ import {
   getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
-import { isWeighInEligibleMember, isWeighInEligibleMom } from "./eligibility";
+import {
+  isGoalCelebrationEligibleMember,
+  isWeighInEligibleMom,
+} from "./eligibility";
 import { hasReachedWeightGoal } from "./goalMilestone";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -163,7 +166,9 @@ export async function getFamilySeasonProps(
     goalReached.push({ id: "mom", name: momName });
   }
   for (const m of familyMembers) {
-    if (!isWeighInEligibleMember(m)) continue;
+    // ADULTS ONLY on this SHARED surface — children keep private records but a
+    // child's weight goal is never celebrated on the family «موسم بيتنا» card.
+    if (!isGoalCelebrationEligibleMember(m)) continue;
     if (m.member_type === "pregnant" || m.member_type === "lactating") continue;
     if (hasReachedWeightGoal(seriesByMember.get(m.id) ?? [], m.target_weight_kg)) {
       goalReached.push({ id: m.id, name: m.name });

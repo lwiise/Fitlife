@@ -39,6 +39,7 @@ export function WeighInForm({
   userId,
   lastWeightKg,
   ownerSex,
+  allowPhotos = true,
 }: {
   memberId: string;
   memberName: string | null;
@@ -46,6 +47,10 @@ export function WeighInForm({
   lastWeightKg: number | null;
   // The form addresses the account OWNER (the one logging) → owner's sex.
   ownerSex?: string | null;
+  // Progress photos are ADULTS-ONLY: false on a child's journey (a stored image
+  // of a minor's body is a line we don't cross). The server refuses child photos
+  // too, so this only hides the control.
+  allowPhotos?: boolean;
 }) {
   const router = useRouter();
   const g = genderPick(ownerSex);
@@ -203,6 +208,7 @@ export function WeighInForm({
         </label>
       </div>
 
+      {allowPhotos && (
       <div className="space-y-2">
         <input
           ref={fileInputRef}
@@ -246,6 +252,7 @@ export function WeighInForm({
           الصورة تبقى في هذه الصفحة الخاصة فقط، ولا تظهر إلا بلمسة منك.
         </p>
       </div>
+      )}
 
       {message && (
         <p role="alert" className="text-sm font-bold text-red-700">

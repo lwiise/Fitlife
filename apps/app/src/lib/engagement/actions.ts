@@ -8,6 +8,7 @@ import { canonicalRecipeKey } from "@fitlife/plan-engine";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
 import {
+  isChildWeighInMember,
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "./eligibility";
@@ -605,6 +606,9 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
+  // Body photos are ADULTS-ONLY. A minor's log never carries a photo — even a
+  // crafted request has it stripped here (the client also hides the control).
+  let memberIsChild = false;
   if (input.member_id === "mom") {
     const { data: profile } = await supabase
       .from("profiles")
@@ -625,19 +629,18 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
       .eq("id", input.member_id)
       .eq("user_id", user.id)
       .single();
-    if (
-      !member ||
-      !isWeighInEligibleMember(
-        member as {
-          member_type: string | null;
-          role: string | null;
-          birth_year: number | null;
-        },
-      )
-    ) {
+    const memberFields = member as {
+      member_type: string | null;
+      role: string | null;
+      birth_year: number | null;
+    } | null;
+    if (!memberFields || !isWeighInEligibleMember(memberFields)) {
       return { ok: false as const, error: VALIDATION_ERROR_AR };
     }
+    memberIsChild = isChildWeighInMember(memberFields);
   }
+  // The effective photo path: null for a child, so nothing below stores it.
+  const photoPath = memberIsChild ? null : (input.photo_path ?? null);
 
   const today = riyadhTodayISO();
   const db = supabase;
@@ -673,9 +676,9 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
   const todaysPrevPhoto = recentRows.find((r) => r.recorded_on === today)
     ?.photo_path;
   if (
-    input.photo_path &&
+    photoPath &&
     todaysPrevPhoto &&
-    todaysPrevPhoto !== input.photo_path
+    todaysPrevPhoto !== photoPath
   ) {
     await supabase.storage
       .from(BODY_PHOTOS_BUCKET)
@@ -698,7 +701,7 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
         waist_cm: input.waist_cm ?? null,
         // Absent photo on a correction keeps today's existing photo (a photo
         // is an addition, never silently discarded by a number-only resubmit).
-        ...(input.photo_path ? { photo_path: input.photo_path } : {}),
+        ...(photoPath ? { photo_path: photoPath } : {}),
       },
       { onConflict: "user_id,member_id,recorded_on" },
     );

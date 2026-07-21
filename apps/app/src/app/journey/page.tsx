@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import {
+  isChildWeighInMember,
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
@@ -137,6 +138,14 @@ export default async function JourneyPage({
   // The weigh-in form + privacy note address the account OWNER (the one logging).
   const g = genderPick(profile?.sex);
 
+  // A child's private record: neutral weight-over-time only. NO body photos
+  // (a stored image of a minor's body is a line we don't cross — enforced again
+  // server-side in logBodyWeight). The mom is never a child.
+  const isChildJourney = selectedMember
+    ? isChildWeighInMember(selectedMember)
+    : false;
+  const allowPhotos = !isChildJourney;
+
   // Target line: the mom's own target only — family adults carry no target
   // weight, and pregnancy gets no loss-framing at all.
   const targetKg =
@@ -168,7 +177,9 @@ export default async function JourneyPage({
     .slice(-8)
     .reverse();
   let photos: Array<{ recorded_on: string; url: string }> = [];
-  if (photoRows.length > 0) {
+  // Never sign or render photos on a child's journey (defense in depth — the
+  // form + server both block child photo uploads, so there should be none).
+  if (allowPhotos && photoRows.length > 0) {
     const { data: signed } = await supabase.storage
       .from(BODY_PHOTOS_BUCKET)
       .createSignedUrls(
@@ -258,6 +269,7 @@ export default async function JourneyPage({
           userId={user.id}
           lastWeightKg={lastKnownWeight}
           ownerSex={profile?.sex}
+          allowPhotos={allowPhotos}
         />
 
         {logs.length >= 2 && (

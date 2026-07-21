@@ -152,9 +152,12 @@ export default async function PlanPage({
     planHasContent(latest.plan_data) &&
     !pendingBlocked &&
     (pendingMembers.length > 0 || hasIncompleteMember);
-  // «رحلتك الخاصة» entries — one per eligible adult (children never, the
-  // housekeeper never; the shared rule in engagement/eligibility.ts). The
-  // PlanViewer shows the entry on the matching member tab.
+  // «رحلتك الخاصة» entries — one per member who may keep a private weight
+  // record (adults AND children now, per owner directive; the housekeeper
+  // never — the shared rule in engagement/eligibility.ts). The PlanViewer shows
+  // the entry on the matching member tab; a child's journey has no body photos
+  // and never feeds the shared goal celebration (both enforced in the journey/
+  // action/seasonProps layer, not here).
   const journeyMembers = [
     ...(isWeighInEligibleMom(profile?.birth_year ?? null)
       ? [{ id: "mom", name: null as string | null, sex: profile?.sex ?? null }]
