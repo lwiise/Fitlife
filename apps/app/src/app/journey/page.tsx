@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
@@ -220,17 +219,6 @@ export default async function JourneyPage({
         <h1 className="text-3xl font-extrabold text-brand-ink">
           {memberName ? `رحلة ${memberName} الخاصة` : "رحلتك الخاصة"}
         </h1>
-
-        <section
-          aria-label="خصوصية"
-          className="bg-brand-lavender/20 rounded-2xl p-4 flex items-start gap-3"
-        >
-          <Lock className="size-4 text-brand-purple-900 mt-1 shrink-0" aria-hidden="true" />
-          <p className="text-sm text-brand-purple-900 leading-relaxed">
-            {g("هذه الصفحة لكِ وحدك", "هذه الصفحة لك وحدك")} — لا تظهر في الرسائل
-            ولا بطاقات المشاركة ولا أي شاشة مشتركة.
-          </p>
-        </section>
 
         {showSwitcher && (
           <nav aria-label="اختيار الفرد" className="flex flex-wrap gap-2">
