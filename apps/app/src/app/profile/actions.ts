@@ -52,6 +52,10 @@ export async function saveMomPersonalInfo(
     return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
   }
   revalidatePath("/profile");
+  // display_name feeds the plan tabs / dashboard via the read-time name overlay
+  // (applyMemberDisplayNames) — bust their caches so a rename shows at once.
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
   return { ok: true };
 }
 

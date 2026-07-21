@@ -2,6 +2,34 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
+import {
+  applyMemberDisplayNames,
+  type MemberNameRoster,
+} from "./memberNames";
+
+/** Current roster names (mom + family members) to overlay onto a stored plan
+ *  snapshot, so history shows the member's CURRENT name after a rename. */
+async function fetchNameRoster(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<MemberNameRoster> {
+  const [prof, members] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", userId)
+      .maybeSingle<{ display_name: string | null }>(),
+    supabase
+      .from("family_members")
+      .select("id, name")
+      .eq("user_id", userId)
+      .returns<Array<{ id: string; name: string | null }>>(),
+  ]);
+  return {
+    mom: { display_name: prof.data?.display_name ?? null },
+    members: members.data ?? [],
+  };
+}
 
 export interface PlanHistoryItem {
   id: string;
@@ -45,10 +73,15 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
 
   if (error || !data) return [];
 
+  const roster = await fetchNameRoster(supabase, userId);
+
   const items: PlanHistoryItem[] = [];
   for (const row of data) {
     const parsed = MealPlanSchema.safeParse(row.plan_data);
     if (!parsed.success) continue;
+    // Display the CURRENT roster names; the membersHash below stays on the RAW
+    // snapshot so the per-member "phantom old plan" dedup is unaffected.
+    const named = applyMemberDisplayNames(parsed.data, roster);
     items.push({
       id: row.id,
       weekStartDate: parsed.data.week_start_date,
@@ -56,7 +89,7 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
       createdAt: row.created_at,
       memberCount: parsed.data.members.length,
       memberIds: parsed.data.members.map((m) => m.member_id),
-      memberNames: parsed.data.members.map((m) => m.member_name_ar),
+      memberNames: named.members.map((m) => m.member_name_ar),
       hiddenForMemberIds: parsed.data.hidden_for_member_ids ?? [],
       membersHash: Object.fromEntries(
         parsed.data.members.map((m) => [m.member_id, JSON.stringify(m)]),
@@ -95,5 +128,9 @@ export async function getPlanById(
     .limit(1)
     .maybeSingle<{ id: string }>();
 
-  return { id: data.id, plan: parsed.data, isCurrent: newest?.id === data.id };
+  // Overlay current roster names so a rename shows in the read-only view too.
+  const roster = await fetchNameRoster(supabase, userId);
+  const plan = applyMemberDisplayNames(parsed.data, roster);
+
+  return { id: data.id, plan, isCurrent: newest?.id === data.id };
 }

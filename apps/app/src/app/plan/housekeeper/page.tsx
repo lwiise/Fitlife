@@ -10,6 +10,7 @@ import {
   MEMBER_GEN_MAX_ATTEMPTS,
 } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
+import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 import { asStringArray } from "@/app/profile/labels";
 import { HousekeeperPlanView } from "./HousekeeperPlanView";
 import type { AllergyEntry } from "./AllergyBackstop";
@@ -107,9 +108,20 @@ export default async function HousekeeperPage() {
       })),
   ].filter((e) => e.allergies.length > 0);
 
+  // Overlay live-roster names so a rename shows immediately. When a member's
+  // Arabic name changed this drops the stale transliteration, so the maid view
+  // falls back to the live Arabic name until the next translation pass rebuilds
+  // it (PlanViewer's `member_name_translated ?? member_name_ar`).
+  const planForView = latest.plan_data
+    ? applyMemberDisplayNames(latest.plan_data, {
+        mom: { display_name: profile?.display_name ?? null },
+        members: familyMembers,
+      })
+    : null;
+
   return (
     <HousekeeperPlanView
-      plan={latest.plan_data ?? null}
+      plan={planForView}
       planId={latest.id}
       locale={locale}
       needsTranslation={needsTranslation}
