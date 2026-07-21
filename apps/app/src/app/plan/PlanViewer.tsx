@@ -138,8 +138,8 @@ export function PlanViewer({
   // day|slot|member — PER PERSON, so a shared meal carries a separate status
   // for each participant. Legacy whole-house rows (member_id null/"household")
   // sit under the "household" key and act as a fallback for every member of
-  // that meal. The 48h window is enforced server-side too — the client gate
-  // just hides controls on future days so adherence can't be pre-marked.
+  // that meal. The window is enforced server-side too — the client gate just
+  // hides controls on future days so adherence can't be pre-marked.
   const [checkinMap, setCheckinMap] = useState<
     Map<string, { status: "cooked" | "swapped" | "skipped"; reason: string | null }>
   >(
@@ -178,12 +178,16 @@ export function PlanViewer({
   );
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const checkinTodayIdx = dayIndexFromWeekStart(plan.week_start_date);
+  // Every meal stays changeable for the WHOLE plan week (owner directive
+  // 07/2026): any day that has already arrived (index ≤ today) is markable —
+  // the mom can complete or correct earlier days anytime before the week rolls
+  // over into history. Future days (index > today) stay locked so adherence is
+  // never pre-marked. The server enforces the same rule.
   const canCheckinActiveDay =
     checkins !== undefined &&
     !readOnly &&
     !translated &&
-    activeDayIndex <= checkinTodayIdx &&
-    activeDayIndex >= checkinTodayIdx - 2;
+    activeDayIndex <= checkinTodayIdx;
 
   /** A member's effective mark: their own row, else the whole-house fallback. */
   function checkinFor(dayIndex: number, slot: string, memberId: string) {

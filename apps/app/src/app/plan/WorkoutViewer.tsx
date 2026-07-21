@@ -21,9 +21,10 @@ const DAY_NAMES_AR = [
   "السبت",
 ];
 
-// A session may be marked on its weekday and up to 2 days after (48h grace) —
-// mirrors the meal check-in window. The server re-derives + enforces this; the
-// client gate just hides the controls on future/stale days.
+// A session stays markable for the whole current week (Sunday-anchored), with a
+// 48h floor so the tail of the previous week keeps its grace — mirrors the meal
+// window (the whole plan week). The server re-derives + enforces this; the
+// client gate just hides the controls on future sessions.
 const WORKOUT_GRACE_DAYS = 2;
 const WORKOUT_STATUS_CHIPS: { value: WorkoutCheckinStatus; label: string }[] = [
   { value: "done", label: "أنجزتها" },
@@ -227,8 +228,9 @@ export function WorkoutViewer({
   const [homeMode, setHomeMode] = useState(false);
 
   // Optimistic session marks, keyed member|day. Seeded from the checkins prop;
-  // clearing removes the mark (a mis-tap must be reversible). The 48h grace is
-  // enforced server-side — the client gate just hides controls on future days.
+  // clearing removes the mark (a mis-tap must be reversible). The whole-current-
+  // week window (48h floor) is enforced server-side — the client gate just hides
+  // controls on future sessions.
   const [checkinMap, setCheckinMap] = useState<Map<string, WorkoutCheckinStatus>>(
     () =>
       new Map(
@@ -301,12 +303,15 @@ export function WorkoutViewer({
     : 0;
 
   // This member's mark for the open day, and whether it's within the markable
-  // window (its weekday, up to 2 days back — never a future session).
+  // window: the whole current week (Sunday-anchored) is markable, with the 48h
+  // floor for the previous week's tail. A future session this week wraps past
+  // this bound (activeDayDist becomes large) and stays hidden.
   const activeStatus =
     checkinMap.get(`${active.member_id}|${activeDayIndex}`) ?? null;
   const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
+  const workoutMaxBack = Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
   const canMarkActive =
-    checkins !== undefined && !!planId && activeDayDist <= WORKOUT_GRACE_DAYS;
+    checkins !== undefined && !!planId && activeDayDist <= workoutMaxBack;
 
   return (
     <div className="space-y-6">
@@ -485,7 +490,7 @@ export function WorkoutViewer({
             </div>
           )}
 
-          {/* Session marking — a training day within the 48h window. Honest
+          {/* Session marking — a training day within the current week. Honest
               signal (done/moved/skipped); tapping again clears. Feeds «موسم
               بيتنا». Server re-derives the date and enforces the window. */}
           {activeSession && canMarkActive && (

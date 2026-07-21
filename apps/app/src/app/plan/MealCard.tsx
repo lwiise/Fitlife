@@ -170,8 +170,8 @@ export function MealCard({
   /** Shared meals only: each participant's own mark, keyed by member_id —
    * statuses are per person, never one answer for the whole dish. */
   sharedCheckins?: Record<string, MealCheckinState | null>;
-  /** Present only on trackable days (today/48h back) — absent hides controls.
-   * memberId says whose status is being set. */
+  /** Present only on trackable days (any elapsed day of the plan week, never a
+   * future day) — absent hides controls. memberId says whose status is set. */
   onCheckin?: (
     memberId: string,
     status: MealCheckinState["status"] | null,
