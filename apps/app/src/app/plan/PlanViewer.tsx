@@ -63,6 +63,7 @@ export function PlanViewer({
   workoutCheckins,
   goalReached,
   journeyMembers,
+  seasonMembers,
   ownerSex,
 }: {
   plan: MealPlan;
@@ -124,6 +125,11 @@ export function PlanViewer({
   // read-only/translated views never pass it. `sex` genders each member's own
   // status label in «موسم بيتنا» (حاضر/حاضرة).
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
+  // «موسم بيتنا» leaderboard roster (main /plan page only): the WHOLE household
+  // — "mom" plus every non-housekeeper family member (adults AND children; owner
+  // directive). Distinct from journeyMembers, which stays adults-only for
+  // private weight tracking. `sex` genders each member's own status label.
+  seasonMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
   // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
   ownerSex?: string | null;
@@ -387,21 +393,21 @@ export function PlanViewer({
 
   const isSolo = plan.members.length === 1;
 
-  // «موسم بيتنا» roster: eligible adults (mom + adult members — journeyMembers
-  // already applies the children-never/housekeeper-never rule) who are in THIS
-  // plan, with display names resolved. The season renders only for a real
-  // household (≥2 adults) — a solo mom never sees a family board (guardrail 7).
+  // «موسم بيتنا» roster: the whole household (mom + adults + children — the
+  // server's seasonMembers applies only the housekeeper-never rule) who are in
+  // THIS plan, with display names resolved. The leaderboard renders only for a
+  // real household (≥2 members) — a solo mom never sees a family board.
   const seasonRoster = useMemo(() => {
-    if (!journeyMembers) return [];
+    if (!seasonMembers) return [];
     const inPlan = new Set(plan.members.map((m) => m.member_id));
-    return journeyMembers
+    return seasonMembers
       .filter((j) => inPlan.has(j.id))
       .map((j) => ({
         id: j.id,
         name: memberNames[j.id] ?? j.name ?? j.id,
         sex: j.sex ?? null,
       }));
-  }, [journeyMembers, plan.members, memberNames]);
+  }, [seasonMembers, plan.members, memberNames]);
 
   // Generation is one-at-a-time: a run fills a SINGLE member (plan.generating_member_id).
   // Scope all loading UI to that member so a different member's empty/failed day
@@ -566,10 +572,11 @@ export function PlanViewer({
         <SaraChangesCard changes={plan.week_changes} />
       )}
 
-      {/* «موسم بيتنا» — the cooperative family season. Interactive Arabic view
-          only (never read-only/history/housekeeper), and only for a real
-          household with ≥2 eligible adults. Built from the marks already
-          fetched; no numbers about anyone's body, no ranking, no last place. */}
+      {/* «موسم بيتنا» — the family season leaderboard (owner-directed ranked
+          shape). Interactive Arabic view only (never read-only/history/
+          housekeeper), and only for a real household with ≥2 members (mom +
+          adults + children; the housekeeper is never in the roster). Built from
+          the marks already fetched; still no numbers about anyone's body. */}
       {!readOnly && !translated && seasonRoster.length >= 2 && (
         <FamilySeasonCard
           members={seasonRoster}
