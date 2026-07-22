@@ -75,13 +75,15 @@ export type SetMealCheckinInput = z.infer<typeof setMealCheckinSchema>;
 // sets the whole dish's status, stored as one row per PRESENT participant in a
 // single fan-out (keeps the leaderboard's per-member credit and the digest's
 // meal-true collapse). member_ids is the present-participant roster the client
-// derived from per_member_portions minus absences; every non-"mom" id is
-// ownership-checked in the action. "household" is not a participant.
+// derived from per_member_portions minus absences; the action re-filters it
+// against ownership AND the server's own meal_absences (a stale tab must not
+// fabricate an absentee's mark). "household" is not a participant. The cap is
+// a sanity bound well above any real household, not a tier limit.
 export const setSharedMealCheckinSchema = z.object({
   meal_plan_id: uuid,
   day_index: z.number().int().min(0).max(6),
   slot: z.enum(CHECKIN_SLOTS),
-  member_ids: z.array(memberId).min(1).max(12),
+  member_ids: z.array(memberId).min(1).max(30),
   status: z.enum(CHECKIN_STATUSES).nullable(),
   reason: z.enum(CHECKIN_REASONS).nullish(),
 });

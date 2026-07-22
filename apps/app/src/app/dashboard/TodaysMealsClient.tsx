@@ -22,11 +22,16 @@ export function TodaysMealsClient({
   planId: _planId,
   weekStartDate,
   ownerSex,
+  absences,
 }: {
   members: MemberPlan[];
   planId: string;
   weekStartDate: string | null;
   ownerSex?: string | null;
+  /** Shared-meal absences for this plan (00021) — display only here: the
+   * dashboard card shows the same absence-adjusted batch as /plan, but the
+   * exclude/restore toggle lives on /plan. */
+  absences?: Array<{ day_index: number; slot: string; member_id: string }>;
 }) {
   const g = genderPick(ownerSex);
   // null = not mounted yet; -1 = the plan's 7 days have ended.
@@ -144,6 +149,16 @@ export function TodaysMealsClient({
                   meal={meal}
                   memberNames={memberNames}
                   currentMemberId={member.member_id}
+                  absentMemberIds={
+                    meal.shared_recipe && meal.per_member_portions?.length
+                      ? (absences ?? [])
+                          .filter(
+                            (a) =>
+                              a.day_index === dayIndex && a.slot === meal.slot,
+                          )
+                          .map((a) => a.member_id)
+                      : undefined
+                  }
                 />
               ))}
             </div>

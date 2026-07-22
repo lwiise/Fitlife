@@ -622,16 +622,25 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
-  // Ownership gate: every concrete family-member id must belong to the caller
-  // (the RLS-scoped read returns fewer rows otherwise).
+  // Ownership gate: keep "mom" and the ids that are really the caller's
+  // family members; DROP the rest instead of rejecting wholesale — a plan
+  // snapshot can still list a member who was since removed from the roster,
+  // and one stale id must not brick marking the whole shared dish. An id
+  // belonging to someone else is indistinguishable from a deleted one here
+  // (the RLS-scoped read returns neither), and dropping it writes nothing.
   const memberUuids = memberIds.filter((id) => id !== "mom");
+  let effectiveIds = memberIds;
   if (memberUuids.length > 0) {
     const { data: owned } = await supabase
       .from("family_members")
       .select("id")
       .in("id", memberUuids)
       .eq("user_id", user.id);
-    if ((owned ?? []).length !== memberUuids.length) {
+    const ownedSet = new Set(
+      ((owned ?? []) as Array<{ id: string }>).map((r) => r.id),
+    );
+    effectiveIds = memberIds.filter((id) => id === "mom" || ownedSet.has(id));
+    if (effectiveIds.length === 0) {
       return { ok: false as const, error: VALIDATION_ERROR_AR };
     }
   }
@@ -648,7 +657,7 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
       .eq("day_index", input.day_index)
       .eq("slot", input.slot)
       .eq("user_id", user.id)
-      .in("member_id", memberIds)
+      .in("member_id", effectiveIds)
       .select("id");
     if (deleteError) {
       // Pre-00019 prod (no member_id column): legacy household-level clear.
@@ -684,6 +693,26 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
       }
     }
   } else {
+    // The server is the authority on who is absent: a tab opened before an
+    // absence was recorded elsewhere still sends the old roster, and its
+    // fan-out must not fabricate the absentee's mark. Pre-00021 prod (table
+    // missing) skips the filter; if the filter would empty the roster (data
+    // says everyone absent), keep it — the status must land somewhere.
+    let presentIds = effectiveIds;
+    const { data: absenceRows, error: absenceError } = await db
+      .from("meal_absences")
+      .select("member_id")
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot)
+      .eq("user_id", user.id);
+    if (!absenceError && absenceRows) {
+      const absent = new Set(
+        (absenceRows as Array<{ member_id: string }>).map((r) => r.member_id),
+      );
+      const filtered = presentIds.filter((id) => !absent.has(id));
+      if (filtered.length > 0) presentIds = filtered;
+    }
     const base = {
       user_id: user.id,
       meal_plan_id: input.meal_plan_id,
@@ -694,7 +723,7 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
       reason: input.status === "cooked" ? null : (input.reason ?? null),
     };
     const { error: upsertError } = await db.from("meal_checkins").upsert(
-      memberIds.map((memberId) => ({ ...base, member_id: memberId })),
+      presentIds.map((memberId) => ({ ...base, member_id: memberId })),
       { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
     if (upsertError) {
@@ -787,10 +816,12 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
     if (upsertError) {
-      Sentry.captureMessage(
-        "meal_absences write failed — apply migration 00021",
-        { level: "warning", tags: { area: "engagement", step: "absence-upsert" } },
-      );
+      // The error object itself distinguishes "table missing — apply 00021"
+      // (42P01) from a real failure; keep it attached instead of flattening
+      // every case into the same message.
+      Sentry.captureException(upsertError, {
+        tags: { area: "engagement", step: "absence-upsert", userId: user.id },
+      });
       return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
     }
     // Outside the meal ⇒ no status for it. Best-effort (pre-00019 prod has no
@@ -804,10 +835,11 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       .eq("user_id", user.id)
       .eq("member_id", input.member_id);
     if (clearError) {
-      Sentry.captureMessage(
-        "meal_checkins member clear on absence failed (pre-00019 prod?)",
-        { level: "warning", tags: { area: "engagement", step: "absence-clear-checkin" } },
-      );
+      // Best-effort by design (pre-00019 prod has no member_id column) — the
+      // absence itself saved; keep the real error for diagnosis.
+      Sentry.captureException(clearError, {
+        tags: { area: "engagement", step: "absence-clear-checkin", userId: user.id },
+      });
     }
   } else {
     const { error: deleteError } = await db
@@ -819,10 +851,9 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       .eq("user_id", user.id)
       .eq("member_id", input.member_id);
     if (deleteError) {
-      Sentry.captureMessage(
-        "meal_absences delete failed — apply migration 00021",
-        { level: "warning", tags: { area: "engagement", step: "absence-delete" } },
-      );
+      Sentry.captureException(deleteError, {
+        tags: { area: "engagement", step: "absence-delete", userId: user.id },
+      });
       return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
     }
   }

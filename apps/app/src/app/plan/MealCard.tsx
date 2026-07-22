@@ -463,7 +463,11 @@ export function MealCard({
                               {portion.portion_grams != null && !isAbsent && (
                                 <span className="font-extrabold text-brand-purple-900 text-sm tabular-nums whitespace-nowrap">
                                   {portion.portion_grams} {t.units.g}
-                                  {portion.portion_percentage != null
+                                  {/* The stored % is a share of the ORIGINAL
+                                      batch — beside an absence-adjusted total
+                                      it would lie, so it hides; the grams stay
+                                      exact either way. */}
+                                  {portion.portion_percentage != null && !hasAbsence
                                     ? ` · ${portion.portion_percentage}%`
                                     : ""}
                                 </span>

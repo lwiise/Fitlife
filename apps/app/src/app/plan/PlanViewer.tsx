@@ -227,7 +227,9 @@ export function PlanViewer({
 
   /** A SHARED meal's single status: any sharer's row (the fan-out keeps them
    * in agreement; legacy per-person rows surface the same way), else the
-   * whole-house fallback. */
+   * whole-house fallback. Callers pass the sharers PRESENT-FIRST so a stale
+   * row on an absentee (best-effort clear that failed) never outranks a
+   * present sharer's mark. */
   function sharedCheckinFor(
     dayIndex: number,
     slot: string,
@@ -373,15 +375,31 @@ export function PlanViewer({
   /** Exclude/restore a sharer for one meal occurrence («إزالة من الوجبة»).
    * Marking absent also drops that member's own status mark for the meal —
    * someone outside the meal has no serving to attest (the server does the
-   * same). Works on any day of the plan week: absence is planning. */
+   * same). Restoring re-attaches them to the dish's single status: when the
+   * other present sharers already carry a mark, it fans out to the restored
+   * member too, so «تسجيل واحد يشمل كل من شاركها» stays literally true.
+   * Works on any day of the plan week: absence is planning. */
   function handleToggleAbsence(
     memberId: string,
     slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
     absent: boolean,
+    sharerIds: string[],
   ) {
     const key = `${activeDayIndex}|${slot}|${memberId}`;
     const prevAbsent = absenceSet.has(key);
     const prevCheckin = checkinMap.get(key) ?? null;
+    // The dish's current mark among the OTHER present sharers — the status a
+    // restored member rejoins. Read before any optimistic mutation.
+    const donorState = absent
+      ? null
+      : (sharerIds
+          .filter(
+            (id) =>
+              id !== memberId &&
+              !absenceSet.has(`${activeDayIndex}|${slot}|${id}`),
+          )
+          .map((id) => checkinMap.get(`${activeDayIndex}|${slot}|${id}`))
+          .find(Boolean) ?? null);
     setAbsenceSet((cur) => {
       const next = new Set(cur);
       if (absent) next.add(key);
@@ -394,6 +412,9 @@ export function PlanViewer({
         next.delete(key);
         return next;
       });
+    }
+    if (!absent && donorState) {
+      setCheckinMap((cur) => new Map(cur).set(key, donorState));
     }
     setCheckinError(null);
     void setMealAbsenceAction({
@@ -413,7 +434,37 @@ export function PlanViewer({
         if (absent && prevCheckin) {
           setCheckinMap((cur) => new Map(cur).set(key, prevCheckin));
         }
+        if (!absent && donorState) {
+          setCheckinMap((cur) => {
+            const reverted = new Map(cur);
+            reverted.delete(key);
+            return reverted;
+          });
+        }
         setCheckinError(result.error);
+        return;
+      }
+      // SEQUENCED after the absence delete on purpose: the fan-out write is
+      // filtered against meal_absences server-side, so it must run once the
+      // absence row is gone. Donor exists ⇒ the day is elapsed (marks only
+      // land on elapsed days), so the week gate can't reject this.
+      if (!absent && donorState) {
+        void setSharedMealCheckinAction({
+          meal_plan_id: planId,
+          day_index: activeDayIndex,
+          slot,
+          member_ids: [memberId],
+          status: donorState.status,
+          reason: donorState.reason as never,
+        }).then((mirror) => {
+          if (!mirror.ok) {
+            setCheckinMap((cur) => {
+              const reverted = new Map(cur);
+              reverted.delete(key);
+              return reverted;
+            });
+          }
+        });
       }
     });
   }
@@ -974,7 +1025,10 @@ export function PlanViewer({
                     currentMemberId={activeMember.member_id}
                     checkin={
                       sharerIds
-                        ? sharedCheckinFor(activeDayIndex, meal.slot, sharerIds)
+                        ? sharedCheckinFor(activeDayIndex, meal.slot, [
+                            ...(presentIds ?? []),
+                            ...absentIds,
+                          ])
                         : checkinFor(
                             activeDayIndex,
                             meal.slot,
@@ -1014,7 +1068,12 @@ export function PlanViewer({
                     onToggleAbsence={
                       canToggleAbsence && sharerIds
                         ? (memberId, absent) =>
-                            handleToggleAbsence(memberId, meal.slot, absent)
+                            handleToggleAbsence(
+                              memberId,
+                              meal.slot,
+                              absent,
+                              sharerIds,
+                            )
                         : undefined
                     }
                     verdict={verdictFor(

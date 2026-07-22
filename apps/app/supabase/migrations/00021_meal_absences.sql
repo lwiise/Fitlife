@@ -50,10 +50,10 @@ create table if not exists public.meal_absences (
 comment on table public.meal_absences is
   'Shared-meal exclusions: this member is not part of this meal occurrence — the app scales the batch for the remaining sharers. Planning fact (may be future-dated), never adherence.';
 
+-- Per-plan lookups ride the unique constraint's index (meal_plan_id leads it);
+-- only the export/PDPL read pattern needs its own.
 create index if not exists meal_absences_user_created_idx
   on public.meal_absences (user_id, created_at desc);
-create index if not exists meal_absences_plan_idx
-  on public.meal_absences (meal_plan_id);
 
 alter table public.meal_absences enable row level security;
 
