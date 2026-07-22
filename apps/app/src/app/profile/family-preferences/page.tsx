@@ -15,10 +15,12 @@ export const metadata = {
 };
 
 export default async function FamilyPreferencesEditPage() {
-  const profile = await getCurrentUserProfile();
+  // Fetched together — the redirect guard below only needs profile.
+  const [profile, members] = await Promise.all([
+    getCurrentUserProfile(),
+    getCurrentUserFamilyMembers(),
+  ]);
   if (!profile) redirect("/onboarding");
-
-  const members = await getCurrentUserFamilyMembers();
   const hk = members.find((m) => m.role === "housekeeper");
   const housekeeper =
     hk && isLocaleCode(hk.preferred_language)

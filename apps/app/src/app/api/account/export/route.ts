@@ -61,61 +61,69 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const [profile, family, plans, workoutPlans, subscription, generations] = await Promise.all(
-    [
-      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("family_members")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("display_order", { ascending: true }),
-      supabase
-        .from("meal_plans")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("workout_plans")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("plan_generations")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-    ],
-  );
-
-  const engagementRows = await Promise.all(
-    ENGAGEMENT_TABLES.map((table) =>
-      fetchEngagementRows(supabase, table, user.id),
-    ),
-  );
-  const [mealCheckins, memberExceptions, mealVerdicts] = engagementRows;
-  let bodyLogs = engagementRows[3] ?? [];
-
-  // workout_checkins (00020) — not yet in the generated Database types, so it's
-  // read through an untyped cast; best-effort so a pre-apply prod exports []
-  // rather than failing the whole export.
-  let workoutCheckins: unknown[] = [];
-  try {
-    const { data } = await (supabase as unknown as SupabaseClient)
-      .from("workout_checkins")
+  // Every table read keys only on user.id — one parallel batch instead of
+  // three sequential await-groups. workout_checkins (00020) is not yet in the
+  // generated Database types, so it's read through an untyped cast;
+  // best-effort so a pre-apply prod exports [] rather than failing the export.
+  const [
+    profile,
+    family,
+    plans,
+    workoutPlans,
+    subscription,
+    generations,
+    engagementRows,
+    workoutCheckins,
+  ] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("family_members")
       .select("*")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    workoutCheckins = data ?? [];
-  } catch {
-    workoutCheckins = [];
-  }
+      .order("display_order", { ascending: true }),
+    supabase
+      .from("meal_plans")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("workout_plans")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("plan_generations")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    Promise.all(
+      ENGAGEMENT_TABLES.map((table) =>
+        fetchEngagementRows(supabase, table, user.id),
+      ),
+    ),
+    (async (): Promise<unknown[]> => {
+      try {
+        const { data } = await (supabase as unknown as SupabaseClient)
+          .from("workout_checkins")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      } catch {
+        return [];
+      }
+    })(),
+  ]);
+
+  const [mealCheckins, memberExceptions, mealVerdicts] = engagementRows;
+  let bodyLogs = engagementRows[3] ?? [];
 
   // Portability covers the photos too: each body log with a photo_path gets a
   // 24-hour signed URL (the bucket is private — a bare path downloads nothing).

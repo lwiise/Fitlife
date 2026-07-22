@@ -16,13 +16,17 @@ import { genderPick } from "@/lib/copy/gender";
 export const metadata = { title: "عائلتك" };
 
 export default async function FamilyPage() {
-  const profile = await getCurrentUserProfile();
+  // Fetched together — the redirect guards below only need profile, and the
+  // members read is wasted only on the (rare) redirect path.
+  const [profile, allMembers] = await Promise.all([
+    getCurrentUserProfile(),
+    getCurrentUserFamilyMembers(),
+  ]);
   if (!profile) redirect("/auth/login");
   // Mom must finish her own profile before managing the family.
   if (!profile.mom_profile_completed_at) redirect("/onboarding");
   const g = genderPick(profile.sex);
 
-  const allMembers = await getCurrentUserFamilyMembers();
   const members = allMembers.filter((m) => m.role !== "housekeeper");
   const housekeeper = allMembers.find((m) => m.role === "housekeeper");
 

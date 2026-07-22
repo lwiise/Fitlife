@@ -294,9 +294,12 @@ export function PlanViewer({
     }
   }, [readOnly]);
 
-  // While later days are still being prepared, poll for them: a periodic
-  // router.refresh pulls the newly-persisted days; once `generating` is false
-  // the next render stops the interval.
+  // While later days are still being prepared, poll for them. A day landing
+  // rewrites the plan row (bumping updated_at), so poll the lightweight status
+  // endpoint and only pull the heavy server tree (router.refresh) when the row
+  // has actually moved past this render's snapshot — a blind 4s refresh
+  // re-rendered and re-downloaded the whole page dozens of times per
+  // generation. After a refresh the new updatedAt prop re-arms the comparison.
   useEffect(() => {
     if (!generating) return;
     // Belt-and-suspenders: even if the `generating` flag were stranded true,
@@ -306,9 +309,18 @@ export function PlanViewer({
       (m) => m.days.length > 0 && m.days.every((d) => d.meals.length > 0),
     );
     if (allContentComplete) return;
-    const t = setInterval(() => router.refresh(), 4000);
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch("/api/plans/status", { cache: "no-store" });
+        if (!res.ok) return;
+        const body = (await res.json()) as { updated_at?: string };
+        if (body.updated_at !== updatedAt) router.refresh();
+      } catch {
+        // transient — keep polling
+      }
+    }, 4000);
     return () => clearInterval(t);
-  }, [generating, plan.members, router]);
+  }, [generating, plan.members, router, updatedAt]);
 
   // Ticking clock so `preparingStalled` re-evaluates without a server round-trip:
   // if the worker died, updatedAt stops advancing and no refresh changes props.

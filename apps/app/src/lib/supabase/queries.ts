@@ -1,20 +1,24 @@
-import { createClient } from "./server";
+import { cache } from "react";
+import { createClient, getAuthUser } from "./server";
 import type { Database } from "./database.types";
 import { getLatestPlan, type LatestPlanSummary } from "@/lib/plans/getLatestPlan";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
 
+// These getters are React.cache-memoized: a page, its layout, and shared
+// helpers can all ask for the same data in one request without repeating the
+// Supabase query. The auth round-trip is deduped further down via getAuthUser.
+
 /**
  * Get the current authenticated user's profile.
  * Returns null if not authenticated or profile not found.
  */
-export async function getCurrentUserProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
+export const getCurrentUserProfile = cache(async (): Promise<Profile | null> => {
+  const user = await getAuthUser();
   if (!user) return null;
 
+  const supabase = await createClient();
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
@@ -23,39 +27,39 @@ export async function getCurrentUserProfile(): Promise<Profile | null> {
 
   if (error || !profile) return null;
   return profile;
-}
+});
 
 /**
  * Get the current user's family members, ordered by display_order.
  */
-export async function getCurrentUserFamilyMembers(): Promise<FamilyMember[]> {
-  const supabase = await createClient();
+export const getCurrentUserFamilyMembers = cache(
+  async (): Promise<FamilyMember[]> => {
+    const user = await getAuthUser();
+    if (!user) return [];
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("family_members")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("display_order", { ascending: true });
 
-  const { data, error } = await supabase
-    .from("family_members")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("display_order", { ascending: true });
-
-  if (error) return [];
-  return data;
-}
+    if (error) return [];
+    return data;
+  },
+);
 
 /**
  * Get the current user's most recent plan regardless of status.
  * Returns null if no plan exists.
  */
-export async function getCurrentUserLatestPlan(): Promise<LatestPlanSummary | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return getLatestPlan(user.id);
-}
+export const getCurrentUserLatestPlan = cache(
+  async (): Promise<LatestPlanSummary | null> => {
+    const user = await getAuthUser();
+    if (!user) return null;
+    return getLatestPlan(user.id);
+  },
+);
 
 /**
  * Check if user has hit the weekly plan generation rate limit.

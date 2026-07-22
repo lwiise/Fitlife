@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
@@ -17,19 +17,23 @@ export default async function MemberPersonalEditPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
-  const { memberId } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [{ memberId }, user, supabase] = await Promise.all([
+    params,
+    getAuthUser(),
+    createClient(),
+  ]);
   if (!user) redirect("/auth/login");
 
-  const { data: row } = await supabase
-    .from("family_members")
-    .select("*")
-    .eq("id", memberId)
-    .eq("user_id", user.id)
-    .single();
+  // Member row + owner profile are independent — one parallel round-trip.
+  const [{ data: row }, { data: ownerProfile }] = await Promise.all([
+    supabase
+      .from("family_members")
+      .select("*")
+      .eq("id", memberId)
+      .eq("user_id", user.id)
+      .single(),
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+  ]);
   const m = row as FamilyMemberRow | null;
   if (!m) redirect("/family");
   // The maid has no personal/health sections — bounce to her own edit screen.
@@ -40,11 +44,6 @@ export default async function MemberPersonalEditPage({
   const showSex = !(type === "adult" && m.role === "dad");
 
   // The form addresses the account OWNER, so its copy follows the owner's sex.
-  const { data: ownerProfile } = await supabase
-    .from("profiles")
-    .select("sex")
-    .eq("id", user.id)
-    .single();
   const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
 
   return (

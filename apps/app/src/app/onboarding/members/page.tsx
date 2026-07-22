@@ -17,15 +17,17 @@ export const metadata = { title: "عائلتك" };
  * details in order, and the end finalizes onboarding and generates everyone at once.
  */
 export default async function OnboardingMembersPage() {
-  const profile = await getCurrentUserProfile();
+  // Fetched together — the redirect guards below only need profile.
+  const [profile, allMembers] = await Promise.all([
+    getCurrentUserProfile(),
+    getCurrentUserFamilyMembers(),
+  ]);
   if (!profile) redirect("/auth/login");
   if (!profile.mom_profile_completed_at) redirect("/onboarding");
   // Already generated (loop finished or returning user) → the plan owns the view.
   if (profile.onboarding_completed_at) redirect("/plan");
 
-  const members = (await getCurrentUserFamilyMembers()).filter(
-    (m) => m.role !== "housekeeper",
-  );
+  const members = allMembers.filter((m) => m.role !== "housekeeper");
 
   // Sex was answered on the identity step — tailor everything after it.
   const sex = profile.sex === "male" ? ("male" as const) : ("female" as const);
