@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 import { track } from "@/marketing/lib/analytics";
-import { initPostHog, posthog } from "@/marketing/lib/posthog";
+import { capture, initPostHog } from "@/marketing/lib/posthog";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,13 +14,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!posthog?.capture) return;
-    try {
-      posthog.capture("$pageview", { path: pathname });
-    } catch {
-      // never break the UX
-    }
+    // Queued until posthog-js lazy-loads, so the first pageview still lands.
+    capture("$pageview", { path: pathname });
   }, [pathname]);
 
   useEffect(() => {

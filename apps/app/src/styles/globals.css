@@ -283,6 +283,21 @@
   letter-spacing: normal;
 }
 
+/* Marketing hero entrance — pure CSS so the headline and card photos paint
+   with the first frame instead of waiting for JS hydration (LCP). Stagger via
+   `[animation-delay:...]` arbitrary classes; `backwards` keeps delayed items
+   hidden until their turn. The global reduced-motion rule above collapses it
+   to the end state instantly. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+}
+@utility hero-rise {
+  animation: hero-rise 0.5s ease-out backwards;
+}
+
 @keyframes spotlight {
   0% {
     opacity: 0;

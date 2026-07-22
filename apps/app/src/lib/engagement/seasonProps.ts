@@ -6,7 +6,10 @@ import {
   getCurrentUserLatestPlan,
 } from "@/lib/supabase/queries";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
-import { isWeighInEligibleMember, isWeighInEligibleMom } from "./eligibility";
+import {
+  isGoalCelebrationEligibleMember,
+  isWeighInEligibleMom,
+} from "./eligibility";
 import { hasReachedWeightGoal } from "./goalMilestone";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -101,12 +104,27 @@ export async function getFamilySeasonProps(
 
   const supabase = await createClient();
 
-  // Meal check-ins + verdicts for this plan. select("*") on purpose: member_id
-  // is a 00019 column — naming it would fail the whole read on a pre-apply prod,
-  // while * degrades to rows without it (house tolerance pattern).
-  const [checkinRes, verdictRes] = await Promise.all([
+  // All four reads are independent — one parallel batch, not three stages.
+  // Meal check-ins + verdicts: select("*") on purpose — member_id is a 00019
+  // column; naming it would fail the whole read on a pre-apply prod, while *
+  // degrades to rows without it (house tolerance pattern). workout_checkins
+  // (00020) isn't in the generated Database types yet, hence the untyped cast;
+  // select("*") degrades to [] on a pre-apply prod.
+  const [checkinRes, verdictRes, workoutRes, { data: logs }] = await Promise.all([
     supabase.from("meal_checkins").select("*").eq("meal_plan_id", latestPlan.id).limit(400),
     supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latestPlan.id).limit(400),
+    workoutPlan?.status === "ready"
+      ? (supabase as unknown as SupabaseClient)
+          .from("workout_checkins")
+          .select("*")
+          .eq("workout_plan_id", workoutPlan.id)
+          .limit(400)
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("body_logs")
+      .select("member_id, weight_kg, recorded_on")
+      .eq("user_id", profile.id)
+      .order("recorded_on", { ascending: true }),
   ]);
   const checkins = ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
     day_index: r.day_index as number,
@@ -120,34 +138,19 @@ export async function getFamilySeasonProps(
     member_id: (r.member_id ?? null) as string | null,
     verdict: r.verdict as string,
   }));
-
-  // Workout session marks (the exercise pillar). Untyped cast: workout_checkins
-  // (00020) isn't in the generated Database types yet; select("*") degrades to
-  // [] on a pre-apply prod.
-  let workoutCheckins: FamilySeasonProps["workoutCheckins"] = [];
-  if (workoutPlan?.status === "ready") {
-    const { data } = await (supabase as unknown as SupabaseClient)
-      .from("workout_checkins")
-      .select("*")
-      .eq("workout_plan_id", workoutPlan.id)
-      .limit(400);
-    workoutCheckins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      day_index: r.day_index as number,
-      member_id: (r.member_id ?? "") as string,
-      status: r.status as string,
-    }));
-  }
+  const workoutCheckins: FamilySeasonProps["workoutCheckins"] = (
+    (workoutRes.data ?? []) as Array<Record<string, unknown>>
+  ).map((r) => ({
+    day_index: r.day_index as number,
+    member_id: (r.member_id ?? "") as string,
+    status: r.status as string,
+  }));
 
   // Goal milestones — eligible ADULTS whose latest weigh-in reached their target
   // (loss-framing, so pregnant/lactating are never celebrated on weight; children
   // have no target and are excluded by eligibility). The number never leaves this
   // computation — the board shows only the achievement.
   const goalReached: Array<{ id: string; name: string }> = [];
-  const { data: logs } = await supabase
-    .from("body_logs")
-    .select("member_id, weight_kg, recorded_on")
-    .eq("user_id", profile.id)
-    .order("recorded_on", { ascending: true });
   const seriesByMember = new Map<string, number[]>();
   for (const r of (logs ?? []) as Array<{ member_id: string; weight_kg: number | null }>) {
     if (r.weight_kg == null) continue;
@@ -163,7 +166,9 @@ export async function getFamilySeasonProps(
     goalReached.push({ id: "mom", name: momName });
   }
   for (const m of familyMembers) {
-    if (!isWeighInEligibleMember(m)) continue;
+    // ADULTS ONLY on this SHARED surface — children keep private records but a
+    // child's weight goal is never celebrated on the family «موسم بيتنا» card.
+    if (!isGoalCelebrationEligibleMember(m)) continue;
     if (m.member_type === "pregnant" || m.member_type === "lactating") continue;
     if (hasReachedWeightGoal(seriesByMember.get(m.id) ?? [], m.target_weight_kg)) {
       goalReached.push({ id: m.id, name: m.name });

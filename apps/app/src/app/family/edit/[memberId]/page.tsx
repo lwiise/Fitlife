@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, ChevronLeft } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
@@ -63,30 +63,29 @@ export default async function EditMemberPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
-  const { memberId } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [{ memberId }, user, supabase] = await Promise.all([
+    params,
+    getAuthUser(),
+    createClient(),
+  ]);
   if (!user) redirect("/auth/login");
 
-  const { data: row } = await supabase
-    .from("family_members")
-    .select("*")
-    .eq("id", memberId)
-    .eq("user_id", user.id)
-    .single();
+  // Member row + owner profile are independent — one parallel round-trip.
+  const [{ data: row }, { data: ownerProfile }] = await Promise.all([
+    supabase
+      .from("family_members")
+      .select("*")
+      .eq("id", memberId)
+      .eq("user_id", user.id)
+      .single(),
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+  ]);
   const m = row as FamilyMemberRow | null;
 
   if (!m) redirect("/family");
 
   // The hub addresses the account OWNER ("عدّلي/عدّل بيانات …"), so its copy
   // follows the owner's sex — not the member's.
-  const { data: ownerProfile } = await supabase
-    .from("profiles")
-    .select("sex")
-    .eq("id", user.id)
-    .single();
   const g = genderPick((ownerProfile as { sex?: string | null } | null)?.sex);
 
   // The maid isn't a plan beneficiary — she has only a name + reading language, so

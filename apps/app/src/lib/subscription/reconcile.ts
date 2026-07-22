@@ -6,7 +6,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getLemonsqueezyStoreId } from "@/lib/env";
 import { setupLemonsqueezy } from "@/lib/lemonsqueezy/client";
 import { mapLemonsqueezyStatus } from "@/app/api/webhooks/lemonsqueezy/mapping";
-import { getCurrentSubscription, type SubscriptionRow } from "./state";
+import {
+  getCurrentSubscription,
+  getCurrentSubscriptionFresh,
+  type SubscriptionRow,
+} from "./state";
 
 /**
  * Direct-from-Lemonsqueezy reconciliation — the safety net for a missed or
@@ -113,6 +117,8 @@ export async function reconcileSubscriptionFromLemonSqueezy(
     console.error("[reconcileSubscription] error", err);
   }
 
-  // Always return the freshest row (post-update if it succeeded).
-  return getCurrentSubscription(userId);
+  // Always return the freshest row (post-update if it succeeded). Must bypass
+  // the request-scoped memoization — the caller may have already read the
+  // pre-update row in this same request.
+  return getCurrentSubscriptionFresh(userId);
 }
