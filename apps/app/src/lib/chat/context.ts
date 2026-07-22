@@ -6,6 +6,7 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
+import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 
 /** Render a jsonb-ish value (usually a string[]) as a compact comma list. */
 function list(value: unknown): string {
@@ -116,7 +117,17 @@ export async function buildHouseholdContext(userId: string): Promise<string> {
   }
 
   if (latest?.status === "ready" && latest.plan_data) {
-    sections.push(planSummary(latest.plan_data));
+    // Overlay current roster names so the advisor never refers to a member by a
+    // pre-rename name still frozen in the plan snapshot (the roster section above
+    // already uses live names).
+    sections.push(
+      planSummary(
+        applyMemberDisplayNames(latest.plan_data, {
+          mom: { display_name: profile?.display_name ?? null },
+          members: family,
+        }),
+      ),
+    );
   } else {
     sections.push("لا توجد خطة حالية جاهزة بعد.");
   }

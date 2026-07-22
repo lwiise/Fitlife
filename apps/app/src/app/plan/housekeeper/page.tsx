@@ -10,6 +10,7 @@ import {
   MEMBER_GEN_MAX_ATTEMPTS,
 } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
+import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 import { asStringArray } from "@/app/profile/labels";
 import { HousekeeperPlanView } from "./HousekeeperPlanView";
 import type { AllergyEntry } from "./AllergyBackstop";
@@ -75,15 +76,29 @@ export default async function HousekeeperPage() {
       ),
     );
 
+  // Overlay live-roster names so a rename shows immediately. When a member's
+  // Arabic name changed this drops the stale transliteration, so the maid view
+  // falls back to the live Arabic name until the next translation pass rebuilds
+  // it (PlanViewer's `member_name_translated ?? member_name_ar`).
+  const planForView = latest.plan_data
+    ? applyMemberDisplayNames(latest.plan_data, {
+        mom: { display_name: profile?.display_name ?? null },
+        members: familyMembers,
+      })
+    : null;
+
   // Allergy backstop: allergens sourced DIRECTLY from the DB (profiles +
   // family_members), never from recipe prose or plan_data. The member NAME is
   // joined to the plan's transliterated form (member_id "mom" for the owner,
   // family_members.id otherwise) so a non-Arabic cook can read whose line it is;
-  // it falls back to the Arabic name until translation lands. Mom first, then
-  // members in display order. The housekeeper is the cook, not a beneficiary —
-  // she's excluded (and never appears in plan_data.members anyway).
+  // it falls back to the Arabic name until translation lands. Read from the
+  // OVERLAID plan so a renamed member's stale transliteration is dropped here
+  // too — otherwise the allergy line would show the old name while the plan tabs
+  // below show the new one. Mom first, then members in display order. The
+  // housekeeper is the cook, not a beneficiary — she's excluded (and never
+  // appears in plan_data.members anyway).
   const nameByMember = new Map(
-    (latest.plan_data?.members ?? []).map((m) => [
+    (planForView?.members ?? []).map((m) => [
       m.member_id,
       m.member_name_translated,
     ]),
@@ -109,7 +124,7 @@ export default async function HousekeeperPage() {
 
   return (
     <HousekeeperPlanView
-      plan={latest.plan_data ?? null}
+      plan={planForView}
       planId={latest.id}
       locale={locale}
       needsTranslation={needsTranslation}

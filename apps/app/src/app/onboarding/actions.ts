@@ -1218,6 +1218,11 @@ export async function updateFamilyMember(
   }
 
   revalidatePath("/family");
+  // A name-only edit skips regeneration (below) but still changes the display
+  // name the plan tabs / dashboard show via the read-time overlay
+  // (applyMemberDisplayNames) — bust their caches so it shows at once.
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
 
   // Substantive change → regenerate; cosmetic (name only) → skip.
   const substantive =

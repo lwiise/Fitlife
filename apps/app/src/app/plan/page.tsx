@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
 import { applyChildDisplayTargets } from "@/lib/plans/childTargets";
+import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 import { genderPick } from "@/lib/copy/gender";
 import { LogoutButton } from "../dashboard/LogoutButton";
 import { Logo } from "@/components/Logo";
@@ -48,6 +49,16 @@ export default async function PlanPage({
     getCurrentUserLatestPlan(),
     getCurrentUserFamilyMembers(),
   ]);
+  // Live-roster names to overlay onto the frozen plan snapshot at read time, so
+  // a member/mom rename in Settings is reflected immediately without a
+  // regenerate — the snapshot keeps whatever name it captured at generation.
+  // Applied to both the meal plan and the workout plan below. See
+  // applyMemberDisplayNames.
+  const nameRoster = {
+    mom: { display_name: profile?.display_name ?? null },
+    members: familyMembers,
+  };
+
   const isOnboarded = !!profile?.onboarding_completed_at;
   // Members saved but not yet in the plan (deferred while a prior gen was in
   // flight). When onboarding is done and the plan is ready, a lazy drain fills
@@ -364,7 +375,7 @@ export default async function PlanPage({
             )}
             {workout.status === "ready" && workout.plan_data && (
               <WorkoutViewer
-                plan={workout.plan_data}
+                plan={applyMemberDisplayNames(workout.plan_data, nameRoster)}
                 planId={workout.id}
                 checkins={workoutCheckins}
                 ownerSex={profile?.sex}
@@ -397,7 +408,7 @@ export default async function PlanPage({
           <>
             {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
             <PlanViewer
-              plan={
+              plan={applyMemberDisplayNames(
                 profile
                   ? applyChildDisplayTargets(latest.plan_data, {
                       mom: {
@@ -406,8 +417,9 @@ export default async function PlanPage({
                       },
                       members: familyMembers,
                     })
-                  : latest.plan_data
-              }
+                  : latest.plan_data,
+                nameRoster,
+              )}
               planId={latest.id}
               generating={latest.in_progress}
               updatedAt={latest.updated_at}
