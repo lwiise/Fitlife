@@ -71,6 +71,37 @@ export const setMealCheckinSchema = z.object({
 });
 export type SetMealCheckinInput = z.infer<typeof setMealCheckinSchema>;
 
+// Single-status marking for a SHARED meal (owner directive 07/2026): one tap
+// sets the whole dish's status, stored as one row per PRESENT participant in a
+// single fan-out (keeps the leaderboard's per-member credit and the digest's
+// meal-true collapse). member_ids is the present-participant roster the client
+// derived from per_member_portions minus absences; every non-"mom" id is
+// ownership-checked in the action. "household" is not a participant.
+export const setSharedMealCheckinSchema = z.object({
+  meal_plan_id: uuid,
+  day_index: z.number().int().min(0).max(6),
+  slot: z.enum(CHECKIN_SLOTS),
+  member_ids: z.array(memberId).min(1).max(12),
+  status: z.enum(CHECKIN_STATUSES).nullable(),
+  reason: z.enum(CHECKIN_REASONS).nullish(),
+});
+export type SetSharedMealCheckinInput = z.infer<
+  typeof setSharedMealCheckinSchema
+>;
+
+// Shared-meal absence toggle (00021): exclude/restore one member for one meal
+// occurrence. NOT gated to elapsed days — absence is planning («تسافر
+// الخميس»), not adherence, so future days are legitimate targets. The action
+// derives local_date server-side from the plan's week anchor.
+export const setMealAbsenceSchema = z.object({
+  meal_plan_id: uuid,
+  day_index: z.number().int().min(0).max(6),
+  slot: z.enum(CHECKIN_SLOTS),
+  member_id: memberId,
+  absent: z.boolean(),
+});
+export type SetMealAbsenceInput = z.infer<typeof setMealAbsenceSchema>;
+
 // Inline per-dish verdict on the plan page — how a cooked dish landed, one at a
 // time, the same table the ختام اليوم sheet writes. Per person (member_id is
 // whose verdict it is), keyed by (plan, member, day, slot) like meal_verdicts.

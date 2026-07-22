@@ -9,8 +9,10 @@ import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
 import {
+  setMealAbsence as setMealAbsenceAction,
   setMealCheckin as setMealCheckinAction,
   setMealVerdict as setMealVerdictAction,
+  setSharedMealCheckin as setSharedMealCheckinAction,
 } from "@/lib/engagement/actions";
 import { RegenerateButton } from "./RegenerateButton";
 // @react-pdf is dynamically imported inside this button's click handler, so it
@@ -59,6 +61,7 @@ export function PlanViewer({
   showWorkoutOptIn = false,
   checkins,
   verdicts,
+  absences,
   journeyMembers,
   planTypeToggle,
   ownerSex,
@@ -88,7 +91,9 @@ export function PlanViewer({
   // plan. Presence of the prop enables the controls; read-only/translated
   // views never pass it. member_id: "mom" | family_members.id per person, or
   // "household"/null for legacy whole-house rows (pre-00019) — those act as a
-  // fallback for every member of that meal.
+  // fallback for every member of that meal. A SHARED meal shows ONE status
+  // (owner directive 07/2026): read from any sharer's row (they're written in
+  // one fan-out) with the whole-house row as the legacy fallback.
   checkins?: Array<{
     day_index: number;
     slot: string;
@@ -96,6 +101,11 @@ export function PlanViewer({
     reason: string | null;
     member_id?: string | null;
   }>;
+  // Shared-meal absences (00021, main /plan page only): members excluded from
+  // a meal occurrence — the card scales the batch for the remaining sharers.
+  // Unlike marking, the toggle works on EVERY day of the plan week (planning,
+  // not adherence). Absent prop = read-only surface, no absence controls.
+  absences?: Array<{ day_index: number; slot: string; member_id: string }>;
   // Per-dish verdicts (main /plan page only, same scope as checkins). member_id
   // is whose verdict it is — verdicts are personal, so there is NO whole-house
   // fallback (unlike checkins). Feeds golden dishes / vetoes → «سارة عدّلت خطتك».
@@ -181,6 +191,15 @@ export function PlanViewer({
           ]),
       ),
   );
+  // Shared-meal absences, keyed day|slot|member (00021). Optimistic like the
+  // maps above. An absent member is out of THIS meal occurrence: the card
+  // scales the batch for the rest, and the fan-out status write skips them.
+  const [absenceSet, setAbsenceSet] = useState<Set<string>>(
+    () =>
+      new Set(
+        (absences ?? []).map((a) => `${a.day_index}|${a.slot}|${a.member_id}`),
+      ),
+  );
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const checkinTodayIdx = dayIndexFromWeekStart(plan.week_start_date);
   // Every meal stays changeable for the WHOLE plan week (owner directive
@@ -193,6 +212,9 @@ export function PlanViewer({
     !readOnly &&
     !translated &&
     activeDayIndex <= checkinTodayIdx;
+  // Absence is planning, not adherence — the toggle works on every day of the
+  // plan week, future included («تسافر الخميس» is adjusted before Thursday).
+  const canToggleAbsence = absences !== undefined && !readOnly && !translated;
 
   /** A member's effective mark: their own row, else the whole-house fallback. */
   function checkinFor(dayIndex: number, slot: string, memberId: string) {
@@ -201,6 +223,21 @@ export function PlanViewer({
       checkinMap.get(`${dayIndex}|${slot}|household`) ??
       null
     );
+  }
+
+  /** A SHARED meal's single status: any sharer's row (the fan-out keeps them
+   * in agreement; legacy per-person rows surface the same way), else the
+   * whole-house fallback. */
+  function sharedCheckinFor(
+    dayIndex: number,
+    slot: string,
+    sharerIds: string[],
+  ) {
+    for (const id of sharerIds) {
+      const own = checkinMap.get(`${dayIndex}|${slot}|${id}`);
+      if (own) return own;
+    }
+    return checkinMap.get(`${dayIndex}|${slot}|household`) ?? null;
   }
 
   /** A member's own verdict for a dish (no fallback — verdicts are personal). */
@@ -280,6 +317,102 @@ export function PlanViewer({
           if (prevHousehold) reverted.set(householdKey, prevHousehold);
           return reverted;
         });
+        setCheckinError(result.error);
+      }
+    });
+  }
+
+  /** ONE tap = one status for the whole shared dish: optimistic fan-out to
+   * every present sharer, mirrored server-side by setSharedMealCheckin.
+   * Clearing removes the sharers' own marks; when the chip was lit only by a
+   * legacy whole-house row, that row is retracted instead (same as the
+   * individual clear). */
+  function handleSharedCheckin(
+    memberIds: string[],
+    slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
+    status: "cooked" | "swapped" | "skipped" | null,
+    reason: string | null,
+  ) {
+    const keys = memberIds.map((id) => `${activeDayIndex}|${slot}|${id}`);
+    const householdKey = `${activeDayIndex}|${slot}|household`;
+    const prevEntries = new Map(
+      [...keys, householdKey].map((k) => [k, checkinMap.get(k) ?? null]),
+    );
+    const next = new Map(checkinMap);
+    if (status === null) {
+      const hadOwn = keys.some((k) => next.has(k));
+      for (const k of keys) next.delete(k);
+      if (!hadOwn) next.delete(householdKey);
+    } else {
+      for (const k of keys) next.set(k, { status, reason });
+    }
+    setCheckinMap(next);
+    setCheckinError(null);
+    void setSharedMealCheckinAction({
+      meal_plan_id: planId,
+      day_index: activeDayIndex,
+      slot,
+      member_ids: memberIds,
+      status,
+      reason: reason as never,
+    }).then((result) => {
+      if (!result.ok) {
+        setCheckinMap((cur) => {
+          const reverted = new Map(cur);
+          for (const [k, v] of prevEntries) {
+            if (v) reverted.set(k, v);
+            else reverted.delete(k);
+          }
+          return reverted;
+        });
+        setCheckinError(result.error);
+      }
+    });
+  }
+
+  /** Exclude/restore a sharer for one meal occurrence («إزالة من الوجبة»).
+   * Marking absent also drops that member's own status mark for the meal —
+   * someone outside the meal has no serving to attest (the server does the
+   * same). Works on any day of the plan week: absence is planning. */
+  function handleToggleAbsence(
+    memberId: string,
+    slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
+    absent: boolean,
+  ) {
+    const key = `${activeDayIndex}|${slot}|${memberId}`;
+    const prevAbsent = absenceSet.has(key);
+    const prevCheckin = checkinMap.get(key) ?? null;
+    setAbsenceSet((cur) => {
+      const next = new Set(cur);
+      if (absent) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+    if (absent && prevCheckin) {
+      setCheckinMap((cur) => {
+        const next = new Map(cur);
+        next.delete(key);
+        return next;
+      });
+    }
+    setCheckinError(null);
+    void setMealAbsenceAction({
+      meal_plan_id: planId,
+      day_index: activeDayIndex,
+      slot,
+      member_id: memberId,
+      absent,
+    }).then((result) => {
+      if (!result.ok) {
+        setAbsenceSet((cur) => {
+          const reverted = new Set(cur);
+          if (prevAbsent) reverted.add(key);
+          else reverted.delete(key);
+          return reverted;
+        });
+        if (absent && prevCheckin) {
+          setCheckinMap((cur) => new Map(cur).set(key, prevCheckin));
+        }
         setCheckinError(result.error);
       }
     });
@@ -817,52 +950,85 @@ export function PlanViewer({
                   {checkinError}
                 </p>
               )}
-              {orderedMeals.map((meal, i) => (
-                <MealCard
-                  key={i}
-                  meal={meal}
-                  memberNames={memberNames}
-                  locale={locale}
-                  currentMemberId={activeMember.member_id}
-                  checkin={checkinFor(
-                    activeDayIndex,
-                    meal.slot,
-                    activeMember.member_id,
-                  )}
-                  sharedCheckins={
-                    meal.shared_recipe && meal.per_member_portions?.length
-                      ? Object.fromEntries(
-                          meal.per_member_portions.map((p) => [
-                            p.member_id,
-                            checkinFor(activeDayIndex, meal.slot, p.member_id),
-                          ]),
-                        )
-                      : undefined
-                  }
-                  onCheckin={
-                    canCheckinActiveDay
-                      ? (memberId, status, reason) =>
-                          handleCheckin(memberId, meal.slot, status, reason)
-                      : undefined
-                  }
-                  verdict={verdictFor(
-                    activeDayIndex,
-                    meal.slot,
-                    activeMember.member_id,
-                  )}
-                  onVerdict={
-                    canCheckinActiveDay
-                      ? (verdict) =>
-                          handleVerdict(
-                            activeMember.member_id,
+              {orderedMeals.map((meal, i) => {
+                // A shared dish: one status for everyone who shares it, and an
+                // absence toggle per sharer (the batch re-scales for the rest).
+                const sharerIds =
+                  meal.shared_recipe && meal.per_member_portions?.length
+                    ? meal.per_member_portions.map((p) => p.member_id)
+                    : null;
+                const absentIds = sharerIds
+                  ? sharerIds.filter((id) =>
+                      absenceSet.has(`${activeDayIndex}|${meal.slot}|${id}`),
+                    )
+                  : [];
+                const presentIds = sharerIds
+                  ? sharerIds.filter((id) => !absentIds.includes(id))
+                  : null;
+                return (
+                  <MealCard
+                    key={i}
+                    meal={meal}
+                    memberNames={memberNames}
+                    locale={locale}
+                    currentMemberId={activeMember.member_id}
+                    checkin={
+                      sharerIds
+                        ? sharedCheckinFor(activeDayIndex, meal.slot, sharerIds)
+                        : checkinFor(
+                            activeDayIndex,
                             meal.slot,
-                            meal.recipe_name_ar,
-                            verdict,
+                            activeMember.member_id,
                           )
-                      : undefined
-                  }
-                />
-              ))}
+                    }
+                    onCheckin={
+                      canCheckinActiveDay
+                        ? (status, reason) =>
+                            sharerIds
+                              ? handleSharedCheckin(
+                                  // Guard against everyone-absent data: the
+                                  // status must always have someone to land on.
+                                  presentIds && presentIds.length > 0
+                                    ? presentIds
+                                    : sharerIds,
+                                  meal.slot,
+                                  status,
+                                  reason,
+                                )
+                              : handleCheckin(
+                                  activeMember.member_id,
+                                  meal.slot,
+                                  status,
+                                  reason,
+                                )
+                        : undefined
+                    }
+                    absentMemberIds={sharerIds ? absentIds : undefined}
+                    onToggleAbsence={
+                      canToggleAbsence && sharerIds
+                        ? (memberId, absent) =>
+                            handleToggleAbsence(memberId, meal.slot, absent)
+                        : undefined
+                    }
+                    verdict={verdictFor(
+                      activeDayIndex,
+                      meal.slot,
+                      activeMember.member_id,
+                    )}
+                    onVerdict={
+                      canCheckinActiveDay
+                        ? (verdict) =>
+                            handleVerdict(
+                              activeMember.member_id,
+                              meal.slot,
+                              meal.recipe_name_ar,
+                              verdict,
+                            )
+                        : undefined
+                    }
+                  />
+                );
+              })}
             </>
           ) : memberIsGenerating &&
             !preparingStalled &&
