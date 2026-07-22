@@ -986,11 +986,18 @@ export function PlanViewer({
                         ? (status, reason) =>
                             sharerIds
                               ? handleSharedCheckin(
-                                  // Guard against everyone-absent data: the
-                                  // status must always have someone to land on.
-                                  presentIds && presentIds.length > 0
-                                    ? presentIds
-                                    : sharerIds,
+                                  // SET lands on the present sharers only (an
+                                  // absentee gets no mark) — with an
+                                  // everyone-absent guard so the status always
+                                  // has someone to land on. CLEAR sweeps ALL
+                                  // sharers, so a stale row (e.g. an absentee's
+                                  // legacy per-person mark) can't keep the
+                                  // chip lit after an un-tap.
+                                  status === null ||
+                                    !presentIds ||
+                                    presentIds.length === 0
+                                    ? sharerIds
+                                    : presentIds,
                                   meal.slot,
                                   status,
                                   reason,
