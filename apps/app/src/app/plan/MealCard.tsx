@@ -83,13 +83,14 @@ const CHECKIN_HEADER_LABEL: Record<MealCheckinState["status"], string> = {
 
 // «كيف كانت؟» — the dish verdict, offered once a dish was actually cooked.
 // Feeds golden dishes (loved) and vetoes (not_again) in the weekly digest.
-// «نحبّها» wears the gold of a golden dish; nothing here reads as shame.
-const VERDICT_CHIPS: { value: Verdict; label: string; selected: string }[] = [
-  { value: "loved", label: "نحبّها", selected: "bg-brand-yellow text-brand-ink" },
-  { value: "fine", label: "عادية", selected: "bg-brand-lavender text-brand-purple-900" },
+// Selected state mirrors the status row's deep-purple fill (owner directive
+// 07/2026) so a tap reads the same in both rows; nothing here reads as shame.
+const VERDICT_CHIPS: { value: Verdict; label: string }[] = [
+  { value: "loved", label: "نحبّها" },
+  { value: "fine", label: "عادية" },
   // First-person plural (family voice, matching «نحبّها») so it stays gender-
   // neutral for the cook rather than a feminine imperative.
-  { value: "not_again", label: "لا نكرّرها", selected: "bg-brand-ink text-white" },
+  { value: "not_again", label: "لا نكرّرها" },
 ];
 
 // The meal's status chips (+ reason chips when swapped). ONE row per meal
@@ -584,7 +585,7 @@ export function MealCard({
                             aria-pressed={verdict === v.value}
                             className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                               verdict === v.value
-                                ? v.selected
+                                ? "bg-brand-purple-900 text-white"
                                 : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
                             }`}
                           >
