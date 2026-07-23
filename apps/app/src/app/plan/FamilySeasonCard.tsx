@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { Trophy, Crown, ChevronLeft } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
+import {
+  computeSeasonStats,
+  WEEKLY_TARGET,
+  type SeasonMealMark,
+  type SeasonVerdictMark,
+  type SeasonWorkoutMark,
+} from "@/lib/engagement/seasonMath";
 
 // «موسم بيتنا» — the family season, rendered as a competitive LEADERBOARD.
 //
@@ -30,9 +37,8 @@ import { genderPick } from "@/lib/copy/gender";
 // filtered on the server). The caller hides the card for solo households and
 // read-only/translated views.
 
-const HONOR_DAYS_GOAL = 5; // meal days in a week to "honor" the season
-const CAP = 14; // invisible capacity the family meal ring fills toward
-const WEEKLY_TARGET = 10; // per-member denominator for the leaderboard %
+// Counting rules + constants (WEEKLY_TARGET, CAP, HONOR_DAYS_GOAL) live in
+// lib/engagement/seasonMath.ts — this component is presentation-only.
 
 const DAY_INITIALS = ["ح", "ن", "ث", "ر", "خ", "ج", "س"]; // getUTCDay 0=Sun
 
@@ -218,19 +224,6 @@ function WinnerCrown() {
   );
 }
 
-type Mark = {
-  day_index: number;
-  slot: string;
-  status?: string;
-  member_id?: string | null;
-};
-type VerdictMark = { verdict?: string; member_id?: string | null };
-type WorkoutMark = {
-  day_index?: number;
-  member_id?: string | null;
-  status: string;
-};
-
 export function FamilySeasonCard({
   members,
   checkins,
@@ -247,10 +240,12 @@ export function FamilySeasonCard({
    * label its correct Arabic gender (حاضر/حاضرة); null falls back to the
    * feminine default. */
   members: Array<{ id: string; name: string; sex?: string | null }>;
-  checkins: Mark[];
-  verdicts: VerdictMark[];
-  /** Workout session marks (the exercise pillar); empty when no workout plan. */
-  workoutCheckins?: WorkoutMark[];
+  checkins: SeasonMealMark[];
+  verdicts: SeasonVerdictMark[];
+  /** Workout session marks (the exercise pillar); empty when no workout plan.
+   * Their local_date scopes them to the meal plan's week (weekday-anchored
+   * day_index alone cannot). */
+  workoutCheckins?: SeasonWorkoutMark[];
   /** Adults who reached their target weight — the achievement ONLY (no number,
    * no target); pregnant/lactating are never here (filtered on the server). */
   goalReached?: Array<{ id: string; name: string }>;
@@ -268,58 +263,27 @@ export function FamilySeasonCard({
   /** Account owner's sex → gendered فصحى in the today panel («علّمي/علّم»). */
   ownerSex?: string | null;
 }) {
-  const memberIds = new Set(members.map((m) => m.id));
-
-  // Meal-true family total: (day, slot) is the meal's identity, so a shared
-  // dinner marked by three people is ONE followed meal (household size can never
-  // inflate it — mirrors the engagement digest).
-  const mealKey = (c: Mark) => `${c.day_index}|${c.slot}`;
-  const followedMeals = new Set(checkins.map(mealKey)).size;
-  const mealsHappened = new Set(
-    checkins.filter((c) => c.status !== "skipped").map(mealKey),
-  ).size;
-  const mealDays = new Set(checkins.map((c) => c.day_index));
-  const activeDays = mealDays.size; // strip is meal-anchored
-  const honored = activeDays >= HONOR_DAYS_GOAL;
-  const workoutActs = new Set(
-    workoutCheckins
-      .filter((w) => w.member_id && memberIds.has(w.member_id) && w.day_index != null)
-      .map((w) => `${w.day_index}|${w.member_id}`),
-  ).size;
-  const sessionsDone = workoutCheckins.filter(
-    (w) => w.status === "done" || w.status === "moved",
-  ).length;
-  const fillFrac = Math.min(1, CAP > 0 ? (followedMeals + workoutActs) / CAP : 0);
-
-  // Distinct meal slots per plan-day → the day's star rating (max 3).
-  const slotsPerDay = new Map<number, Set<string>>();
-  for (const c of checkins) {
-    if (!slotsPerDay.has(c.day_index)) slotsPerDay.set(c.day_index, new Set());
-    slotsPerDay.get(c.day_index)!.add(c.slot);
-  }
-
-  // Per-member participation (meal marks + verdicts + workout marks) → rank + %.
-  const acts: Record<string, number> = {};
-  members.forEach((m) => (acts[m.id] = 0));
-  const bump = (id: string | null | undefined) => {
-    if (id && memberIds.has(id)) acts[id] = (acts[id] ?? 0) + 1;
-  };
-  for (const c of checkins) bump(c.member_id);
-  for (const v of verdicts) bump(v.member_id);
-  for (const w of workoutCheckins) bump(w.member_id);
-
-  const ranked = members
-    .map((m) => ({
-      ...m,
-      score: acts[m.id] ?? 0,
-      pct: Math.min(1, (acts[m.id] ?? 0) / WEEKLY_TARGET),
-    }))
-    .sort((a, b) => b.score - a.score);
-  const maxScore = ranked[0]?.score ?? 0;
-  const hasWinner = maxScore > 0;
-  const leaderName = hasWinner && ranked[0] ? ranked[0].name : null;
-
-  const hasActivity = followedMeals > 0 || workoutActs > 0;
+  // All counting happens in seasonMath (skipped meals excluded, workouts
+  // week-scoped by local_date, deterministic tie-break) — one shared,
+  // unit-tested definition of every number on this card.
+  const {
+    followedMeals,
+    activeDays,
+    honored,
+    sessionsDone,
+    fillFrac,
+    hasActivity,
+    days,
+    ranked,
+    hasWinner,
+    leaderName,
+  } = computeSeasonStats({
+    members,
+    checkins,
+    verdicts,
+    workoutCheckins,
+    weekStartDate,
+  });
 
   // «اليوم» panel — fills the hero's second column with the next action (and
   // restores the dashboard's path to /plan). Absent when today isn't in the
@@ -399,7 +363,7 @@ export function FamilySeasonCard({
                 <div className="min-w-0 text-start">
                   <p className="text-sm sm:text-[17px] leading-snug text-brand-ink">
                     هذا الأسبوع اجتمع بيتكم على{" "}
-                    <Count n={mealsHappened} one="وجبة واحدة" two="وجبتين" few="وجبات" many="وجبة" />{" "}
+                    <Count n={followedMeals} one="وجبة واحدة" two="وجبتين" few="وجبات" many="وجبة" />{" "}
                     معاً
                     <span className="block text-brand-ink-muted text-[12.5px] mt-0.5">
                       أضاء <Count n={activeDays} one="يوماً واحداً" two="يومين" few="أيام" many="يوماً" />
@@ -428,10 +392,8 @@ export function FamilySeasonCard({
                 mark; a day without a meal mark is a dashed placeholder. Fixed
                 compact height so the whole section fits a laptop screen. */}
             <ul className="grid grid-cols-7 gap-1.5 sm:gap-2.5 mt-4 list-none p-0 m-0" aria-label="أيام الأسبوع">
-              {Array.from({ length: 7 }, (_, i) => {
-                const cooked = mealDays.has(i);
+              {days.map(({ dayIndex: i, lit: cooked, stars }) => {
                 const isToday = todayIndex === i;
-                const stars = Math.min(3, slotsPerDay.get(i)?.size ?? 0);
                 const label = weekdayInitial(weekStartDate, i);
                 const dateNum = dayOfMonth(weekStartDate, i);
                 return (
@@ -523,8 +485,7 @@ export function FamilySeasonCard({
           const isWinner = hasWinner && idx === 0;
           // Avatar colour is stable by ROSTER order (never by rank), so each
           // member keeps their colour week to week.
-          const rosterIdx = members.findIndex((x) => x.id === m.id);
-          const avatarBg = AVATAR_BG[(rosterIdx < 0 ? 0 : rosterIdx) % AVATAR_BG.length]!;
+          const avatarBg = AVATAR_BG[m.rosterIndex % AVATAR_BG.length]!;
           const initial = m.name.trim().charAt(0).toLocaleUpperCase();
           const pctText = (
             <span dir="ltr" className="tabular-nums">
@@ -616,8 +577,8 @@ export function FamilySeasonCard({
 
       {/* One line explaining the ranking metric — kills the mystery %. */}
       <p className="text-center text-brand-ink-muted text-[11.5px] leading-relaxed">
-        النسبة = تسجيلات الأسبوع (وجبات وآراء وتمارين) من هدف{" "}
-        <Figure n={WEEKLY_TARGET} /> تسجيلات
+        النسبة = تسجيلات هذا الأسبوع (وجبات وآراء وتمارين — الوجبة المتجاوزة لا
+        تُحسب) من هدف <Figure n={WEEKLY_TARGET} /> تسجيلات
       </p>
 
       {/* Goal achievements (kept as an achievement event only — no numbers). */}

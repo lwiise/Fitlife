@@ -27,6 +27,7 @@ import { Logo } from "@/components/Logo";
 import { SettingsLink } from "@/components/SettingsLink";
 import { LogoutButton } from "./LogoutButton";
 import { CheckoutSuccessHandler } from "./CheckoutSuccessHandler";
+import { RefreshOnFocus } from "./RefreshOnFocus";
 import { BillingPortalButton } from "./BillingPortalButton";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -200,6 +201,10 @@ export default async function DashboardPage() {
       </header>
 
       <div className="container-app py-8 md:py-12">
+        {/* Marks made on /plan (or another device) only reach an already-open
+            dashboard on the next fetch — refresh when the tab wakes so the
+            «موسم بيتنا» board is never a day stale. */}
+        <RefreshOnFocus />
         <Suspense fallback={null}>
           <CheckoutSuccessHandler />
         </Suspense>

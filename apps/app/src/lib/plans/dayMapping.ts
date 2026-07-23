@@ -62,6 +62,13 @@ export function riyadhTodayISO(): string {
   return new Date(Date.now() + RIYADH_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+/** YYYY-MM-DD + n days → YYYY-MM-DD (pure calendar math, no TZ). */
+export function addDaysISO(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Whole days from the plan's week_start_date to today (Riyadh). 0 = the plan's
  * first day (its generation day). Can be negative (legacy future-anchored plans)
