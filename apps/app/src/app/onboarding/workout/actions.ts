@@ -6,7 +6,10 @@ import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutProfileSchema } from "@fitlife/plan-engine";
-import { isWorkoutEligibleMember } from "@/lib/plans/workoutEligibility";
+import {
+  isWorkoutEligibleMember,
+  isWorkoutEligibleMom,
+} from "@/lib/plans/workoutEligibility";
 import { triggerWorkoutGeneration } from "@/lib/plans/dispatch";
 import { finishOnboardingToSubscription } from "../actions";
 
@@ -47,6 +50,16 @@ export async function saveWorkoutProfiles(
 
   for (const entry of parsed.data) {
     if (entry.target === "mom") {
+      // The account holder passes the same server-side age gate as members —
+      // an under-18 signup must never carry a workout profile.
+      const { data: mom } = await supabase
+        .from("profiles")
+        .select("birth_year")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!mom || !isWorkoutEligibleMom(mom)) {
+        return { ok: false, error: "خطة التمارين متاحة للبالغين فقط" };
+      }
       const { error } = await supabase
         .from("profiles")
         .update({ workout_profile: entry.profile })

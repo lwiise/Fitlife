@@ -34,6 +34,7 @@ function makeContext(overrides?: {
   momWorkout?: Partial<WorkoutProfile> | null;
   momPregnant?: boolean;
   momConditions?: string[];
+  momAge?: number;
 }): PlanPromptContext {
   const momWorkout =
     overrides?.momWorkout === null
@@ -45,7 +46,7 @@ function makeContext(overrides?: {
       display_name: "أم محمد",
       sex: "female",
       member_type: overrides?.momPregnant ? "pregnant" : "adult",
-      age: 35,
+      age: overrides?.momAge ?? 35,
       height_cm: 165,
       weight_kg: 70,
       activity_level: "moderate",
@@ -195,6 +196,13 @@ describe("workoutTrainees", () => {
   it("includes only opted-in adults", () => {
     expect(workoutTrainees(makeContext()).map((t) => t.member_id)).toEqual(["mom"]);
     expect(workoutTrainees(makeContext({ momWorkout: null }))).toEqual([]);
+  });
+
+  it("drops an under-18 account holder — the 18 line mirrors the app-side gate", () => {
+    expect(workoutTrainees(makeContext({ momAge: 17 }))).toEqual([]);
+    expect(
+      workoutTrainees(makeContext({ momAge: 18 })).map((t) => t.member_id),
+    ).toEqual(["mom"]);
   });
 });
 

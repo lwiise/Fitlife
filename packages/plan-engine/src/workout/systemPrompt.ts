@@ -126,10 +126,15 @@ export interface WorkoutTrainee {
   profile: WorkoutProfile;
 }
 
-/** All opted-in adults (workout_profile set). Children are never eligible. */
+/** All opted-in adults (workout_profile set). Children are never eligible —
+ * including the account holder herself: an under-18 mom is dropped exactly
+ * like an under-18 member, matching the app-side gate in
+ * lib/plans/workoutEligibility. Unknown age passes (it cannot be
+ * fabricated), same as there. */
 export function workoutTrainees(context: PlanPromptContext): WorkoutTrainee[] {
   const out: WorkoutTrainee[] = [];
-  if (context.mom.workout_profile) {
+  const momIsMinor = context.mom.age != null && context.mom.age < 18;
+  if (context.mom.workout_profile && !momIsMinor) {
     out.push({
       member_id: "mom",
       name: context.mom.display_name ?? "الأم",

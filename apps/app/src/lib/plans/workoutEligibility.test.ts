@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 
 import {
   isWorkoutEligibleMember,
+  isWorkoutEligibleMom,
+  momWorkoutIneligibleReason,
   workoutIneligibleReason,
 } from "./workoutEligibility";
 
@@ -96,6 +98,30 @@ describe("workoutIneligibleReason", () => {
         YEAR,
       ),
     ).toBeNull();
+  });
+});
+
+describe("momWorkoutIneligibleReason", () => {
+  it("accepts an adult account holder", () => {
+    expect(momWorkoutIneligibleReason({ birth_year: 1990 }, YEAR)).toBeNull();
+  });
+
+  it("refuses an under-18 account holder — same 18 line as members", () => {
+    expect(momWorkoutIneligibleReason({ birth_year: YEAR - 17 }, YEAR)).toBe(
+      "child",
+    );
+    expect(momWorkoutIneligibleReason({ birth_year: YEAR - 18 }, YEAR)).toBeNull();
+  });
+
+  it("allows an unknown birth_year (age cannot be fabricated)", () => {
+    expect(momWorkoutIneligibleReason({ birth_year: null }, YEAR)).toBeNull();
+  });
+});
+
+describe("isWorkoutEligibleMom", () => {
+  it("mirrors the reason function", () => {
+    expect(isWorkoutEligibleMom({ birth_year: 1990 }, YEAR)).toBe(true);
+    expect(isWorkoutEligibleMom({ birth_year: YEAR - 16 }, YEAR)).toBe(false);
   });
 });
 

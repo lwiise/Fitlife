@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutProfileSchema, type WorkoutProfile } from "@fitlife/plan-engine";
 import { Logo } from "@/components/Logo";
-import { workoutIneligibleReason } from "@/lib/plans/workoutEligibility";
+import {
+  momWorkoutIneligibleReason,
+  workoutIneligibleReason,
+} from "@/lib/plans/workoutEligibility";
 import {
   WorkoutQuestions,
   type WorkoutPerson,
@@ -23,7 +26,9 @@ function parseProfile(v: unknown): WorkoutProfile | null {
 /**
  * The workout opt-in questionnaire. Reached from the onboarding plan-scope
  * fork, the dashboard opt-in card, and the profile edit entry. Children and
- * the housekeeper are never eligible.
+ * the housekeeper are never eligible — and the age gate covers the account
+ * holder herself: an under-18 mom shows as excluded exactly like an under-18
+ * member (signup accepts any birth_year up to the current year).
  */
 export default async function WorkoutOptInPage() {
   const supabase = await createClient();
@@ -36,7 +41,7 @@ export default async function WorkoutOptInPage() {
     supabase
       .from("profiles")
       .select(
-        "display_name, mom_profile_completed_at, onboarding_completed_at, workout_profile, sex",
+        "display_name, mom_profile_completed_at, onboarding_completed_at, workout_profile, sex, birth_year",
       )
       .eq("id", user.id)
       .maybeSingle(),
@@ -49,13 +54,22 @@ export default async function WorkoutOptInPage() {
 
   if (!profile?.mom_profile_completed_at) redirect("/onboarding");
 
+  const momReason = momWorkoutIneligibleReason({
+    birth_year: profile.birth_year ?? null,
+  });
+  const momName = profile.display_name ?? "أنا";
+
   const people: WorkoutPerson[] = [
-    {
-      target: "mom",
-      name: profile.display_name ?? "أنا",
-      sex: profile.sex ?? null,
-      existing: parseProfile(profile.workout_profile),
-    },
+    ...(momReason === null
+      ? [
+          {
+            target: "mom" as const,
+            name: momName,
+            sex: profile.sex ?? null,
+            existing: parseProfile(profile.workout_profile),
+          },
+        ]
+      : []),
     ...(members ?? [])
       .filter((m) => workoutIneligibleReason(m) === null)
       .map((m) => ({
@@ -66,12 +80,19 @@ export default async function WorkoutOptInPage() {
       })),
   ];
 
-  // Ineligible family members are still shown (muted, with the reason) so a
-  // family of N never wonders why the list is shorter than the household.
-  const excluded: ExcludedPerson[] = (members ?? []).flatMap((m) => {
-    const reason = workoutIneligibleReason(m);
-    return reason ? [{ id: m.id as string, name: m.name as string, reason }] : [];
-  });
+  // Ineligible people are still shown (muted, with the reason) so a family
+  // of N never wonders why the list is shorter than the household. The mom
+  // appears here too when under-age — with everyone excluded the selection
+  // screen still renders and simply has no one to continue with.
+  const excluded: ExcludedPerson[] = [
+    ...(momReason ? [{ id: "mom", name: momName, reason: momReason }] : []),
+    ...(members ?? []).flatMap((m) => {
+      const reason = workoutIneligibleReason(m);
+      return reason
+        ? [{ id: m.id as string, name: m.name as string, reason }]
+        : [];
+    }),
+  ];
 
   // First-screen exit, PR #50 style (deterministic, never router.back()):
   // mid-onboarding the previous page is the plan-scope fork; afterwards the
