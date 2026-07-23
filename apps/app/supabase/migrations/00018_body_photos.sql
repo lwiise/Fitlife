@@ -1,11 +1,13 @@
 -- ============================================================================
 -- 00018 — Body progress photos on body_logs + private storage bucket
 --
--- «رحلتك الخاصة» grows from the mom to every eligible adult in the household
--- (children NEVER — the 00017 schema stance; the housekeeper NEVER — the same
--- dignity rule that keeps her out of workout plans: the employer does not
--- track her body). member_id already exists on body_logs, so per-member rows
--- need no schema change — this migration only adds the optional photo:
+-- «رحلتك الخاصة» grows from the mom to every eligible member of the household
+-- (adults AND children — later owner directives, 07/2026, brought children into
+-- the private journey and then into progress photos too; the housekeeper NEVER
+-- — the same dignity rule that keeps her out of workout plans: the employer
+-- does not track her body). member_id already exists on body_logs, so
+-- per-member rows need no schema change — this migration only adds the optional
+-- photo (WHO may attach one is enforced in app code, not by this SQL):
 --
 --   * body_logs.photo_path — storage object path of an optional progress
 --     photo attached to a weigh-in. Path convention: <user_id>/<file> (flat,

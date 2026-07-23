@@ -42,7 +42,7 @@ describe("isWeighInEligibleMember", () => {
   });
 });
 
-// ── Minor detection (no photos; never on the shared celebration) ──────────────
+// ── Minor detection (never on the shared celebration) ─────────────────────────
 describe("isChildWeighInMember", () => {
   it("true for a child type regardless of birth_year", () => {
     expect(

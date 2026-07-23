@@ -5,7 +5,6 @@ import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { BackToDashboard } from "@/components/BackToDashboard";
 import {
-  isChildWeighInMember,
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
@@ -138,14 +137,6 @@ export default async function JourneyPage({
   // The weigh-in form + privacy note address the account OWNER (the one logging).
   const g = genderPick(profile?.sex);
 
-  // A child's private record: neutral weight-over-time only. NO body photos
-  // (a stored image of a minor's body is a line we don't cross — enforced again
-  // server-side in logBodyWeight). The mom is never a child.
-  const isChildJourney = selectedMember
-    ? isChildWeighInMember(selectedMember)
-    : false;
-  const allowPhotos = !isChildJourney;
-
   // Target line: the mom's own target only — family adults carry no target
   // weight, and pregnancy gets no loss-framing at all.
   const targetKg =
@@ -170,16 +161,16 @@ export default async function JourneyPage({
   );
 
   // Progress photos: newest-first, short-lived signed URLs (the bucket is
-  // PRIVATE — plain paths are useless to a browser, by design). Tolerant of
-  // pre-00018 prod where the column/bucket don't exist yet.
+  // PRIVATE — plain paths are useless to a browser, by design). Available to
+  // every eligible member including children (owner directive 07/2026); the
+  // bucket is per-account and private. Tolerant of pre-00018 prod where the
+  // column/bucket don't exist yet.
   const photoRows = allRows
     .filter((p): p is BodyLogPoint & { photo_path: string } => !!p.photo_path)
     .slice(-8)
     .reverse();
   let photos: Array<{ recorded_on: string; url: string }> = [];
-  // Never sign or render photos on a child's journey (defense in depth — the
-  // form + server both block child photo uploads, so there should be none).
-  if (allowPhotos && photoRows.length > 0) {
+  if (photoRows.length > 0) {
     const { data: signed } = await supabase.storage
       .from(BODY_PHOTOS_BUCKET)
       .createSignedUrls(
@@ -269,7 +260,6 @@ export default async function JourneyPage({
           userId={user.id}
           lastWeightKg={lastKnownWeight}
           ownerSex={profile?.sex}
-          allowPhotos={allowPhotos}
         />
 
         {logs.length >= 2 && (
