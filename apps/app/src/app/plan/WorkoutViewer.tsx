@@ -37,6 +37,21 @@ const WORKOUT_HEADER_LABEL: Record<WorkoutCheckinStatus, string> = {
   skipped: "تجاوزت",
 };
 
+// One implementation for the initial useState seed AND the props-resync, so
+// the optimistic map can never drift from how server rows are read.
+function seedWorkoutMap(
+  checkins: Array<{ day_index: number; member_id: string; status: string }> | undefined,
+) {
+  return new Map(
+    (checkins ?? [])
+      .filter(
+        (c): c is typeof c & { status: WorkoutCheckinStatus } =>
+          c.status === "done" || c.status === "moved" || c.status === "skipped",
+      )
+      .map((c) => [`${c.member_id}|${c.day_index}`, c.status]),
+  );
+}
+
 function formatRest(restSeconds: number): string {
   return restSeconds >= 60
     ? `${Math.round(restSeconds / 30) / 2} د`
@@ -231,20 +246,23 @@ export function WorkoutViewer({
   // clearing removes the mark (a mis-tap must be reversible). The whole-current-
   // week window (48h floor) is enforced server-side — the client gate just hides
   // controls on future sessions.
-  const [checkinMap, setCheckinMap] = useState<Map<string, WorkoutCheckinStatus>>(
-    () =>
-      new Map(
-        (checkins ?? [])
-          .filter(
-            (c): c is typeof c & { status: WorkoutCheckinStatus } =>
-              c.status === "done" || c.status === "moved" || c.status === "skipped",
-          )
-          .map((c) => [`${c.member_id}|${c.day_index}`, c.status]),
-      ),
-  );
+  const [checkinMap, setCheckinMap] = useState(() => seedWorkoutMap(checkins));
   const [checkinError, setCheckinError] = useState<string | null>(null);
   // Weekday today (0=Sunday), once — matches defaultDayIndex's approach.
   const [todayWeekday] = useState(() => new Date().getDay());
+
+  // Marks in flight — while > 0 the optimistic map is the truth and the
+  // props-resync below must hold off. Render-phase adjust (the React
+  // "adjusting state when props change" pattern; the set-state-in-effect rule
+  // forbids the effect version) so fresh server rows — an action's own
+  // revalidation, a soft navigation back — re-seed the map instead of it
+  // keeping its first-mount seed forever.
+  const [pendingWrites, setPendingWrites] = useState(0);
+  const [syncedCheckins, setSyncedCheckins] = useState(checkins);
+  if (checkins !== syncedCheckins && pendingWrites === 0) {
+    setSyncedCheckins(checkins);
+    setCheckinMap(seedWorkoutMap(checkins));
+  }
 
   function handleWorkoutCheckin(
     memberId: string,
@@ -259,22 +277,28 @@ export function WorkoutViewer({
     else next.set(key, status);
     setCheckinMap(next);
     setCheckinError(null);
+    setPendingWrites((n) => n + 1);
     void setWorkoutCheckinAction({
       workout_plan_id: planId,
       day_index: dayIndex,
       member_id: memberId,
       status,
-    }).then((result) => {
-      if (!result.ok) {
-        setCheckinMap((cur) => {
-          const reverted = new Map(cur);
-          if (prev) reverted.set(key, prev);
-          else reverted.delete(key);
-          return reverted;
-        });
-        setCheckinError(result.error);
-      }
-    });
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setCheckinMap((cur) => {
+            const reverted = new Map(cur);
+            if (prev) reverted.set(key, prev);
+            else reverted.delete(key);
+            return reverted;
+          });
+          setCheckinError(result.error);
+        }
+      })
+      .catch(() => {
+        /* transport failure — the next props-resync restores server truth */
+      })
+      .finally(() => setPendingWrites((n) => n - 1));
   }
 
   const stats = useMemo(() => {
