@@ -108,9 +108,23 @@ export default async function PlanPage({
     (async () => {
       if (!profile || latest?.status !== "ready") return null;
       const supabase = await createClient();
-      const [checkinRes, verdictRes] = await Promise.all([
+      // meal_absences (00021) is not in the generated types yet — untyped
+      // cast, and a pre-apply prod (missing table) degrades to [] so the plan
+      // still renders without absence adjustments.
+      const [checkinRes, verdictRes, absenceRes] = await Promise.all([
         supabase.from("meal_checkins").select("*").eq("meal_plan_id", latest.id).limit(400),
         supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
+        (async (): Promise<{ data: unknown[] | null }> => {
+          try {
+            return await (supabase as unknown as SupabaseClient)
+              .from("meal_absences")
+              .select("*")
+              .eq("meal_plan_id", latest.id)
+              .limit(400);
+          } catch {
+            return { data: null };
+          }
+        })(),
       ]);
       return {
         checkins: ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -126,6 +140,11 @@ export default async function PlanPage({
           member_id: (r.member_id ?? null) as string | null,
           verdict: r.verdict as string,
         })),
+        absences: ((absenceRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          day_index: r.day_index as number,
+          slot: r.slot as string,
+          member_id: (r.member_id ?? "") as string,
+        })),
       };
     })(),
     // Deferred members the tier can't cover → don't auto-drain or show
@@ -140,6 +159,7 @@ export default async function PlanPage({
   const workoutView = view === "workout" && workout != null;
   const checkins = mealMarks?.checkins;
   const verdicts = mealMarks?.verdicts;
+  const absences = mealMarks?.absences;
   const pendingBlocked = familyChangeAccess ? !familyChangeAccess.allowed : false;
   // Order by add order so the banner shows the member being prepared NOW vs the
   // rest still queued (the drain generates them one at a time, in this order).
@@ -428,6 +448,7 @@ export default async function PlanPage({
               showWorkoutOptIn={workout === null}
               checkins={checkins}
               verdicts={verdicts}
+              absences={absences}
               journeyMembers={journeyMembers}
               planTypeToggle={planTypeToggle}
               ownerSex={profile?.sex}

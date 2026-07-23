@@ -113,6 +113,23 @@ export interface WorkoutCheckinRow {
   updated_at: string;
 }
 
+/** Shared-meal exclusion (00021): this member is not part of this meal
+ * occurrence — the plan surface scales the batch for the remaining sharers.
+ * A planning fact (local_date may be in the FUTURE — «تسافر الخميس»), never
+ * an adherence mark, and never a statement about what anyone ate. */
+export interface MealAbsenceRow {
+  id: string;
+  user_id: string;
+  meal_plan_id: string;
+  day_index: number;
+  /** The MEAL's Riyadh-local calendar date (week_start + day_index). */
+  local_date: string;
+  slot: string;
+  /** "mom" | family_members.id (plan-JSON convention). */
+  member_id: EngagementMemberId;
+  created_at: string;
+}
+
 export interface BodyLogRow {
   id: string;
   user_id: string;

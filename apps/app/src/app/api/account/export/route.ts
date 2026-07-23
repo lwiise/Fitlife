@@ -74,6 +74,7 @@ export async function GET() {
     generations,
     engagementRows,
     workoutCheckins,
+    mealAbsences,
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     supabase
@@ -112,6 +113,19 @@ export async function GET() {
       try {
         const { data } = await (supabase as unknown as SupabaseClient)
           .from("workout_checkins")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      } catch {
+        return [];
+      }
+    })(),
+    // meal_absences (00021) — same pre-apply tolerance as workout_checkins.
+    (async (): Promise<unknown[]> => {
+      try {
+        const { data } = await (supabase as unknown as SupabaseClient)
+          .from("meal_absences")
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
@@ -169,6 +183,7 @@ export async function GET() {
     meal_checkins: mealCheckins,
     member_exceptions: memberExceptions,
     meal_verdicts: mealVerdicts,
+    meal_absences: mealAbsences,
     body_logs: bodyLogs,
     workout_checkins: workoutCheckins,
   };

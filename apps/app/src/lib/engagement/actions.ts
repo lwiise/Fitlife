@@ -16,13 +16,17 @@ import { BODY_PHOTOS_BUCKET, HOUSEHOLD_CHECKIN_MEMBER } from "./types";
 import {
   closeDayInputSchema,
   logBodyWeightSchema,
+  setMealAbsenceSchema,
   setMealCheckinSchema,
   setMealVerdictSchema,
+  setSharedMealCheckinSchema,
   setWorkoutCheckinSchema,
   type CloseDayInput,
   type LogBodyWeightInput,
+  type SetMealAbsenceInput,
   type SetMealCheckinInput,
   type SetMealVerdictInput,
+  type SetSharedMealCheckinInput,
   type SetWorkoutCheckinInput,
 } from "./serverSchemas";
 
@@ -565,6 +569,293 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
     // it keeps answering for members without their own row, and deleting it
     // would cascade-destroy the day's member_exceptions and erase the
     // kitchen's attestation from the digest.
+  }
+
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
+  return { ok: true as const, local_date: localDate };
+}
+
+/**
+ * Single-status marking for a SHARED meal (owner directive 07/2026): the dish
+ * has ONE status — «طبختها كما هي / بدّلتها / تجاوزتها» — not a separate
+ * answer per participant. One tap writes the same status for every PRESENT
+ * participant in one fan-out (per-member rows, so the «موسم بيتنا» ranking
+ * keeps its per-member credit and the digest keeps collapsing rows into one
+ * MEAL by (local_date, slot)). Absent members (meal_absences) are simply not
+ * in member_ids — they get no row, so their week stays honest.
+ *
+ * Same calendar rules as setMealCheckin: server-derived date, any elapsed day
+ * of the plan week, never a future day. status null clears every present
+ * participant's row; when nothing was cleared (the chip was lit only by a
+ * legacy whole-house row), the household row itself is retracted — that is
+ * the mark the user is pointing at. On a pre-00019 prod the write degrades to
+ * the legacy household-level shape.
+ */
+export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
+
+  const parsed = setSharedMealCheckinSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  const input = parsed.data;
+  const memberIds = [...new Set(input.member_ids)];
+
+  const { data: planRow, error: planError } = await supabase
+    .from("meal_plans")
+    .select("week_start:plan_data->>week_start_date")
+    .eq("id", input.meal_plan_id)
+    .eq("user_id", user.id)
+    .single();
+  const weekStart = (planRow as { week_start?: string } | null)?.week_start;
+  if (planError || !weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  // Adherence honesty gate — identical to setMealCheckin.
+  const localDate = addDaysISO(weekStart, input.day_index);
+  const today = riyadhTodayISO();
+  if (localDate > today) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  // Ownership gate: keep "mom" and the ids that are really the caller's
+  // family members; DROP the rest instead of rejecting wholesale — a plan
+  // snapshot can still list a member who was since removed from the roster,
+  // and one stale id must not brick marking the whole shared dish. An id
+  // belonging to someone else is indistinguishable from a deleted one here
+  // (the RLS-scoped read returns neither), and dropping it writes nothing.
+  const memberUuids = memberIds.filter((id) => id !== "mom");
+  let effectiveIds = memberIds;
+  if (memberUuids.length > 0) {
+    const { data: owned } = await supabase
+      .from("family_members")
+      .select("id")
+      .in("id", memberUuids)
+      .eq("user_id", user.id);
+    const ownedSet = new Set(
+      ((owned ?? []) as Array<{ id: string }>).map((r) => r.id),
+    );
+    effectiveIds = memberIds.filter((id) => id === "mom" || ownedSet.has(id));
+    if (effectiveIds.length === 0) {
+      return { ok: false as const, error: VALIDATION_ERROR_AR };
+    }
+  }
+
+  // member_id is a 00019 column not yet in the generated types — untyped
+  // client cast (house pattern).
+  const db = supabase as unknown as SupabaseClient;
+
+  if (input.status === null) {
+    const { data: cleared, error: deleteError } = await db
+      .from("meal_checkins")
+      .delete()
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot)
+      .eq("user_id", user.id)
+      .in("member_id", effectiveIds)
+      .select("id");
+    if (deleteError) {
+      // Pre-00019 prod (no member_id column): legacy household-level clear.
+      const { error: legacyError } = await supabase
+        .from("meal_checkins")
+        .delete()
+        .eq("meal_plan_id", input.meal_plan_id)
+        .eq("day_index", input.day_index)
+        .eq("slot", input.slot)
+        .eq("user_id", user.id);
+      if (legacyError) {
+        Sentry.captureException(deleteError, {
+          tags: { area: "engagement", step: "shared-checkin-clear", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
+      }
+    } else if (((cleared ?? []) as unknown[]).length === 0) {
+      // The chip was lit only by a whole-house row (legacy / ختام اليوم) —
+      // retract it, exactly as the per-member clear does.
+      const { error: fallbackClearError } = await db
+        .from("meal_checkins")
+        .delete()
+        .eq("meal_plan_id", input.meal_plan_id)
+        .eq("day_index", input.day_index)
+        .eq("slot", input.slot)
+        .eq("user_id", user.id)
+        .eq("member_id", HOUSEHOLD_CHECKIN_MEMBER);
+      if (fallbackClearError) {
+        Sentry.captureException(fallbackClearError, {
+          tags: { area: "engagement", step: "shared-checkin-clear", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
+      }
+    }
+  } else {
+    // The server is the authority on who is absent: a tab opened before an
+    // absence was recorded elsewhere still sends the old roster, and its
+    // fan-out must not fabricate the absentee's mark. Pre-00021 prod (table
+    // missing) skips the filter; if the filter would empty the roster (data
+    // says everyone absent), keep it — the status must land somewhere.
+    let presentIds = effectiveIds;
+    const { data: absenceRows, error: absenceError } = await db
+      .from("meal_absences")
+      .select("member_id")
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot)
+      .eq("user_id", user.id);
+    if (!absenceError && absenceRows) {
+      const absent = new Set(
+        (absenceRows as Array<{ member_id: string }>).map((r) => r.member_id),
+      );
+      const filtered = presentIds.filter((id) => !absent.has(id));
+      if (filtered.length > 0) presentIds = filtered;
+    }
+    const base = {
+      user_id: user.id,
+      meal_plan_id: input.meal_plan_id,
+      day_index: input.day_index,
+      local_date: localDate,
+      slot: input.slot,
+      status: input.status,
+      reason: input.status === "cooked" ? null : (input.reason ?? null),
+    };
+    const { error: upsertError } = await db.from("meal_checkins").upsert(
+      presentIds.map((memberId) => ({ ...base, member_id: memberId })),
+      { onConflict: "meal_plan_id,day_index,slot,member_id" },
+    );
+    if (upsertError) {
+      // Pre-00019 prod: one legacy household-level row so the mark still saves.
+      const { error: legacyError } = await supabase
+        .from("meal_checkins")
+        .upsert(base, { onConflict: "meal_plan_id,day_index,slot" });
+      if (legacyError) {
+        Sentry.captureException(upsertError, {
+          tags: { area: "engagement", step: "shared-checkin", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
+      }
+      Sentry.captureMessage(
+        "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
+        { level: "warning", tags: { area: "engagement", step: "shared-checkin" } },
+      );
+    }
+  }
+
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
+  return { ok: true as const, local_date: localDate };
+}
+
+/**
+ * Shared-meal absence toggle (00021) — «إزالة من الوجبة / إعادة إلى الوجبة».
+ * One tap records that a member is not part of this meal occurrence; the plan
+ * surface then ADJUSTS the batch quantities for the remaining sharers (pure
+ * display math — the dish is never changed or regenerated).
+ *
+ * Deliberately NOT gated to elapsed days: absence is a planning fact («تسافر
+ * الخميس»), not adherence, so future days of the plan week are legitimate
+ * targets. local_date is the MEAL's date, derived server-side.
+ *
+ * Marking absent also clears the member's own status row for that meal (a
+ * person outside the meal has no serving to attest, and keeps no leaderboard
+ * credit for it). Their dish VERDICTS are left alone — an opinion about the
+ * dish is theirs regardless. Restoring deletes only the absence row; the meal
+ * can then be re-marked to give them a status again.
+ */
+export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: AUTH_ERROR_AR };
+
+  const parsed = setMealAbsenceSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  const input = parsed.data;
+
+  const { data: planRow, error: planError } = await supabase
+    .from("meal_plans")
+    .select("week_start:plan_data->>week_start_date")
+    .eq("id", input.meal_plan_id)
+    .eq("user_id", user.id)
+    .single();
+  const weekStart = (planRow as { week_start?: string } | null)?.week_start;
+  if (planError || !weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+  const localDate = addDaysISO(weekStart, input.day_index);
+
+  // Ownership gate — same posture as setMealCheckin.
+  if (input.member_id !== "mom") {
+    const { data: member } = await supabase
+      .from("family_members")
+      .select("id")
+      .eq("id", input.member_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!member) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+
+  // meal_absences (00021) is not in the generated types yet — untyped client
+  // cast (house pattern).
+  const db = supabase as unknown as SupabaseClient;
+
+  if (input.absent) {
+    const { error: upsertError } = await db.from("meal_absences").upsert(
+      {
+        user_id: user.id,
+        meal_plan_id: input.meal_plan_id,
+        day_index: input.day_index,
+        local_date: localDate,
+        slot: input.slot,
+        member_id: input.member_id,
+      },
+      { onConflict: "meal_plan_id,day_index,slot,member_id" },
+    );
+    if (upsertError) {
+      // The error object itself distinguishes "table missing — apply 00021"
+      // (42P01) from a real failure; keep it attached instead of flattening
+      // every case into the same message.
+      Sentry.captureException(upsertError, {
+        tags: { area: "engagement", step: "absence-upsert", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
+    }
+    // Outside the meal ⇒ no status for it. Best-effort (pre-00019 prod has no
+    // member_id column — the shared status there is household-level anyway).
+    const { error: clearError } = await db
+      .from("meal_checkins")
+      .delete()
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot)
+      .eq("user_id", user.id)
+      .eq("member_id", input.member_id);
+    if (clearError) {
+      // Best-effort by design (pre-00019 prod has no member_id column) — the
+      // absence itself saved; keep the real error for diagnosis.
+      Sentry.captureException(clearError, {
+        tags: { area: "engagement", step: "absence-clear-checkin", userId: user.id },
+      });
+    }
+  } else {
+    const { error: deleteError } = await db
+      .from("meal_absences")
+      .delete()
+      .eq("meal_plan_id", input.meal_plan_id)
+      .eq("day_index", input.day_index)
+      .eq("slot", input.slot)
+      .eq("user_id", user.id)
+      .eq("member_id", input.member_id);
+    if (deleteError) {
+      Sentry.captureException(deleteError, {
+        tags: { area: "engagement", step: "absence-delete", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
+    }
   }
 
   revalidatePath("/plan");

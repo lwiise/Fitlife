@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Loader2, ChevronLeft } from "lucide-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 import { getTodaysPlanView } from "@/lib/plans/getTodaysPlanView";
 import { genderPick } from "@/lib/copy/gender";
 import { TodayHeader } from "./TodayHeader";
@@ -112,6 +114,26 @@ export async function TodaysMeals({
   }
 
   // ready
+  // Shared-meal absences (00021) — so today's card shows the same adjusted
+  // batch the /plan card shows (display only; the toggle lives on /plan).
+  // Untyped cast + tolerant of a pre-apply prod (missing table → []).
+  let absences: Array<{ day_index: number; slot: string; member_id: string }> = [];
+  try {
+    const supabase = await createClient();
+    const { data } = await (supabase as unknown as SupabaseClient)
+      .from("meal_absences")
+      .select("day_index, slot, member_id")
+      .eq("meal_plan_id", view.planId)
+      .limit(400);
+    absences = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      day_index: r.day_index as number,
+      slot: r.slot as string,
+      member_id: (r.member_id ?? "") as string,
+    }));
+  } catch {
+    // Absence adjustment is an enrichment — today's meals render regardless.
+  }
+
   return (
     <section className="space-y-4">
       <HeaderStrip showWeekLink ownerSex={ownerSex} />
@@ -120,6 +142,7 @@ export async function TodaysMeals({
         planId={view.planId}
         weekStartDate={view.weekStartDate}
         ownerSex={ownerSex}
+        absences={absences}
       />
     </section>
   );

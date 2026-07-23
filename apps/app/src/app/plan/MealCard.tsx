@@ -8,6 +8,11 @@ import type { Verdict } from "@/lib/engagement/types";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
 import { formatNameList } from "@/lib/plans/formatNames";
+import {
+  absenceScaleFactor,
+  adjustedBatchWeight,
+  scaleIngredients,
+} from "@/lib/plans/sharedMealAbsence";
 
 const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   breakfast: { bg: "bg-brand-yellow/25", text: "text-brand-ink" },
@@ -87,9 +92,10 @@ const VERDICT_CHIPS: { value: Verdict; label: string; selected: string }[] = [
   { value: "not_again", label: "لا نكرّرها", selected: "bg-brand-ink text-white" },
 ];
 
-// One person's status chips (+ reason chips when swapped). Shared meals render
-// one row of these PER PARTICIPANT — each person's status is separate; an
-// individual meal renders a single row for the member whose tab is open.
+// The meal's status chips (+ reason chips when swapped). ONE row per meal
+// (owner directive 07/2026): a shared dish carries a single status for
+// everyone who shares it; an individual meal's row belongs to the member
+// whose tab is open.
 function CheckinChips({
   state,
   onChange,
@@ -152,8 +158,9 @@ export function MealCard({
   locale,
   currentMemberId,
   checkin,
-  sharedCheckins,
   onCheckin,
+  absentMemberIds,
+  onToggleAbsence,
   verdict,
   onVerdict,
 }: {
@@ -164,19 +171,25 @@ export function MealCard({
   // The member whose plan is currently open — used to highlight their portion in
   // a shared (family) recipe so "what you take" is obvious. Optional.
   currentMemberId?: string;
-  /** The VIEWED member's inline mark (header badge + the single chip row on an
-   * individual meal), when the surface tracks (plan page only). */
+  /** The meal's inline mark (header badge + the single chip row). ONE status
+   * per meal (owner directive 07/2026): on a shared dish it speaks for every
+   * sharer; on an individual meal it is the viewed member's own. */
   checkin?: MealCheckinState | null;
-  /** Shared meals only: each participant's own mark, keyed by member_id —
-   * statuses are per person, never one answer for the whole dish. */
-  sharedCheckins?: Record<string, MealCheckinState | null>;
   /** Present only on trackable days (any elapsed day of the plan week, never a
-   * future day) — absent hides controls. memberId says whose status is set. */
+   * future day) — absent hides controls. The caller routes the write (fan-out
+   * to the present sharers on a shared meal; the viewed member otherwise). */
   onCheckin?: (
-    memberId: string,
     status: MealCheckinState["status"] | null,
     reason: string | null,
   ) => void;
+  /** Shared meals only: sharers excluded from THIS meal occurrence — the card
+   * scales the batch quantities down to the remaining sharers (display math;
+   * the dish itself is never changed). */
+  absentMemberIds?: string[];
+  /** Exclude/restore a sharer for this meal occurrence. A planning act, so
+   * it's offered on EVERY day of the plan week (future included) — unlike
+   * onCheckin. Absent = read-only surface, no absence controls. */
+  onToggleAbsence?: (memberId: string, absent: boolean) => void;
   /** The viewed member's verdict on this dish (header/tracking); null = none. */
   verdict?: Verdict | null;
   /** Set the viewed member's verdict (null clears). Offered only once the dish
@@ -203,14 +216,6 @@ export function MealCard({
       ? meal.prep_steps_translated
       : meal.prep_steps_ar;
 
-  const metaBits: string[] = [];
-  if (meal.prep_time_minutes != null)
-    metaBits.push(`${t.prep_time} ${meal.prep_time_minutes} ${t.min_abbr}`);
-  if (meal.cook_time_minutes != null)
-    metaBits.push(`${t.cook_time} ${meal.cook_time_minutes} ${t.min_abbr}`);
-  if (meal.servings_count != null)
-    metaBits.push(`${meal.servings_count} ${t.servings_unit}`);
-
   const sharedPortions =
     meal.shared_recipe && meal.per_member_portions?.length
       ? meal.per_member_portions
@@ -218,10 +223,65 @@ export function MealCard({
   // A shared meal gets a distinct, lavender-accented treatment so it reads as one
   // dish cooked for several people — not just another individual recipe.
   const isShared = !!meal.shared_recipe;
-  // Who this meal is split between — named so the cook knows exactly who shares it.
+
+  // Absence-adjusted view of a shared meal: absentees are excluded from this
+  // occurrence and the BATCH quantities scale down to the remaining sharers
+  // (deterministic display math — the dish itself is never changed; see
+  // sharedMealAbsence.ts). Individual meals and read-only surfaces (no
+  // absentMemberIds prop) render the plan as stored.
+  const absentSet = new Set(
+    sharedPortions && absentMemberIds?.length ? absentMemberIds : [],
+  );
+  const presentPortions =
+    sharedPortions?.filter((p) => !absentSet.has(p.member_id)) ?? null;
+  const absentPortions =
+    sharedPortions?.filter((p) => absentSet.has(p.member_id)) ?? [];
+  // Guard mirrors absenceScaleFactor: with nobody left present, the original
+  // recipe is shown unscaled — the UI also refuses to remove the last sharer.
+  const hasAbsence =
+    !!sharedPortions && absentPortions.length > 0 && presentPortions!.length > 0;
+  const scaleFactor = sharedPortions
+    ? absenceScaleFactor(sharedPortions, absentSet)
+    : 1;
+  const displayIngredients = scaleIngredients(ingredients, scaleFactor);
+  const displayBatchWeight = sharedPortions
+    ? adjustedBatchWeight(
+        meal.batch_finished_weight_g ?? null,
+        sharedPortions,
+        absentSet,
+        scaleFactor,
+      )
+    : (meal.batch_finished_weight_g ?? null);
+  const viewerAbsent =
+    currentMemberId != null && hasAbsence && absentSet.has(currentMemberId);
+  const memberName = (id: string) => memberNames?.[id] ?? id;
+  const absentNames = formatNameList(
+    absentPortions.map((p) => memberName(p.member_id)),
+    locale ?? "ar",
+  );
+
+  const metaBits: string[] = [];
+  if (meal.prep_time_minutes != null)
+    metaBits.push(`${t.prep_time} ${meal.prep_time_minutes} ${t.min_abbr}`);
+  if (meal.cook_time_minutes != null)
+    metaBits.push(`${t.cook_time} ${meal.cook_time_minutes} ${t.min_abbr}`);
+  if (meal.servings_count != null) {
+    // When servings clearly meant "one per sharer", show the adjusted count.
+    const servings =
+      hasAbsence && meal.servings_count === sharedPortions!.length
+        ? presentPortions!.length
+        : meal.servings_count;
+    metaBits.push(`${servings} ${t.servings_unit}`);
+  }
+
+  // Who this meal is split between — named so the cook knows exactly who
+  // shares it. Absentees drop off the line (the portions section still lists
+  // them, grayed, with the restore control).
   const participantNames = sharedPortions
     ? formatNameList(
-        sharedPortions.map((p) => memberNames?.[p.member_id] ?? p.member_id),
+        (hasAbsence ? presentPortions! : sharedPortions).map((p) =>
+          memberName(p.member_id),
+        ),
         locale ?? "ar",
       )
     : "";
@@ -319,13 +379,21 @@ export function MealCard({
                     {t.ingredients}
                     {sharedPortions ? ` (${t.base_recipe})` : ""}
                   </span>
-                  {sharedPortions && meal.batch_finished_weight_g != null && (
+                  {sharedPortions && displayBatchWeight != null && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-purple-900/10 text-brand-purple-900 text-[11px] font-bold tabular-nums">
-                      {t.batch_total} {meal.batch_finished_weight_g} {t.units.g}
+                      {t.batch_total} {displayBatchWeight} {t.units.g}
                     </span>
                   )}
                 </h4>
-                <IngredientList items={ingredients} units={t.units} />
+                {/* The adjustment is stated where the numbers changed, so the
+                    cook never wonders why today's amounts differ from the plan. */}
+                {hasAbsence && !translated && (
+                  <p className="mb-2 rounded-xl bg-brand-lavender/25 px-3 py-2 text-brand-purple-900 text-xs font-bold leading-relaxed">
+                    عدّلنا المقادير لبقية أفراد البيت — {absentNames} خارج هذه
+                    الوجبة.
+                  </p>
+                )}
+                <IngredientList items={displayIngredients} units={t.units} />
               </section>
 
               <section>
@@ -354,39 +422,91 @@ export function MealCard({
                       const isCurrent =
                         currentMemberId != null &&
                         portion.member_id === currentMemberId;
+                      const isAbsent = absentSet.has(portion.member_id);
+                      // Never orphan the pot: the last present sharer can't be
+                      // removed — with nobody left there is no meal to adjust
+                      // (that day is a «تجاوزتها», not an adjustment).
+                      const canRemove =
+                        !!onToggleAbsence &&
+                        !isAbsent &&
+                        (presentPortions?.length ?? 0) > 1;
                       return (
                         <li
                           key={i}
                           className={`rounded-xl p-3 ${
-                            isCurrent
-                              ? "bg-brand-lavender/40 ring-1 ring-brand-purple-900/30"
-                              : "bg-brand-surface/60"
+                            isAbsent
+                              ? "bg-brand-surface/40 border border-dashed border-brand-ink/15"
+                              : isCurrent
+                                ? "bg-brand-lavender/40 ring-1 ring-brand-purple-900/30"
+                                : "bg-brand-surface/60"
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-bold text-brand-ink text-xs min-w-0 truncate">
-                              {memberNames?.[portion.member_id] ?? portion.member_id}
-                              {isCurrent && (
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <p
+                              className={`font-bold text-xs min-w-0 truncate ${
+                                isAbsent ? "text-brand-ink-muted" : "text-brand-ink"
+                              }`}
+                            >
+                              {memberName(portion.member_id)}
+                              {isCurrent && !isAbsent && (
                                 <span className="ms-1.5 text-brand-purple-900 font-extrabold">
                                   {t.your_portion}
                                 </span>
                               )}
+                              {isAbsent && (
+                                <span className="ms-1.5 inline-flex items-center px-2 py-0.5 rounded-full bg-brand-ink/10 text-brand-ink-muted text-[11px] font-bold">
+                                  خارج الوجبة
+                                </span>
+                              )}
                             </p>
-                            {portion.portion_grams != null && (
-                              <span className="flex-shrink-0 font-extrabold text-brand-purple-900 text-sm tabular-nums whitespace-nowrap">
-                                {portion.portion_grams} {t.units.g}
-                                {portion.portion_percentage != null
-                                  ? ` · ${portion.portion_percentage}%`
-                                  : ""}
-                              </span>
-                            )}
+                            <span className="flex items-center gap-2 flex-shrink-0">
+                              {portion.portion_grams != null && !isAbsent && (
+                                <span className="font-extrabold text-brand-purple-900 text-sm tabular-nums whitespace-nowrap">
+                                  {portion.portion_grams} {t.units.g}
+                                  {/* The stored % is a share of the ORIGINAL
+                                      batch — beside an absence-adjusted total
+                                      it would lie, so it hides; the grams stay
+                                      exact either way. */}
+                                  {portion.portion_percentage != null && !hasAbsence
+                                    ? ` · ${portion.portion_percentage}%`
+                                    : ""}
+                                </span>
+                              )}
+                              {/* Absence toggle — one tap excludes/restores this
+                                  sharer and the batch re-scales. Offered on every
+                                  day of the plan week (planning, not adherence). */}
+                              {onToggleAbsence && isAbsent && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onToggleAbsence(portion.member_id, false)
+                                  }
+                                  className="min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center bg-brand-purple-900 text-white hover:bg-brand-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+                                >
+                                  إعادة إلى الوجبة
+                                </button>
+                              )}
+                              {canRemove && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onToggleAbsence?.(portion.member_id, true)
+                                  }
+                                  className="min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+                                >
+                                  إزالة من الوجبة
+                                </button>
+                              )}
+                            </span>
                           </div>
-                          {portion.ingredients && portion.ingredients.length > 0 && (
-                            <div className="mt-2">
-                              <IngredientList items={portion.ingredients} units={t.units} />
-                            </div>
-                          )}
-                          {!translated && portion.notes_ar && (
+                          {!isAbsent &&
+                            portion.ingredients &&
+                            portion.ingredients.length > 0 && (
+                              <div className="mt-2">
+                                <IngredientList items={portion.ingredients} units={t.units} />
+                              </div>
+                            )}
+                          {!translated && !isAbsent && portion.notes_ar && (
                             <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
                               {portion.notes_ar}
                             </p>
@@ -424,59 +544,27 @@ export function MealCard({
               )}
 
               {/* Per-meal tracking — the card's closing act, after the recipe.
-                  A shared meal tracks EACH participant separately (Louis can
-                  skip the dish anas ate); an individual meal tracks the member
-                  whose tab is open. */}
+                  ONE status per meal (owner directive 07/2026): a shared dish
+                  is answered once for everyone who shares it; an individual
+                  meal's row belongs to the member whose tab is open. */}
               {onCheckin && (
                 <div
                   className="pt-3 border-t border-brand-ink/5 space-y-2"
                   aria-label="تتبّع الوجبة"
                 >
-                  {sharedPortions && sharedCheckins ? (
-                    <div className="space-y-3">
-                      {sharedPortions.map((portion) => {
-                        const name =
-                          memberNames?.[portion.member_id] ?? portion.member_id;
-                        const isCurrent =
-                          currentMemberId != null &&
-                          portion.member_id === currentMemberId;
-                        return (
-                          <div
-                            key={portion.member_id}
-                            role="group"
-                            aria-label={`تتبّع ${name}`}
-                            className="space-y-1.5"
-                          >
-                            <p
-                              className={`text-xs font-bold ${
-                                isCurrent
-                                  ? "text-brand-purple-900"
-                                  : "text-brand-ink"
-                              }`}
-                            >
-                              {name}
-                            </p>
-                            <CheckinChips
-                              state={sharedCheckins[portion.member_id] ?? null}
-                              onChange={(status, reason) =>
-                                onCheckin(portion.member_id, status, reason)
-                              }
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : currentMemberId != null ? (
-                    <CheckinChips
-                      state={checkin ?? null}
-                      onChange={(status, reason) =>
-                        onCheckin(currentMemberId, status, reason)
-                      }
-                    />
-                  ) : null}
+                  {sharedPortions && (
+                    <p className="text-xs font-bold text-brand-purple-900">
+                      تسجيل واحد للوجبة المشتركة — يشمل كل من شاركها
+                    </p>
+                  )}
+                  <CheckinChips
+                    state={checkin ?? null}
+                    onChange={(status, reason) => onCheckin(status, reason)}
+                  />
                   {/* Verdict — only for a dish that was actually cooked (you can
-                      only judge what you made). One row for the viewed member. */}
-                  {onVerdict && checkin?.status === "cooked" && (
+                      only judge what you made). One row for the viewed member —
+                      and never for a member outside this meal occurrence. */}
+                  {onVerdict && checkin?.status === "cooked" && !viewerAbsent && (
                     <div
                       className="pt-1 space-y-1.5"
                       role="group"
