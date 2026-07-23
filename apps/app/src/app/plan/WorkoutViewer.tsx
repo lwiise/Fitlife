@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check } from "lucide-react";
+import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check, UserPlus } from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
 import type { WorkoutCheckinStatus } from "@/lib/engagement/types";
 import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
@@ -36,6 +37,21 @@ const WORKOUT_HEADER_LABEL: Record<WorkoutCheckinStatus, string> = {
   moved: "بدّلت",
   skipped: "تجاوزت",
 };
+
+// One implementation for the initial useState seed AND the props-resync, so
+// the optimistic map can never drift from how server rows are read.
+function seedWorkoutMap(
+  checkins: Array<{ day_index: number; member_id: string; status: string }> | undefined,
+) {
+  return new Map(
+    (checkins ?? [])
+      .filter(
+        (c): c is typeof c & { status: WorkoutCheckinStatus } =>
+          c.status === "done" || c.status === "moved" || c.status === "skipped",
+      )
+      .map((c) => [`${c.member_id}|${c.day_index}`, c.status]),
+  );
+}
 
 function formatRest(restSeconds: number): string {
   return restSeconds >= 60
@@ -206,6 +222,8 @@ export function WorkoutViewer({
   planId,
   checkins,
   ownerSex,
+  planTypeToggle,
+  journeyMembers,
 }: {
   plan: WorkoutPlan;
   /** workout_plans.id — needed to write session marks. */
@@ -215,6 +233,13 @@ export function WorkoutViewer({
   checkins?: Array<{ day_index: number; member_id: string; status: string }>;
   /** Account owner's sex → the «أنتِ/أنتَ» mom-tab marker. */
   ownerSex?: string | null;
+  /** The meal/workout plan-type toggle, hosted here so it shares the header row
+   * with the «الوزن والمتابعة» journey link — identical placement to the meal
+   * PlanViewer, so the top navigation chrome stays put when switching views. */
+  planTypeToggle?: ReactNode;
+  /** «رحلتك الخاصة» entries, member-keyed. The link follows the active member
+   * tab and shows only for eligible members (same rule as the meal view). */
+  journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
 }) {
   const [activeMemberId, setActiveMemberId] = useState(
     plan.members[0]?.member_id ?? "",
@@ -231,20 +256,23 @@ export function WorkoutViewer({
   // clearing removes the mark (a mis-tap must be reversible). The whole-current-
   // week window (48h floor) is enforced server-side — the client gate just hides
   // controls on future sessions.
-  const [checkinMap, setCheckinMap] = useState<Map<string, WorkoutCheckinStatus>>(
-    () =>
-      new Map(
-        (checkins ?? [])
-          .filter(
-            (c): c is typeof c & { status: WorkoutCheckinStatus } =>
-              c.status === "done" || c.status === "moved" || c.status === "skipped",
-          )
-          .map((c) => [`${c.member_id}|${c.day_index}`, c.status]),
-      ),
-  );
+  const [checkinMap, setCheckinMap] = useState(() => seedWorkoutMap(checkins));
   const [checkinError, setCheckinError] = useState<string | null>(null);
   // Weekday today (0=Sunday), once — matches defaultDayIndex's approach.
   const [todayWeekday] = useState(() => new Date().getDay());
+
+  // Marks in flight — while > 0 the optimistic map is the truth and the
+  // props-resync below must hold off. Render-phase adjust (the React
+  // "adjusting state when props change" pattern; the set-state-in-effect rule
+  // forbids the effect version) so fresh server rows — an action's own
+  // revalidation, a soft navigation back — re-seed the map instead of it
+  // keeping its first-mount seed forever.
+  const [pendingWrites, setPendingWrites] = useState(0);
+  const [syncedCheckins, setSyncedCheckins] = useState(checkins);
+  if (checkins !== syncedCheckins && pendingWrites === 0) {
+    setSyncedCheckins(checkins);
+    setCheckinMap(seedWorkoutMap(checkins));
+  }
 
   function handleWorkoutCheckin(
     memberId: string,
@@ -259,22 +287,28 @@ export function WorkoutViewer({
     else next.set(key, status);
     setCheckinMap(next);
     setCheckinError(null);
+    setPendingWrites((n) => n + 1);
     void setWorkoutCheckinAction({
       workout_plan_id: planId,
       day_index: dayIndex,
       member_id: memberId,
       status,
-    }).then((result) => {
-      if (!result.ok) {
-        setCheckinMap((cur) => {
-          const reverted = new Map(cur);
-          if (prev) reverted.set(key, prev);
-          else reverted.delete(key);
-          return reverted;
-        });
-        setCheckinError(result.error);
-      }
-    });
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setCheckinMap((cur) => {
+            const reverted = new Map(cur);
+            if (prev) reverted.set(key, prev);
+            else reverted.delete(key);
+            return reverted;
+          });
+          setCheckinError(result.error);
+        }
+      })
+      .catch(() => {
+        /* transport failure — the next props-resync restores server truth */
+      })
+      .finally(() => setPendingWrites((n) => n - 1));
   }
 
   const stats = useMemo(() => {
@@ -315,6 +349,34 @@ export function WorkoutViewer({
 
   return (
     <div className="space-y-6">
+      {/* Plan-type toggle (meals/workout) + the private «الوزن والمتابعة»
+          journey link, sharing one row — mirrors the meal PlanViewer so the top
+          navigation chrome is identical across both views. The journey entry
+          follows the active member tab and shows only for eligible members. */}
+      {(() => {
+        const journeyEntry =
+          journeyMembers?.find((j) => j.id === active.member_id) ?? null;
+        const showJourney = !!journeyEntry;
+        if (!planTypeToggle && !showJourney) return null;
+        return (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {planTypeToggle ?? <span />}
+            {showJourney && journeyEntry && (
+              <Link
+                href={
+                  journeyEntry.id === "mom"
+                    ? "/journey"
+                    : `/journey?member=${journeyEntry.id}`
+                }
+                className="inline-flex items-center min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              >
+                الوزن والمتابعة
+              </Link>
+            )}
+          </div>
+        );
+      })()}
+
       {plan.safety_disclaimer_ar && (
         <p className="flex items-start gap-2 rounded-xl bg-brand-yellow/15 border border-brand-yellow/40 px-4 py-3 text-brand-ink text-sm leading-relaxed">
           <ShieldCheck className="size-4.5 flex-shrink-0 mt-0.5 text-brand-ink" aria-hidden="true" />
@@ -322,39 +384,50 @@ export function WorkoutViewer({
         </p>
       )}
 
-      {/* Member tabs (hidden for a solo program) — same underline style as the meal viewer */}
+      {/* Member tabs (hidden for a solo program) — same structure as the meal
+          viewer (tab row + trailing «إضافة فرد») so the top navigation chrome
+          matches when switching between the meal and workout views. */}
       {!isSolo && (
         <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
-          <div className="flex gap-1 min-w-max">
-            {plan.members.map((m) => {
-              const isActive = m.member_id === active.member_id;
-              return (
-                <button
-                  key={m.member_id}
-                  type="button"
-                  onClick={() => setActiveMemberId(m.member_id)}
-                  aria-pressed={isActive}
-                  className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                    isActive
-                      ? "text-brand-purple-900"
-                      : "text-brand-ink-muted hover:text-brand-ink"
-                  }`}
-                >
-                  {m.member_id === "mom" && (
-                    <span className="text-brand-pink me-1">
-                      {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                    </span>
-                  )}
-                  {m.member_name_ar}
-                  {isActive && (
-                    <motion.span
-                      layoutId="workout-member-tab-underline"
-                      className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
-                    />
-                  )}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-2 min-w-max">
+            <div className="flex gap-1">
+              {plan.members.map((m) => {
+                const isActive = m.member_id === active.member_id;
+                return (
+                  <button
+                    key={m.member_id}
+                    type="button"
+                    onClick={() => setActiveMemberId(m.member_id)}
+                    aria-pressed={isActive}
+                    className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                      isActive
+                        ? "text-brand-purple-900"
+                        : "text-brand-ink-muted hover:text-brand-ink"
+                    }`}
+                  >
+                    {m.member_id === "mom" && (
+                      <span className="text-brand-pink me-1">
+                        {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                      </span>
+                    )}
+                    {m.member_name_ar}
+                    {isActive && (
+                      <motion.span
+                        layoutId="workout-member-tab-underline"
+                        className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <Link
+              href="/family"
+              className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              إضافة فرد
+            </Link>
           </div>
         </div>
       )}

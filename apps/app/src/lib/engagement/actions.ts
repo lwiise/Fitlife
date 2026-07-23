@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 import { canonicalRecipeKey } from "@fitlife/plan-engine";
-import { riyadhTodayISO } from "@/lib/plans/dayMapping";
+import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
 import {
   isWeighInEligibleMember,
@@ -41,13 +41,6 @@ const AUTH_ERROR_AR = "انتهت الجلسة، يرجى تسجيل الدخو�
  * last couple days of the previous week keep their grace.
  */
 const GRACE_DAYS = 2;
-
-/** YYYY-MM-DD + n days → YYYY-MM-DD (pure calendar math, no TZ). */
-function addDaysISO(dateISO: string, days: number): string {
-  const d = new Date(`${dateISO}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * ختام اليوم — persist one day's household check-in in a single submit:

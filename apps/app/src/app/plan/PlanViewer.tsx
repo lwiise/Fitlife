@@ -48,6 +48,58 @@ function formatWeekRange(weekStart: string, locale?: LocaleCode): string {
   }
 }
 
+// ─── Optimistic-state seeds ──────────────────────────────────────────────
+// One implementation for the initial useState seed AND the props-resync below,
+// so the optimistic maps can never drift from how server rows are read.
+
+type CheckinRowProp = {
+  day_index: number;
+  slot: string;
+  status: string;
+  reason: string | null;
+  member_id?: string | null;
+};
+type VerdictRowProp = {
+  day_index: number;
+  slot: string;
+  member_id?: string | null;
+  verdict: string;
+};
+type AbsenceRowProp = { day_index: number; slot: string; member_id: string };
+
+function seedCheckinMap(checkins: CheckinRowProp[] | undefined) {
+  return new Map(
+    (checkins ?? [])
+      .filter(
+        (c): c is typeof c & { status: "cooked" | "swapped" | "skipped" } =>
+          c.status === "cooked" || c.status === "swapped" || c.status === "skipped",
+      )
+      .map((c) => [
+        `${c.day_index}|${c.slot}|${c.member_id ?? "household"}`,
+        { status: c.status, reason: c.reason },
+      ]),
+  );
+}
+
+function seedVerdictMap(verdicts: VerdictRowProp[] | undefined) {
+  return new Map(
+    (verdicts ?? [])
+      .filter(
+        (v): v is typeof v & { verdict: "loved" | "fine" | "not_again" } =>
+          v.verdict === "loved" ||
+          v.verdict === "fine" ||
+          v.verdict === "not_again",
+      )
+      .map((v) => [`${v.day_index}|${v.slot}|${v.member_id ?? "mom"}`, v.verdict]),
+  );
+}
+
+function seedAbsenceSet(absences: AbsenceRowProp[] | undefined) {
+  return new Set(
+    (absences ?? []).map((a) => `${a.day_index}|${a.slot}|${a.member_id}`),
+  );
+}
+
 export function PlanViewer({
   plan,
   planId,
@@ -155,52 +207,43 @@ export function PlanViewer({
   // sit under the "household" key and act as a fallback for every member of
   // that meal. The window is enforced server-side too — the client gate just
   // hides controls on future days so adherence can't be pre-marked.
-  const [checkinMap, setCheckinMap] = useState<
-    Map<string, { status: "cooked" | "swapped" | "skipped"; reason: string | null }>
-  >(
-    () =>
-      new Map(
-        (checkins ?? [])
-          .filter(
-            (c): c is typeof c & { status: "cooked" | "swapped" | "skipped" } =>
-              c.status === "cooked" || c.status === "swapped" || c.status === "skipped",
-          )
-          .map((c) => [
-            `${c.day_index}|${c.slot}|${c.member_id ?? "household"}`,
-            { status: c.status, reason: c.reason },
-          ]),
-      ),
-  );
+  const [checkinMap, setCheckinMap] = useState(() => seedCheckinMap(checkins));
   // Per-dish verdicts, keyed day|slot|member. Personal by design → no
   // whole-house fallback (a verdict is never attested for someone else).
-  const [verdictMap, setVerdictMap] = useState<
-    Map<string, "loved" | "fine" | "not_again">
-  >(
-    () =>
-      new Map(
-        (verdicts ?? [])
-          .filter(
-            (v): v is typeof v & { verdict: "loved" | "fine" | "not_again" } =>
-              v.verdict === "loved" ||
-              v.verdict === "fine" ||
-              v.verdict === "not_again",
-          )
-          .map((v) => [
-            `${v.day_index}|${v.slot}|${v.member_id ?? "mom"}`,
-            v.verdict,
-          ]),
-      ),
-  );
+  const [verdictMap, setVerdictMap] = useState(() => seedVerdictMap(verdicts));
   // Shared-meal absences, keyed day|slot|member (00021). Optimistic like the
   // maps above. An absent member is out of THIS meal occurrence: the card
   // scales the batch for the rest, and the fan-out status write skips them.
-  const [absenceSet, setAbsenceSet] = useState<Set<string>>(
-    () =>
-      new Set(
-        (absences ?? []).map((a) => `${a.day_index}|${a.slot}|${a.member_id}`),
-      ),
-  );
+  const [absenceSet, setAbsenceSet] = useState(() => seedAbsenceSet(absences));
   const [checkinError, setCheckinError] = useState<string | null>(null);
+
+  // Marks in flight — while > 0 the optimistic maps are the truth and the
+  // props-resync below must hold off (the server hasn't confirmed yet).
+  const [pendingWrites, setPendingWrites] = useState(0);
+  const endWrite = () => setPendingWrites((n) => n - 1);
+
+  // Re-seed the optimistic maps whenever the server sends fresh rows (an
+  // action's own revalidation, the generation poll's router.refresh, a soft
+  // navigation back) — otherwise the maps keep their first-mount seed forever
+  // and silently drift from server truth. Render-phase adjust (the React
+  // "adjusting state when props change" pattern — the set-state-in-effect rule
+  // forbids the effect version), gated so in-flight optimistic taps never
+  // flicker back.
+  const [syncedCheckins, setSyncedCheckins] = useState(checkins);
+  if (checkins !== syncedCheckins && pendingWrites === 0) {
+    setSyncedCheckins(checkins);
+    setCheckinMap(seedCheckinMap(checkins));
+  }
+  const [syncedVerdicts, setSyncedVerdicts] = useState(verdicts);
+  if (verdicts !== syncedVerdicts && pendingWrites === 0) {
+    setSyncedVerdicts(verdicts);
+    setVerdictMap(seedVerdictMap(verdicts));
+  }
+  const [syncedAbsences, setSyncedAbsences] = useState(absences);
+  if (absences !== syncedAbsences && pendingWrites === 0) {
+    setSyncedAbsences(absences);
+    setAbsenceSet(seedAbsenceSet(absences));
+  }
   const checkinTodayIdx = dayIndexFromWeekStart(plan.week_start_date);
   // Every meal stays changeable for the WHOLE plan week (owner directive
   // 07/2026): any day that has already arrived (index ≤ today) is markable —
@@ -260,6 +303,7 @@ export function PlanViewer({
     else next.set(key, verdict);
     setVerdictMap(next);
     setCheckinError(null);
+    setPendingWrites((n) => n + 1);
     void setMealVerdictAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -267,17 +311,22 @@ export function PlanViewer({
       member_id: memberId,
       recipe_name_ar: recipeNameAr,
       verdict,
-    }).then((result) => {
-      if (!result.ok) {
-        setVerdictMap((cur) => {
-          const reverted = new Map(cur);
-          if (prev) reverted.set(key, prev);
-          else reverted.delete(key);
-          return reverted;
-        });
-        setCheckinError(result.error);
-      }
-    });
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setVerdictMap((cur) => {
+            const reverted = new Map(cur);
+            if (prev) reverted.set(key, prev);
+            else reverted.delete(key);
+            return reverted;
+          });
+          setCheckinError(result.error);
+        }
+      })
+      .catch(() => {
+        /* transport failure — the next props-resync restores server truth */
+      })
+      .finally(endWrite);
   }
 
   function handleCheckin(
@@ -303,6 +352,7 @@ export function PlanViewer({
     }
     setCheckinMap(next);
     setCheckinError(null);
+    setPendingWrites((n) => n + 1);
     void setMealCheckinAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -310,18 +360,23 @@ export function PlanViewer({
       member_id: memberId,
       status,
       reason: reason as never,
-    }).then((result) => {
-      if (!result.ok) {
-        setCheckinMap((cur) => {
-          const reverted = new Map(cur);
-          if (prev) reverted.set(key, prev);
-          else reverted.delete(key);
-          if (prevHousehold) reverted.set(householdKey, prevHousehold);
-          return reverted;
-        });
-        setCheckinError(result.error);
-      }
-    });
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setCheckinMap((cur) => {
+            const reverted = new Map(cur);
+            if (prev) reverted.set(key, prev);
+            else reverted.delete(key);
+            if (prevHousehold) reverted.set(householdKey, prevHousehold);
+            return reverted;
+          });
+          setCheckinError(result.error);
+        }
+      })
+      .catch(() => {
+        /* transport failure — the next props-resync restores server truth */
+      })
+      .finally(endWrite);
   }
 
   /** ONE tap = one status for the whole shared dish: optimistic fan-out to
@@ -350,6 +405,7 @@ export function PlanViewer({
     }
     setCheckinMap(next);
     setCheckinError(null);
+    setPendingWrites((n) => n + 1);
     void setSharedMealCheckinAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -357,19 +413,24 @@ export function PlanViewer({
       member_ids: memberIds,
       status,
       reason: reason as never,
-    }).then((result) => {
-      if (!result.ok) {
-        setCheckinMap((cur) => {
-          const reverted = new Map(cur);
-          for (const [k, v] of prevEntries) {
-            if (v) reverted.set(k, v);
-            else reverted.delete(k);
-          }
-          return reverted;
-        });
-        setCheckinError(result.error);
-      }
-    });
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setCheckinMap((cur) => {
+            const reverted = new Map(cur);
+            for (const [k, v] of prevEntries) {
+              if (v) reverted.set(k, v);
+              else reverted.delete(k);
+            }
+            return reverted;
+          });
+          setCheckinError(result.error);
+        }
+      })
+      .catch(() => {
+        /* transport failure — the next props-resync restores server truth */
+      })
+      .finally(endWrite);
   }
 
   /** Exclude/restore a sharer for one meal occurrence («إزالة من الوجبة»).
@@ -417,56 +478,63 @@ export function PlanViewer({
       setCheckinMap((cur) => new Map(cur).set(key, donorState));
     }
     setCheckinError(null);
+    setPendingWrites((n) => n + 1);
     void setMealAbsenceAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
       slot,
       member_id: memberId,
       absent,
-    }).then((result) => {
-      if (!result.ok) {
-        setAbsenceSet((cur) => {
-          const reverted = new Set(cur);
-          if (prevAbsent) reverted.add(key);
-          else reverted.delete(key);
-          return reverted;
-        });
-        if (absent && prevCheckin) {
-          setCheckinMap((cur) => new Map(cur).set(key, prevCheckin));
-        }
-        if (!absent && donorState) {
-          setCheckinMap((cur) => {
-            const reverted = new Map(cur);
-            reverted.delete(key);
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setAbsenceSet((cur) => {
+            const reverted = new Set(cur);
+            if (prevAbsent) reverted.add(key);
+            else reverted.delete(key);
             return reverted;
           });
-        }
-        setCheckinError(result.error);
-        return;
-      }
-      // SEQUENCED after the absence delete on purpose: the fan-out write is
-      // filtered against meal_absences server-side, so it must run once the
-      // absence row is gone. Donor exists ⇒ the day is elapsed (marks only
-      // land on elapsed days), so the week gate can't reject this.
-      if (!absent && donorState) {
-        void setSharedMealCheckinAction({
-          meal_plan_id: planId,
-          day_index: activeDayIndex,
-          slot,
-          member_ids: [memberId],
-          status: donorState.status,
-          reason: donorState.reason as never,
-        }).then((mirror) => {
-          if (!mirror.ok) {
+          if (absent && prevCheckin) {
+            setCheckinMap((cur) => new Map(cur).set(key, prevCheckin));
+          }
+          if (!absent && donorState) {
             setCheckinMap((cur) => {
               const reverted = new Map(cur);
               reverted.delete(key);
               return reverted;
             });
           }
-        });
-      }
-    });
+          setCheckinError(result.error);
+          return;
+        }
+        // SEQUENCED after the absence delete on purpose: the fan-out write is
+        // filtered against meal_absences server-side, so it must run once the
+        // absence row is gone. Donor exists ⇒ the day is elapsed (marks only
+        // land on elapsed days), so the week gate can't reject this. Returned
+        // so the pending-writes counter stays held until the mirror settles.
+        if (!absent && donorState) {
+          return setSharedMealCheckinAction({
+            meal_plan_id: planId,
+            day_index: activeDayIndex,
+            slot,
+            member_ids: [memberId],
+            status: donorState.status,
+            reason: donorState.reason as never,
+          }).then((mirror) => {
+            if (!mirror.ok) {
+              setCheckinMap((cur) => {
+                const reverted = new Map(cur);
+                reverted.delete(key);
+                return reverted;
+              });
+            }
+          });
+        }
+      })
+      .catch(() => {
+        /* transport failure — the next props-resync restores server truth */
+      })
+      .finally(endWrite);
   }
 
   // The ?member= param only seeds the initial tab; strip it after mount so a
