@@ -8,7 +8,6 @@ import { canonicalRecipeKey } from "@fitlife/plan-engine";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
 import {
-  isChildWeighInMember,
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "./eligibility";
@@ -864,22 +863,25 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
 }
 
 /**
- * رحلتك الخاصة — the private weigh-in, per eligible adult.
+ * رحلتك الخاصة — the private weigh-in, per eligible member.
  *
  * member_id is "mom" (the account owner) or a family_members.id; eligibility
- * is the ONE shared rule in engagement/eligibility.ts — children never, the
- * housekeeper never, under-18 by birth_year never. Cadence is weekly PER
- * MEMBER by design — ED-safety, not a technical limit: a second weigh-in in
- * the same week is refused gently, while re-submitting TODAY's value upserts
- * as a correction. The latest value also refreshes the member's weight_kg
- * scalar (profiles or family_members) so next week's generation uses the
- * freshest number.
+ * is the ONE shared rule in engagement/eligibility.ts — adults AND children
+ * keep a private record, the housekeeper never (dignity rule), and an under-18
+ * mom never. Cadence is weekly PER MEMBER by design — ED-safety, not a
+ * technical limit: a second weigh-in in the same week is refused gently, while
+ * re-submitting TODAY's value upserts as a correction. The latest value also
+ * refreshes the member's weight_kg scalar (profiles or family_members) so next
+ * week's generation uses the freshest number.
  *
  * photo_path (optional) is an object the client already uploaded to the
- * PRIVATE body-photos bucket. Ownership is enforced twice: storage RLS at
- * upload time, and HERE by requiring the path to sit inside the caller's own
- * folder — a crafted request cannot attach someone else's object. Replacing
- * today's photo best-effort-deletes the previous object (no orphans).
+ * PRIVATE body-photos bucket. Every eligible member may attach one — INCLUDING
+ * children (owner directive 07/2026): the bucket is per-account and private, so
+ * a child's photo lives only in the parent's own folder and never leaves the
+ * journey page. Ownership is enforced twice: storage RLS at upload time, and
+ * HERE by requiring the path to sit inside the caller's own folder — a crafted
+ * request cannot attach someone else's object. Replacing today's photo
+ * best-effort-deletes the previous object (no orphans).
  */
 export async function logBodyWeight(rawInput: LogBodyWeightInput) {
   const supabase = await createClient();
@@ -897,9 +899,11 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
-  // Body photos are ADULTS-ONLY. A minor's log never carries a photo — even a
-  // crafted request has it stripped here (the client also hides the control).
-  let memberIsChild = false;
+  // Eligibility gate (the ONE shared rule): adults and children keep a private
+  // record, the housekeeper never, an under-18 mom never. A progress photo
+  // rides along for every eligible member — INCLUDING children (owner directive
+  // 07/2026): the bucket is per-account and private, so a child's photo lives
+  // only in the parent's own folder.
   if (input.member_id === "mom") {
     const { data: profile } = await supabase
       .from("profiles")
@@ -928,10 +932,8 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
     if (!memberFields || !isWeighInEligibleMember(memberFields)) {
       return { ok: false as const, error: VALIDATION_ERROR_AR };
     }
-    memberIsChild = isChildWeighInMember(memberFields);
   }
-  // The effective photo path: null for a child, so nothing below stores it.
-  const photoPath = memberIsChild ? null : (input.photo_path ?? null);
+  const photoPath = input.photo_path ?? null;
 
   const today = riyadhTodayISO();
   const db = supabase;

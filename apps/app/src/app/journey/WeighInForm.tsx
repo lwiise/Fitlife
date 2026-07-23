@@ -22,7 +22,7 @@ const PHOTO_EXT_BY_MIME: Record<string, string> = {
 };
 
 /**
- * Weekly weigh-in for one member ("mom" or an eligible adult). The last known
+ * Weekly weigh-in for one member (mom, an adult, or a child). The last known
  * weight renders MASKED by default — this phone gets handed to children and
  * the housekeeper; revealing is a deliberate tap. Submitting again the same
  * day corrects today's value; a second weigh-in within the week is refused by
@@ -31,7 +31,10 @@ const PHOTO_EXT_BY_MIME: Record<string, string> = {
  * The optional progress photo uploads STRAIGHT to the private body-photos
  * bucket from the browser (owner-scoped RLS; a photo never transits our
  * server), then the object path rides along on the action. If the save is
- * refused, the just-uploaded object is removed best-effort.
+ * refused, the just-uploaded object is removed best-effort. Every eligible
+ * member may add one — including children (owner directive 07/2026): the
+ * bucket is per-account and private, and photos never leave this journey page
+ * (masked by default, signed URLs only, never on a shared surface or in admin).
  */
 export function WeighInForm({
   memberId,
@@ -39,7 +42,6 @@ export function WeighInForm({
   userId,
   lastWeightKg,
   ownerSex,
-  allowPhotos = true,
 }: {
   memberId: string;
   memberName: string | null;
@@ -47,10 +49,6 @@ export function WeighInForm({
   lastWeightKg: number | null;
   // The form addresses the account OWNER (the one logging) → owner's sex.
   ownerSex?: string | null;
-  // Progress photos are ADULTS-ONLY: false on a child's journey (a stored image
-  // of a minor's body is a line we don't cross). The server refuses child photos
-  // too, so this only hides the control.
-  allowPhotos?: boolean;
 }) {
   const router = useRouter();
   const g = genderPick(ownerSex);
@@ -208,7 +206,6 @@ export function WeighInForm({
         </label>
       </div>
 
-      {allowPhotos && (
       <div className="space-y-2">
         <input
           ref={fileInputRef}
@@ -252,7 +249,6 @@ export function WeighInForm({
           الصورة تبقى في هذه الصفحة الخاصة فقط، ولا تظهر إلا بلمسة منك.
         </p>
       </div>
-      )}
 
       {message && (
         <p role="alert" className="text-sm font-bold text-red-700">
