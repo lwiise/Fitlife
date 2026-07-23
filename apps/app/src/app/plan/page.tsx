@@ -250,6 +250,11 @@ export default async function PlanPage({
   // the toggle standalone above its content.
   const mealReadyView =
     !workoutView && latest?.status === "ready" && !!latest.plan_data;
+  // The workout-ready view renders WorkoutViewer, which (like PlanViewer) hosts
+  // the plan-type toggle inline in its header row — so it isn't rendered
+  // standalone above it, keeping the top chrome identical to the meal view.
+  const workoutReadyView =
+    workoutView && workout?.status === "ready" && !!workout.plan_data;
 
   const planTypeToggle =
     workout != null ? (
@@ -357,9 +362,11 @@ export default async function PlanPage({
           </div>
         )}
 
-        {/* Standalone in every state except the meal-ready view, where
-            PlanViewer renders it inline with the journey link. */}
-        {planTypeToggle && !mealReadyView && <div className="mb-6">{planTypeToggle}</div>}
+        {/* Standalone in every state except the meal-ready and workout-ready
+            views, where the viewer renders it inline with the journey link. */}
+        {planTypeToggle && !mealReadyView && !workoutReadyView && (
+          <div className="mb-6">{planTypeToggle}</div>
+        )}
 
         {workoutView && workout && (
           <>
@@ -399,6 +406,8 @@ export default async function PlanPage({
                 planId={workout.id}
                 checkins={workoutCheckins}
                 ownerSex={profile?.sex}
+                planTypeToggle={planTypeToggle}
+                journeyMembers={journeyMembers}
               />
             )}
           </>
