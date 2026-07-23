@@ -4,24 +4,29 @@
  * OWNER DECISION (07/2026): CHILDREN are now included in the PRIVATE weight
  * journey (previously excluded outright — the 00017 "adults only" stance). The
  * owner directed this with the child-safety trade-offs surfaced. To keep the
- * reversal narrow and safe, the concept is split into three gates (below), and
- * two things stay adults-only regardless: BODY PHOTOS (a stored image of a
- * minor's body is a line we don't cross) and the family-VISIBLE goal-milestone
+ * reversal narrow and safe, the concept is split into three gates (below). The
+ * one thing that stays adults-only is the family-VISIBLE goal-milestone
  * celebration on «موسم بيتنا» (a child's weight is never shown on a shared
- * surface). The housekeeper is NEVER tracked (dignity rule — the employer does
- * not track her body), same as workout plans.
+ * surface). BODY PHOTOS were also adults-only at first, but a LATER owner
+ * directive (07/2026) extended them to children too — a progress photo is a
+ * private, per-account, journey-page-only record that never reaches a shared
+ * surface (see logBodyWeight / the journey page). The housekeeper is NEVER
+ * tracked (dignity rule — the employer does not track her body), same as
+ * workout plans.
  *
- *   isWeighInEligibleMember      — may keep a PRIVATE record (adults + children;
- *                                  never the housekeeper). Journey page, /plan
- *                                  entry, and the logBodyWeight write gate.
- *   isChildWeighInMember         — the member is a MINOR → no body photos, and
- *                                  never on the shared celebration.
+ *   isWeighInEligibleMember      — may keep a PRIVATE record, PHOTOS included
+ *                                  (adults + children; never the housekeeper).
+ *                                  Journey page, /plan entry, and the
+ *                                  logBodyWeight write gate.
+ *   isChildWeighInMember         — the member is a MINOR → still never on the
+ *                                  shared goal-milestone celebration.
  *   isGoalCelebrationEligibleMember — adults only → the shared «تحقّق الهدف».
  *
  * Pregnant/lactating members ARE eligible — pregnancy changes the framing (no
  * loss targets, no deltas toward a goal), never the right to a private record.
  * Children get the same no-loss-framing shape by construction: the target line
- * is mom-only, so a child journey is a neutral weight-over-time record.
+ * is mom-only, so a child journey is a neutral weight-over-time record (with an
+ * optional private progress photo, per the later owner directive).
  */
 
 /** The fields the rules read — a subset of family_members rows. */
@@ -38,8 +43,8 @@ export function isWeighInEligibleMember(m: WeighInMemberFields): boolean {
 }
 
 /** The member is a MINOR (child type, or under-18 by a known birth year).
- * Minors may keep a private record but get NO body photos and NEVER appear on
- * the shared goal-milestone celebration. */
+ * Minors may keep a private record (progress photos included) but NEVER appear
+ * on the shared goal-milestone celebration. */
 export function isChildWeighInMember(
   m: WeighInMemberFields,
   currentYear: number = new Date().getFullYear(),
