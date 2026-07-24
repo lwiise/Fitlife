@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Sparkles, Users, AlertTriangle, MailOpen } from "lucide-react";
 import { AddFamilyBanner } from "./AddFamilyBanner";
 import { DeepDiveBanner } from "./DeepDiveBanner";
+import { PlanCTA, type PlanCTAState } from "./PlanCTA";
 import { WorkoutOptInBanner } from "./WorkoutOptInBanner";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { FamilySeasonCard } from "../plan/FamilySeasonCard";
@@ -94,6 +95,14 @@ export default async function DashboardPage() {
   const beneficiaryCount = familyMembers.filter(
     (m) => m.role !== "housekeeper",
   ).length;
+  // Plan doorway state — a 'ready' shell with no meals yet counts as generating.
+  const planCtaState: PlanCTAState = !latestPlan
+    ? "none"
+    : latestPlan.status === "failed"
+      ? "failed"
+      : planIsReady
+        ? "ready"
+        : "generating";
   // Mom's plan exists but no other family members yet → nudge to add family.
   const showAddFamily =
     profile.mom_profile_completed_at !== null &&
@@ -317,6 +326,19 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Doorway to /plan — the page's primary action, in every plan state.
+            Pre-onboarding the «خطتك على بعد دقيقتين» block below is the CTA. */}
+        {onboardingDone && (
+          <div className="mb-5">
+            <PlanCTA
+              state={planCtaState}
+              isOnboarded={onboardingDone}
+              ownerSex={profile.sex}
+              memberCount={beneficiaryCount + 1}
+            />
+          </div>
+        )}
 
         {/* «موسم بيتنا» leaderboard — the dashboard's centerpiece. Hidden for
             solo households / before a plan is ready (seasonProps is null then). */}
