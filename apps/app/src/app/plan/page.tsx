@@ -37,6 +37,7 @@ import { WorkoutViewer } from "./WorkoutViewer";
 import { WorkoutGeneratingState } from "./WorkoutGeneratingState";
 import { RetryWorkoutButton } from "./RetryWorkoutButton";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
+import { isWorkoutEligibleMember } from "@/lib/plans/workoutEligibility";
 import Link from "next/link";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
@@ -270,6 +271,20 @@ export default async function PlanPage({
         sex: m.sex as string | null,
       })),
   ];
+  // Where the workout view's «add another adult» CTA leads. Workout plans are
+  // adults-only and opt-in per person, so the member switcher only fills once a
+  // second adult has their own plan. If an eligible adult already exists in the
+  // family but isn't on the workout plan yet, point at the opt-in questionnaire
+  // (it lists everyone eligible for selection); otherwise there's nobody to opt
+  // in yet, so point at /family to add an adult first. Consumed by WorkoutViewer
+  // for both the solo prompt and the member-tab «add» link.
+  const workoutMemberIds = workout?.member_ids ?? [];
+  const addTraineeHref = familyMembers.some(
+    (m) => isWorkoutEligibleMember(m) && !workoutMemberIds.includes(m.id),
+  )
+    ? "/onboarding/workout"
+    : "/family";
+
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =
@@ -467,6 +482,7 @@ export default async function PlanPage({
                 ownerSex={profile?.sex}
                 planTypeToggle={planTypeToggle}
                 journeyMembers={journeyMembers}
+                addTraineeHref={addTraineeHref}
               />
             )}
           </>

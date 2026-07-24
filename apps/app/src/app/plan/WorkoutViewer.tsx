@@ -224,6 +224,7 @@ export function WorkoutViewer({
   ownerSex,
   planTypeToggle,
   journeyMembers,
+  addTraineeHref = "/onboarding/workout",
 }: {
   plan: WorkoutPlan;
   /** workout_plans.id — needed to write session marks. */
@@ -240,6 +241,11 @@ export function WorkoutViewer({
   /** «رحلتك الخاصة» entries, member-keyed. The link follows the active member
    * tab and shows only for eligible members (same rule as the meal view). */
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
+  /** Where the «add another adult to workouts» affordance leads. Workout plans
+   * are adults-only and opt-in per person, so the switcher only fills once a
+   * second adult has a plan. The page resolves this to the opt-in questionnaire
+   * when an eligible adult can be added, else to /family to add one first. */
+  addTraineeHref?: string;
 }) {
   const [activeMemberId, setActiveMemberId] = useState(
     plan.members[0]?.member_id ?? "",
@@ -384,9 +390,12 @@ export function WorkoutViewer({
         </p>
       )}
 
-      {/* Member tabs (hidden for a solo program) — same structure as the meal
-          viewer (tab row + trailing «إضافة فرد») so the top navigation chrome
-          matches when switching between the meal and workout views. */}
+      {/* Member tabs (multi-adult program) — same structure as the meal viewer
+          (tab row + trailing «add» link) so the top navigation chrome matches
+          when switching between the meal and workout views. Unlike meals, the
+          trailing link opens the WORKOUT opt-in (adding a family member alone
+          doesn't give them a program) so the switcher can grow to a 3rd adult.
+          A solo program shows the invite prompt below instead of a lone tab. */}
       {!isSolo && (
         <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
           <div className="flex items-center justify-between gap-2 min-w-max">
@@ -422,11 +431,37 @@ export function WorkoutViewer({
               })}
             </div>
             <Link
-              href="/family"
+              href={addTraineeHref}
               className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
             >
               <UserPlus className="size-4" aria-hidden="true" />
-              إضافة فرد
+              إضافة فرد للتمارين
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Solo program — no tabs to switch between yet. Since the whole point of
+          the exercise page's switcher is moving between people, surface a warm
+          prompt to give another adult their own program (workouts are
+          adults-only + opt-in per person, so this is the only way the switcher
+          grows). Sits where the tab row would be, so it reads as «this is where
+          other people appear». */}
+      {isSolo && (
+        <div className="border-b border-brand-ink/10 -mx-4 px-4 pb-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-brand-ink-muted text-sm leading-relaxed max-w-sm">
+              {genderPick(ownerSex)(
+                "يتدرّب معكِ فرد بالغ آخر؟ أضيفيه لخطة التمارين لتنتقلي بينكما من هنا.",
+                "يتدرّب معك فرد بالغ آخر؟ أضِفه لخطة التمارين لتنتقل بينكما من هنا.",
+              )}
+            </p>
+            <Link
+              href={addTraineeHref}
+              className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              إضافة فرد للتمارين
             </Link>
           </div>
         </div>
