@@ -241,6 +241,80 @@ describe("workout prompts", () => {
     expect(prompt).toContain("قواعد السلامة");
   });
 
+  it("chosen weekdays render as a mandatory clause with day_index values", () => {
+    const prompt = buildWorkoutSkeletonPrompt(
+      makeContext({ momWorkout: { preferred_days: [0, 2, 4, 6] } }),
+    );
+    expect(prompt).toContain("أيام التدريب المحددة (إلزامية)");
+    expect(prompt).toContain("الأحد، الثلاثاء، الخميس، السبت");
+    expect(prompt).toContain("day_index: 0، 2، 4، 6");
+  });
+
+  it("no chosen weekdays → no mandatory-days clause (legacy profiles)", () => {
+    const prompt = buildWorkoutSkeletonPrompt(makeContext());
+    expect(prompt).not.toContain("أيام التدريب المحددة");
+  });
+
+  it("intensity feedback renders as an adaptation clause on the trainee line", () => {
+    const ctx = makeContext();
+    ctx.mom.workout_feedback = { done: 3, rated: 3, easy: 0, hard: 2 };
+    const prompt = buildWorkoutSkeletonPrompt(ctx);
+    expect(prompt).toContain("تقييم الأسبوع الماضي");
+    expect(prompt).toContain("خفّفي");
+  });
+
+  it("gym trainees are told to actually use club gear", () => {
+    const prompt = buildWorkoutSkeletonPrompt(
+      makeContext({ momWorkout: { location: "gym", equipment: [] } }),
+    );
+    expect(prompt).toContain("أدوات النادي كاملة");
+    expect(prompt).toContain("اعتمدي في تمارين القوة الرئيسية على أدوات النادي");
+  });
+
+  it("home trainees get an explicit allowed exercise_id list scoped to their tools", () => {
+    const ctx = makeContext({ momWorkout: { location: "home", equipment: ["dumbbells"] } });
+    const skeleton = {
+      members: [
+        {
+          member_id: "mom",
+          member_name_ar: "أم محمد",
+          split_name_ar: "جسم كامل ×3",
+          sessions: [
+            { day_index: 0, session_name_ar: "جسم كامل أ", main_patterns_ar: ["دفع"] },
+          ],
+        },
+      ],
+      safety_disclaimer_ar: "تنبيه",
+    };
+    const prompt = buildWorkoutMemberPrompt(ctx, skeleton, "mom");
+    expect(prompt).toContain("قائمة exercise_id المسموحة لهذا المتدرب حصراً");
+    expect(prompt).toContain("goblet_squat");
+    // Machine work never appears in a home trainee's legal list.
+    expect(prompt).not.toContain("lat_pulldown");
+    expect(prompt).not.toContain("barbell_back_squat");
+  });
+
+  it("'both' trainees get a home-variant id list scoped to their home tools", () => {
+    const ctx = makeContext(); // PROFILE: both + dumbbells/bands
+    const skeleton = {
+      members: [
+        {
+          member_id: "mom",
+          member_name_ar: "أم محمد",
+          split_name_ar: "علوي/سفلي ×2",
+          sessions: [
+            { day_index: 0, session_name_ar: "علوي أ", main_patterns_ar: ["دفع"] },
+          ],
+        },
+      ],
+      safety_disclaimer_ar: "تنبيه",
+    };
+    const prompt = buildWorkoutMemberPrompt(ctx, skeleton, "mom");
+    expect(prompt).toContain("قائمة home_variant_id المسموحة");
+    expect(prompt).toContain("band_row");
+    expect(prompt).not.toContain("seated_cable_row");
+  });
+
   it("member prompt pins the member and demands home variants for 'both'", () => {
     const ctx = makeContext();
     const skeleton = {
@@ -288,6 +362,33 @@ describe("normalizeWorkoutSkeleton", () => {
   it("caps an over-emitted week at the trainee's desired days", () => {
     const out = normalizeWorkoutSkeleton(sk([0, 1, 2, 3, 4, 5, 6]), { mom: 4 });
     expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("remaps sessions onto the trainee's chosen weekdays — her calendar wins", () => {
+    const out = normalizeWorkoutSkeleton(
+      sk([1, 3, 5]),
+      { mom: 3 },
+      { mom: [0, 2, 4] },
+    );
+    expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([0, 2, 4]);
+  });
+
+  it("keeps a compliant skeleton untouched when days already match", () => {
+    const out = normalizeWorkoutSkeleton(
+      sk([0, 2, 4]),
+      { mom: 3 },
+      { mom: [0, 2, 4] },
+    );
+    expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([0, 2, 4]);
+  });
+
+  it("chosen days also cap an over-emitted week", () => {
+    const out = normalizeWorkoutSkeleton(
+      sk([0, 1, 2, 3, 4, 5]),
+      { mom: 4 },
+      { mom: [1, 3, 5, 6] },
+    );
+    expect(out.members[0]!.sessions.map((s) => s.day_index)).toEqual([1, 3, 5, 6]);
   });
 
   it("dedupes duplicate day_index (keeps the first) and sorts", () => {

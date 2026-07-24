@@ -11,6 +11,16 @@ export const WorkoutProfileSchema = z.object({
   injuries: z.array(z.enum(["shoulder", "knee", "back", "other"])).default([]),
   injury_notes: z.string().trim().max(300).nullish(),
   desired_days: z.union([z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
+  // The exact WEEKDAYS she can train (0=Sunday … 6=Saturday, the workout
+  // day_index convention). Optional — profiles saved before this question
+  // exist without it, and the model then picks the spacing itself. Stored
+  // sorted + deduped; the UI enforces count === desired_days.
+  preferred_days: z
+    .array(z.number().int().min(0).max(6))
+    .min(1)
+    .max(7)
+    .transform((days) => [...new Set(days)].sort((a, b) => a - b))
+    .nullish(),
   focus_areas: z
     .array(
       z.enum([
@@ -149,17 +159,24 @@ export function workoutPlanHasContent(plan: WorkoutPlan): boolean {
  * day_index, drop duplicate day_index entries (keep the first), and cap the
  * count at the trainee's desired_days (fallback 6). The model occasionally
  * over-emits — e.g. lists rest or walking days as sessions — and shape
- * problems must never kill a run that code can repair.
+ * problems must never kill a run that code can repair. When the trainee chose
+ * exact weekdays (preferred_days), sessions are REMAPPED onto those days —
+ * the user's calendar wins over the model's spacing, deterministically.
  */
 export function normalizeWorkoutSkeleton(
   skeleton: WorkoutSkeleton,
   desiredDaysById: Record<string, number | undefined>,
+  preferredDaysById?: Record<string, number[] | null | undefined>,
 ): WorkoutSkeleton {
   return {
     ...skeleton,
     members: skeleton.members.map((m) => ({
       ...m,
-      sessions: normalizeSessionList(m.sessions, desiredDaysById[m.member_id]),
+      sessions: normalizeSessionList(
+        m.sessions,
+        desiredDaysById[m.member_id],
+        preferredDaysById?.[m.member_id] ?? undefined,
+      ),
     })),
   };
 }
@@ -168,8 +185,9 @@ export function normalizeWorkoutSkeleton(
 export function normalizeMemberSessions<T extends { day_index: number }>(
   sessions: T[],
   desiredDays: number | undefined,
+  preferredDays?: number[],
 ): T[] {
-  return normalizeSessionList(sessions, desiredDays);
+  return normalizeSessionList(sessions, desiredDays, preferredDays);
 }
 
 /**
@@ -206,8 +224,17 @@ export function normalizeExerciseIds(member: MemberWorkout): {
 function normalizeSessionList<T extends { day_index: number }>(
   sessions: T[],
   desiredDays: number | undefined,
+  preferredDays?: number[],
 ): T[] {
-  const cap = desiredDays && desiredDays >= 1 ? Math.min(desiredDays, 6) : 6;
+  const days =
+    preferredDays && preferredDays.length > 0
+      ? [...new Set(preferredDays)].sort((a, b) => a - b)
+      : null;
+  const cap = days
+    ? days.length
+    : desiredDays && desiredDays >= 1
+      ? Math.min(desiredDays, 6)
+      : 6;
   const seen = new Set<number>();
   const out: T[] = [];
   for (const session of [...sessions].sort((a, b) => a.day_index - b.day_index)) {
@@ -215,6 +242,11 @@ function normalizeSessionList<T extends { day_index: number }>(
     seen.add(session.day_index);
     out.push(session);
     if (out.length >= cap) break;
+  }
+  // Chosen weekdays win: the i-th session (in week order) lands on the i-th
+  // chosen day. When the model already followed the prompt this is a no-op.
+  if (days) {
+    return out.map((s, i) => ({ ...s, day_index: days[i] ?? s.day_index }));
   }
   return out;
 }

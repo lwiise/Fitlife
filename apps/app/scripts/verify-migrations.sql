@@ -122,5 +122,9 @@ select * from (values
   ('00021 meal_absences DELETE policy (restore-to-meal needs it)',
     (select case when exists (select 1 from pg_policies
       where schemaname='public' and tablename='meal_absences' and cmd='DELETE')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00022 workout_checkins.intensity (adaptation feedback)',
+    (select case when exists (select 1 from information_schema.columns
+      where table_schema='public' and table_name='workout_checkins' and column_name='intensity')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);

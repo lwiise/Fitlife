@@ -97,7 +97,12 @@ export default async function PlanPage({
     (async () => {
       const workout = profile ? await getLatestWorkoutPlan(profile.id) : null;
       let workoutCheckins:
-        | Array<{ day_index: number; member_id: string; status: string }>
+        | Array<{
+            day_index: number;
+            member_id: string;
+            status: string;
+            intensity?: string | null;
+          }>
         | undefined;
       if (profile && workout?.status === "ready") {
         const supabase = await createClient();
@@ -117,6 +122,7 @@ export default async function PlanPage({
           day_index: r.day_index as number,
           member_id: (r.member_id ?? null) as string | null,
           status: r.status as string,
+          intensity: (r.intensity ?? null) as string | null,
         }));
         // Within the ≤7-day window each weekday occurs at most once, so
         // member|day_index stays unique after the member|date collapse.
@@ -126,6 +132,7 @@ export default async function PlanPage({
             day_index: m.day_index as number,
             member_id: m.member_id ?? "",
             status: m.status,
+            intensity: m.intensity ?? null,
           }));
       }
       return { workout, workoutCheckins };

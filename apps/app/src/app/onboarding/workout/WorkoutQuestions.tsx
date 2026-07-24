@@ -44,7 +44,7 @@ const EQUIPMENT = [
   { value: "none", label: "بدون أدوات" },
   { value: "dumbbells", label: "دمبل" },
   { value: "bands", label: "أحبال مقاومة" },
-  { value: "machines", label: "أجهزة" },
+  { value: "machines", label: "أجهزة منزلية (سير أو دراجة)" },
 ] as const;
 const INJURIES = [
   { value: "shoulder", label: "الكتف" },
@@ -53,6 +53,16 @@ const INJURIES = [
   { value: "other", label: "أخرى" },
 ] as const;
 const DAYS = [3, 4, 5, 6] as const;
+// Weekday chips follow the workout day_index convention: 0 = الأحد (Sunday).
+const WEEKDAYS = [
+  { value: 0, label: "الأحد" },
+  { value: 1, label: "الاثنين" },
+  { value: 2, label: "الثلاثاء" },
+  { value: 3, label: "الأربعاء" },
+  { value: 4, label: "الخميس" },
+  { value: 5, label: "الجمعة" },
+  { value: 6, label: "السبت" },
+] as const;
 const FOCUS = [
   { value: "full_body", label: "الجسم كامل" },
   { value: "core", label: "البطن والكور" },
@@ -80,6 +90,7 @@ type Draft = {
   injuries: WorkoutProfile["injuries"];
   injury_notes: string;
   desired_days: WorkoutProfile["desired_days"] | 0;
+  preferred_days: number[];
   focus_areas: WorkoutProfile["focus_areas"];
   experience: WorkoutProfile["experience"] | "";
   session_minutes: WorkoutProfile["session_minutes"] | "";
@@ -92,6 +103,7 @@ function draftFrom(existing: WorkoutProfile | null): Draft {
     injuries: existing?.injuries ?? [],
     injury_notes: existing?.injury_notes ?? "",
     desired_days: existing?.desired_days ?? 0,
+    preferred_days: existing?.preferred_days ?? [],
     focus_areas: existing?.focus_areas ?? [],
     experience: existing?.experience ?? "",
     session_minutes: existing?.session_minutes ?? "",
@@ -113,6 +125,11 @@ const STEPS = [
       if (d.focus_areas.length === 0)
         return g("اختاري منطقة تركيز واحدة على الأقل", "اختر منطقة تركيز واحدة على الأقل");
       if (!d.desired_days) return g("حدّدي أيام التدريب", "حدّد أيام التدريب");
+      if (d.preferred_days.length !== d.desired_days)
+        return g(
+          `اختاري ${d.desired_days} أيام من الأسبوع لتدريبك`,
+          `اختر ${d.desired_days} أيام من الأسبوع لتدريبك`,
+        );
       if (!d.session_minutes) return g("حدّدي مدة الجلسة", "حدّد مدة الجلسة");
       return null;
     },
@@ -286,6 +303,7 @@ export function WorkoutQuestions({
             injuries: d.injuries,
             injury_notes: d.injuries.length > 0 ? d.injury_notes.trim() || null : null,
             desired_days: d.desired_days as WorkoutProfile["desired_days"],
+            preferred_days: [...d.preferred_days].sort((a, b) => a - b),
             focus_areas: d.focus_areas,
             experience: d.experience as WorkoutProfile["experience"],
             session_minutes: d.session_minutes as WorkoutProfile["session_minutes"],
@@ -460,13 +478,62 @@ export function WorkoutQuestions({
                         <OptionButton
                           key={d}
                           active={draft.desired_days === d}
-                          onClick={() => setDraft({ desired_days: d })}
+                          onClick={() =>
+                            setDraft({
+                              desired_days: d,
+                              // Shrinking the count keeps the first d chosen
+                              // days so the selection never exceeds it.
+                              preferred_days: draft.preferred_days.slice(0, d),
+                            })
+                          }
                         >
                           {String(d)}
                         </OptionButton>
                       ))}
                     </div>
                   </Field>
+
+                  {draft.desired_days > 0 && (
+                    <Field
+                      label={`أي أيام الأسبوع؟ (${g("اختاري", "اختر")} ${draft.desired_days})`}
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        {WEEKDAYS.map((w) => {
+                          const active = draft.preferred_days.includes(w.value);
+                          const full =
+                            !active &&
+                            draft.preferred_days.length >= draft.desired_days;
+                          return (
+                            <button
+                              key={w.value}
+                              type="button"
+                              disabled={full}
+                              onClick={() =>
+                                setDraft({
+                                  preferred_days: active
+                                    ? draft.preferred_days.filter((v) => v !== w.value)
+                                    : [...draft.preferred_days, w.value].sort(
+                                        (a, b) => a - b,
+                                      ),
+                                })
+                              }
+                              aria-pressed={active}
+                              className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 disabled:opacity-40 disabled:cursor-not-allowed ${
+                                active
+                                  ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
+                                  : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-purple-900/40"
+                              }`}
+                            >
+                              {w.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-2 text-xs text-brand-ink-muted leading-relaxed">
+                        جلساتك ستوضع على هذه الأيام تحديداً.
+                      </p>
+                    </Field>
+                  )}
 
                   <Field label="مدة الجلسة">
                     <div className="grid grid-cols-3 gap-2">

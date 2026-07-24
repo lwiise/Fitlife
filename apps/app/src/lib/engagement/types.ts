@@ -48,6 +48,11 @@ export type Verdict = (typeof VERDICTS)[number];
 export const WORKOUT_CHECKIN_STATUSES = ["done", "moved", "skipped"] as const;
 export type WorkoutCheckinStatus = (typeof WORKOUT_CHECKIN_STATUSES)[number];
 
+// How a done session felt (00022) — feeds the next generation's adaptation
+// clause. NULL = unrated (unknown, never assumed); only meaningful on 'done'.
+export const WORKOUT_INTENSITIES = ["easy", "right", "hard"] as const;
+export type WorkoutIntensity = (typeof WORKOUT_INTENSITIES)[number];
+
 /** "mom" for the account owner, otherwise a family_members.id UUID. */
 export type EngagementMemberId = string;
 
@@ -109,6 +114,8 @@ export interface WorkoutCheckinRow {
   /** Riyadh-local calendar date (YYYY-MM-DD), stamped at write time. */
   local_date: string;
   status: WorkoutCheckinStatus;
+  /** 00022 — how the done session felt; null = unrated. */
+  intensity: WorkoutIntensity | null;
   created_at: string;
   updated_at: string;
 }

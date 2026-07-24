@@ -313,6 +313,125 @@ export const bench_dips = {
   poses: [benchDipPose(0, 272), benchDipPose(0.42, 330), benchDipPose(0.52, 330), benchDipPose(1, 272)],
 };
 
+// Chest press machine — upright seat with a backrest, handles press straight
+// forward at chest height.
+function chestPressPose(at, wristX) {
+  const hip = [206, 380];
+  const torso = -84;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, [wristX, shoulder[1] + 14], "back");
+  const legs = legIK(hip, [312, 470], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 55,
+      headLift: 0,
+    },
+  };
+}
+export const chest_press_machine = {
+  id: "chest_press_machine",
+  seconds: 2.6,
+  highlight: ["upperArmNear", "upperArmFar"],
+  props: [{ type: "pad", parent: "forearmNear", far: true }],
+  furniture: [
+    { kind: "line", x1: 176, y1: 200, x2: 168, y2: 400, w: 14 },
+    { kind: "rect", x: 220, y: 424, w: 120, h: 40, r: 10 },
+    { kind: "line", x1: 398, y1: 180, x2: 398, y2: 486, w: 10, o: 40 },
+  ],
+  farPeek: { arm: 12, leg: 5 },
+  arrow: { at: [370, 220], move: [38, 0], window: [0.05, 0.42] },
+  poses: [
+    chestPressPose(0, 288),
+    chestPressPose(0.42, 372),
+    chestPressPose(0.54, 372),
+    chestPressPose(1, 288),
+  ],
+};
+
+// Shoulder press machine — seated with a backrest, handles press from ear
+// height to overhead.
+function shoulderPressPose(at, wrist) {
+  const hip = [216, 380];
+  const torso = -88;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, wrist, "back");
+  const legs = legIK(hip, [320, 470], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 55,
+      headLift: 0,
+    },
+  };
+}
+export const shoulder_press_machine = {
+  id: "shoulder_press_machine",
+  seconds: 2.6,
+  highlight: ["upperArmNear", "upperArmFar"],
+  props: [{ type: "pad", parent: "forearmNear", far: true }],
+  furniture: [
+    { kind: "line", x1: 186, y1: 196, x2: 178, y2: 400, w: 14 },
+    { kind: "rect", x: 230, y: 424, w: 120, h: 40, r: 10 },
+  ],
+  farPeek: { arm: 12, leg: 5 },
+  arrow: { at: [330, 140], move: [0, -40], window: [0.05, 0.42] },
+  poses: [
+    shoulderPressPose(0, [268, 238]),
+    shoulderPressPose(0.42, [246, 128]),
+    shoulderPressPose(0.54, [246, 128]),
+    shoulderPressPose(1, [268, 238]),
+  ],
+};
+
+// Cable lateral raise — FRONT view; the working arm sweeps up against a low
+// cable that crosses in front of the body from the far-side pulley.
+function cableLatPose(at, up) {
+  return {
+    at,
+    hip: [256, 268],
+    angles: {
+      torso: -90,
+      upperArmNear: up ? 4 : 66,
+      forearmNear: up ? 0 : 74,
+      upperArmFar: 128,
+      forearmFar: 116,
+      thighNear: 94,
+      shinNear: 92,
+      footNear: 30,
+      thighFar: 86,
+      shinFar: 88,
+      footFar: 150,
+      headLift: 0,
+    },
+  };
+}
+export const cable_lateral_raise = {
+  id: "cable_lateral_raise",
+  seconds: 2.6,
+  farOpacity: 85,
+  highlight: ["upperArmNear"],
+  furniture: [
+    { kind: "line", x1: 116, y1: 150, x2: 116, y2: 486, w: 10 },
+    { kind: "circle", x: 122, y: 460, r: 9 },
+  ],
+  props: [{ type: "band", from: { point: [126, 460] }, to: { joint: "wristNear" }, w: 7, above: true }],
+  arrow: { at: [448, 210], move: [0, -34], window: [0.05, 0.42] },
+  poses: [cableLatPose(0, false), cableLatPose(0.42, true), cableLatPose(0.54, true), cableLatPose(1, false)],
+};
+
 export const PUSH = [
   pushup,
   knee_pushup,
@@ -324,4 +443,7 @@ export const PUSH = [
   triceps_extension,
   triceps_pushdown,
   bench_dips,
+  chest_press_machine,
+  shoulder_press_machine,
+  cable_lateral_raise,
 ];

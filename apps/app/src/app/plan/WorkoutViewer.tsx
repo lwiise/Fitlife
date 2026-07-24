@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check, UserPlus, Dumbbell } from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
-import type { WorkoutCheckinStatus } from "@/lib/engagement/types";
+import type { WorkoutCheckinStatus, WorkoutIntensity } from "@/lib/engagement/types";
 import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
 import { ExerciseLottie } from "./ExerciseLottie";
 import { genderPick } from "@/lib/copy/gender";
@@ -37,19 +37,41 @@ const WORKOUT_HEADER_LABEL: Record<WorkoutCheckinStatus, string> = {
   moved: "بدّلت",
   skipped: "تجاوزت",
 };
+// How the done session felt (00022) — feeds next week's program.
+const INTENSITY_CHIPS: { value: WorkoutIntensity; label: string }[] = [
+  { value: "easy", label: "خفيفة" },
+  { value: "right", label: "مناسبة" },
+  { value: "hard", label: "شاقة" },
+];
+
+interface WorkoutMark {
+  status: WorkoutCheckinStatus;
+  intensity: WorkoutIntensity | null;
+}
 
 // One implementation for the initial useState seed AND the props-resync, so
 // the optimistic map can never drift from how server rows are read.
 function seedWorkoutMap(
-  checkins: Array<{ day_index: number; member_id: string; status: string }> | undefined,
+  checkins:
+    | Array<{ day_index: number; member_id: string; status: string; intensity?: string | null }>
+    | undefined,
 ) {
-  return new Map(
+  return new Map<string, WorkoutMark>(
     (checkins ?? [])
       .filter(
         (c): c is typeof c & { status: WorkoutCheckinStatus } =>
           c.status === "done" || c.status === "moved" || c.status === "skipped",
       )
-      .map((c) => [`${c.member_id}|${c.day_index}`, c.status]),
+      .map((c) => [
+        `${c.member_id}|${c.day_index}`,
+        {
+          status: c.status,
+          intensity:
+            c.intensity === "easy" || c.intensity === "right" || c.intensity === "hard"
+              ? c.intensity
+              : null,
+        },
+      ]),
   );
 }
 
@@ -233,7 +255,12 @@ export function WorkoutViewer({
   planId?: string;
   /** Session marks for this plan (interactive page only). member_id: "mom" |
    * family_members.id; day_index weekday-anchored. Presence enables marking. */
-  checkins?: Array<{ day_index: number; member_id: string; status: string }>;
+  checkins?: Array<{
+    day_index: number;
+    member_id: string;
+    status: string;
+    intensity?: string | null;
+  }>;
   /** Account owner's sex → the «أنتِ/أنتَ» mom-tab marker. */
   ownerSex?: string | null;
   /** The meal/workout plan-type toggle, hosted here so it shares the header row
@@ -312,13 +339,14 @@ export function WorkoutViewer({
     memberId: string,
     dayIndex: number,
     status: WorkoutCheckinStatus | null,
+    intensity: WorkoutIntensity | null = null,
   ) {
     if (!planId) return;
     const key = `${memberId}|${dayIndex}`;
     const prev = checkinMap.get(key) ?? null;
     const next = new Map(checkinMap);
     if (status === null) next.delete(key);
-    else next.set(key, status);
+    else next.set(key, { status, intensity: status === "done" ? intensity : null });
     setCheckinMap(next);
     setCheckinError(null);
     setPendingWrites((n) => n + 1);
@@ -327,6 +355,7 @@ export function WorkoutViewer({
       day_index: dayIndex,
       member_id: memberId,
       status,
+      intensity: status === "done" ? intensity : null,
     })
       .then((result) => {
         if (!result.ok) {
@@ -375,8 +404,10 @@ export function WorkoutViewer({
   // window: the whole current week (Sunday-anchored) is markable, with the 48h
   // floor for the previous week's tail. A future session this week wraps past
   // this bound (activeDayDist becomes large) and stays hidden.
-  const activeStatus =
+  const activeMark =
     checkinMap.get(`${activeTab.member_id}|${activeDayIndex}`) ?? null;
+  const activeStatus = activeMark?.status ?? null;
+  const activeIntensity = activeMark?.intensity ?? null;
   const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
   const workoutMaxBack = Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
   const canMarkActive =
@@ -674,6 +705,40 @@ export function WorkoutViewer({
                   </button>
                 ))}
               </div>
+              {activeStatus === "done" && (
+                <div className="pt-1.5 border-t border-brand-ink/5 space-y-1.5">
+                  <p className="text-xs font-bold text-brand-ink-muted">
+                    كيف كانت شدة الحصة؟
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {INTENSITY_CHIPS.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() =>
+                          handleWorkoutCheckin(
+                            activeWorkout.member_id,
+                            activeDayIndex,
+                            "done",
+                            activeIntensity === c.value ? null : c.value,
+                          )
+                        }
+                        aria-pressed={activeIntensity === c.value}
+                        className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                          activeIntensity === c.value
+                            ? "bg-brand-pink text-white"
+                            : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+                    إجابتك تضبط شدة برنامج الأسبوع القادم.
+                  </p>
+                </div>
+              )}
               {checkinError && (
                 <p role="alert" className="text-xs font-bold text-red-700">
                   {checkinError}

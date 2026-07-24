@@ -328,6 +328,120 @@ export const hammer_curl = {
   poses: [curlPose(0, 88), curlPose(0.42, -36), curlPose(0.54, -36), curlPose(1, 88)],
 };
 
+// Reverse pec deck — seated facing the chest pad, near-straight arms sweep
+// from ahead to behind the shoulder line.
+function reversePecPose(at, wrist) {
+  const hip = [222, 388];
+  const torso = -86;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, wrist, "back");
+  const legs = legIK(hip, [330, 470], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 40,
+      headLift: -2,
+    },
+  };
+}
+export const reverse_pec_deck = {
+  id: "reverse_pec_deck",
+  seconds: 2.6,
+  highlight: ["upperArmNear", "upperArmFar"],
+  props: [{ type: "pad", parent: "forearmNear", far: true }],
+  furniture: [
+    { kind: "rect", x: 318, y: 268, w: 20, h: 120, r: 8 },
+    { kind: "rect", x: 236, y: 442, w: 130, h: 42, r: 10 },
+  ],
+  farPeek: { arm: 14, leg: 5 },
+  arrow: { at: [160, 210], move: [-34, 0], window: [0.05, 0.42] },
+  poses: [
+    reversePecPose(0, [368, 262]),
+    reversePecPose(0.42, [156, 288]),
+    reversePecPose(0.54, [156, 288]),
+    reversePecPose(1, [368, 262]),
+  ],
+};
+
+// Cable biceps curl — the curl arc against a low cable anchored ahead.
+function cableCurlPose(at, fore) {
+  return {
+    at,
+    hip: [230, 268],
+    angles: {
+      torso: -88,
+      upperArmNear: 95,
+      forearmNear: fore,
+      thighNear: 90,
+      shinNear: 90,
+      footNear: 0,
+      headLift: 0,
+    },
+  };
+}
+export const cable_biceps_curl = {
+  id: "cable_biceps_curl",
+  seconds: 2.4,
+  highlight: ["upperArmNear", "upperArmFar"],
+  furniture: [
+    { kind: "line", x1: 428, y1: 150, x2: 428, y2: 486, w: 10 },
+    { kind: "circle", x: 422, y: 458, r: 9 },
+  ],
+  props: [{ type: "band", from: { point: [416, 458] }, to: { joint: "wristNear" }, w: 7 }],
+  farPeek: { arm: 9, leg: 6 },
+  arrow: { at: [330, 300], move: [0, -36], window: [0.05, 0.42] },
+  poses: [cableCurlPose(0, 74), cableCurlPose(0.42, -32), cableCurlPose(0.54, -32), cableCurlPose(1, 74)],
+};
+
+// Towel door row — towel looped on the door handle, straight body leans back,
+// elbows drive the chest toward the door.
+function towelRowPose(at, leanDeg, wrist) {
+  const ankle = [352, 473];
+  const r = (leanDeg * Math.PI) / 180;
+  const dir = [Math.cos(r), Math.sin(r)];
+  const knee = [ankle[0] + 100 * dir[0], ankle[1] + 100 * dir[1]];
+  const hip = [knee[0] + 105 * dir[0], knee[1] + 105 * dir[1]];
+  const shoulder = jointFrom(hip, leanDeg + 6, 130);
+  const arm = armIK(shoulder, wrist, "back");
+  return {
+    at,
+    hip,
+    angles: {
+      torso: leanDeg + 6,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: leanDeg + 180,
+      shinNear: leanDeg + 180,
+      footNear: 0,
+      headLift: -4,
+    },
+  };
+}
+export const towel_row = {
+  id: "towel_row",
+  seconds: 2.6,
+  highlight: ["upperArmNear", "upperArmFar"],
+  furniture: [
+    { kind: "line", x1: 442, y1: 96, x2: 442, y2: 486, w: 10 },
+    { kind: "circle", x: 434, y: 238, r: 7 },
+  ],
+  props: [{ type: "band", from: { point: [434, 238] }, to: { joint: "wristNear" }, w: 8 }],
+  farPeek: { arm: 10, leg: 5 },
+  arrow: { at: [250, 200], move: [30, -14], window: [0.05, 0.42] },
+  poses: [
+    towelRowPose(0, -118, [386, 250]),
+    towelRowPose(0.42, -103, [400, 248]),
+    towelRowPose(0.54, -103, [400, 248]),
+    towelRowPose(1, -118, [386, 250]),
+  ],
+};
+
 export const PULL = [
   one_arm_db_row,
   bent_over_row,
@@ -339,4 +453,7 @@ export const PULL = [
   rear_delt_fly,
   biceps_curl,
   hammer_curl,
+  reverse_pec_deck,
+  cable_biceps_curl,
+  towel_row,
 ];
