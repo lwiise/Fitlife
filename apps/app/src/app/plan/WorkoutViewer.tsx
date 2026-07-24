@@ -125,7 +125,7 @@ function SessionDetail({
             {session.exercises.length} تمارين · {totalSets} مجموعة
           </p>
         </div>
-        <div className="overflow-x-auto px-4 pb-1">
+        <div className="overflow-x-auto no-scrollbar px-4 pb-1">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-brand-ink-muted text-xs border-b border-brand-ink/5">
@@ -471,7 +471,7 @@ export function WorkoutViewer({
           add-plan CTA in the body below; a solo household shows the invite
           prompt instead of a lone tab. */}
       {!isSolo && (
-        <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
+        <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto no-scrollbar">
           <div className="flex items-center justify-between gap-2 min-w-max">
             <div className="flex items-center gap-1">
               <div className="flex gap-1">

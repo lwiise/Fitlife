@@ -834,7 +834,7 @@ export function PlanViewer({
           the last tab; «الوزن والمتابعة» takes the trailing (end) slot the add
           button used to occupy (owner directive 07/2026). */}
       {!isSolo && (
-      <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
+      <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto no-scrollbar">
         <div className="flex items-center justify-between gap-2 min-w-max">
         <div className="flex items-center gap-1">
         <div className="flex gap-1">
