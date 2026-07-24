@@ -757,24 +757,27 @@ export function PlanViewer({
 
   return (
     <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
-      {/* Plan-type toggle (meals/workout). For a solo plan the «الوزن والمتابعة»
-          journey link shares this row (there is no member-tab row to host it);
-          for a family it moves down beside the tabs, collapsing this strip to
-          just the toggle. */}
-      {(planTypeToggle || (isSolo && journeyLink)) && (
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          {planTypeToggle ?? <span />}
-          {isSolo && journeyLink}
+      {/* A solo plan has no member-tab row to host «الوزن والمتابعة», so it keeps
+          its own strip here; for a family the journey link lives beside the
+          tabs. The plan-type toggle rides in the week-range/actions row below. */}
+      {isSolo && journeyLink && (
+        <div className="flex items-center justify-end gap-3 flex-wrap">
+          {journeyLink}
         </div>
       )}
 
-      {/* Top strip: week range + actions */}
+      {/* Top strip: the meals/exercise toggle + week range on the start side,
+          plan actions on the end side. The toggle shares this row with the
+          action buttons instead of taking a strip of its own. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-          <p className="font-bold text-brand-ink text-base tabular-nums">
-            {formatWeekRange(plan.week_start_date, locale)}
-          </p>
+        <div className="flex items-center gap-3">
+          {planTypeToggle}
+          <div>
+            <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
+            <p className="font-bold text-brand-ink text-base tabular-nums">
+              {formatWeekRange(plan.week_start_date, locale)}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {!readOnly && isSolo && (
