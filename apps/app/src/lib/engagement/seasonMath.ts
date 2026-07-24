@@ -7,21 +7,24 @@
 //   • A skipped meal earns NOTHING — no member credit, no family ring, no strip
 //     cell. Marking «تجاوزتها» is honest logging, but the season celebrates
 //     meals that happened (cooked/swapped).
-//   • The formula stays flat: each act = 1 point (non-skipped meal mark,
-//     verdict, workout done/moved), % = acts / WEEKLY_TARGET.
-//   • Workout marks count only inside the MEAL plan's week — their day_index is
-//     weekday-anchored to the workout plan's own week, so `local_date` is the
-//     only key that can scope them to «this week».
+//   • The % is PLAN COMPLETION, not an act count (owner directive): a member
+//     with meals only is measured purely on meals — each meal worth
+//     100% / their planned meals. A member with a workout plan splits 50/50 —
+//     half the % from meals (against their planned meals), half from exercise
+//     sessions (against their planned sessions). Dish verdicts («كيف كانت؟»)
+//     do NOT count toward the % — they feed Sara's adaptation, not the board.
+//   • Workout marks count only inside the current marking window — their
+//     day_index is weekday-anchored to the workout plan's own week, so
+//     `local_date` is the only key that can place them in a calendar week.
+//   • Board reads are CALENDAR-keyed (user + local_date window), not plan-id
+//     keyed: a mid-week regenerate mints a new plan row for the same week, and
+//     marks must survive that. The collapse helpers below dedupe the fan-in
+//     from multiple same-week plan versions (last write wins).
 
 import { addDaysISO } from "@/lib/plans/dayMapping";
 
 export const HONOR_DAYS_GOAL = 5; // meal days in a week to "honor" the season
 export const CAP = 14; // invisible capacity the family meal ring fills toward
-/** FALLBACK per-member denominator for the leaderboard % — used only when a
- * member's real planned total (meals + workout sessions, via `targets`) is
- * unknown or zero (owner directive 07/2026: the % measures completion of the
- * member's OWN plan, not an arbitrary act count). */
-export const WEEKLY_TARGET = 10;
 
 export interface SeasonMember {
   id: string;
@@ -36,26 +39,46 @@ export interface SeasonMealMark {
   member_id?: string | null;
 }
 
-export interface SeasonVerdictMark {
-  verdict?: string;
-  member_id?: string | null;
-}
-
 export interface SeasonWorkoutMark {
   day_index?: number;
   member_id?: string | null;
   status: string;
   /** Server-stamped Riyadh date of the session — the only field that can place
-   * a weekday-anchored workout mark inside the meal plan's week. */
+   * a weekday-anchored workout mark inside a calendar week. */
   local_date?: string | null;
 }
 
+/** A raw meal_checkins row from the calendar-keyed read (may span several
+ * same-week plan versions). Ordered oldest-first by the query. */
+export interface RawSeasonMealRow {
+  local_date: string | null;
+  day_index: number;
+  slot: string;
+  status: string;
+  member_id: string | null;
+}
+
+/** A raw workout_checkins row from the calendar-keyed read. */
+export interface RawSeasonWorkoutRow {
+  local_date: string | null;
+  day_index: number;
+  member_id: string | null;
+  status: string;
+}
+
+/** A member's weekly plan totals — the % denominators. `sessions` is present
+ * ONLY when the member is in the ready workout plan (the 50/50 pillar exists);
+ * absent means the meals-only formula applies. */
+export interface PlannedTotals {
+  meals: number;
+  sessions?: number;
+}
+
 export interface RankedMember extends SeasonMember {
+  /** Marks that happened: distinct meals marked + distinct sessions done. */
   score: number;
-  /** The member's own weekly denominator: planned meals + workout sessions
-   * (WEEKLY_TARGET fallback when unknown). */
-  target: number;
-  /** min(1, score / target) — the member's ring fill and rank metric. */
+  /** Plan completion — meals-only: mealsMarked/mealsPlanned; with a workout
+   * plan: ½·meals + ½·sessions. Capped at 1; the ring fill and rank metric. */
   pct: number;
   /** Position in the ROSTER (not the ranking) — stable avatar colour. */
   rosterIndex: number;
@@ -76,9 +99,9 @@ export interface SeasonStats {
   /** Distinct days with at least one non-skipped meal mark. */
   activeDays: number;
   honored: boolean;
-  /** Distinct (day, member) workout sessions done/moved inside the week. */
+  /** Distinct (date, member) workout sessions done/moved inside the week. */
   workoutActs: number;
-  /** Workout rows done/moved inside the week (rows are unique per member+day). */
+  /** Workout rows done/moved inside the week (deduped per member+date). */
   sessionsDone: number;
   fillFrac: number;
   hasActivity: boolean;
@@ -91,6 +114,74 @@ export interface SeasonStats {
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Whole days from `startISO` to `dateISO` (both YYYY-MM-DD; UTC math — the
+ * dates are Riyadh-local calendar days, no DST). */
+function daysFromStart(startISO: string, dateISO: string): number {
+  return Math.round(
+    (Date.parse(`${dateISO}T00:00:00Z`) - Date.parse(`${startISO}T00:00:00Z`)) /
+      86_400_000,
+  );
+}
+
+/**
+ * Collapse the calendar-keyed meal_checkins fan-in to one mark per
+ * (date, slot, member): rows arrive oldest-first and may repeat across
+ * same-week plan versions (a mid-week regenerate mints a new plan row), so the
+ * LAST write wins — including a later «تجاوزتها» correction overriding an
+ * older «طبختها». The day identity is then re-derived from local_date against
+ * the plan week anchor (uniform across plan versions); rows without a
+ * resolvable day inside [0,6] are dropped. Skipped-filtering happens later in
+ * computeSeasonStats — corrections must win BEFORE statuses are judged.
+ */
+export function collapseMealMarks(
+  rows: RawSeasonMealRow[],
+  weekStartDate?: string,
+): SeasonMealMark[] {
+  const weekStart =
+    weekStartDate && ISO_DATE_RE.test(weekStartDate) ? weekStartDate : undefined;
+  const latest = new Map<string, SeasonMealMark>();
+  for (const r of rows) {
+    let dayIndex: number | null = null;
+    if (weekStart && r.local_date && ISO_DATE_RE.test(r.local_date)) {
+      const diff = daysFromStart(weekStart, r.local_date);
+      if (diff >= 0 && diff <= 6) dayIndex = diff;
+    } else if (Number.isInteger(r.day_index) && r.day_index >= 0 && r.day_index <= 6) {
+      // No calendar anchor (legacy plan-id read / missing date) — trust the
+      // row's own plan-week day_index.
+      dayIndex = r.day_index;
+    }
+    if (dayIndex === null) continue;
+    const key = `${r.local_date ?? `d${dayIndex}`}|${r.slot}|${r.member_id ?? "household"}`;
+    latest.set(key, {
+      day_index: dayIndex,
+      slot: r.slot,
+      status: r.status,
+      member_id: r.member_id,
+    });
+  }
+  return [...latest.values()];
+}
+
+/**
+ * Collapse the calendar-keyed workout_checkins fan-in to one mark per
+ * (member, date) — same last-write-wins rule across workout plan re-mints.
+ */
+export function collapseWorkoutMarks(
+  rows: RawSeasonWorkoutRow[],
+): SeasonWorkoutMark[] {
+  const latest = new Map<string, SeasonWorkoutMark>();
+  for (const r of rows) {
+    const key = `${r.member_id ?? ""}|${r.local_date ?? `d${r.day_index}`}`;
+    latest.set(key, {
+      day_index: r.day_index,
+      member_id: r.member_id,
+      status: r.status,
+      local_date: r.local_date,
+    });
+  }
+  return [...latest.values()];
+}
 
 /** A meal mark that actually happened — skipped earns nothing anywhere. */
 function isNonSkipped(mark: SeasonMealMark): boolean {
@@ -110,7 +201,6 @@ export function dayHasNonSkippedMark(
 export function computeSeasonStats(input: {
   members: SeasonMember[];
   checkins: SeasonMealMark[];
-  verdicts: SeasonVerdictMark[];
   workoutCheckins?: SeasonWorkoutMark[];
   /** Meal plan week anchor (YYYY-MM-DD) — drives the strip labels. Also the
    * FALLBACK workout window ([weekStartDate, weekStartDate+6]) for callers that
@@ -127,13 +217,13 @@ export function computeSeasonStats(input: {
    * open rather than zero the pillar. */
   workoutWeekStart?: string;
   workoutWeekEnd?: string;
-  /** Per-member weekly denominators (member id → planned meals + planned
-   * workout sessions, "if any"). The % is the member's completion of their OWN
-   * plan (owner directive 07/2026). Missing/zero entries fall back to
-   * WEEKLY_TARGET so a degraded read never divides by zero. */
-  targets?: Record<string, number>;
+  /** Per-member weekly plan totals (the % denominators — owner directive:
+   * the % measures completion of the member's OWN plan). A missing member or
+   * zero planned meals yields 0% for that pillar (never a division by zero);
+   * the member's raw marks still count toward `score`/«حاضر». */
+  planned?: Record<string, PlannedTotals>;
 }): SeasonStats {
-  const { members, checkins, verdicts } = input;
+  const { members, checkins } = input;
   const workoutCheckins = input.workoutCheckins ?? [];
   const memberIds = new Set(members.map((m) => m.id));
 
@@ -190,14 +280,17 @@ export function computeSeasonStats(input: {
       w.local_date <= workoutEnd
     );
   });
-  const workoutActs = new Set(
+  // A session's identity is its calendar date (falling back to the
+  // weekday-anchored day_index when no date exists — unscoped legacy rows).
+  const workoutKey = (w: SeasonWorkoutMark) =>
+    `${w.local_date ?? `d${w.day_index}`}|${w.member_id}`;
+  const workoutActSet = new Set(
     effectiveWorkouts
-      .filter(
-        (w) => w.member_id && memberIds.has(w.member_id) && w.day_index != null,
-      )
-      .map((w) => `${w.day_index}|${w.member_id}`),
-  ).size;
-  const sessionsDone = effectiveWorkouts.length;
+      .filter((w) => w.member_id && memberIds.has(w.member_id))
+      .map(workoutKey),
+  );
+  const workoutActs = workoutActSet.size;
+  const sessionsDone = new Set(effectiveWorkouts.map(workoutKey)).size;
 
   const fillFrac = Math.min(
     1,
@@ -205,54 +298,77 @@ export function computeSeasonStats(input: {
   );
   const hasActivity = followedMeals > 0 || workoutActs > 0;
 
-  // ── Per-member participation → rank + % ─────────────────────────────────
+  // ── Per-member plan completion → rank + % ───────────────────────────────
   // 'household' sentinel rows (legacy pre-00019 + ختام اليوم attestations)
-  // light the family surfaces above but never buy any member rank.
-  const acts: Record<string, number> = {};
-  members.forEach((m) => (acts[m.id] = 0));
-  const bump = (id: string | null | undefined) => {
-    if (id && memberIds.has(id)) acts[id] = (acts[id] ?? 0) + 1;
-  };
-  for (const c of happened) bump(c.member_id);
-  for (const v of verdicts) bump(v.member_id);
-  for (const w of effectiveWorkouts) bump(w.member_id);
-
-  // Tie-break: score, then distinct non-skipped meal DAYS (spread beats a
-  // one-day burst), then roster order — a true tie keeps the earlier roster
-  // member (mom first, then family order) so the crown never flickers.
+  // light the family surfaces above but never buy any member rank. Verdicts
+  // deliberately don't score (owner directive: the % is meals and exercise).
+  const mealsMarkedBy = new Map<string, Set<string>>();
   const mealDaysByMember = new Map<string, Set<number>>();
   for (const c of happened) {
     if (!c.member_id || !memberIds.has(c.member_id)) continue;
+    if (!mealsMarkedBy.has(c.member_id)) mealsMarkedBy.set(c.member_id, new Set());
+    mealsMarkedBy.get(c.member_id)!.add(`${c.day_index}|${c.slot}`);
     if (!mealDaysByMember.has(c.member_id)) {
       mealDaysByMember.set(c.member_id, new Set());
     }
     mealDaysByMember.get(c.member_id)!.add(c.day_index);
   }
-  const targets = input.targets ?? {};
-  const targetOf = (id: string) => {
-    const t = targets[id];
-    return typeof t === "number" && Number.isFinite(t) && t > 0
-      ? t
-      : WEEKLY_TARGET;
-  };
-  const ranked: RankedMember[] = members
-    .map((m, rosterIndex) => {
-      const score = acts[m.id] ?? 0;
-      const target = targetOf(m.id);
-      return { ...m, rosterIndex, score, target, pct: Math.min(1, score / target) };
-    })
-    .sort(
-      (a, b) =>
-        // The displayed metric ranks: capped % of the member's OWN plan,
-        // compared as exact cross-multiplied integers (never float division,
-        // so equal fractions can't flip ranks between renders).
-        Math.min(b.score, b.target) * a.target -
-          Math.min(a.score, a.target) * b.target ||
-        b.score - a.score ||
-        (mealDaysByMember.get(b.id)?.size ?? 0) -
-          (mealDaysByMember.get(a.id)?.size ?? 0) ||
-        a.rosterIndex - b.rosterIndex,
-    );
+  const sessionsMarkedBy = new Map<string, Set<string>>();
+  for (const w of effectiveWorkouts) {
+    if (!w.member_id || !memberIds.has(w.member_id)) continue;
+    if (!sessionsMarkedBy.has(w.member_id)) {
+      sessionsMarkedBy.set(w.member_id, new Set());
+    }
+    sessionsMarkedBy.get(w.member_id)!.add(workoutKey(w));
+  }
+
+  const planned = input.planned ?? {};
+  // Each member's % as an EXACT rational n/d (owner formula):
+  //   meals only          → min(m, M) / M
+  //   with workout pillar → (min(m,M)/M + min(s,S)/S) / 2
+  // A degenerate denominator (≤0) contributes 0 to its pillar — never a
+  // division by zero. Rank compares cross-multiplied integers so equal
+  // fractions can never flip between renders.
+  const scored = members.map((m, rosterIndex) => {
+    const mealsMarked = mealsMarkedBy.get(m.id)?.size ?? 0;
+    const sessionsMarked = sessionsMarkedBy.get(m.id)?.size ?? 0;
+    const p = planned[m.id];
+    const M = Math.max(0, Math.floor(p?.meals ?? 0));
+    const hasWorkoutPillar = p?.sessions !== undefined;
+    let n: number;
+    let d: number;
+    if (!hasWorkoutPillar) {
+      n = M > 0 ? Math.min(mealsMarked, M) : 0;
+      d = M > 0 ? M : 1;
+    } else {
+      const S = Math.max(0, Math.floor(p.sessions ?? 0));
+      const mealD = M > 0 ? M : 1;
+      const sessD = S > 0 ? S : 1;
+      const mealN = M > 0 ? Math.min(mealsMarked, M) : 0;
+      const sessN = S > 0 ? Math.min(sessionsMarked, S) : 0;
+      n = mealN * sessD + sessN * mealD;
+      d = 2 * mealD * sessD;
+    }
+    return {
+      ...m,
+      rosterIndex,
+      score: mealsMarked + sessionsMarked,
+      pct: n / d,
+      n,
+      d,
+    };
+  });
+  scored.sort(
+    (a, b) =>
+      b.n * a.d - a.n * b.d ||
+      b.score - a.score ||
+      (mealDaysByMember.get(b.id)?.size ?? 0) -
+        (mealDaysByMember.get(a.id)?.size ?? 0) ||
+      a.rosterIndex - b.rosterIndex,
+  );
+  const ranked: RankedMember[] = scored.map(
+    ({ n: _n, d: _d, ...member }) => member,
+  );
   const hasWinner = (ranked[0]?.score ?? 0) > 0;
   const leaderName = hasWinner && ranked[0] ? ranked[0].name : null;
 
