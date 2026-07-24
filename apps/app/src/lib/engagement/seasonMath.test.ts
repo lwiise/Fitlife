@@ -261,6 +261,92 @@ describe("computeSeasonStats — workout window (decoupled from the meal week)",
   });
 });
 
+describe("computeSeasonStats — per-member targets (owner directive: % of OWN plan)", () => {
+  it("divides each member's acts by their own planned total, not a flat target", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", day_index: 0 }),
+        mark({ member_id: "mom", day_index: 1 }),
+        mark({ member_id: "m1", day_index: 0 }),
+        mark({ member_id: "m1", day_index: 1 }),
+      ],
+      verdicts: [],
+      targets: { mom: 20, m1: 5, m2: 10 },
+    });
+    const byId = Object.fromEntries(stats.ranked.map((m) => [m.id, m]));
+    expect(byId.mom!.pct).toBeCloseTo(2 / 20);
+    expect(byId.mom!.target).toBe(20);
+    expect(byId.m1!.pct).toBeCloseTo(2 / 5);
+    expect(byId.m1!.target).toBe(5);
+  });
+
+  it("ranks by completion % — fewer absolute acts can outrank more", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        // mom: 3 acts of 30 planned (10%); m1: 2 acts of 5 planned (40%).
+        mark({ member_id: "mom", day_index: 0, slot: "breakfast" }),
+        mark({ member_id: "mom", day_index: 0, slot: "lunch" }),
+        mark({ member_id: "mom", day_index: 0, slot: "dinner" }),
+        mark({ member_id: "m1", day_index: 0 }),
+        mark({ member_id: "m1", day_index: 1 }),
+      ],
+      verdicts: [],
+      targets: { mom: 30, m1: 5, m2: 10 },
+    });
+    expect(stats.ranked[0]!.id).toBe("m1");
+    expect(stats.ranked[1]!.id).toBe("mom");
+  });
+
+  it("breaks an exact % tie by absolute acts", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        // mom: 4/20 = 20%; m1: 1/5 = 20% — mom's 4 acts beat m1's 1.
+        mark({ member_id: "mom", day_index: 0, slot: "breakfast" }),
+        mark({ member_id: "mom", day_index: 0, slot: "lunch" }),
+        mark({ member_id: "mom", day_index: 1, slot: "breakfast" }),
+        mark({ member_id: "mom", day_index: 1, slot: "lunch" }),
+        mark({ member_id: "m1", day_index: 0 }),
+      ],
+      verdicts: [],
+      targets: { mom: 20, m1: 5, m2: 10 },
+    });
+    expect(stats.ranked[0]!.id).toBe("mom");
+    expect(stats.ranked[0]!.pct).toBeCloseTo(stats.ranked[1]!.pct);
+  });
+
+  it("caps at 100% when acts exceed the member's planned total", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "m1", day_index: 0, slot: "breakfast" }),
+        mark({ member_id: "m1", day_index: 0, slot: "lunch" }),
+        mark({ member_id: "m1", day_index: 1, slot: "breakfast" }),
+      ],
+      verdicts: [{ verdict: "loved", member_id: "m1" }],
+      targets: { mom: 10, m1: 3, m2: 10 },
+    });
+    const m1 = stats.ranked.find((m) => m.id === "m1")!;
+    expect(m1.score).toBe(4);
+    expect(m1.pct).toBe(1);
+  });
+
+  it("falls back to WEEKLY_TARGET for a missing or zero target (degraded read)", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [mark({ member_id: "mom" })],
+      verdicts: [],
+      targets: { mom: 0 }, // m1/m2 absent entirely
+    });
+    const byId = Object.fromEntries(stats.ranked.map((m) => [m.id, m]));
+    expect(byId.mom!.target).toBe(WEEKLY_TARGET);
+    expect(byId.mom!.pct).toBeCloseTo(1 / WEEKLY_TARGET);
+    expect(byId.m1!.target).toBe(WEEKLY_TARGET);
+  });
+});
+
 describe("computeSeasonStats — ranking", () => {
   it("caps the percentage at 100% and the family ring at 1", () => {
     const stats = computeSeasonStats({

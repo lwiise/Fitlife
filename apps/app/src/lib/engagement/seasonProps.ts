@@ -45,6 +45,11 @@ export interface FamilySeasonProps {
     local_date: string | null;
   }>;
   goalReached: Array<{ id: string; name: string }>;
+  /** Per-member weekly denominators: the member's planned meals this week +
+   * their planned workout sessions ("if any" — 0 workout share without a ready
+   * workout plan). The leaderboard % measures completion of the member's OWN
+   * plan (owner directive 07/2026). */
+  targets: Record<string, number>;
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
    * Sunday-anchored week the workout UI writes into. Scopes workout marks on the
@@ -155,6 +160,31 @@ export async function getFamilySeasonProps(
   ].filter((m) => inPlan.has(m.id));
   // A solo household never sees a family board.
   if (members.length < 2) return null;
+
+  // Per-member weekly denominator for the leaderboard % — the member's OWN
+  // planned total this week: their meals in the plan + their workout sessions
+  // when a workout plan is ready ("if any"). Acts (marks + verdicts + workout
+  // marks) are measured against THIS, not a flat target (owner directive
+  // 07/2026); seasonMath falls back to WEEKLY_TARGET on a missing/zero entry.
+  const plannedMealsById = new Map(
+    latestPlan.plan_data.members.map((pm) => [
+      pm.member_id,
+      pm.days.reduce((n, d) => n + d.meals.length, 0),
+    ]),
+  );
+  const plannedSessionsById = new Map(
+    workoutPlan?.status === "ready" && workoutPlan.plan_data
+      ? workoutPlan.plan_data.members.map((wm) => [
+          wm.member_id,
+          wm.weekly_sessions.length,
+        ])
+      : [],
+  );
+  const targets: Record<string, number> = {};
+  for (const m of members) {
+    targets[m.id] =
+      (plannedMealsById.get(m.id) ?? 0) + (plannedSessionsById.get(m.id) ?? 0);
+  }
 
   const supabase = await createClient();
 
@@ -309,6 +339,7 @@ export async function getFamilySeasonProps(
     verdicts,
     workoutCheckins,
     goalReached,
+    targets,
     weekStartDate,
     workoutWeekStart,
     workoutWeekEnd,

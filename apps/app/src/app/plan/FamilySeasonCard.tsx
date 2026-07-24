@@ -3,7 +3,6 @@ import { Trophy, Crown, ChevronLeft } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
 import {
   computeSeasonStats,
-  WEEKLY_TARGET,
   type SeasonMealMark,
   type SeasonVerdictMark,
   type SeasonWorkoutMark,
@@ -230,6 +229,7 @@ export function FamilySeasonCard({
   verdicts,
   workoutCheckins = [],
   goalReached = [],
+  targets,
   weekStartDate,
   workoutWeekStart,
   workoutWeekEnd,
@@ -251,6 +251,9 @@ export function FamilySeasonCard({
   /** Adults who reached their target weight — the achievement ONLY (no number,
    * no target); pregnant/lactating are never here (filtered on the server). */
   goalReached?: Array<{ id: string; name: string }>;
+  /** Per-member weekly denominators (planned meals + workout sessions, "if
+   * any") — the % measures completion of the member's OWN plan. */
+  targets?: Record<string, number>;
   /** Plan week start (YYYY-MM-DD) → real weekday initials on the strip. */
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
@@ -292,6 +295,7 @@ export function FamilySeasonCard({
     weekStartDate,
     workoutWeekStart,
     workoutWeekEnd,
+    targets,
   });
 
   // «اليوم» panel — fills the hero's second column with the next action (and
@@ -586,8 +590,8 @@ export function FamilySeasonCard({
 
       {/* One line explaining the ranking metric — kills the mystery %. */}
       <p className="text-center text-brand-ink-muted text-[11.5px] leading-relaxed">
-        النسبة = تسجيلات هذا الأسبوع (وجبات وآراء وتمارين — الوجبة المتجاوزة لا
-        تُحسب) من هدف <Figure n={WEEKLY_TARGET} /> تسجيلات
+        النسبة = ما سُجّل هذا الأسبوع (وجبات وآراء وتمارين — الوجبة المتجاوزة لا
+        تُحسب) من إجمالي وجبات وتمارين خطة كل فرد
       </p>
 
       {/* Goal achievements (kept as an achievement event only — no numbers). */}
