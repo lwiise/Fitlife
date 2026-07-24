@@ -42,6 +42,78 @@ const AUTH_ERROR_AR = "انتهت الجلسة، يرجى تسجيل الدخو�
  */
 const GRACE_DAYS = 2;
 
+const CHECKIN_CLEAR_ERROR_AR = "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى";
+
+/**
+ * Clear a meal's marks the way /plan READS them — otherwise an un-tap looks
+ * ignored, or worse: an older status takes the chip back (owner report
+ * 07/2026 — un-marking a shared meal turned it into «تجاوزتها»).
+ *
+ * Two write/read asymmetries caused that, both fixed here:
+ *
+ *   • The whole-house row ('household': legacy pre-00019 marks, ختام اليوم) is
+ *     the read-time FALLBACK for every member of a meal. A per-member write
+ *     deliberately leaves it in place — but a CLEAR that leaves it re-lights
+ *     the very chip the user just un-tapped, showing whatever the kitchen last
+ *     attested. So a clear retracts it too: un-tapping means «this meal
+ *     carries no mark», not «swap my mark for the old one». (member_exceptions
+ *     cascade off that row; ختام اليوم has no UI yet, so in practice there are
+ *     none to lose — the 00017 clear path already retracted it whenever the
+ *     chip was lit purely by the fallback.)
+ *
+ *   • /plan reads check-ins by USER + CALENDAR WEEK (local_date) across every
+ *     plan version of the week — a mid-week regenerate mints a new meal_plans
+ *     row, and collapseMealMarks re-derives day_index from the date. A delete
+ *     scoped to (meal_plan_id, day_index) therefore missed the older version's
+ *     row for the same (date, slot, member), and that stale status reappeared
+ *     the moment the current one was gone. Deleting by (user, local_date,
+ *     slot, member) is exactly the read key.
+ *
+ * Pre-00019 prod (no member_id column) degrades to the legacy whole-meal
+ * clear — that schema's own semantics, where one row speaks for the house.
+ */
+async function clearMealMarks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  db: SupabaseClient,
+  {
+    userId,
+    localDate,
+    slot,
+    memberIds,
+    step,
+  }: {
+    userId: string;
+    localDate: string;
+    slot: string;
+    memberIds: string[];
+    step: string;
+  },
+): Promise<boolean> {
+  const targets = [...new Set([...memberIds, HOUSEHOLD_CHECKIN_MEMBER])];
+  const { error } = await db
+    .from("meal_checkins")
+    .delete()
+    .eq("user_id", userId)
+    .eq("local_date", localDate)
+    .eq("slot", slot)
+    .in("member_id", targets);
+  if (!error) return true;
+
+  const { error: legacyError } = await supabase
+    .from("meal_checkins")
+    .delete()
+    .eq("user_id", userId)
+    .eq("local_date", localDate)
+    .eq("slot", slot);
+  if (legacyError) {
+    Sentry.captureException(error, {
+      tags: { area: "engagement", step, userId },
+    });
+    return false;
+  }
+  return true;
+}
+
 /**
  * ختام اليوم — persist one day's household check-in in a single submit:
  * per-slot answers, per-member dish verdicts (canonical_key minted HERE,
@@ -441,8 +513,9 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
  * A whole-house row ('household': legacy, or ختام اليوم) is NEVER destroyed
  * by a per-member write — it is the kitchen's attestation and stays as the
  * read-time fallback for members without their own row (member_exceptions
- * also cascade off it). Clearing deletes the member's own row; un-tapping a
- * chip lit only by the fallback retracts the household row itself. On a
+ * also cascade off it). CLEARING is the exception: it sweeps the member's own
+ * row AND the fallback (clearMealMarks) — a row left behind would just hand
+ * the chip back with an older status. On a
  * pre-00019 prod the write degrades to the legacy household-level shape
  * (marking keeps working; per-person separation waits for the migration).
  */
@@ -495,53 +568,17 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
   const db = supabase as unknown as SupabaseClient;
 
   if (input.status === null) {
-    // Clear the member's OWN row. select("id") reports what was deleted: if
-    // nothing was (the chip the user un-tapped was lit by the whole-house
-    // fallback), retract the household row itself — that is the mark they
-    // are pointing at, and leaving it would make the tap look ignored.
-    const { data: cleared, error: deleteError } = await db
-      .from("meal_checkins")
-      .delete()
-      .eq("meal_plan_id", input.meal_plan_id)
-      .eq("day_index", input.day_index)
-      .eq("slot", input.slot)
-      .eq("user_id", user.id)
-      .eq("member_id", memberId)
-      .select("id");
-    if (deleteError) {
-      // Pre-00019 prod (no member_id column): legacy household-level clear.
-      const { error: legacyError } = await supabase
-        .from("meal_checkins")
-        .delete()
-        .eq("meal_plan_id", input.meal_plan_id)
-        .eq("day_index", input.day_index)
-        .eq("slot", input.slot)
-        .eq("user_id", user.id);
-      if (legacyError) {
-        Sentry.captureException(deleteError, {
-          tags: { area: "engagement", step: "checkin-clear", userId: user.id },
-        });
-        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
-      }
-    } else if (
-      ((cleared ?? []) as unknown[]).length === 0 &&
-      memberId !== HOUSEHOLD_CHECKIN_MEMBER
-    ) {
-      const { error: fallbackClearError } = await db
-        .from("meal_checkins")
-        .delete()
-        .eq("meal_plan_id", input.meal_plan_id)
-        .eq("day_index", input.day_index)
-        .eq("slot", input.slot)
-        .eq("user_id", user.id)
-        .eq("member_id", HOUSEHOLD_CHECKIN_MEMBER);
-      if (fallbackClearError) {
-        Sentry.captureException(fallbackClearError, {
-          tags: { area: "engagement", step: "checkin-clear", userId: user.id },
-        });
-        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
-      }
-    }
+    // Clear the member's row AND the whole-house fallback that would otherwise
+    // answer for this meal again, calendar-keyed so an older plan version of
+    // the same week can't hand the chip back (see clearMealMarks).
+    const cleared = await clearMealMarks(supabase, db, {
+      userId: user.id,
+      localDate,
+      slot: input.slot,
+      memberIds: [memberId],
+      step: "checkin-clear",
+    });
+    if (!cleared) return { ok: false as const, error: CHECKIN_CLEAR_ERROR_AR };
   } else {
     const row = {
       user_id: user.id,
@@ -594,11 +631,10 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
  * in member_ids — they get no row, so their week stays honest.
  *
  * Same calendar rules as setMealCheckin: server-derived date, any elapsed day
- * of the plan week, never a future day. status null clears every present
- * participant's row; when nothing was cleared (the chip was lit only by a
- * legacy whole-house row), the household row itself is retracted — that is
- * the mark the user is pointing at. On a pre-00019 prod the write degrades to
- * the legacy household-level shape.
+ * of the plan week, never a future day. status null un-answers the dish for
+ * everyone: every sharer's row plus the whole-house fallback that would
+ * otherwise re-light the chip (clearMealMarks). On a pre-00019 prod the write
+ * degrades to the legacy household-level shape.
  */
 export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) {
   const supabase = await createClient();
@@ -658,48 +694,18 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
   const db = supabase as unknown as SupabaseClient;
 
   if (input.status === null) {
-    const { data: cleared, error: deleteError } = await db
-      .from("meal_checkins")
-      .delete()
-      .eq("meal_plan_id", input.meal_plan_id)
-      .eq("day_index", input.day_index)
-      .eq("slot", input.slot)
-      .eq("user_id", user.id)
-      .in("member_id", effectiveIds)
-      .select("id");
-    if (deleteError) {
-      // Pre-00019 prod (no member_id column): legacy household-level clear.
-      const { error: legacyError } = await supabase
-        .from("meal_checkins")
-        .delete()
-        .eq("meal_plan_id", input.meal_plan_id)
-        .eq("day_index", input.day_index)
-        .eq("slot", input.slot)
-        .eq("user_id", user.id);
-      if (legacyError) {
-        Sentry.captureException(deleteError, {
-          tags: { area: "engagement", step: "shared-checkin-clear", userId: user.id },
-        });
-        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
-      }
-    } else if (((cleared ?? []) as unknown[]).length === 0) {
-      // The chip was lit only by a whole-house row (legacy / ختام اليوم) —
-      // retract it, exactly as the per-member clear does.
-      const { error: fallbackClearError } = await db
-        .from("meal_checkins")
-        .delete()
-        .eq("meal_plan_id", input.meal_plan_id)
-        .eq("day_index", input.day_index)
-        .eq("slot", input.slot)
-        .eq("user_id", user.id)
-        .eq("member_id", HOUSEHOLD_CHECKIN_MEMBER);
-      if (fallbackClearError) {
-        Sentry.captureException(fallbackClearError, {
-          tags: { area: "engagement", step: "shared-checkin-clear", userId: user.id },
-        });
-        return { ok: false as const, error: "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى" };
-      }
-    }
+    // One tap answered for the whole dish, so one tap un-answers it: every
+    // sharer's row plus the whole-house fallback, calendar-keyed across plan
+    // versions (see clearMealMarks). Anything left behind would re-light the
+    // chip with an older status.
+    const cleared = await clearMealMarks(supabase, db, {
+      userId: user.id,
+      localDate,
+      slot: input.slot,
+      memberIds: effectiveIds,
+      step: "shared-checkin-clear",
+    });
+    if (!cleared) return { ok: false as const, error: CHECKIN_CLEAR_ERROR_AR };
   } else {
     // The server is the authority on who is absent: a tab opened before an
     // absence was recorded elsewhere still sends the old roster, and its
@@ -832,15 +838,18 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       });
       return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
     }
-    // Outside the meal ⇒ no status for it. Best-effort (pre-00019 prod has no
-    // member_id column — the shared status there is household-level anyway).
+    // Outside the meal ⇒ no status for it. Calendar-keyed like clearMealMarks
+    // (a mid-week regenerate leaves same-week rows on the older plan id, and
+    // /plan reads them by date), but the whole-house row stays: the kitchen's
+    // attestation is not one member's to retract. Best-effort (pre-00019 prod
+    // has no member_id column — the shared status there is household-level
+    // anyway).
     const { error: clearError } = await db
       .from("meal_checkins")
       .delete()
-      .eq("meal_plan_id", input.meal_plan_id)
-      .eq("day_index", input.day_index)
-      .eq("slot", input.slot)
       .eq("user_id", user.id)
+      .eq("local_date", localDate)
+      .eq("slot", input.slot)
       .eq("member_id", input.member_id);
     if (clearError) {
       // Best-effort by design (pre-00019 prod has no member_id column) — the
