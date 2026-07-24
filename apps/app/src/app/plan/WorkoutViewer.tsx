@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check, UserPlus } from "lucide-react";
+import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check, UserPlus, Dumbbell } from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
 import type { WorkoutCheckinStatus } from "@/lib/engagement/types";
 import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
@@ -224,6 +224,8 @@ export function WorkoutViewer({
   ownerSex,
   planTypeToggle,
   journeyMembers,
+  roster,
+  addMemberHref = "/family",
   addTraineeHref = "/onboarding/workout",
 }: {
   plan: WorkoutPlan;
@@ -241,17 +243,43 @@ export function WorkoutViewer({
   /** «رحلتك الخاصة» entries, member-keyed. The link follows the active member
    * tab and shows only for eligible members (same rule as the meal view). */
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
-  /** Where the «add another adult to workouts» affordance leads. Workout plans
-   * are adults-only and opt-in per person, so the switcher only fills once a
-   * second adult has a plan. The page resolves this to the opt-in questionnaire
-   * when an eligible adult can be added, else to /family to add one first. */
+  /** The member tabs to show — the SAME set/order as the meal view, so switching
+   * to Exercise keeps the exact tab row (owner directive 07/2026). Each carries
+   * `eligible` (adults-only workout rule): an eligible member without a program
+   * gets an add-plan CTA, an ineligible one (child) an adults-only note. Absent
+   * → fall back to the workout plan's own members (every tab has content). */
+  roster?: Array<{ member_id: string; member_name_ar: string; eligible: boolean }>;
+  /** The trailing «إضافة فرد» button target — /family, exactly like the meal
+   * view (adding a household member, not the workout opt-in). */
+  addMemberHref?: string;
+  /** Where the solo-household «add another adult to workouts» prompt leads. The
+   * page resolves this to the opt-in questionnaire when an eligible adult can be
+   * added, else to /family to add one first. */
   addTraineeHref?: string;
 }) {
-  const [activeMemberId, setActiveMemberId] = useState(
-    plan.members[0]?.member_id ?? "",
+  // The Exercise view mirrors the meal view's member tabs (owner directive
+  // 07/2026): the SAME people appear as tabs. A member with a program shows it;
+  // one without shows an add-plan CTA (eligible adults) or an adults-only note
+  // (children). `roster` is the meal plan's member set/order so the tabs match
+  // the meal view exactly; when it is absent (nothing to mirror) we fall back to
+  // the workout plan's own members, so every tab still resolves to content.
+  const tabs = useMemo(
+    () =>
+      roster && roster.length > 0
+        ? roster
+        : plan.members.map((m) => ({
+            member_id: m.member_id,
+            member_name_ar: m.member_name_ar,
+            eligible: true,
+          })),
+    [roster, plan.members],
   );
-  const active =
-    plan.members.find((m) => m.member_id === activeMemberId) ?? plan.members[0];
+  const [activeMemberId, setActiveMemberId] = useState(tabs[0]?.member_id ?? "");
+  const activeTab = tabs.find((t) => t.member_id === activeMemberId) ?? tabs[0];
+  // The active member's program, if they have one. Null → the tab renders the
+  // add-plan CTA / adults-only note instead of a week of sessions.
+  const activeWorkout =
+    plan.members.find((m) => m.member_id === activeMemberId) ?? null;
   const [activeDayIndex, setActiveDayIndex] = useState<number>(() =>
     defaultDayIndex(plan.members[0]),
   );
@@ -317,9 +345,10 @@ export function WorkoutViewer({
       .finally(() => setPendingWrites((n) => n - 1));
   }
 
+  // Always an object (zeros when the active member has no program) — it is read
+  // only inside the program branch below, so the empty case never renders.
   const stats = useMemo(() => {
-    if (!active) return null;
-    const sessions = active.weekly_sessions;
+    const sessions = activeWorkout?.weekly_sessions ?? [];
     const totalMin = sessions.reduce((sum, s) => sum + s.duration_min, 0);
     const totalExercises = sessions.reduce((sum, s) => sum + s.exercises.length, 0);
     return {
@@ -327,15 +356,15 @@ export function WorkoutViewer({
       avgMin: sessions.length > 0 ? Math.round(totalMin / sessions.length) : 0,
       totalExercises,
     };
-  }, [active]);
+  }, [activeWorkout]);
 
-  if (!active || !stats) return null;
+  if (!activeTab) return null;
 
-  const isSolo = plan.members.length === 1;
-  const activeSession = active.weekly_sessions.find(
+  const isSolo = tabs.length === 1;
+  const activeSession = activeWorkout?.weekly_sessions.find(
     (s) => s.day_index === activeDayIndex,
   );
-  const showHomeVariant = active.weekly_sessions.some((s) =>
+  const showHomeVariant = !!activeWorkout?.weekly_sessions.some((s) =>
     s.exercises.some((e) => e.home_variant_ar),
   );
   const activeSets = activeSession
@@ -347,96 +376,96 @@ export function WorkoutViewer({
   // floor for the previous week's tail. A future session this week wraps past
   // this bound (activeDayDist becomes large) and stays hidden.
   const activeStatus =
-    checkinMap.get(`${active.member_id}|${activeDayIndex}`) ?? null;
+    checkinMap.get(`${activeTab.member_id}|${activeDayIndex}`) ?? null;
   const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
   const workoutMaxBack = Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
   const canMarkActive =
-    checkins !== undefined && !!planId && activeDayDist <= workoutMaxBack;
+    checkins !== undefined &&
+    !!planId &&
+    !!activeWorkout &&
+    activeDayDist <= workoutMaxBack;
+
+  // The private «الوزن والمتابعة» journey link for the ACTIVE member (eligible
+  // members only) — same placement rule as the meal view: beside the tabs for a
+  // family, up top with the toggle for a solo program.
+  const journeyEntry =
+    journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
+  const journeyLink = journeyEntry ? (
+    <Link
+      href={
+        journeyEntry.id === "mom"
+          ? "/journey"
+          : `/journey?member=${journeyEntry.id}`
+      }
+      className="inline-flex items-center flex-shrink-0 min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+    >
+      الوزن والمتابعة
+    </Link>
+  ) : null;
 
   return (
     <div className="space-y-6">
-      {/* Plan-type toggle (meals/workout) + the private «الوزن والمتابعة»
-          journey link, sharing one row — mirrors the meal PlanViewer so the top
-          navigation chrome is identical across both views. The journey entry
-          follows the active member tab and shows only for eligible members. */}
-      {(() => {
-        const journeyEntry =
-          journeyMembers?.find((j) => j.id === active.member_id) ?? null;
-        const showJourney = !!journeyEntry;
-        if (!planTypeToggle && !showJourney) return null;
-        return (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            {planTypeToggle ?? <span />}
-            {showJourney && journeyEntry && (
-              <Link
-                href={
-                  journeyEntry.id === "mom"
-                    ? "/journey"
-                    : `/journey?member=${journeyEntry.id}`
-                }
-                className="inline-flex items-center min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                الوزن والمتابعة
-              </Link>
-            )}
-          </div>
-        );
-      })()}
-
-      {plan.safety_disclaimer_ar && (
-        <p className="flex items-start gap-2 rounded-xl bg-brand-yellow/15 border border-brand-yellow/40 px-4 py-3 text-brand-ink text-sm leading-relaxed">
-          <ShieldCheck className="size-4.5 flex-shrink-0 mt-0.5 text-brand-ink" aria-hidden="true" />
-          {plan.safety_disclaimer_ar}
-        </p>
+      {/* Plan-type toggle (meals/workout). For a solo program the «الوزن
+          والمتابعة» journey link shares this row; for a family it moves down
+          beside the tabs — identical placement to the meal PlanViewer, so the
+          top chrome is the same across both views. */}
+      {(planTypeToggle || (isSolo && journeyLink)) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {planTypeToggle ?? <span />}
+          {isSolo && journeyLink}
+        </div>
       )}
 
-      {/* Member tabs (multi-adult program) — same structure as the meal viewer
-          (tab row + trailing «add» link) so the top navigation chrome matches
-          when switching between the meal and workout views. Unlike meals, the
-          trailing link opens the WORKOUT opt-in (adding a family member alone
-          doesn't give them a program) so the switcher can grow to a 3rd adult.
-          A solo program shows the invite prompt below instead of a lone tab. */}
+      {/* Member tabs — the SAME set/order as the meal viewer (owner directive
+          07/2026): every household member appears, «إضافة فرد» sits right after
+          the last tab (→ /family, exactly like meals), and «الوزن والمتابعة»
+          takes the trailing slot. A member without a program renders the
+          add-plan CTA in the body below; a solo household shows the invite
+          prompt instead of a lone tab. */}
       {!isSolo && (
         <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
           <div className="flex items-center justify-between gap-2 min-w-max">
-            <div className="flex gap-1">
-              {plan.members.map((m) => {
-                const isActive = m.member_id === active.member_id;
-                return (
-                  <button
-                    key={m.member_id}
-                    type="button"
-                    onClick={() => setActiveMemberId(m.member_id)}
-                    aria-pressed={isActive}
-                    className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                      isActive
-                        ? "text-brand-purple-900"
-                        : "text-brand-ink-muted hover:text-brand-ink"
-                    }`}
-                  >
-                    {m.member_id === "mom" && (
-                      <span className="text-brand-pink me-1">
-                        {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                      </span>
-                    )}
-                    {m.member_name_ar}
-                    {isActive && (
-                      <motion.span
-                        layoutId="workout-member-tab-underline"
-                        className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
-                      />
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-1">
+              <div className="flex gap-1">
+                {tabs.map((m) => {
+                  const isActive = m.member_id === activeMemberId;
+                  return (
+                    <button
+                      key={m.member_id}
+                      type="button"
+                      onClick={() => setActiveMemberId(m.member_id)}
+                      aria-pressed={isActive}
+                      className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                        isActive
+                          ? "text-brand-purple-900"
+                          : "text-brand-ink-muted hover:text-brand-ink"
+                      }`}
+                    >
+                      {m.member_id === "mom" && (
+                        <span className="text-brand-pink me-1">
+                          {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                        </span>
+                      )}
+                      {m.member_name_ar}
+                      {isActive && (
+                        <motion.span
+                          layoutId="workout-member-tab-underline"
+                          className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <Link
+                href={addMemberHref}
+                className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+              >
+                <UserPlus className="size-4" aria-hidden="true" />
+                إضافة فرد
+              </Link>
             </div>
-            <Link
-              href={addTraineeHref}
-              className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-            >
-              <UserPlus className="size-4" aria-hidden="true" />
-              إضافة فرد للتمارين
-            </Link>
+            {journeyLink}
           </div>
         </div>
       )}
@@ -467,12 +496,25 @@ export function WorkoutViewer({
         </div>
       )}
 
+      {/* A member with a program shows it; one without shows the add-plan CTA
+          (eligible adults) or an adults-only note (children) — the Exercise view
+          keeps the meal view's tabs while «if there are exercises show them, if
+          not show add-an-exercise-plan». */}
+      {activeWorkout ? (
+        <>
+          {plan.safety_disclaimer_ar && (
+            <p className="flex items-start gap-2 rounded-xl bg-brand-yellow/15 border border-brand-yellow/40 px-4 py-3 text-brand-ink text-sm leading-relaxed">
+              <ShieldCheck className="size-4.5 flex-shrink-0 mt-0.5 text-brand-ink" aria-hidden="true" />
+              {plan.safety_disclaimer_ar}
+            </p>
+          )}
+
       {/* Member summary tiles */}
       <div className="grid grid-cols-4 gap-2">
         <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
           <p className="text-brand-ink-muted text-xs">التقسيم</p>
           <p className="font-extrabold text-brand-ink text-sm mt-1 leading-snug">
-            {active.split_name_ar}
+            {activeWorkout.split_name_ar}
           </p>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
@@ -499,7 +541,7 @@ export function WorkoutViewer({
       {/* Day tabs — rest days stay visible but muted */}
       <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
-          const isTraining = active.weekly_sessions.some((s) => s.day_index === i);
+          const isTraining = activeWorkout.weekly_sessions.some((s) => s.day_index === i);
           const isActive = i === activeDayIndex;
           return (
             <button
@@ -579,7 +621,7 @@ export function WorkoutViewer({
       {/* Single-day content */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={`${active.member_id}-${activeDayIndex}`}
+          key={`${activeWorkout.member_id}-${activeDayIndex}`}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
@@ -616,7 +658,7 @@ export function WorkoutViewer({
                     type="button"
                     onClick={() =>
                       handleWorkoutCheckin(
-                        active.member_id,
+                        activeWorkout.member_id,
                         activeDayIndex,
                         activeStatus === c.value ? null : c.value,
                       )
@@ -653,26 +695,58 @@ export function WorkoutViewer({
             التدرّج
           </p>
           <p className="text-sm text-brand-ink-muted leading-relaxed">
-            {active.progression_notes_ar}
+            {activeWorkout.progression_notes_ar}
           </p>
         </div>
-        {active.cardio_notes_ar && (
+        {activeWorkout.cardio_notes_ar && (
           <div className="rounded-2xl border border-brand-ink/5 bg-white p-4">
             <p className="flex items-center gap-2 text-sm font-bold text-brand-ink mb-1.5">
               <Flame className="size-4 text-brand-pink" aria-hidden="true" />
               الكارديو والخطوات
             </p>
             <p className="text-sm text-brand-ink-muted leading-relaxed">
-              {active.cardio_notes_ar}
+              {activeWorkout.cardio_notes_ar}
             </p>
           </div>
         )}
       </div>
 
-      {active.safety_notes_ar && (
+      {activeWorkout.safety_notes_ar && (
         <p className="rounded-xl bg-brand-pink-light/60 border border-brand-pink/30 px-4 py-3 text-brand-ink text-sm leading-relaxed">
-          {active.safety_notes_ar}
+          {activeWorkout.safety_notes_ar}
         </p>
+      )}
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-4 py-12 text-center">
+          <Dumbbell
+            className="size-7 text-brand-purple-900 opacity-70"
+            aria-hidden="true"
+          />
+          {activeTab.eligible ? (
+            <>
+              <p className="text-brand-ink font-bold text-base leading-relaxed max-w-sm">
+                لا توجد خطة تمارين لـ{activeTab.member_name_ar} بعد.
+              </p>
+              <Link
+                href="/onboarding/workout"
+                className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-3 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
+              >
+                <Dumbbell className="size-4" aria-hidden="true" />
+                {genderPick(ownerSex)(
+                  `أضيفي خطة تمارين لـ${activeTab.member_name_ar}`,
+                  `أضِف خطة تمارين لـ${activeTab.member_name_ar}`,
+                )}
+              </Link>
+            </>
+          ) : (
+            <p className="text-brand-ink-muted text-sm leading-relaxed max-w-sm">
+              خطط التمارين مخصّصة للكبار.{" "}
+              {genderPick(ownerSex)("تجدين", "تجد")} خطة{" "}
+              {activeTab.member_name_ar} الغذائية في قسم الوجبات.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
