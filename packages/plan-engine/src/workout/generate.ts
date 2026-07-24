@@ -177,6 +177,9 @@ export async function generateWorkoutPlan(params: {
   const desiredDaysById = Object.fromEntries(
     trainees.map((t) => [t.member_id, t.profile.desired_days]),
   );
+  const preferredDaysById = Object.fromEntries(
+    trainees.map((t) => [t.member_id, t.profile.preferred_days ?? undefined]),
+  );
   let skeleton: WorkoutSkeleton | null = null;
   for (let attempt = 1; ; attempt++) {
     try {
@@ -201,7 +204,7 @@ export async function generateWorkoutPlan(params: {
           res.text,
         );
       }
-      skeleton = normalizeWorkoutSkeleton(parsed.data, desiredDaysById);
+      skeleton = normalizeWorkoutSkeleton(parsed.data, desiredDaysById, preferredDaysById);
       break;
     } catch (err) {
       const retryable = isRetryable(err) || err instanceof PlanValidationError;
@@ -248,6 +251,7 @@ export async function generateWorkoutPlan(params: {
           weekly_sessions: normalizeMemberSessions(
             parsed.data.weekly_sessions,
             trainee.profile.desired_days,
+            trainee.profile.preferred_days ?? undefined,
           ),
         });
         if (withIds.unknownIds.length > 0) {

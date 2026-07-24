@@ -2,6 +2,7 @@ import type { PlanPromptContext, PlanPromptContextMember, PlanPromptContextMom }
 import { splitForDays, type WorkoutProfile, type WorkoutSkeleton } from "./schema";
 import { exerciseCatalogPromptBlock } from "./exerciseCatalog";
 import { allowedExerciseIds, homeAllowedIds } from "./equipment";
+import { workoutFeedbackClause } from "./feedback";
 
 // ─── Coach identity ─────────────────────────────────────────────────────────
 const WORKOUT_ROLE = `أنتِ "سارة"، مدربة لياقة معتمدة متخصصة في تدريب المقاومة للنساء والعائلات في الخليج. تصممين برامج تمارين أسبوعية دقيقة وآمنة وقابلة للتنفيذ في المنزل أو النادي، بلغة عربية فصحى واضحة ودافئة، دون مبالغة ودون وعود غير واقعية.`;
@@ -33,6 +34,7 @@ export const WORKOUT_METHODOLOGY = `# منهجية التدريب
 - المبتدئات: تدرّج مزدوج — زيدي التكرارات حتى سقف المدى ثم زيدي الوزن وعودي لأسفل المدى.
 - المتوسطات/المتقدمات: تدرّج أسبوعي بالوزن أو التكرارات لكل تمرين.
 - أسبوع تخفيف كل 5-6 أسابيع: نصف المجموعات بنفس الأوزان. اذكريه في ملاحظات التدرّج.
+- التكيّف: إن ورد في بيانات المتدرب تقييم لشدة الأسبوع الماضي فطبّقيه حرفياً — التقييم الفعلي مقدَّم على أي افتراض.
 
 ## بنية الجلسة
 إحماء 5-8 دقائق (رفع نبض + حركية مفصلية لأنماط اليوم) → المركبة → العزل → خاتمة اختيارية → إطالات تهدئة.
@@ -103,6 +105,16 @@ const EXPERIENCE_AR: Record<string, string> = {
   intermediate: "متوسطة",
   advanced: "متقدمة",
 };
+// Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (JS getDay).
+const WEEKDAY_AR = [
+  "الأحد",
+  "الاثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+  "السبت",
+];
 const SESSION_MIN_AR: Record<string, string> = {
   m20_30: "20-30 دقيقة",
   m30_45: "30-45 دقيقة",
@@ -172,6 +184,12 @@ function describeTrainee(t: WorkoutTrainee): string {
 
   let line = parts.join("، ") + ".";
   line += ` أيام التدريب المرغوبة: ${wp.desired_days} — التقسيم الموصى به: ${splitForDays(wp.desired_days)}.`;
+  if (wp.preferred_days && wp.preferred_days.length > 0) {
+    const days = wp.preferred_days;
+    line += ` أيام التدريب المحددة (إلزامية): ${days
+      .map((d) => WEEKDAY_AR[d])
+      .join("، ")} — day_index: ${days.join("، ")}. ضعي الجلسات على هذه الأيام حصراً ولا تنقليها.`;
+  }
   const homeTools =
     wp.equipment.filter((e) => e !== "none").length > 0
       ? wp.equipment
@@ -209,6 +227,8 @@ function describeTrainee(t: WorkoutTrainee): string {
   if (p.medical_conditions.length > 0) {
     line += ` حالات صحية: ${p.medical_conditions.join("، ")} — طبّقي قواعد السلامة المناسبة.`;
   }
+  const feedback = workoutFeedbackClause(p.workout_feedback);
+  if (feedback) line += ` ${feedback}`;
   return line;
 }
 
@@ -224,8 +244,8 @@ export function buildWorkoutSkeletonPrompt(context: PlanPromptContext): string {
 ${traineeRoster(trainees)}
 
 # المطلوب (المرحلة 1: هيكل الأسبوع فقط)
-لكل متدرب: أكّدي التقسيم الأسبوعي المناسب (التزمي بالموصى به ما لم تفرض السلامة غير ذلك)، وسمّي جلسات الأسبوع بأنماطها الحركية الرئيسية فقط — بدون تمارين مفصلة. day_index من 0 إلى 6 (0 = أول أيام الأسبوع).
-قيود صارمة: عدد الجلسات لكل متدرب يساوي أيام التدريب المرغوبة **بالضبط** — لا أكثر ولا أقل؛ لا تُدرجي أيام الراحة أو المشي كجلسات؛ لكل جلسة day_index فريد؛ أيام الراحة تُترك بلا جلسات.
+لكل متدرب: أكّدي التقسيم الأسبوعي المناسب (التزمي بالموصى به ما لم تفرض السلامة غير ذلك)، وسمّي جلسات الأسبوع بأنماطها الحركية الرئيسية فقط — بدون تمارين مفصلة. day_index من 0 إلى 6 (0 = الأحد … 6 = السبت).
+قيود صارمة: عدد الجلسات لكل متدرب يساوي أيام التدريب المرغوبة **بالضبط** — لا أكثر ولا أقل؛ إن وردت للمتدرب أيام تدريب محددة فضعي الجلسات على تلك الأيام حصراً؛ لا تُدرجي أيام الراحة أو المشي كجلسات؛ لكل جلسة day_index فريد؛ أيام الراحة تُترك بلا جلسات.
 
 # الإخراج
 أرجعي JSON صالحاً فقط (لا نص قبله أو بعده). الشكل:

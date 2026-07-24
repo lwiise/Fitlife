@@ -49,6 +49,8 @@ export interface SeasonWorkoutMark {
   /** Server-stamped Riyadh date of the session — the only field that can place
    * a weekday-anchored workout mark inside a calendar week. */
   local_date?: string | null;
+  /** 00022 — pass-through for the plan-page viewer; board math ignores it. */
+  intensity?: string | null;
 }
 
 /** A raw meal_checkins row from the calendar-keyed read (may span several
@@ -68,6 +70,9 @@ export interface RawSeasonWorkoutRow {
   day_index: number;
   member_id: string | null;
   status: string;
+  /** 00022 — how the done session felt; carried for the plan-page viewer,
+   * ignored by the board math. */
+  intensity?: string | null;
 }
 
 /** A member's weekly plan totals — the % denominators. `sessions` is present
@@ -227,6 +232,7 @@ export function collapseWorkoutMarks(
       member_id: r.member_id,
       status: r.status,
       local_date: r.local_date,
+      intensity: r.intensity ?? null,
     });
   }
   return [...latest.values()];

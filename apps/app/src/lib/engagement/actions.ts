@@ -286,17 +286,33 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
     return { ok: true as const };
   }
 
-  const { error } = await db.from("workout_checkins").upsert(
-    {
-      user_id: user.id,
-      workout_plan_id: input.workout_plan_id,
-      member_id: input.member_id,
-      day_index: input.day_index,
-      local_date: localDate,
-      status: input.status,
-    },
-    { onConflict: "workout_plan_id,member_id,day_index" },
-  );
+  // intensity (00022): a done session may carry how it felt; any status write
+  // without a rating resets it (a stale rating must not steer next week).
+  const row = {
+    user_id: user.id,
+    workout_plan_id: input.workout_plan_id,
+    member_id: input.member_id,
+    day_index: input.day_index,
+    local_date: localDate,
+    status: input.status,
+    intensity: input.status === "done" ? (input.intensity ?? null) : null,
+  };
+  let { error } = await db
+    .from("workout_checkins")
+    .upsert(row, { onConflict: "workout_plan_id,member_id,day_index" });
+  if (error && /intensity/i.test(error.message ?? "")) {
+    // Pre-00022 prod: the column doesn't exist yet. Keep the mark itself
+    // working (old semantics), surface the missing migration in Sentry.
+    Sentry.captureMessage("workout_checkins.intensity missing — apply migration 00022", {
+      level: "warning",
+      tags: { area: "engagement", step: "workout-checkin-upsert", userId: user.id },
+    });
+    const legacyRow: Partial<typeof row> = { ...row };
+    delete legacyRow.intensity;
+    ({ error } = await db
+      .from("workout_checkins")
+      .upsert(legacyRow, { onConflict: "workout_plan_id,member_id,day_index" }));
+  }
   if (error) {
     Sentry.captureException(error, {
       tags: { area: "engagement", step: "workout-checkin-upsert", userId: user.id },

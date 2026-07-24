@@ -20,6 +20,7 @@ import {
   mealGenBlocksWorkout,
 } from "../../../../packages/plan-engine/src/workout/generate";
 import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
+import { summarizeWorkoutFeedback } from "../../../../packages/plan-engine/src/workout/feedback";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
@@ -571,6 +572,31 @@ const handler = async (req: Request): Promise<Response> => {
 
     try {
       const context = await buildContextViaFetch(supabaseUrl, expected, userId);
+      // Intensity feedback (00022): recent per-member ratings steer this
+      // week's volume/intensity via the trainee prompt's adaptation clause.
+      // Best-effort — a pre-apply prod (no table / no column) simply yields
+      // no clause, never a failed run.
+      try {
+        const since = new Date(Date.now() - 21 * 86_400_000)
+          .toISOString()
+          .slice(0, 10);
+        const rows = (await sbSelectMany(
+          supabaseUrl,
+          expected,
+          "workout_checkins",
+          `user_id=eq.${userId}&local_date=gte.${since}&select=member_id,status,intensity&limit=500`,
+        )) as Array<{ member_id: string | null; status: string; intensity?: string | null }>;
+        const feedback = summarizeWorkoutFeedback(rows);
+        if (feedback["mom"]) context.mom.workout_feedback = feedback["mom"];
+        for (const m of context.family_members) {
+          if (feedback[m.id]) m.workout_feedback = feedback[m.id];
+        }
+      } catch (fbErr) {
+        console.log(
+          "[generate-plan-background] workout feedback unavailable (pre-00022 prod?) — proceeding without",
+          String(fbErr),
+        );
+      }
       const sb = makeFetchSupabase(supabaseUrl, expected);
       await runWorkoutPlanGeneration({
         supabase: sb,

@@ -6,6 +6,7 @@ import {
   CHECKIN_STATUSES,
   VERDICTS,
   WORKOUT_CHECKIN_STATUSES,
+  WORKOUT_INTENSITIES,
 } from "./types";
 
 // Server-side validation for the engagement actions (ختام اليوم). Same stance
@@ -124,12 +125,20 @@ export type SetMealVerdictInput = z.infer<typeof setMealVerdictSchema>;
 // (0=Sunday), so the action derives the session's calendar date from its
 // weekday over the whole current week (Sunday-anchored, with a 48h floor for
 // the previous week's tail), never a future day. status null clears.
-export const setWorkoutCheckinSchema = z.object({
-  workout_plan_id: uuid,
-  day_index: z.number().int().min(0).max(6),
-  member_id: memberId,
-  status: z.enum(WORKOUT_CHECKIN_STATUSES).nullable(),
-});
+export const setWorkoutCheckinSchema = z
+  .object({
+    workout_plan_id: uuid,
+    day_index: z.number().int().min(0).max(6),
+    member_id: memberId,
+    status: z.enum(WORKOUT_CHECKIN_STATUSES).nullable(),
+    // 00022 — how the session felt. Only a done session can carry a rating;
+    // any other status write resets it to null (a moved/skipped session's old
+    // rating must not linger and steer next week's program).
+    intensity: z.enum(WORKOUT_INTENSITIES).nullish(),
+  })
+  .refine((v) => v.intensity == null || v.status === "done", {
+    message: "intensity requires status done",
+  });
 export type SetWorkoutCheckinInput = z.infer<typeof setWorkoutCheckinSchema>;
 
 export const closeDayInputSchema = z.object({

@@ -3,6 +3,7 @@ import { OnboardingIncompleteError, MedicalGateError } from "./errors";
 import type { EngagementDigest } from "./engagementDigest";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
+import type { WorkoutFeedbackSummary } from "./workout/feedback";
 
 // Accepts any Supabase client shape — the app's <Database>-typed cookie client
 // or the plain service-role admin client. The engine queries untyped.
@@ -103,6 +104,9 @@ export interface PlanPromptContextMom {
   deep_dive?: DeepDiveFields;
   // Workout opt-in answers (00014). undefined = not opted in / invalid shape.
   workout_profile?: WorkoutProfile;
+  // Recent intensity feedback (workout_checkins.intensity, 00022) — populated
+  // by the background function for workout runs; undefined = no signal.
+  workout_feedback?: WorkoutFeedbackSummary;
 }
 
 export interface PlanPromptContextMember {
@@ -147,6 +151,9 @@ export interface PlanPromptContextMember {
   feeding_mode: string | null;
   // Workout opt-in answers (00014). undefined = not opted in / invalid shape.
   workout_profile?: WorkoutProfile;
+  // Recent intensity feedback (workout_checkins.intensity, 00022) — populated
+  // by the background function for workout runs; undefined = no signal.
+  workout_feedback?: WorkoutFeedbackSummary;
 }
 
 export interface PlanPromptContextFamilyWide {
