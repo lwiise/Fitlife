@@ -10,6 +10,15 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
+import {
+  collapseMealMarks,
+  collapseWorkoutMarks,
+  isISODate,
+  workoutMarkingWindow,
+  type RawSeasonMealRow,
+  type RawSeasonWorkoutRow,
+} from "@/lib/engagement/seasonMath";
+import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
@@ -73,11 +82,14 @@ export default async function PlanPage({
   const [workoutBundle, mealMarks, familyChangeAccess] = await Promise.all([
     // Workout plan (opt-in) + its session marks (the exercise pillar). The
     // toggle renders only when a row exists; the meal view is untouched
-    // otherwise. Untyped cast: workout_checkins (00020) isn't in the generated
-    // Database types until db:types is regenerated; select("*") degrades to []
-    // on a pre-apply prod. Feeds WorkoutViewer's inline session marking (the
-    // «موسم بيتنا» leaderboard now lives on the dashboard and fetches its own
-    // marks via getFamilySeasonProps).
+    // otherwise. Marks are read by USER + the current marking window
+    // (calendar-keyed, same definition as the «موسم بيتنا» board via
+    // workoutMarkingWindow) — NOT by workout_plan_id: a workout re-dispatch
+    // mints a new plan row and a plan-id read rendered every earlier session
+    // mark as unmarked while the board still counted it. collapseWorkoutMarks
+    // dedupes the multi-version fan-in (last write wins). Untyped cast:
+    // workout_checkins (00020) isn't in the generated Database types until
+    // db:types is regenerated; select("*") degrades to [] on a pre-apply prod.
     (async () => {
       const workout = profile ? await getLatestWorkoutPlan(profile.id) : null;
       let workoutCheckins:
@@ -85,34 +97,71 @@ export default async function PlanPage({
         | undefined;
       if (profile && workout?.status === "ready") {
         const supabase = await createClient();
+        const { start, end } = workoutMarkingWindow(riyadhTodayISO());
         const { data } = await (supabase as unknown as SupabaseClient)
           .from("workout_checkins")
           .select("*")
-          .eq("workout_plan_id", workout.id)
-          .limit(400);
-        workoutCheckins = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          .eq("user_id", profile.id)
+          .gte("local_date", start)
+          .lte("local_date", end)
+          .order("created_at", { ascending: true })
+          .limit(800);
+        const raw: RawSeasonWorkoutRow[] = (
+          (data ?? []) as Array<Record<string, unknown>>
+        ).map((r) => ({
+          local_date: (r.local_date ?? null) as string | null,
           day_index: r.day_index as number,
-          member_id: (r.member_id ?? "") as string,
+          member_id: (r.member_id ?? null) as string | null,
           status: r.status as string,
         }));
+        // Within the ≤7-day window each weekday occurs at most once, so
+        // member|day_index stays unique after the member|date collapse.
+        workoutCheckins = collapseWorkoutMarks(raw)
+          .filter((m) => Number.isInteger(m.day_index))
+          .map((m) => ({
+            day_index: m.day_index as number,
+            member_id: m.member_id ?? "",
+            status: m.status,
+          }));
       }
       return { workout, workoutCheckins };
     })(),
     // Inline per-meal tracking marks + per-dish verdicts («كيف كانت؟») for this
     // plan (interactive page only — history/housekeeper views never receive
-    // them). select("*") on purpose: member_id is a 00019 column — naming it
-    // would fail the whole read on a pre-apply prod, while * degrades to rows
-    // without it (house tolerance pattern). Rows are per (day, slot, member) →
-    // 7 days × 4 slots × household. meal_verdicts is a 00017 table; a missing
-    // table degrades to [].
+    // them). CHECK-INS are read by USER + the plan's calendar week
+    // (local_date), matching the «موسم بيتنا» board: a mid-week regenerate
+    // mints a new plan row for the same week, and a plan-id read rendered
+    // every earlier mark as unmarked while the board still counted it.
+    // collapseMealMarks dedupes the multi-version fan-in (last write wins) and
+    // re-derives day_index from local_date. Verdicts/absences stay plan-id
+    // keyed (per-plan opinions / planning facts). select("*") on purpose:
+    // member_id is a 00019 column — naming it would fail the whole read on a
+    // pre-apply prod, while * degrades to rows without it (house tolerance
+    // pattern). meal_verdicts is a 00017 table; a missing table degrades to [].
     (async () => {
       if (!profile || latest?.status !== "ready") return null;
       const supabase = await createClient();
+      // Malformed/absent week anchor (never expected) — degrade to the legacy
+      // plan-id-keyed read rather than an unbounded scan.
+      const anchor = isISODate(latest.plan_data?.week_start_date)
+        ? latest.plan_data!.week_start_date
+        : null;
+      const checkinBase = supabase.from("meal_checkins").select("*");
+      const checkinQuery = (
+        anchor
+          ? checkinBase
+              .eq("user_id", profile.id)
+              .gte("local_date", anchor)
+              .lte("local_date", addDaysISO(anchor, 6))
+          : checkinBase.eq("meal_plan_id", latest.id)
+      )
+        .order("created_at", { ascending: true })
+        .limit(800);
       // meal_absences (00021) is not in the generated types yet — untyped
       // cast, and a pre-apply prod (missing table) degrades to [] so the plan
       // still renders without absence adjustments.
       const [checkinRes, verdictRes, absenceRes] = await Promise.all([
-        supabase.from("meal_checkins").select("*").eq("meal_plan_id", latest.id).limit(400),
+        checkinQuery,
         supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
         (async (): Promise<{ data: unknown[] | null }> => {
           try {
@@ -126,13 +175,23 @@ export default async function PlanPage({
           }
         })(),
       ]);
+      const rawCheckins: RawSeasonMealRow[] = (
+        (checkinRes.data ?? []) as Array<Record<string, unknown>>
+      ).map((r) => ({
+        local_date: (r.local_date ?? null) as string | null,
+        day_index: r.day_index as number,
+        slot: r.slot as string,
+        status: r.status as string,
+        reason: (r.reason ?? null) as string | null,
+        member_id: (r.member_id ?? null) as string | null,
+      }));
       return {
-        checkins: ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-          day_index: r.day_index as number,
-          slot: r.slot as string,
-          status: r.status as string,
-          reason: (r.reason ?? null) as string | null,
-          member_id: (r.member_id ?? null) as string | null,
+        checkins: collapseMealMarks(rawCheckins, anchor ?? undefined).map((c) => ({
+          day_index: c.day_index,
+          slot: c.slot,
+          status: c.status ?? "",
+          reason: c.reason ?? null,
+          member_id: c.member_id ?? null,
         })),
         verdicts: ((verdictRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
           day_index: r.day_index as number,

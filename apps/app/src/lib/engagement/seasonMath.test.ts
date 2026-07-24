@@ -5,6 +5,7 @@ import {
   collapseWorkoutMarks,
   computeSeasonStats,
   dayHasNonSkippedMark,
+  workoutMarkingWindow,
   type RawSeasonMealRow,
   type SeasonMealMark,
   type SeasonMember,
@@ -277,6 +278,72 @@ describe("computeSeasonStats — plan-completion % (owner formula)", () => {
     expect(stats.ranked[0]!.id).toBe("m2");
     expect(stats.ranked.every((m) => m.pct === 0)).toBe(true);
   });
+
+  it("exposes the breakdown counts — meals-only member has no sessions fields", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", day_index: 0 }),
+        mark({ member_id: "mom", day_index: 1 }),
+      ],
+      planned: { mom: { meals: 5 }, m1: { meals: 5 }, m2: { meals: 5 } },
+    });
+    const mom = stats.ranked.find((m) => m.id === "mom")!;
+    expect(mom.mealsMarked).toBe(2);
+    expect(mom.mealsPlanned).toBe(5);
+    expect(mom.sessionsMarked).toBeUndefined();
+    expect(mom.sessionsPlanned).toBeUndefined();
+  });
+
+  it("exposes the breakdown counts — 50/50 member carries both pillars", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: Array.from({ length: 7 }, (_, day) =>
+        mark({ member_id: "mom", day_index: day }),
+      ),
+      workoutCheckins: [
+        workout({ local_date: "2026-07-18" }),
+        workout({ local_date: "2026-07-19" }),
+      ],
+      weekStartDate: WEEK_START,
+      planned: {
+        mom: { meals: 14, sessions: 3 },
+        m1: { meals: 14 },
+        m2: { meals: 14 },
+      },
+    });
+    const mom = stats.ranked.find((m) => m.id === "mom")!;
+    expect(mom.mealsMarked).toBe(7);
+    expect(mom.mealsPlanned).toBe(14);
+    expect(mom.sessionsMarked).toBe(2);
+    expect(mom.sessionsPlanned).toBe(3);
+  });
+});
+
+describe("workoutMarkingWindow", () => {
+  it("spans today back to the week's Sunday mid-week", () => {
+    // 2026-07-22 is a Wednesday (weekday 3 > grace 2).
+    expect(workoutMarkingWindow("2026-07-22")).toEqual({
+      start: "2026-07-19",
+      end: "2026-07-22",
+    });
+  });
+
+  it("keeps the 48h grace floor on a Sunday (previous week's tail)", () => {
+    // 2026-07-19 is a Sunday (weekday 0 → floor 2 days back).
+    expect(workoutMarkingWindow("2026-07-19")).toEqual({
+      start: "2026-07-17",
+      end: "2026-07-19",
+    });
+  });
+
+  it("covers the whole week on a Saturday", () => {
+    // 2026-07-25 is a Saturday (weekday 6).
+    expect(workoutMarkingWindow("2026-07-25")).toEqual({
+      start: "2026-07-19",
+      end: "2026-07-25",
+    });
+  });
 });
 
 describe("computeSeasonStats — workouts", () => {
@@ -472,6 +539,29 @@ describe("collapseMealMarks — calendar fan-in across plan re-mints", () => {
       WEEK_START,
     );
     expect(collapsed).toHaveLength(2);
+  });
+
+  it("carries reason through (the /plan surface displays it)", () => {
+    const collapsed = collapseMealMarks(
+      [rawRow({ status: "skipped", reason: "guests" })],
+      WEEK_START,
+    );
+    expect(collapsed[0]!.reason).toBe("guests");
+    const noReason = collapseMealMarks([rawRow()], WEEK_START);
+    expect(noReason[0]!.reason).toBeNull();
+  });
+
+  it("last write wins for reason too — a correction replaces the old reason", () => {
+    const collapsed = collapseMealMarks(
+      [
+        rawRow({ status: "cooked", reason: null }),
+        rawRow({ status: "skipped", reason: "travel" }),
+      ],
+      WEEK_START,
+    );
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0]!.status).toBe("skipped");
+    expect(collapsed[0]!.reason).toBe("travel");
   });
 
   it("end-to-end: marks survive a same-week plan re-mint", () => {

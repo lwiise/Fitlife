@@ -17,6 +17,8 @@ import {
   collapseMealMarks,
   collapseWorkoutMarks,
   dayHasNonSkippedMark,
+  isISODate,
+  workoutMarkingWindow,
   type PlannedTotals,
   type RawSeasonMealRow,
   type RawSeasonWorkoutRow,
@@ -87,20 +89,6 @@ function riyadhTodayISO(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(
     new Date(),
   );
-}
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-// The floor of the workout marking window, mirrored from actions.ts GRACE_DAYS:
-// setWorkoutCheckin can stamp a session's local_date back to
-// today - max(todayWeekday, GRACE_DAYS), so the board's workout window must
-// span exactly that to count every mark the UI can produce.
-const WORKOUT_GRACE_DAYS = 2;
-
-/** Weekday (0=Sunday, matches setWorkoutCheckin's derivation) of a Riyadh-local
- * YYYY-MM-DD date. */
-function weekdayOfISO(dateISO: string): number {
-  return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
 }
 
 // undefined_table (Postgres) / schema-cache miss (PostgREST) — the shape a
@@ -201,20 +189,14 @@ export async function getFamilySeasonProps(
   // The MEAL week anchors meal day_index and the strip labels.
   const weekStartDate = latestPlan.plan_data.week_start_date;
 
-  // Workout marks are scoped to the CURRENT (Sunday-anchored) week the marking
-  // UI writes into — exactly the span setWorkoutCheckin can stamp: today back to
-  // today - max(todayWeekday, GRACE_DAYS). This is DELIBERATELY decoupled from
-  // the meal plan's week_start_date, which is anchored to the meal generation
-  // day (an arbitrary weekday) and may even be a stale prior week — scoping
-  // workouts by it silently dropped legitimate current-week sessions (they still
-  // showed on /plan, but never reached this board). A current-week bound still
-  // keeps the "stale prior week can't buy rank" guarantee.
-  const workoutTodayISO = riyadhTodayISO();
-  const workoutWeekStart = addDaysISO(
-    workoutTodayISO,
-    -Math.max(weekdayOfISO(workoutTodayISO), WORKOUT_GRACE_DAYS),
+  // Workout marks are scoped to the CURRENT (Sunday-anchored) marking window —
+  // DELIBERATELY decoupled from the meal plan's week_start_date (an arbitrary
+  // generation-day anchor that may even be a stale prior week). The ONE shared
+  // definition lives in seasonMath.workoutMarkingWindow and is used by both
+  // this board and the /plan viewer read, so the surfaces always agree.
+  const { start: workoutWeekStart, end: workoutWeekEnd } = workoutMarkingWindow(
+    riyadhTodayISO(),
   );
-  const workoutWeekEnd = workoutTodayISO;
 
   // All three reads are independent — one parallel batch. Reads are keyed by
   // USER + CALENDAR WINDOW (local_date), not plan id: a mid-week regenerate /
@@ -227,7 +209,7 @@ export async function getFamilySeasonProps(
   // select("*") + untyped cast: house tolerance pattern (pre-migration prod
   // degrades instead of failing). Ordered oldest-first so the limit truncates
   // deterministically; 800 covers several plan versions' rows.
-  const mealWeekValid = ISO_DATE_RE.test(weekStartDate);
+  const mealWeekValid = isISODate(weekStartDate);
   const mealQuery = () => {
     const base = supabase.from("meal_checkins").select("*");
     // Malformed week anchor (never expected) — degrade to the legacy
