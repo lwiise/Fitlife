@@ -62,12 +62,16 @@ export function PlanCTA({
 
   if (state === "generating") {
     return (
-      <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
+      <div
+        role="status"
+        aria-live="polite"
+        className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center"
+      >
         <Loader2
           className="size-6 mx-auto animate-spin motion-reduce:animate-none text-brand-purple-900"
           aria-hidden="true"
         />
-        <p className="font-bold text-brand-ink text-lg mt-3">خطتك تتجهز الآن…</p>
+        <h2 className="font-bold text-brand-ink text-lg mt-3">خطتك تتجهز الآن…</h2>
         <p className="mt-1 text-brand-ink-muted text-sm">خلال دقيقة تقريباً</p>
         <Link
           href="/plan"
@@ -83,12 +87,12 @@ export function PlanCTA({
   if (state === "failed") {
     return (
       <div className="bg-white rounded-2xl border border-red-200 p-6 text-center">
-        <p className="font-bold text-brand-ink text-lg">ما قدرنا ننشئ خطتك</p>
+        <h2 className="font-bold text-brand-ink text-lg">ما قدرنا ننشئ خطتك</h2>
         <div className="mt-4 flex flex-col items-center gap-3">
           <EmptyPlanCTA isOnboarded={isOnboarded} variant="failed" ownerSex={ownerSex} />
           <Link
             href="/settings"
-            className="text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors"
+            className="inline-flex items-center justify-center min-h-11 px-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors"
           >
             {g("تواصلي معنا", "تواصل معنا")}
           </Link>
@@ -100,7 +104,7 @@ export function PlanCTA({
   // none — onboarded but no plan yet
   return (
     <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
-      <p className="font-bold text-brand-ink text-lg">ما عندك خطة بعد</p>
+      <h2 className="font-bold text-brand-ink text-lg">ما عندك خطة بعد</h2>
       <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
         {g(
           "أنشئي خطتك الأولى لعرض وجبات الأسبوع",

@@ -309,9 +309,11 @@ export default async function DashboardPage() {
           </div>
           {onboardingDone && (
             <div className="flex flex-wrap gap-2">
+              {/* Outline like its sibling — the PlanCTA band below is the page's
+                  single filled-purple action (one dark anchor above the fold). */}
               <Link
                 href="/chat"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
               >
                 <Sparkles className="size-4" aria-hidden="true" />
                 {g("اسألي المستشارة", "اسأل المستشارة")}
