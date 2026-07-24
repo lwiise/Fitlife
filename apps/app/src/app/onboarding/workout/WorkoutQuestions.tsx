@@ -31,10 +31,14 @@ const EXCLUDED_REASON: Record<WorkoutIneligibleReason, string> = {
     "خطة التمارين مخصّصة لأفراد الأسرة، والعاملة المنزلية تكفيها خطة الوجبات بلغتها الخاصة",
 };
 
+// Location is a binary home XOR gym choice: pick المنزل and the whole plan is
+// home-only; pick النادي and it's gym-only. The combined "both" pathway (a gym
+// plan with a per-exercise home substitution + the viewer's home/gym toggle) is
+// intentionally NOT offered in the standard flow — it stays supported in the
+// schema, prompt, and viewer as an exception to enable only on explicit request.
 const LOCATIONS = [
   { value: "home", label: "المنزل" },
   { value: "gym", label: "النادي" },
-  { value: "both", label: "كلاهما" },
 ] as const;
 const EQUIPMENT = [
   { value: "none", label: "بدون أدوات" },
@@ -483,7 +487,7 @@ export function WorkoutQuestions({
               {stepDef.key === "place" && (
                 <>
                   <Field label="أين ستكون التمارين؟">
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {LOCATIONS.map((o) => (
                         <OptionButton
                           key={o.value}
