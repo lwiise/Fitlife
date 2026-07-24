@@ -37,7 +37,10 @@ import { WorkoutViewer } from "./WorkoutViewer";
 import { WorkoutGeneratingState } from "./WorkoutGeneratingState";
 import { RetryWorkoutButton } from "./RetryWorkoutButton";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
-import { isWorkoutEligibleMember } from "@/lib/plans/workoutEligibility";
+import {
+  isWorkoutEligibleMember,
+  isWorkoutEligibleMom,
+} from "@/lib/plans/workoutEligibility";
 import Link from "next/link";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
@@ -285,6 +288,29 @@ export default async function PlanPage({
     ? "/onboarding/workout"
     : "/family";
 
+  // The Exercise view mirrors the meal view's member tabs (owner directive
+  // 07/2026): the SAME people/order appear, so switching to Exercise keeps the
+  // exact tab row. A member with a program shows it; one without shows an
+  // add-plan CTA (eligible adults) or an adults-only note (children). Built from
+  // the meal plan's members (so the tab set/order matches the meal view) with
+  // live names overlaid; eligibility (the adults-only workout rule) is resolved
+  // here from birth_year, which the frozen plan snapshot doesn't carry.
+  const workoutEligibleById = new Map<string, boolean>();
+  if (profile)
+    workoutEligibleById.set(
+      "mom",
+      isWorkoutEligibleMom({ birth_year: profile.birth_year }),
+    );
+  for (const m of familyMembers)
+    workoutEligibleById.set(m.id, isWorkoutEligibleMember(m));
+  const workoutRoster = latest?.plan_data
+    ? applyMemberDisplayNames(latest.plan_data, nameRoster).members.map((m) => ({
+        member_id: m.member_id,
+        member_name_ar: m.member_name_ar,
+        eligible: workoutEligibleById.get(m.member_id) ?? m.is_child !== true,
+      }))
+    : undefined;
+
   // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
   const housekeeperLocale =
@@ -482,6 +508,7 @@ export default async function PlanPage({
                 ownerSex={profile?.sex}
                 planTypeToggle={planTypeToggle}
                 journeyMembers={journeyMembers}
+                roster={workoutRoster}
                 addTraineeHref={addTraineeHref}
               />
             )}
