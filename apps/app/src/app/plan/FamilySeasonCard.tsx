@@ -520,6 +520,33 @@ export function FamilySeasonCard({
               </span>
             </span>
           );
+          // «وجبات ٣/٢١ · تمارين ١/٦» — the % explained in its own numbers.
+          // LTR-isolated tabular fractions (like pctText) so bidi never flips
+          // marked/planned. Suppressed when the member has nothing planned.
+          const showBreakdown =
+            m.mealsPlanned > 0 || m.sessionsPlanned !== undefined;
+          const breakdown = (colorCls: string) =>
+            showBreakdown ? (
+              <p className={`mt-0.5 text-[11px] leading-relaxed ${colorCls}`}>
+                {m.mealsPlanned > 0 && (
+                  <>
+                    وجبات{" "}
+                    <span dir="ltr" className="tabular-nums">
+                      {ar(m.mealsMarked)}/{ar(m.mealsPlanned)}
+                    </span>
+                  </>
+                )}
+                {m.sessionsPlanned !== undefined && (
+                  <>
+                    {m.mealsPlanned > 0 && " · "}
+                    تمارين{" "}
+                    <span dir="ltr" className="tabular-nums">
+                      {ar(m.sessionsMarked ?? 0)}/{ar(m.sessionsPlanned)}
+                    </span>
+                  </>
+                )}
+              </p>
+            ) : null;
           if (isWinner) {
             return (
               <li key={m.id}>
@@ -538,6 +565,7 @@ export function FamilySeasonCard({
                       <Crown className="size-3" aria-hidden="true" />
                       فائز هذا الأسبوع
                     </span>
+                    {breakdown("font-bold text-[#6B4E06]")}
                   </div>
                   <div className="relative shrink-0 size-16 sm:size-[76px]">
                     <Ring frac={m.pct} color="#7A5200" track="rgba(107,78,6,0.22)" sw={7} r={30} />
@@ -577,6 +605,7 @@ export function FamilySeasonCard({
                   <p className="text-[11.5px] text-brand-lavender mt-0.5">
                     {m.score > 0 ? genderPick(m.sex)("حاضرة", "حاضر") : "بانتظار البداية"}
                   </p>
+                  {breakdown("text-brand-lavender/80")}
                 </div>
                 <div className="relative shrink-0 size-16 sm:size-[76px]">
                   <Ring frac={m.pct} color="var(--color-brand-lavender)" track="rgba(255,255,255,0.22)" sw={7} r={30} />
