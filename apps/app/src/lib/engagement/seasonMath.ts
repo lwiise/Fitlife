@@ -37,6 +37,9 @@ export interface SeasonMealMark {
   slot: string;
   status?: string;
   member_id?: string | null;
+  /** Why a meal was swapped/skipped — carried for the /plan surface (MealCard
+   * shows it); the board ignores it. */
+  reason?: string | null;
 }
 
 export interface SeasonWorkoutMark {
@@ -56,6 +59,7 @@ export interface RawSeasonMealRow {
   slot: string;
   status: string;
   member_id: string | null;
+  reason?: string | null;
 }
 
 /** A raw workout_checkins row from the calendar-keyed read. */
@@ -82,6 +86,13 @@ export interface RankedMember extends SeasonMember {
   pct: number;
   /** Position in the ROSTER (not the ranking) — stable avatar colour. */
   rosterIndex: number;
+  /** Raw counts behind the % (pct caps; these don't) — the card renders them
+   * as «وجبات م/M · تمارين س/S» so every % explains itself. sessions* present
+   * iff the member has the workout pillar (planned[id].sessions !== undefined). */
+  mealsMarked: number;
+  mealsPlanned: number;
+  sessionsMarked?: number;
+  sessionsPlanned?: number;
 }
 
 export interface SeasonDayCell {
@@ -114,6 +125,43 @@ export interface SeasonStats {
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True for a plain YYYY-MM-DD calendar date — the shared anchor guard. */
+export function isISODate(v: string | null | undefined): v is string {
+  return typeof v === "string" && ISO_DATE_RE.test(v);
+}
+
+/** The floor of the workout marking window, mirrored from actions.ts
+ * GRACE_DAYS: setWorkoutCheckin can stamp a session's local_date back to
+ * today - max(todayWeekday, GRACE_DAYS). */
+export const WORKOUT_GRACE_DAYS = 2;
+
+/** Weekday (0=Sunday, matches setWorkoutCheckin's derivation) of a
+ * Riyadh-local YYYY-MM-DD date. */
+function weekdayOfISO(dateISO: string): number {
+  return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
+}
+
+/**
+ * The current Sunday-anchored workout marking window (inclusive) — exactly the
+ * span setWorkoutCheckin can stamp: today back to
+ * today - max(todayWeekday, GRACE_DAYS). Pure — callers pass riyadhTodayISO().
+ * The ONE definition shared by the board (seasonProps) and the /plan viewer
+ * read (plan/page.tsx), so the two surfaces can never disagree on which
+ * workout marks exist.
+ */
+export function workoutMarkingWindow(todayISO: string): {
+  start: string;
+  end: string;
+} {
+  return {
+    start: addDaysISO(
+      todayISO,
+      -Math.max(weekdayOfISO(todayISO), WORKOUT_GRACE_DAYS),
+    ),
+    end: todayISO,
+  };
+}
 
 /** Whole days from `startISO` to `dateISO` (both YYYY-MM-DD; UTC math — the
  * dates are Riyadh-local calendar days, no DST). */
@@ -158,6 +206,7 @@ export function collapseMealMarks(
       slot: r.slot,
       status: r.status,
       member_id: r.member_id,
+      reason: r.reason ?? null,
     });
   }
   return [...latest.values()];
@@ -335,13 +384,13 @@ export function computeSeasonStats(input: {
     const p = planned[m.id];
     const M = Math.max(0, Math.floor(p?.meals ?? 0));
     const hasWorkoutPillar = p?.sessions !== undefined;
+    const S = hasWorkoutPillar ? Math.max(0, Math.floor(p.sessions ?? 0)) : undefined;
     let n: number;
     let d: number;
-    if (!hasWorkoutPillar) {
+    if (S === undefined) {
       n = M > 0 ? Math.min(mealsMarked, M) : 0;
       d = M > 0 ? M : 1;
     } else {
-      const S = Math.max(0, Math.floor(p.sessions ?? 0));
       const mealD = M > 0 ? M : 1;
       const sessD = S > 0 ? S : 1;
       const mealN = M > 0 ? Math.min(mealsMarked, M) : 0;
@@ -354,6 +403,9 @@ export function computeSeasonStats(input: {
       rosterIndex,
       score: mealsMarked + sessionsMarked,
       pct: n / d,
+      mealsMarked,
+      mealsPlanned: M,
+      ...(S !== undefined ? { sessionsMarked, sessionsPlanned: S } : {}),
       n,
       d,
     };
