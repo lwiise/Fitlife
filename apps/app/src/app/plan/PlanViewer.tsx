@@ -733,34 +733,40 @@ export function PlanViewer({
     );
   }
 
+  // The private «الوزن والمتابعة» journey link for the ACTIVE member (eligible
+  // members, interactive Arabic view only). Owner directive 07/2026: for a
+  // family it now sits at the END of the member-tab row (the slot «إضافة فرد»
+  // used to hold), freeing the top strip; a solo plan (no tab row) keeps it up
+  // top inline with the plan-type toggle.
+  const journeyEntry =
+    journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
+  const showJourney = !!journeyEntry && !readOnly && !translated;
+  const journeyLink =
+    showJourney && journeyEntry ? (
+      <Link
+        href={
+          journeyEntry.id === "mom"
+            ? "/journey"
+            : `/journey?member=${journeyEntry.id}`
+        }
+        className="inline-flex items-center flex-shrink-0 min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      >
+        الوزن والمتابعة
+      </Link>
+    ) : null;
+
   return (
     <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
-      {/* Plan-type toggle (meals/workout) + the private «الوزن والمتابعة»
-          journey link, sharing one row. The journey entry is member-aware —
-          it follows the active tab and only shows for eligible adults. */}
-      {(() => {
-        const journeyEntry =
-          journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
-        const showJourney = !!journeyEntry && !readOnly && !translated;
-        if (!planTypeToggle && !showJourney) return null;
-        return (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            {planTypeToggle ?? <span />}
-            {showJourney && journeyEntry && (
-              <Link
-                href={
-                  journeyEntry.id === "mom"
-                    ? "/journey"
-                    : `/journey?member=${journeyEntry.id}`
-                }
-                className="inline-flex items-center min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                الوزن والمتابعة
-              </Link>
-            )}
-          </div>
-        );
-      })()}
+      {/* Plan-type toggle (meals/workout). For a solo plan the «الوزن والمتابعة»
+          journey link shares this row (there is no member-tab row to host it);
+          for a family it moves down beside the tabs, collapsing this strip to
+          just the toggle. */}
+      {(planTypeToggle || (isSolo && journeyLink)) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {planTypeToggle ?? <span />}
+          {isSolo && journeyLink}
+        </div>
+      )}
 
       {/* Top strip: week range + actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -835,10 +841,13 @@ export function PlanViewer({
         <SaraChangesCard changes={plan.week_changes} />
       )}
 
-      {/* Member tabs (hidden for a solo plan) */}
+      {/* Member tabs (hidden for a solo plan). «إضافة فرد» now sits right after
+          the last tab; «الوزن والمتابعة» takes the trailing (end) slot the add
+          button used to occupy (owner directive 07/2026). */}
       {!isSolo && (
       <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto">
         <div className="flex items-center justify-between gap-2 min-w-max">
+        <div className="flex items-center gap-1">
         <div className="flex gap-1">
           {plan.members.map((m) => {
             const isActive = m.member_id === activeMemberId;
@@ -893,6 +902,8 @@ export function PlanViewer({
             إضافة فرد
           </Link>
         )}
+        </div>
+        {journeyLink}
         </div>
       </div>
       )}

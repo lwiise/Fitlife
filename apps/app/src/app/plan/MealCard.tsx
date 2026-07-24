@@ -83,8 +83,10 @@ const CHECKIN_HEADER_LABEL: Record<MealCheckinState["status"], string> = {
 
 // «كيف كانت؟» — the dish verdict, offered once a dish was actually cooked.
 // Feeds golden dishes (loved) and vetoes (not_again) in the weekly digest.
-// Selected state mirrors the status row's deep-purple fill (owner directive
-// 07/2026) so a tap reads the same in both rows; nothing here reads as shame.
+// Selected state uses the lavender fill (owner directive 07/2026) so the
+// follow-up row under the status chips reads the same whether it's this
+// verdict row or the swap-reason row (both light purple); the deep-purple
+// fill stays reserved for the status row. Nothing here reads as shame.
 const VERDICT_CHIPS: { value: Verdict; label: string }[] = [
   { value: "loved", label: "نحبّها" },
   { value: "fine", label: "عادية" },
@@ -585,7 +587,7 @@ export function MealCard({
                             aria-pressed={verdict === v.value}
                             className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                               verdict === v.value
-                                ? "bg-brand-purple-900 text-white"
+                                ? "bg-brand-lavender text-brand-purple-900"
                                 : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
                             }`}
                           >
