@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, TrendingUp } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
@@ -735,8 +735,9 @@ export function PlanViewer({
             ? "/journey"
             : `/journey?member=${journeyEntry.id}`
         }
-        className="inline-flex items-center flex-shrink-0 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+        className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
       >
+        <TrendingUp className="size-4" aria-hidden="true" />
         الوزن والمتابعة
       </Link>
     ) : null;
@@ -752,24 +753,32 @@ export function PlanViewer({
         </div>
       )}
 
-      {/* Top strip: week range on the start side; the action cluster on the end
-          side, led by the meals/exercise toggle — it is the FIRST item, so in
-          RTL it sits to the RIGHT of the action buttons (owner directive). The
-          workout viewer renders the same strip with the toggle in the same
-          leading slot. Every control in this row is 44px tall. */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* Top strip: the week range is the section's MASTHEAD — a purple
+          headline with a short yellow rule, so the actual context leads the
+          page instead of being its smallest text. The action cluster sits on
+          the end side, led by the meals/exercise toggle — it is the FIRST
+          item, so in RTL it sits to the RIGHT of the action buttons (owner
+          directive). The workout viewer renders the same strip with the
+          toggle in the same leading slot. Every control in this row is 44px
+          tall; only the primary CTA carries a fill — the rest are quiet
+          ghosts. */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-          <p className="font-bold text-brand-ink text-base tabular-nums">
+          <p className="font-black text-brand-purple-900 text-[28px] leading-tight tabular-nums">
             {formatWeekRange(plan.week_start_date, locale)}
           </p>
+          <div
+            className="w-14 h-[3px] rounded-full bg-brand-yellow mt-1.5"
+            aria-hidden="true"
+          />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {planTypeToggle}
           {!readOnly && isSolo && (
             <Link
               href="/family"
-              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
               <UserPlus className="size-4" aria-hidden="true" />
               إضافة فرد
@@ -778,7 +787,7 @@ export function PlanViewer({
           {!readOnly && (
             <Link
               href="/plan/history"
-              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
               <History className="size-4" aria-hidden="true" />
               الخطط السابقة
@@ -787,7 +796,7 @@ export function PlanViewer({
           {!readOnly && !translated && showWorkoutOptIn && (
             <Link
               href="/onboarding/workout"
-              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
               <Dumbbell className="size-4" aria-hidden="true" />
               {genderPick(ownerSex)("أضيفي خطة التمارين", "أضِف خطة التمارين")}
@@ -796,7 +805,7 @@ export function PlanViewer({
           {!readOnly && housekeeperLocale && (
             <Link
               href="/plan/housekeeper"
-              className="inline-flex items-center gap-1.5 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
               <ChefHat className="size-4" aria-hidden="true" />
               وصفات الخدامة
@@ -848,16 +857,26 @@ export function PlanViewer({
                 type="button"
                 onClick={() => setActiveMemberId(m.member_id)}
                 aria-pressed={isActive}
-                className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                className={`relative px-3.5 py-3 text-[15px] font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
                   isActive
                     ? "text-brand-purple-900"
                     : "text-brand-ink-muted hover:text-brand-ink"
                 }`}
               >
                 {isMom && !translated && (
-                  <span className="text-brand-pink me-1">
-                    {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                  </span>
+                  <>
+                    {/* Pink DOT marker + the word in the tab's own color —
+                        pink text at small sizes is off-brand (headings 24px+
+                        only), but the «أنتِ» address itself must stay visible
+                        text, never color alone. */}
+                    <span
+                      className="inline-block size-[7px] rounded-full bg-brand-pink me-1.5 align-middle"
+                      aria-hidden="true"
+                    />
+                    <span className="me-1">
+                      {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                    </span>
+                  </>
                 )}
                 {memberLabel(m)}
                 {translated && transStatus === "translating" && (
@@ -875,7 +894,7 @@ export function PlanViewer({
                 {isActive && (
                   <motion.span
                     layoutId="member-tab-underline"
-                    className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
+                    className="absolute inset-x-2 -bottom-px h-[3px] rounded-t-full bg-brand-purple-900"
                   />
                 )}
               </button>
@@ -885,10 +904,11 @@ export function PlanViewer({
         {!readOnly && (
           <Link
             href="/family"
-            className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            aria-label="إضافة فرد"
+            title="إضافة فرد"
+            className="inline-flex items-center justify-center flex-shrink-0 size-11 rounded-full border-[1.5px] border-dashed border-brand-purple-900/40 text-brand-purple-900 hover:bg-brand-lavender/30 transition-colors ms-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
           >
             <UserPlus className="size-4" aria-hidden="true" />
-            إضافة فرد
           </Link>
         )}
         </div>

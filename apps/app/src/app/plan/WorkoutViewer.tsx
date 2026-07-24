@@ -429,8 +429,9 @@ export function WorkoutViewer({
           ? "/journey"
           : `/journey?member=${journeyEntry.id}`
       }
-      className="inline-flex items-center flex-shrink-0 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
     >
+      <TrendingUp className="size-4" aria-hidden="true" />
       الوزن والمتابعة
     </Link>
   ) : null;
@@ -452,12 +453,16 @@ export function WorkoutViewer({
           justify-end keeps it there on mobile too, where the stacked strip
           makes the cluster full-width (a no-op at sm+, where the parent's
           justify-between already pins the content-width cluster to the end). */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="text-brand-ink-muted text-xs">الأسبوع</p>
-          <p className="font-bold text-brand-ink text-base tabular-nums">
+          <p className="font-black text-brand-purple-900 text-[28px] leading-tight tabular-nums">
             {formatWeekRange(plan.week_start_date)}
           </p>
+          <div
+            className="w-14 h-[3px] rounded-full bg-brand-yellow mt-1.5"
+            aria-hidden="true"
+          />
         </div>
         <div className="flex items-center justify-end gap-2 flex-wrap">
           {planTypeToggle}
@@ -483,22 +488,30 @@ export function WorkoutViewer({
                       type="button"
                       onClick={() => setActiveMemberId(m.member_id)}
                       aria-pressed={isActive}
-                      className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                      className={`relative px-3.5 py-3 text-[15px] font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
                         isActive
                           ? "text-brand-purple-900"
                           : "text-brand-ink-muted hover:text-brand-ink"
                       }`}
                     >
                       {m.member_id === "mom" && (
-                        <span className="text-brand-pink me-1">
-                          {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                        </span>
+                        <>
+                          {/* Pink DOT + word in the tab's own color — same
+                              treatment as the meal viewer's tabs. */}
+                          <span
+                            className="inline-block size-[7px] rounded-full bg-brand-pink me-1.5 align-middle"
+                            aria-hidden="true"
+                          />
+                          <span className="me-1">
+                            {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                          </span>
+                        </>
                       )}
                       {m.member_name_ar}
                       {isActive && (
                         <motion.span
                           layoutId="workout-member-tab-underline"
-                          className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
+                          className="absolute inset-x-2 -bottom-px h-[3px] rounded-t-full bg-brand-purple-900"
                         />
                       )}
                     </button>
@@ -507,10 +520,11 @@ export function WorkoutViewer({
               </div>
               <Link
                 href={addMemberHref}
-                className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+                aria-label="إضافة فرد"
+                title="إضافة فرد"
+                className="inline-flex items-center justify-center flex-shrink-0 size-11 rounded-full border-[1.5px] border-dashed border-brand-purple-900/40 text-brand-purple-900 hover:bg-brand-lavender/30 transition-colors ms-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
               >
                 <UserPlus className="size-4" aria-hidden="true" />
-                إضافة فرد
               </Link>
             </div>
             {journeyLink}

@@ -366,11 +366,13 @@ export default async function PlanPage({
 
   const planTypeToggle =
     workout != null ? (
-      // Height is tuned to land on exactly 44px so the toggle matches every
-      // other pill in the plan's action row (they are all min-h-11 = 44px):
-      // 36px segments (min-h-9) + 3px padding × 2 + 1px border × 2 = 44px.
+      // Segmented view switch on a lavender track — the active segment is a
+      // white inset thumb (brand purple text), so the near-black fill no longer
+      // competes with the primary CTA for attention. Each Link spans the FULL
+      // 44px track height (min-h-11) for the tap target; the inner span is the
+      // 36px visual thumb, vertically centered → the 4px inset look.
       <div
-        className="inline-flex rounded-full border border-brand-ink/10 bg-white p-[3px]"
+        className="inline-flex rounded-full bg-brand-lavender/30 px-[3px]"
         role="tablist"
         aria-label="نوع الخطة"
       >
@@ -378,25 +380,33 @@ export default async function PlanPage({
           href="/plan"
           role="tab"
           aria-selected={!workoutView}
-          className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-            !workoutView
-              ? "bg-brand-ink text-white"
-              : "text-brand-ink-muted hover:text-brand-ink"
-          }`}
+          className="min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
         >
-          الوجبات
+          <span
+            className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
+              !workoutView
+                ? "bg-white text-brand-purple-900 shadow-sm"
+                : "text-brand-ink-muted hover:text-brand-ink"
+            }`}
+          >
+            الوجبات
+          </span>
         </Link>
         <Link
           href="/plan?view=workout"
           role="tab"
           aria-selected={workoutView}
-          className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
-            workoutView
-              ? "bg-brand-ink text-white"
-              : "text-brand-ink-muted hover:text-brand-ink"
-          }`}
+          className="min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
         >
-          التمارين
+          <span
+            className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
+              workoutView
+                ? "bg-white text-brand-purple-900 shadow-sm"
+                : "text-brand-ink-muted hover:text-brand-ink"
+            }`}
+          >
+            التمارين
+          </span>
         </Link>
       </div>
     ) : null;

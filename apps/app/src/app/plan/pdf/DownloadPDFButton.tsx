@@ -66,7 +66,7 @@ export function DownloadPDFButton({
       type="button"
       onClick={handleDownload}
       disabled={loading}
-      className="inline-flex items-center justify-center gap-2 bg-white border border-brand-ink/10 hover:bg-brand-surface disabled:opacity-60 disabled:cursor-not-allowed text-brand-ink font-bold text-sm px-5 py-2.5 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      className="inline-flex items-center justify-center gap-2 text-brand-purple-900 hover:bg-brand-lavender/30 disabled:opacity-60 disabled:cursor-not-allowed font-bold text-sm px-3.5 py-2.5 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
     >
       {loading ? (
         <Loader2
