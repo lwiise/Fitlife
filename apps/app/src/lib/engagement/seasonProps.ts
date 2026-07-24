@@ -13,7 +13,14 @@ import {
   isWeighInEligibleMom,
 } from "./eligibility";
 import { hasReachedWeightGoal } from "./goalMilestone";
-import { dayHasNonSkippedMark } from "./seasonMath";
+import {
+  collapseMealMarks,
+  collapseWorkoutMarks,
+  dayHasNonSkippedMark,
+  type PlannedTotals,
+  type RawSeasonMealRow,
+  type RawSeasonWorkoutRow,
+} from "./seasonMath";
 import { genderPick } from "@/lib/copy/gender";
 
 type Profile = NonNullable<Awaited<ReturnType<typeof getCurrentUserProfile>>>;
@@ -24,32 +31,28 @@ type WorkoutPlan = Awaited<ReturnType<typeof getLatestWorkoutPlan>>;
 /** Everything the «موسم بيتنا» leaderboard (`FamilySeasonCard`) needs. */
 export interface FamilySeasonProps {
   members: Array<{ id: string; name: string; sex?: string | null }>;
+  /** Calendar-collapsed meal marks (one row per date+slot+member, day_index
+   * re-derived from local_date — survives same-week plan re-mints). */
   checkins: Array<{
     day_index: number;
     slot: string;
-    status: string;
+    status?: string;
     member_id?: string | null;
-  }>;
-  verdicts: Array<{
-    day_index: number;
-    slot: string;
-    member_id?: string | null;
-    verdict: string;
   }>;
   workoutCheckins: Array<{
-    day_index: number;
-    member_id: string;
+    day_index?: number;
+    member_id?: string | null;
     status: string;
     /** Server-stamped session date — scopes the weekday-anchored mark to the
-     * meal plan's week (the leaderboard drops rows without it). */
-    local_date: string | null;
+     * current marking week (the leaderboard drops rows without it). */
+    local_date?: string | null;
   }>;
   goalReached: Array<{ id: string; name: string }>;
-  /** Per-member weekly denominators: the member's planned meals this week +
-   * their planned workout sessions ("if any" — 0 workout share without a ready
-   * workout plan). The leaderboard % measures completion of the member's OWN
-   * plan (owner directive 07/2026). */
-  targets: Record<string, number>;
+  /** Per-member weekly plan totals — the % denominators (owner directive: the
+   * % measures completion of the member's OWN plan; 50/50 meals/exercise when
+   * the member has a workout plan, meals-only otherwise). `sessions` present
+   * ONLY when the member is in the ready workout plan. */
+  planned: Record<string, PlannedTotals>;
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
    * Sunday-anchored week the workout UI writes into. Scopes workout marks on the
@@ -85,6 +88,8 @@ function riyadhTodayISO(): string {
     new Date(),
   );
 }
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // The floor of the workout marking window, mirrored from actions.ts GRACE_DAYS:
 // setWorkoutCheckin can stamp a session's local_date back to
@@ -127,9 +132,11 @@ function reportSeasonReadError(
 /**
  * Assemble the «موسم بيتنا» leaderboard props for a household with a ready plan:
  * the whole-household roster (mom + adults + CHILDREN, never the housekeeper —
- * owner directive), this week's meal check-ins/verdicts + workout marks, and the
- * adults-only goal-milestone celebrations. Returns null when there is no board
- * to show (no ready plan, or a solo household with fewer than two members).
+ * owner directive), this week's meal check-ins + workout marks (calendar-keyed
+ * so they survive plan re-mints; verdicts don't score — owner formula), the
+ * per-member plan totals, and the adults-only goal-milestone celebrations.
+ * Returns null when there is no board to show (no ready plan, or a solo
+ * household with fewer than two members).
  *
  * This mirrors the fetch that used to live inline in /plan/page.tsx; the season
  * now surfaces on the dashboard, so the logic lives here to be shared/testable.
@@ -161,18 +168,17 @@ export async function getFamilySeasonProps(
   // A solo household never sees a family board.
   if (members.length < 2) return null;
 
-  // Per-member weekly denominator for the leaderboard % — the member's OWN
-  // planned total this week: their meals in the plan + their workout sessions
-  // when a workout plan is ready ("if any"). Acts (marks + verdicts + workout
-  // marks) are measured against THIS, not a flat target (owner directive
-  // 07/2026); seasonMath falls back to WEEKLY_TARGET on a missing/zero entry.
+  // Per-member weekly plan totals — the % denominators (owner directive: the %
+  // measures completion of the member's OWN plan). Meals from the meal plan;
+  // the `sessions` key exists ONLY when the member is in the ready workout plan
+  // — its presence is what switches that member to the 50/50 formula.
   const plannedMealsById = new Map(
     latestPlan.plan_data.members.map((pm) => [
       pm.member_id,
       pm.days.reduce((n, d) => n + d.meals.length, 0),
     ]),
   );
-  const plannedSessionsById = new Map(
+  const plannedSessionsById = new Map<string, number>(
     workoutPlan?.status === "ready" && workoutPlan.plan_data
       ? workoutPlan.plan_data.members.map((wm) => [
           wm.member_id,
@@ -180,10 +186,14 @@ export async function getFamilySeasonProps(
         ])
       : [],
   );
-  const targets: Record<string, number> = {};
+  const planned: Record<string, PlannedTotals> = {};
   for (const m of members) {
-    targets[m.id] =
-      (plannedMealsById.get(m.id) ?? 0) + (plannedSessionsById.get(m.id) ?? 0);
+    planned[m.id] = {
+      meals: plannedMealsById.get(m.id) ?? 0,
+      ...(plannedSessionsById.has(m.id)
+        ? { sessions: plannedSessionsById.get(m.id) }
+        : {}),
+    };
   }
 
   const supabase = await createClient();
@@ -206,39 +216,46 @@ export async function getFamilySeasonProps(
   );
   const workoutWeekEnd = workoutTodayISO;
 
-  // All four reads are independent — one parallel batch, not three stages.
-  // Meal check-ins + verdicts: select("*") on purpose — member_id is a 00019
-  // column; naming it would fail the whole read on a pre-apply prod, while *
-  // degrades to rows without it (house tolerance pattern). workout_checkins
-  // (00020) isn't in the generated Database types yet, hence the untyped cast;
-  // select("*") degrades to [] on a pre-apply prod. Ordered oldest-first so the
-  // limit, if ever hit, truncates deterministically.
+  // All three reads are independent — one parallel batch. Reads are keyed by
+  // USER + CALENDAR WINDOW (local_date), not plan id: a mid-week regenerate /
+  // add-member / subscribe-sync mints a NEW plan row for the same week, and
+  // plan-id-keyed reads stranded every earlier mark (the board froze). Both
+  // check-in tables carry a server-stamped NOT NULL local_date with a
+  // (user_id, local_date) index, and same-week re-mints preserve
+  // week_start_date, so calendar keys line up across plan versions; the
+  // collapse helpers dedupe the multi-version fan-in (last write wins).
+  // select("*") + untyped cast: house tolerance pattern (pre-migration prod
+  // degrades instead of failing). Ordered oldest-first so the limit truncates
+  // deterministically; 800 covers several plan versions' rows.
+  const mealWeekValid = ISO_DATE_RE.test(weekStartDate);
+  const mealQuery = () => {
+    const base = supabase.from("meal_checkins").select("*");
+    // Malformed week anchor (never expected) — degrade to the legacy
+    // plan-id-keyed read rather than an unbounded scan.
+    const scoped = mealWeekValid
+      ? base
+          .eq("user_id", profile.id)
+          .gte("local_date", weekStartDate)
+          .lte("local_date", addDaysISO(weekStartDate, 6))
+      : base.eq("meal_plan_id", latestPlan.id);
+    return scoped.order("created_at", { ascending: true }).limit(800);
+  };
   const workoutQuery = () => {
     if (workoutPlan?.status !== "ready") {
       return Promise.resolve({ data: null, error: null });
     }
-    const q = (supabase as unknown as SupabaseClient)
+    return (supabase as unknown as SupabaseClient)
       .from("workout_checkins")
       .select("*")
-      .eq("workout_plan_id", workoutPlan.id)
+      .eq("user_id", profile.id)
       .gte("local_date", workoutWeekStart)
-      .lte("local_date", workoutWeekEnd);
-    return q.order("created_at", { ascending: true }).limit(400);
+      .lte("local_date", workoutWeekEnd)
+      .order("created_at", { ascending: true })
+      .limit(800);
   };
-  const [checkinRes, verdictRes, workoutRes, { data: logs, error: logsError }] =
+  const [checkinRes, workoutRes, { data: logs, error: logsError }] =
     await Promise.all([
-      supabase
-        .from("meal_checkins")
-        .select("*")
-        .eq("meal_plan_id", latestPlan.id)
-        .order("created_at", { ascending: true })
-        .limit(400),
-      supabase
-        .from("meal_verdicts")
-        .select("*")
-        .eq("meal_plan_id", latestPlan.id)
-        .order("created_at", { ascending: true })
-        .limit(400),
+      mealQuery(),
       workoutQuery(),
       supabase
         .from("body_logs")
@@ -247,29 +264,30 @@ export async function getFamilySeasonProps(
         .order("recorded_on", { ascending: true }),
     ]);
   reportSeasonReadError("checkins", checkinRes.error);
-  reportSeasonReadError("verdicts", verdictRes.error);
   reportSeasonReadError("workouts", workoutRes.error);
   reportSeasonReadError("body-logs", logsError);
-  const checkins = ((checkinRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+  const rawCheckins: RawSeasonMealRow[] = (
+    (checkinRes.data ?? []) as Array<Record<string, unknown>>
+  ).map((r) => ({
+    local_date: (r.local_date ?? null) as string | null,
     day_index: r.day_index as number,
     slot: r.slot as string,
     status: r.status as string,
     member_id: (r.member_id ?? null) as string | null,
   }));
-  const verdicts = ((verdictRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-    day_index: r.day_index as number,
-    slot: r.slot as string,
-    member_id: (r.member_id ?? null) as string | null,
-    verdict: r.verdict as string,
-  }));
-  const workoutCheckins: FamilySeasonProps["workoutCheckins"] = (
+  const checkins = collapseMealMarks(
+    rawCheckins,
+    mealWeekValid ? weekStartDate : undefined,
+  );
+  const rawWorkouts: RawSeasonWorkoutRow[] = (
     (workoutRes.data ?? []) as Array<Record<string, unknown>>
   ).map((r) => ({
-    day_index: r.day_index as number,
-    member_id: (r.member_id ?? "") as string,
-    status: r.status as string,
     local_date: (r.local_date ?? null) as string | null,
+    day_index: r.day_index as number,
+    member_id: (r.member_id ?? null) as string | null,
+    status: r.status as string,
   }));
+  const workoutCheckins = collapseWorkoutMarks(rawWorkouts);
 
   // Goal milestones — eligible ADULTS whose latest weigh-in reached their target
   // (loss-framing, so pregnant/lactating are never celebrated on weight; children
@@ -336,10 +354,9 @@ export async function getFamilySeasonProps(
   return {
     members,
     checkins,
-    verdicts,
     workoutCheckins,
     goalReached,
-    targets,
+    planned,
     weekStartDate,
     workoutWeekStart,
     workoutWeekEnd,

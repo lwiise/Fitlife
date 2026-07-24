@@ -3,8 +3,8 @@ import { Trophy, Crown, ChevronLeft } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
 import {
   computeSeasonStats,
+  type PlannedTotals,
   type SeasonMealMark,
-  type SeasonVerdictMark,
   type SeasonWorkoutMark,
 } from "@/lib/engagement/seasonMath";
 
@@ -25,9 +25,13 @@ import {
 //   • Top card — the shared header: a family meal-total ring, the week's pride
 //     line, the most-consistent member, and a 7-day meal strip (a day the house
 //     cooked lights up with a star rating + a utensils mark; other days dashed).
-//   • Leaderboard — every household member ranked by weekly participation
-//     (meal marks + verdicts + workout marks). #1 gets the gold winner card with
-//     a crown and a «فائز هذا الأسبوع» badge; the rest are purple rank cards.
+//   • Leaderboard — every household member ranked by PLAN COMPLETION (owner
+//     directive 07/2026): meals-only members are measured purely on meals
+//     (each meal worth 100% / their planned meals); a member with a workout
+//     plan splits 50/50 between meals and exercise sessions, each pillar
+//     against its own planned count. Dish verdicts do NOT score. #1 gets the
+//     gold winner card with a crown and a «فائز هذا الأسبوع» badge; the rest
+//     are purple rank cards.
 // The WHOLE household competes — mom, adults, and CHILDREN alike (owner
 // directive 07/2026: children rank exactly like adults and may take the #1 spot;
 // the earlier no-sibling-comparison stance is superseded here alongside the
@@ -36,8 +40,9 @@ import {
 // filtered on the server). The caller hides the card for solo households and
 // read-only/translated views.
 
-// Counting rules + constants (WEEKLY_TARGET, CAP, HONOR_DAYS_GOAL) live in
-// lib/engagement/seasonMath.ts — this component is presentation-only.
+// Counting rules + constants (CAP, HONOR_DAYS_GOAL) and the plan-completion
+// formula live in lib/engagement/seasonMath.ts — this component is
+// presentation-only.
 
 const DAY_INITIALS = ["ح", "ن", "ث", "ر", "خ", "ج", "س"]; // getUTCDay 0=Sun
 
@@ -226,10 +231,9 @@ function WinnerCrown() {
 export function FamilySeasonCard({
   members,
   checkins,
-  verdicts,
   workoutCheckins = [],
   goalReached = [],
-  targets,
+  planned,
   weekStartDate,
   workoutWeekStart,
   workoutWeekEnd,
@@ -243,7 +247,6 @@ export function FamilySeasonCard({
    * feminine default. */
   members: Array<{ id: string; name: string; sex?: string | null }>;
   checkins: SeasonMealMark[];
-  verdicts: SeasonVerdictMark[];
   /** Workout session marks (the exercise pillar); empty when no workout plan.
    * Scoped to the workout marking window below (weekday-anchored day_index alone
    * cannot place them in a week). */
@@ -251,9 +254,9 @@ export function FamilySeasonCard({
   /** Adults who reached their target weight — the achievement ONLY (no number,
    * no target); pregnant/lactating are never here (filtered on the server). */
   goalReached?: Array<{ id: string; name: string }>;
-  /** Per-member weekly denominators (planned meals + workout sessions, "if
-   * any") — the % measures completion of the member's OWN plan. */
-  targets?: Record<string, number>;
+  /** Per-member plan totals — the % denominators. `sessions` present only for
+   * members in the ready workout plan (switches them to the 50/50 formula). */
+  planned?: Record<string, PlannedTotals>;
   /** Plan week start (YYYY-MM-DD) → real weekday initials on the strip. */
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
@@ -290,12 +293,11 @@ export function FamilySeasonCard({
   } = computeSeasonStats({
     members,
     checkins,
-    verdicts,
     workoutCheckins,
     weekStartDate,
     workoutWeekStart,
     workoutWeekEnd,
-    targets,
+    planned,
   });
 
   // «اليوم» panel — fills the hero's second column with the next action (and
@@ -590,8 +592,9 @@ export function FamilySeasonCard({
 
       {/* One line explaining the ranking metric — kills the mystery %. */}
       <p className="text-center text-brand-ink-muted text-[11.5px] leading-relaxed">
-        النسبة = ما سُجّل هذا الأسبوع (وجبات وآراء وتمارين — الوجبة المتجاوزة لا
-        تُحسب) من إجمالي وجبات وتمارين خطة كل فرد
+        النسبة = ما أُتمّ من خطة كل فرد: الوجبات المسجّلة من وجبات خطته، ولمن
+        لديه خطة تمارين تُحتسب الوجبات نصفاً والتمارين نصفاً — الوجبة المتجاوزة
+        لا تُحسب
       </p>
 
       {/* Goal achievements (kept as an achievement event only — no numbers). */}
