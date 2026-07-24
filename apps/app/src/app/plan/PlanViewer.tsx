@@ -21,6 +21,7 @@ import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
 import {
   dayIndexFromWeekStart,
   dayNameFromWeekStart,
+  formatWeekRange,
   getLocalizedDayNameFromWeekStart,
 } from "@/lib/plans/dayMapping";
 import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
@@ -31,22 +32,6 @@ import { genderPick } from "@/lib/copy/gender";
 // far longer than a healthy day stream (~1-2 min), far shorter than the 15-min
 // server-side dead-man's switch.
 const STALE_PREPARING_MS = 180_000;
-
-function formatWeekRange(weekStart: string, locale?: LocaleCode): string {
-  try {
-    const start = new Date(weekStart);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
-    const intlLocale = locale && locale !== "ar" ? `${locale}-u-ca-gregory` : "ar-SA";
-    const fmt = new Intl.DateTimeFormat(intlLocale, {
-      day: "numeric",
-      month: "long",
-    });
-    return `${fmt.format(start)} — ${fmt.format(end)}`;
-  } catch {
-    return weekStart;
-  }
-}
 
 // ─── Optimistic-state seeds ──────────────────────────────────────────────
 // One implementation for the initial useState seed AND the props-resync below,
@@ -173,8 +158,10 @@ export function PlanViewer({
   // read-only/translated views never pass it. `sex` genders the entry copy.
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
   // The meal/workout plan-type toggle, rendered by the server page and hosted
-  // here so it shares a row with the «الوزن والمتابعة» journey link. Null when
-  // no workout plan exists (nothing to toggle) or on read-only/translated views.
+  // here as the LAST item of the top strip's action cluster (the far/left
+  // corner in RTL) — the workout viewer uses the same slot so the toggle never
+  // moves when switching views. Null when no workout plan exists (nothing to
+  // toggle) or on read-only/translated views.
   planTypeToggle?: ReactNode;
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
   // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
@@ -766,18 +753,16 @@ export function PlanViewer({
         </div>
       )}
 
-      {/* Top strip: the meals/exercise toggle + week range on the start side,
-          plan actions on the end side. The toggle shares this row with the
-          action buttons instead of taking a strip of its own. */}
+      {/* Top strip: week range on the start side; the action cluster on the end
+          side with the meals/exercise toggle as its LAST item — the far (left in
+          RTL) corner. The workout viewer renders the SAME strip with the same
+          toggle slot, so the toggle never moves when switching views. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {planTypeToggle}
-          <div>
-            <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-            <p className="font-bold text-brand-ink text-base tabular-nums">
-              {formatWeekRange(plan.week_start_date, locale)}
-            </p>
-          </div>
+        <div>
+          <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
+          <p className="font-bold text-brand-ink text-base tabular-nums">
+            {formatWeekRange(plan.week_start_date, locale)}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {!readOnly && isSolo && (
@@ -832,6 +817,11 @@ export function PlanViewer({
               ownerSex={ownerSex}
             />
           )}
+          {/* ms-auto pins the toggle to its line's far (left in RTL) edge even
+              when the cluster wraps or goes full-width on mobile — the same
+              corner the workout view and the standalone states use. A no-op on
+              an unwrapped sm+ row (the cluster is content-width there). */}
+          {planTypeToggle && <div className="ms-auto">{planTypeToggle}</div>}
         </div>
       </div>
 

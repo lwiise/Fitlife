@@ -55,6 +55,27 @@ export function formatTodayHeader(date: Date = new Date()): string {
   return `اليوم ${dayName} — ${HEADER_DATE_FMT.format(date)}`;
 }
 
+/**
+ * «١٧ يوليو — ٢٣ يوليو» — the plan week's date range (start + 6 days). Shared
+ * by the meal AND workout viewers so the top strip reads identically in both
+ * (moved verbatim from PlanViewer when the workout view gained the same strip).
+ */
+export function formatWeekRange(weekStart: string, locale?: LocaleCode): string {
+  try {
+    const start = new Date(weekStart);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const intlLocale = locale && locale !== "ar" ? `${locale}-u-ca-gregory` : "ar-SA";
+    const fmt = new Intl.DateTimeFormat(intlLocale, {
+      day: "numeric",
+      month: "long",
+    });
+    return `${fmt.format(start)} — ${fmt.format(end)}`;
+  } catch {
+    return weekStart;
+  }
+}
+
 const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
 
 /** "Today" as a Riyadh (UTC+3) calendar date — matches the engine's anchor. */

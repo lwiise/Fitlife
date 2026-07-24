@@ -352,14 +352,15 @@ export default async function PlanPage({
     planHasContent(latest.plan_data) &&
     !latest.in_progress;
 
-  // The meal-ready view renders PlanViewer, which hosts the plan-type toggle in
-  // the same row as the «الوزن والمتابعة» journey link. Every other state renders
-  // the toggle standalone above its content.
+  // The meal-ready view renders PlanViewer, which hosts the plan-type toggle at
+  // the end of its top strip's action cluster (the far/left corner in RTL).
+  // Every other state renders the toggle standalone above its content, pinned
+  // to the same corner.
   const mealReadyView =
     !workoutView && latest?.status === "ready" && !!latest.plan_data;
-  // The workout-ready view renders WorkoutViewer, which (like PlanViewer) hosts
-  // the plan-type toggle inline in its header row — so it isn't rendered
-  // standalone above it, keeping the top chrome identical to the meal view.
+  // The workout-ready view renders WorkoutViewer, which hosts the toggle in the
+  // SAME top-strip slot as PlanViewer — so it isn't rendered standalone above
+  // it, and the toggle never moves when switching views.
   const workoutReadyView =
     workoutView && workout?.status === "ready" && !!workout.plan_data;
 
@@ -470,9 +471,11 @@ export default async function PlanPage({
         )}
 
         {/* Standalone in every state except the meal-ready and workout-ready
-            views, where the viewer renders it inline with the journey link. */}
+            views, where the viewer hosts it in the top strip's action cluster.
+            justify-end pins it to the same far (left in RTL) corner the ready
+            views use, so the toggle never moves across states. */}
         {planTypeToggle && !mealReadyView && !workoutReadyView && (
-          <div className="mb-6">{planTypeToggle}</div>
+          <div className="mb-6 flex justify-end">{planTypeToggle}</div>
         )}
 
         {workoutView && workout && (

@@ -8,6 +8,7 @@ import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-e
 import type { WorkoutCheckinStatus, WorkoutIntensity } from "@/lib/engagement/types";
 import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
 import { ExerciseLottie } from "./ExerciseLottie";
+import { formatWeekRange } from "@/lib/plans/dayMapping";
 import { genderPick } from "@/lib/copy/gender";
 
 // Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
@@ -263,9 +264,9 @@ export function WorkoutViewer({
   }>;
   /** Account owner's sex → the «أنتِ/أنتَ» mom-tab marker. */
   ownerSex?: string | null;
-  /** The meal/workout plan-type toggle, hosted here so it shares the header row
-   * with the «الوزن والمتابعة» journey link — identical placement to the meal
-   * PlanViewer, so the top navigation chrome stays put when switching views. */
+  /** The meal/workout plan-type toggle, hosted here as the LAST item of the top
+   * strip's action cluster (the far/left corner in RTL) — the same slot the
+   * meal PlanViewer uses, so the toggle never moves when switching views. */
   planTypeToggle?: ReactNode;
   /** «رحلتك الخاصة» entries, member-keyed. The link follows the active member
    * tab and shows only for eligible members (same rule as the meal view). */
@@ -436,16 +437,32 @@ export function WorkoutViewer({
 
   return (
     <div className="space-y-6">
-      {/* Plan-type toggle (meals/workout). For a solo program the «الوزن
-          والمتابعة» journey link shares this row; for a family it moves down
-          beside the tabs — identical placement to the meal PlanViewer, so the
-          top chrome is the same across both views. */}
-      {(planTypeToggle || (isSolo && journeyLink)) && (
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          {planTypeToggle ?? <span />}
-          {isSolo && journeyLink}
+      {/* A solo program has no member-tab row to host «الوزن والمتابعة», so it
+          keeps its own strip here — identical to the meal viewer's solo strip. */}
+      {isSolo && journeyLink && (
+        <div className="flex items-center justify-end gap-3 flex-wrap">
+          {journeyLink}
         </div>
       )}
+
+      {/* Top strip — the SAME contract as the meal PlanViewer: week range on
+          the start side, the action cluster on the end side with the
+          meals/exercise toggle as its LAST item (the far/left corner in RTL).
+          justify-end keeps that corner on mobile too, where the stacked strip
+          makes this cluster full-width (a no-op at sm+, where the parent's
+          justify-between already pins the content-width cluster to the end).
+          Same slot in both views, so the toggle never moves when switching. */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-brand-ink-muted text-xs">الأسبوع</p>
+          <p className="font-bold text-brand-ink text-base tabular-nums">
+            {formatWeekRange(plan.week_start_date)}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 flex-wrap">
+          {planTypeToggle}
+        </div>
+      </div>
 
       {/* Member tabs — the SAME set/order as the meal viewer (owner directive
           07/2026): every household member appears, «إضافة فرد» sits right after
