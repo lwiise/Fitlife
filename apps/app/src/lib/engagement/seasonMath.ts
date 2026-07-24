@@ -17,7 +17,11 @@ import { addDaysISO } from "@/lib/plans/dayMapping";
 
 export const HONOR_DAYS_GOAL = 5; // meal days in a week to "honor" the season
 export const CAP = 14; // invisible capacity the family meal ring fills toward
-export const WEEKLY_TARGET = 10; // per-member denominator for the leaderboard %
+/** FALLBACK per-member denominator for the leaderboard % — used only when a
+ * member's real planned total (meals + workout sessions, via `targets`) is
+ * unknown or zero (owner directive 07/2026: the % measures completion of the
+ * member's OWN plan, not an arbitrary act count). */
+export const WEEKLY_TARGET = 10;
 
 export interface SeasonMember {
   id: string;
@@ -48,7 +52,10 @@ export interface SeasonWorkoutMark {
 
 export interface RankedMember extends SeasonMember {
   score: number;
-  /** min(1, score / WEEKLY_TARGET) — the member's ring fill. */
+  /** The member's own weekly denominator: planned meals + workout sessions
+   * (WEEKLY_TARGET fallback when unknown). */
+  target: number;
+  /** min(1, score / target) — the member's ring fill and rank metric. */
   pct: number;
   /** Position in the ROSTER (not the ranking) — stable avatar colour. */
   rosterIndex: number;
@@ -120,6 +127,11 @@ export function computeSeasonStats(input: {
    * open rather than zero the pillar. */
   workoutWeekStart?: string;
   workoutWeekEnd?: string;
+  /** Per-member weekly denominators (member id → planned meals + planned
+   * workout sessions, "if any"). The % is the member's completion of their OWN
+   * plan (owner directive 07/2026). Missing/zero entries fall back to
+   * WEEKLY_TARGET so a degraded read never divides by zero. */
+  targets?: Record<string, number>;
 }): SeasonStats {
   const { members, checkins, verdicts } = input;
   const workoutCheckins = input.workoutCheckins ?? [];
@@ -216,15 +228,26 @@ export function computeSeasonStats(input: {
     }
     mealDaysByMember.get(c.member_id)!.add(c.day_index);
   }
+  const targets = input.targets ?? {};
+  const targetOf = (id: string) => {
+    const t = targets[id];
+    return typeof t === "number" && Number.isFinite(t) && t > 0
+      ? t
+      : WEEKLY_TARGET;
+  };
   const ranked: RankedMember[] = members
-    .map((m, rosterIndex) => ({
-      ...m,
-      rosterIndex,
-      score: acts[m.id] ?? 0,
-      pct: Math.min(1, (acts[m.id] ?? 0) / WEEKLY_TARGET),
-    }))
+    .map((m, rosterIndex) => {
+      const score = acts[m.id] ?? 0;
+      const target = targetOf(m.id);
+      return { ...m, rosterIndex, score, target, pct: Math.min(1, score / target) };
+    })
     .sort(
       (a, b) =>
+        // The displayed metric ranks: capped % of the member's OWN plan,
+        // compared as exact cross-multiplied integers (never float division,
+        // so equal fractions can't flip ranks between renders).
+        Math.min(b.score, b.target) * a.target -
+          Math.min(a.score, a.target) * b.target ||
         b.score - a.score ||
         (mealDaysByMember.get(b.id)?.size ?? 0) -
           (mealDaysByMember.get(a.id)?.size ?? 0) ||
