@@ -380,13 +380,13 @@ export default async function PlanPage({
           href="/plan"
           role="tab"
           aria-selected={!workoutView}
-          className="min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          className="group min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
         >
           <span
             className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
               !workoutView
                 ? "bg-white text-brand-purple-900 shadow-sm"
-                : "text-brand-ink-muted hover:text-brand-ink"
+                : "text-brand-ink/70 group-hover:text-brand-ink"
             }`}
           >
             الوجبات
@@ -396,13 +396,13 @@ export default async function PlanPage({
           href="/plan?view=workout"
           role="tab"
           aria-selected={workoutView}
-          className="min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          className="group min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
         >
           <span
             className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
               workoutView
                 ? "bg-white text-brand-purple-900 shadow-sm"
-                : "text-brand-ink-muted hover:text-brand-ink"
+                : "text-brand-ink/70 group-hover:text-brand-ink"
             }`}
           >
             التمارين

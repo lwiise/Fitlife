@@ -765,7 +765,7 @@ export function PlanViewer({
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-          <p className="font-black text-brand-purple-900 text-[28px] leading-tight tabular-nums">
+          <p className="font-extrabold text-brand-purple-900 text-[28px] leading-tight tabular-nums">
             {formatWeekRange(plan.week_start_date, locale)}
           </p>
           <div
