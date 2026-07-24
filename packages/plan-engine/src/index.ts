@@ -84,6 +84,7 @@ export * from "./errors";
 // ── Workout plans (separate opt-in program; meals-first fork) ───────────────
 export * from "./workout/schema";
 export * from "./workout/exerciseCatalog";
+export * from "./workout/equipment";
 export {
   WORKOUT_STATIC,
   WORKOUT_METHODOLOGY,

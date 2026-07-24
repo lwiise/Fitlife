@@ -28,7 +28,9 @@ import {
   buildWorkoutSkeletonPrompt,
   buildWorkoutMemberPrompt,
   workoutTrainees,
+  type WorkoutTrainee,
 } from "./systemPrompt";
+import { enforceWorkoutProfileFit, type ProfileFitFlags } from "./equipment";
 
 type AnyClient = SupabaseClient<any, any, any>;
 
@@ -128,6 +130,19 @@ function parseJson<T>(raw: string, label: string): T {
   } catch (err) {
     throw new PlanValidationError(`${label}: invalid JSON — ${String(err)}`, raw);
   }
+}
+
+/** Safety posture for deterministic repairs (mirrors describeTrainee's read
+ * of the same fields): pregnant → substitutions stay pregnancy-safe;
+ * pregnant/early-postpartum → the gym-gear floor is waived. */
+function fitFlagsFor(trainee: WorkoutTrainee): ProfileFitFlags {
+  const p = trainee.person;
+  const pregnant =
+    ("is_pregnant" in p && !!p.is_pregnant) || p.member_type === "pregnant";
+  return {
+    pregnant,
+    recentPostpartum: p.months_postpartum != null && p.months_postpartum <= 3,
+  };
 }
 
 /**
@@ -243,7 +258,32 @@ export async function generateWorkoutPlan(params: {
             ids: withIds.unknownIds,
           });
         }
-        member = withIds.member;
+
+        // Location/equipment contract: exercises the trainee cannot do where
+        // they train (or a gym program that reads like a home plan) re-roll
+        // the call; the final attempt ships the deterministic repair instead
+        // of dropping the member.
+        const fit = enforceWorkoutProfileFit(
+          withIds.member,
+          trainee.profile,
+          fitFlagsFor(trainee),
+        );
+        if (fit.violations.length > 0 && attempt < MAX_RETRIES) {
+          throw new PlanValidationError(
+            `member workout violates location/equipment fit: ${fit.violations.join(", ")}`,
+            res.text,
+          );
+        }
+        if (fit.violations.length > 0) {
+          console.warn("[workout-generate] location/equipment repair applied", {
+            member: trainee.member_id,
+            location: trainee.profile.location,
+            violations: fit.violations,
+            replacements: fit.replacements,
+            gymShareOk: fit.gymShareOk,
+          });
+        }
+        member = fit.member;
         break;
       } catch (err) {
         const retryable = isRetryable(err) || err instanceof PlanValidationError;

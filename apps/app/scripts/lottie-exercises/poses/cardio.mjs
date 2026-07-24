@@ -131,4 +131,103 @@ export const stationary_bike = {
   poses: [bikePose(0, 90), bikePose(0.25, 180), bikePose(0.5, 270), bikePose(0.75, 360), bikePose(1, 450)],
 };
 
-export const CARDIO = [brisk_walk, incline_walk, stationary_bike];
+// Rowing machine — catch (knees folded, arms long toward the flywheel) to
+// finish (legs long, lean back, handle at the ribs), sliding along the rail.
+function rowErgPose(at, hipX, torso, wrist) {
+  const hip = [hipX, 424];
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, wrist, "back");
+  const legs = legIK(hip, [408, 434], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: legs.shin - 55,
+      headLift: -4,
+    },
+  };
+}
+export const rowing_machine = {
+  id: "rowing_machine",
+  seconds: 2.4,
+  floor: false,
+  highlight: ["upperArmNear", "thighNear", "thighFar"],
+  furniture: [
+    { kind: "line", x1: 96, y1: 468, x2: 430, y2: 468, w: 12 },
+    { kind: "line", x1: 408, y1: 452, x2: 408, y2: 400, w: 10 },
+    { kind: "circle", x: 452, y: 356, r: 24 },
+  ],
+  props: [{ type: "band", from: { point: [446, 352] }, to: { joint: "wristNear" }, w: 7 }],
+  farPeek: { arm: 10, leg: 6 },
+  arrow: { at: [230, 300], move: [-38, 0], window: [0.05, 0.45] },
+  poses: [
+    rowErgPose(0, 302, -64, [372, 356]),
+    rowErgPose(0.45, 218, -104, [262, 348]),
+    rowErgPose(0.58, 218, -104, [262, 348]),
+    rowErgPose(1, 302, -64, [372, 356]),
+  ],
+};
+
+// Elliptical — feet glide an oval path on the pedals, hands ride the moving
+// poles; the whole cycle loops with linear easing like the walk.
+const GLIDE_C = [252, 448];
+function glideTarget(angleDeg) {
+  return [
+    GLIDE_C[0] + 52 * Math.cos((angleDeg * Math.PI) / 180),
+    GLIDE_C[1] + 12 * Math.sin((angleDeg * Math.PI) / 180),
+  ];
+}
+function ellipticalPose(at, crankAngle, wristLead) {
+  const hip = [232, 276];
+  const torso = -84;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, [322 + wristLead, 250], "back");
+  const farArm = armIK(shoulder, [322 - wristLead, 252], "back");
+  const near = legIK(hip, glideTarget(crankAngle), "front");
+  const far = legIK(hip, glideTarget(crankAngle + 180), "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      upperArmFar: farArm.upper,
+      forearmFar: farArm.fore,
+      thighNear: near.thigh,
+      shinNear: near.shin,
+      footNear: 15,
+      thighFar: far.thigh,
+      shinFar: far.shin,
+      footFar: 15,
+      headLift: -2,
+    },
+  };
+}
+export const elliptical = {
+  id: "elliptical",
+  seconds: 2.2,
+  ease: "linear",
+  farOpacity: 55,
+  floor: false,
+  highlight: ["thighNear", "thighFar"],
+  furniture: [
+    { kind: "line", x1: 130, y1: 474, x2: 420, y2: 474, w: 12 },
+    { kind: "line", x1: 356, y1: 468, x2: 372, y2: 300, w: 12 },
+    { kind: "line", x1: 344, y1: 300, x2: 400, y2: 300, w: 10 },
+  ],
+  poses: [
+    ellipticalPose(0, 0, 22),
+    ellipticalPose(0.25, 90, 0),
+    ellipticalPose(0.5, 180, -22),
+    ellipticalPose(0.75, 270, 0),
+    ellipticalPose(1, 360, 22),
+  ],
+};
+
+export const CARDIO = [brisk_walk, incline_walk, stationary_bike, rowing_machine, elliptical];

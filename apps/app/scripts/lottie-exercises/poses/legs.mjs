@@ -369,6 +369,218 @@ export const calf_raise = {
   poses: [calfFlat, calfUp, { ...calfUp, at: 0.54 }, { ...calfFlat, at: 1 }],
 };
 
+// Barbell back squat — squat legs, bar racked on the shoulders (plate seen
+// end-on at the grip), torso a touch more upright than the bodyweight squat.
+function bbSquatPose(at, hip, torso, thigh, shin, headLift) {
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, [shoulder[0] + 38, shoulder[1] + 10], "back");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: thigh,
+      shinNear: shin,
+      footNear: 0,
+      headLift,
+    },
+  };
+}
+const bbSquatTop = bbSquatPose(0, [240, 268], -90, 90, 90, 0);
+const bbSquatBottom = bbSquatPose(0.42, [215, 342], -62, 33, 130, -18);
+export const barbell_back_squat = {
+  id: "barbell_back_squat",
+  seconds: 2.8,
+  highlight: ["thighNear", "thighFar"],
+  props: [{ type: "plate", parent: "forearmNear" }],
+  arrow: { at: [340, 390], move: [0, -46], window: [0.56, 0.98] },
+  farPeek: { arm: 8, leg: 8 },
+  poses: [bbSquatTop, bbSquatBottom, { ...bbSquatBottom, at: 0.54 }, { ...bbSquatTop, at: 1 }],
+};
+
+// Barbell deadlift — hinged start with the bar below the knees, stand tall to
+// lockout at the hips; arms stay straight the whole way.
+function deadliftPose(at, hip, torso, wrist, headLift) {
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, wrist, "back");
+  const legs = legIK(hip, [232, 473], "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 0,
+      headLift,
+    },
+  };
+}
+const dlBottom = deadliftPose(0, [200, 330], -26, [300, 440], -20);
+const dlTop = deadliftPose(0.45, [235, 268], -90, [248, 296], 0);
+export const barbell_deadlift = {
+  id: "barbell_deadlift",
+  seconds: 3,
+  highlight: ["thighNear", "thighFar"],
+  props: [{ type: "plate", parent: "forearmNear", far: true }],
+  farPeek: { arm: 8, leg: 6 },
+  arrow: { at: [352, 320], move: [0, -46], window: [0.05, 0.45] },
+  poses: [dlBottom, dlTop, { ...dlTop, at: 0.58 }, { ...dlBottom, at: 1 }],
+};
+
+// Barbell hip thrust — the hip-thrust body with a plate riding the hip crease
+// and the hands steadying the bar.
+function bbThrustPose(at, hipY) {
+  const hip = [265, hipY];
+  const shoulderTarget = [142, 378];
+  const torso = (Math.atan2(shoulderTarget[1] - hip[1], shoulderTarget[0] - hip[0]) * 180) / Math.PI;
+  const shoulder = jointFrom(hip, torso, 130);
+  const legs = legIK(hip, [345, 473], "front");
+  const arm = armIK(shoulder, [hip[0] - 6, hip[1] - 20], "back");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: legs.thigh,
+      shinNear: legs.shin,
+      footNear: 0,
+      headLift: -6,
+    },
+  };
+}
+export const barbell_hip_thrust = {
+  id: "barbell_hip_thrust",
+  seconds: 2.8,
+  highlight: ["thighNear", "thighFar"],
+  props: [{ type: "plate", parent: "torso", at: 6 }],
+  furniture: [{ kind: "rect", x: 118, y: 438, w: 130, h: 96, r: 10 }],
+  arrow: { at: [268, 420], move: [0, -42], window: [0.05, 0.4] },
+  farPeek: { arm: 8, leg: 6 },
+  poses: [bbThrustPose(0, 442), bbThrustPose(0.42, 376), bbThrustPose(0.54, 376), bbThrustPose(1, 442)],
+};
+
+// Hip abduction machine — FRONT view; seated, knees drive apart against the
+// pads.
+function abductionPose(at, open) {
+  return {
+    at,
+    hip: [256, 340],
+    angles: {
+      torso: -90,
+      upperArmNear: 70,
+      forearmNear: 85,
+      upperArmFar: 110,
+      forearmFar: 95,
+      thighNear: open ? 58 : 76,
+      shinNear: open ? 74 : 88,
+      footNear: open ? 78 : 90,
+      thighFar: open ? 122 : 104,
+      shinFar: open ? 106 : 92,
+      footFar: open ? 102 : 90,
+      headLift: 0,
+    },
+  };
+}
+export const hip_abduction = {
+  id: "hip_abduction",
+  seconds: 2.6,
+  farOpacity: 85,
+  highlight: ["thighNear", "thighFar"],
+  props: [{ type: "pad", parent: "thighNear", at: 82, far: true }],
+  furniture: [
+    { kind: "rect", x: 256, y: 372, w: 120, h: 40, r: 10 },
+    { kind: "line", x1: 256, y1: 352, x2: 256, y2: 210, w: 12, o: 40 },
+  ],
+  arrow: { at: [420, 380], move: [34, -10], window: [0.05, 0.42] },
+  poses: [abductionPose(0, false), abductionPose(0.42, true), abductionPose(0.54, true), abductionPose(1, false)],
+};
+
+// Cable glute kickback — standing at the column, one leg sweeps back against
+// the low cable; hands brace on the frame.
+function kickbackPose(at, ankleTarget) {
+  const hip = [268, 282];
+  const torso = -74;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arm = armIK(shoulder, [382, 262], "back");
+  const near = legIK(hip, ankleTarget, "front");
+  return {
+    at,
+    hip,
+    angles: {
+      torso,
+      upperArmNear: arm.upper,
+      forearmNear: arm.fore,
+      thighNear: near.thigh,
+      shinNear: near.shin,
+      footNear: near.shin - 88,
+      thighFar: 92,
+      shinFar: 88,
+      footFar: 0,
+      headLift: -6,
+    },
+  };
+}
+export const cable_glute_kickback = {
+  id: "cable_glute_kickback",
+  seconds: 2.6,
+  highlight: ["thighNear"],
+  furniture: [
+    { kind: "line", x1: 408, y1: 130, x2: 408, y2: 486, w: 10 },
+    { kind: "circle", x: 402, y: 452, r: 9 },
+  ],
+  props: [{ type: "band", from: { point: [398, 452] }, to: { joint: "ankleNear" }, w: 7 }],
+  farPeek: { arm: 8 },
+  arrow: { at: [150, 380], move: [-30, -24], window: [0.05, 0.42] },
+  poses: [
+    kickbackPose(0, [286, 470]),
+    kickbackPose(0.42, [148, 386]),
+    kickbackPose(0.54, [148, 386]),
+    kickbackPose(1, [286, 470]),
+  ],
+};
+
+// Seated calf raise — thighs under the pads, heels drive up on the ball of
+// the foot.
+function seatedCalfPose(at, up) {
+  const hip = [200, 372];
+  const torso = -80;
+  const shoulder = jointFrom(hip, torso, 130);
+  const arms = armIK(shoulder, [252, 380], "back");
+  return {
+    at,
+    hip: [hip[0], hip[1] - (up ? 8 : 0)],
+    angles: {
+      torso,
+      upperArmNear: arms.upper,
+      forearmNear: arms.fore,
+      thighNear: up ? -6 : 0,
+      shinNear: up ? 96 : 90,
+      footNear: up ? 26 : 0,
+      headLift: -2,
+    },
+  };
+}
+export const seated_calf_raise = {
+  id: "seated_calf_raise",
+  seconds: 2.4,
+  highlight: ["shinNear", "shinFar"],
+  props: [{ type: "pad", parent: "thighNear", at: 92, far: true }],
+  furniture: [
+    { kind: "rect", x: 205, y: 420, w: 150, h: 44, r: 10 },
+    { kind: "line", x1: 138, y1: 330, x2: 138, y2: 452, w: 14 },
+  ],
+  farPeek: { arm: 8, leg: 6 },
+  arrow: { at: [370, 420], move: [0, -32], window: [0.05, 0.4] },
+  poses: [seatedCalfPose(0, false), seatedCalfPose(0.42, true), seatedCalfPose(0.54, true), seatedCalfPose(1, false)],
+};
+
 export const LEGS = [
   squat,
   goblet_squat,
@@ -383,4 +595,10 @@ export const LEGS = [
   leg_extension,
   leg_curl,
   calf_raise,
+  barbell_back_squat,
+  barbell_deadlift,
+  barbell_hip_thrust,
+  hip_abduction,
+  cable_glute_kickback,
+  seated_calf_raise,
 ];

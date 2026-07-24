@@ -257,4 +257,30 @@ export const kegel = {
   poses: [kegelPose(0, false), kegelPose(0.5, true), kegelPose(1, false)],
 };
 
-export const CORE = [plank, side_plank, dead_bug, bird_dog, crunch, reverse_crunch, leg_raises, kegel];
+// Superman — prone, arms reaching past the head; chest and legs lift together
+// and hold.
+function supermanPose(at, lift) {
+  return {
+    at,
+    hip: [252, 462],
+    angles: {
+      torso: lift ? -19 : -3,
+      upperArmNear: lift ? -30 : -6,
+      forearmNear: lift ? -28 : -4,
+      thighNear: lift ? 201 : 183,
+      shinNear: lift ? 204 : 184,
+      footNear: lift ? 246 : 226,
+      headLift: lift ? -18 : -6,
+    },
+  };
+}
+export const superman = {
+  id: "superman",
+  seconds: 3,
+  highlight: ["torso"],
+  farPeek: { arm: 8, leg: 6 },
+  arrow: { at: [452, 420], move: [0, -32], window: [0.05, 0.4] },
+  poses: [supermanPose(0, false), supermanPose(0.4, true), supermanPose(0.62, true), supermanPose(1, false)],
+};
+
+export const CORE = [plank, side_plank, dead_bug, bird_dog, crunch, reverse_crunch, leg_raises, kegel, superman];

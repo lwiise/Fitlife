@@ -241,6 +241,58 @@ describe("workout prompts", () => {
     expect(prompt).toContain("قواعد السلامة");
   });
 
+  it("gym trainees are told to actually use club gear", () => {
+    const prompt = buildWorkoutSkeletonPrompt(
+      makeContext({ momWorkout: { location: "gym", equipment: [] } }),
+    );
+    expect(prompt).toContain("أدوات النادي كاملة");
+    expect(prompt).toContain("اعتمدي في تمارين القوة الرئيسية على أدوات النادي");
+  });
+
+  it("home trainees get an explicit allowed exercise_id list scoped to their tools", () => {
+    const ctx = makeContext({ momWorkout: { location: "home", equipment: ["dumbbells"] } });
+    const skeleton = {
+      members: [
+        {
+          member_id: "mom",
+          member_name_ar: "أم محمد",
+          split_name_ar: "جسم كامل ×3",
+          sessions: [
+            { day_index: 0, session_name_ar: "جسم كامل أ", main_patterns_ar: ["دفع"] },
+          ],
+        },
+      ],
+      safety_disclaimer_ar: "تنبيه",
+    };
+    const prompt = buildWorkoutMemberPrompt(ctx, skeleton, "mom");
+    expect(prompt).toContain("قائمة exercise_id المسموحة لهذا المتدرب حصراً");
+    expect(prompt).toContain("goblet_squat");
+    // Machine work never appears in a home trainee's legal list.
+    expect(prompt).not.toContain("lat_pulldown");
+    expect(prompt).not.toContain("barbell_back_squat");
+  });
+
+  it("'both' trainees get a home-variant id list scoped to their home tools", () => {
+    const ctx = makeContext(); // PROFILE: both + dumbbells/bands
+    const skeleton = {
+      members: [
+        {
+          member_id: "mom",
+          member_name_ar: "أم محمد",
+          split_name_ar: "علوي/سفلي ×2",
+          sessions: [
+            { day_index: 0, session_name_ar: "علوي أ", main_patterns_ar: ["دفع"] },
+          ],
+        },
+      ],
+      safety_disclaimer_ar: "تنبيه",
+    };
+    const prompt = buildWorkoutMemberPrompt(ctx, skeleton, "mom");
+    expect(prompt).toContain("قائمة home_variant_id المسموحة");
+    expect(prompt).toContain("band_row");
+    expect(prompt).not.toContain("seated_cable_row");
+  });
+
   it("member prompt pins the member and demands home variants for 'both'", () => {
     const ctx = makeContext();
     const skeleton = {

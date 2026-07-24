@@ -1,6 +1,7 @@
 import type { PlanPromptContext, PlanPromptContextMember, PlanPromptContextMom } from "../buildContext";
 import { splitForDays, type WorkoutProfile, type WorkoutSkeleton } from "./schema";
 import { exerciseCatalogPromptBlock } from "./exerciseCatalog";
+import { allowedExerciseIds, homeAllowedIds } from "./equipment";
 
 // ─── Coach identity ─────────────────────────────────────────────────────────
 const WORKOUT_ROLE = `أنتِ "سارة"، مدربة لياقة معتمدة متخصصة في تدريب المقاومة للنساء والعائلات في الخليج. تصممين برامج تمارين أسبوعية دقيقة وآمنة وقابلة للتنفيذ في المنزل أو النادي، بلغة عربية فصحى واضحة ودافئة، دون مبالغة ودون وعود غير واقعية.`;
@@ -37,9 +38,11 @@ export const WORKOUT_METHODOLOGY = `# منهجية التدريب
 إحماء 5-8 دقائق (رفع نبض + حركية مفصلية لأنماط اليوم) → المركبة → العزل → خاتمة اختيارية → إطالات تهدئة.
 مدة الجلسة يجب أن تحترم اختيار المتدرب (20-30 / 30-45 / 45-60 دقيقة): قلّصي حجم العزل، لا المركبة.
 
-## المكان والأدوات
-- كل تمرين يناسب مكان التدريب المعلن وأدواته فقط. لا تسمّي جهازاً غير متاح.
-- عند التدريب في المنزل والنادي معاً: قدمي بديلاً منزلياً لكل تمرين نادٍ (home_variant_ar).
+## المكان والأدوات (إلزامي — الخطة تُرفض عند المخالفة)
+- كل تمرين يجب أن يكون متاحاً في مكان تدريب المتدرب وبأدواته المعلنة فقط. لا تسمّي جهازاً أو أداة غير متاحة أبداً.
+- المتدرب في النادي: استغلي أدوات النادي فعلياً — التمارين المركبة والعزل الرئيسية بالأجهزة والبار والكابل والدمبل، بحيث يكون نصف تمارين القوة في كل جلسة على الأقل بأدوات النادي (أجهزة/بار). برنامج نادٍ من تمارين وزن الجسم وحدها مرفوض؛ وزن الجسم للإحماء والكور والإطالات، أو عند قيد طبي.
+- المتدرب في المنزل: الأدوات المعلنة فقط + وزن الجسم وأثاث المنزل (كرسي ثابت، حائط، درجة). «أجهزة منزلية» تعني سير المشي أو الدراجة الثابتة للكارديو فقط — لا أجهزة مقاومة في المنزل أبداً.
+- المنزل والنادي معاً: صمّمي البرنامج الرئيسي كبرنامج نادٍ كامل الأدوات، وقدمي بديلاً منزلياً لكل تمرين نادٍ (home_variant_ar + home_variant_id) ضمن أدوات المنزل المعلنة.
 - بدائل منزلية معتمدة: وزن الجسم، الدمبل، أحبال المقاومة؛ مع تدرّجات أسهل/أصعب مسماة (ضغط على الركب ← ضغط كامل ← ضغط بميل سفلي).
 
 ## ربط التمرين بهدف التغذية (نفس أهداف خطة الوجبات)
@@ -78,7 +81,7 @@ const EQUIPMENT_AR: Record<string, string> = {
   none: "بدون أدوات",
   dumbbells: "دمبل",
   bands: "أحبال مقاومة",
-  machines: "أجهزة",
+  machines: "أجهزة منزلية (سير/دراجة)",
 };
 const INJURY_AR: Record<string, string> = {
   shoulder: "الكتف",
@@ -169,11 +172,20 @@ function describeTrainee(t: WorkoutTrainee): string {
 
   let line = parts.join("، ") + ".";
   line += ` أيام التدريب المرغوبة: ${wp.desired_days} — التقسيم الموصى به: ${splitForDays(wp.desired_days)}.`;
-  line += ` المكان: ${LOCATION_AR[wp.location]}${
-    wp.location !== "gym" && wp.equipment.length > 0
-      ? ` (الأدوات: ${wp.equipment.map((e) => EQUIPMENT_AR[e]).join("، ")})`
-      : ""
-  }.`;
+  const homeTools =
+    wp.equipment.filter((e) => e !== "none").length > 0
+      ? wp.equipment
+          .filter((e) => e !== "none")
+          .map((e) => EQUIPMENT_AR[e])
+          .join("، ")
+      : "بدون أدوات (وزن الجسم وأثاث المنزل فقط)";
+  if (wp.location === "gym") {
+    line += ` المكان: النادي — أدوات النادي كاملة (أجهزة، كابل، بار، دمبل). اعتمدي في تمارين القوة الرئيسية على أدوات النادي فعلياً.`;
+  } else if (wp.location === "home") {
+    line += ` المكان: المنزل — الأدوات المتاحة: ${homeTools}. ممنوع أي جهاز نادٍ أو بار.`;
+  } else {
+    line += ` المكان: المنزل والنادي معاً — البرنامج الرئيسي برنامج نادٍ كامل الأدوات، مع بديل منزلي لكل تمرين نادٍ ضمن أدوات المنزل: ${homeTools}.`;
+  }
   line += ` الخبرة: ${EXPERIENCE_AR[wp.experience]}. مدة الجلسة: ${SESSION_MIN_AR[wp.session_minutes]}.`;
   line += ` مناطق التركيز: ${wp.focus_areas.map((f) => FOCUS_AR[f]).join("، ")}.`;
 
@@ -246,11 +258,27 @@ export function buildWorkoutMemberPrompt(
       .map((s) => `- يوم ${s.day_index}: ${s.session_name_ar} (${s.main_patterns_ar.join("، ")})`)
       .join("\n") ?? "";
 
+  // The location/equipment contract, made explicit per trainee: a home
+  // program gets its exact legal id list; a «كلاهما» program gets the legal
+  // home-variant list. Gym programs use the full static catalog (the roster
+  // line + methodology push them onto club gear). Enforced post-parse by
+  // enforceWorkoutProfileFit — violations re-roll the call.
+  let allowedBlock = "";
+  if (trainee?.profile.location === "home") {
+    const ids = [...allowedExerciseIds(trainee.profile)].sort();
+    allowedBlock = `\n\n# قائمة exercise_id المسموحة لهذا المتدرب حصراً (حسب مكانه وأدواته — أي تمرين خارجها مرفوض)
+${ids.join("، ")}`;
+  } else if (trainee?.profile.location === "both") {
+    const ids = [...homeAllowedIds(trainee.profile)].sort();
+    allowedBlock = `\n\n# قائمة home_variant_id المسموحة لبدائل المنزل حصراً (حسب أدوات منزله — أي بديل خارجها مرفوض)
+${ids.join("، ")}`;
+  }
+
   return `# المتدرب
 ${trainee ? describeTrainee(trainee) : `member_id="${memberId}"`}
 
 # جلسات الأسبوع المقررة (من المرحلة 1 — التزمي بها)
-${sessions}
+${sessions}${allowedBlock}
 
 # المطلوب (المرحلة 2: تفصيل الأسبوع كاملاً لهذا المتدرب فقط)
 فصّلي كل جلسة: إحماء (RAMP مختصر)، التمارين بالترتيب (المركبة أولاً)، لكل تمرين: exercise_id من الكتالوج المعتمد حصراً، الاسم بالعربية (والإنجليزية إن شاع)، العضلات المستهدفة، المجموعات، التكرارات (مدى)، الراحة بالثواني، وملاحظة جهد RIR. ${

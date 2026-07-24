@@ -40,7 +40,7 @@ const EQUIPMENT = [
   { value: "none", label: "بدون أدوات" },
   { value: "dumbbells", label: "دمبل" },
   { value: "bands", label: "أحبال مقاومة" },
-  { value: "machines", label: "أجهزة" },
+  { value: "machines", label: "أجهزة منزلية (سير أو دراجة)" },
 ] as const;
 const INJURIES = [
   { value: "shoulder", label: "الكتف" },
