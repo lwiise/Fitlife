@@ -366,8 +366,11 @@ export default async function PlanPage({
 
   const planTypeToggle =
     workout != null ? (
+      // Height is tuned to land on exactly 44px so the toggle matches every
+      // other pill in the plan's action row (they are all min-h-11 = 44px):
+      // 36px segments (min-h-9) + 3px padding × 2 + 1px border × 2 = 44px.
       <div
-        className="inline-flex rounded-full border border-brand-ink/10 bg-white p-1"
+        className="inline-flex rounded-full border border-brand-ink/10 bg-white p-[3px]"
         role="tablist"
         aria-label="نوع الخطة"
       >

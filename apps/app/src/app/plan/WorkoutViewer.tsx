@@ -264,9 +264,9 @@ export function WorkoutViewer({
   }>;
   /** Account owner's sex → the «أنتِ/أنتَ» mom-tab marker. */
   ownerSex?: string | null;
-  /** The meal/workout plan-type toggle, hosted here as the LAST item of the top
-   * strip's action cluster (the far/left corner in RTL) — the same slot the
-   * meal PlanViewer uses, so the toggle never moves when switching views. */
+  /** The meal/workout plan-type toggle, hosted in the top strip's action
+   * cluster — the same slot the meal PlanViewer uses (there it leads a row of
+   * action buttons; here it is the cluster's only item). */
   planTypeToggle?: ReactNode;
   /** «رحلتك الخاصة» entries, member-keyed. The link follows the active member
    * tab and shows only for eligible members (same rule as the meal view). */
@@ -429,7 +429,7 @@ export function WorkoutViewer({
           ? "/journey"
           : `/journey?member=${journeyEntry.id}`
       }
-      className="inline-flex items-center flex-shrink-0 min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      className="inline-flex items-center flex-shrink-0 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
     >
       الوزن والمتابعة
     </Link>
@@ -446,12 +446,12 @@ export function WorkoutViewer({
       )}
 
       {/* Top strip — the SAME contract as the meal PlanViewer: week range on
-          the start side, the action cluster on the end side with the
-          meals/exercise toggle as its LAST item (the far/left corner in RTL).
-          justify-end keeps that corner on mobile too, where the stacked strip
-          makes this cluster full-width (a no-op at sm+, where the parent's
-          justify-between already pins the content-width cluster to the end).
-          Same slot in both views, so the toggle never moves when switching. */}
+          the start side, the action cluster on the end side led by the
+          meals/exercise toggle. This view has no action buttons of its own, so
+          the toggle is the cluster's only item and sits at the strip's end;
+          justify-end keeps it there on mobile too, where the stacked strip
+          makes the cluster full-width (a no-op at sm+, where the parent's
+          justify-between already pins the content-width cluster to the end). */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <p className="text-brand-ink-muted text-xs">الأسبوع</p>

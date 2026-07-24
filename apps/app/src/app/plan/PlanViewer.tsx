@@ -158,10 +158,9 @@ export function PlanViewer({
   // read-only/translated views never pass it. `sex` genders the entry copy.
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
   // The meal/workout plan-type toggle, rendered by the server page and hosted
-  // here as the LAST item of the top strip's action cluster (the far/left
-  // corner in RTL) — the workout viewer uses the same slot so the toggle never
-  // moves when switching views. Null when no workout plan exists (nothing to
-  // toggle) or on read-only/translated views.
+  // here as the FIRST item of the top strip's action cluster, so in RTL it sits
+  // to the RIGHT of the action buttons (owner directive). Null when no workout
+  // plan exists (nothing to toggle) or on read-only/translated views.
   planTypeToggle?: ReactNode;
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
   // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
@@ -736,7 +735,7 @@ export function PlanViewer({
             ? "/journey"
             : `/journey?member=${journeyEntry.id}`
         }
-        className="inline-flex items-center flex-shrink-0 min-h-9 px-4 py-1.5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+        className="inline-flex items-center flex-shrink-0 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
       >
         الوزن والمتابعة
       </Link>
@@ -754,9 +753,10 @@ export function PlanViewer({
       )}
 
       {/* Top strip: week range on the start side; the action cluster on the end
-          side with the meals/exercise toggle as its LAST item — the far (left in
-          RTL) corner. The workout viewer renders the SAME strip with the same
-          toggle slot, so the toggle never moves when switching views. */}
+          side, led by the meals/exercise toggle — it is the FIRST item, so in
+          RTL it sits to the RIGHT of the action buttons (owner directive). The
+          workout viewer renders the same strip with the toggle in the same
+          leading slot. Every control in this row is 44px tall. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
@@ -765,6 +765,7 @@ export function PlanViewer({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {planTypeToggle}
           {!readOnly && isSolo && (
             <Link
               href="/family"
@@ -817,11 +818,6 @@ export function PlanViewer({
               ownerSex={ownerSex}
             />
           )}
-          {/* ms-auto pins the toggle to its line's far (left in RTL) edge even
-              when the cluster wraps or goes full-width on mobile — the same
-              corner the workout view and the standalone states use. A no-op on
-              an unwrapped sm+ row (the cluster is content-width there). */}
-          {planTypeToggle && <div className="ms-auto">{planTypeToggle}</div>}
         </div>
       </div>
 
