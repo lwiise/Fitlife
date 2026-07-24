@@ -44,8 +44,8 @@ export function PlanCTA({
             </h2>
             <p className="text-white/75 text-sm mt-0.5 leading-relaxed">
               {memberCount > 1
-                ? "وجبات بيتك جاهزة، يوم بيوم بالمقادير"
-                : "وجباتك جاهزة، يوم بيوم بالمقادير"}
+                ? "٧ أيام من وجبات بيتك جاهزة بالمقادير"
+                : "٧ أيام من وجباتك جاهزة بالمقادير"}
             </p>
           </div>
           <span className="inline-flex items-center justify-center gap-1.5 min-h-11 px-5 rounded-full bg-white text-brand-purple-900 group-hover:bg-brand-yellow text-sm font-bold transition-colors w-full sm:w-auto">
@@ -103,8 +103,8 @@ export function PlanCTA({
       <p className="font-bold text-brand-ink text-lg">ما عندك خطة بعد</p>
       <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
         {g(
-          "ابدئي بإنشاء خطتك الأولى لمعرفة وجبات الأسبوع",
-          "ابدأ بإنشاء خطتك الأولى لمعرفة وجبات الأسبوع",
+          "أنشئي خطتك الأولى لعرض وجبات الأسبوع",
+          "أنشئ خطتك الأولى لعرض وجبات الأسبوع",
         )}
       </p>
       <div className="mt-4 flex justify-center">
