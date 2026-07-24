@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import type { MemberPlan } from "@fitlife/plan-engine";
+import { PLAN_MENU_ITEM_CLASS } from "../PlanActionsMenu";
 
 export interface DownloadPDFButtonProps {
   memberPlan: MemberPlan;
@@ -66,17 +67,20 @@ export function DownloadPDFButton({
       type="button"
       onClick={handleDownload}
       disabled={loading}
-      className="inline-flex items-center justify-center gap-2 text-brand-purple-900 hover:bg-brand-lavender/30 disabled:opacity-60 disabled:cursor-not-allowed font-bold text-sm px-3.5 py-2.5 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      // Renders as a row of the plan header's «المزيد» menu — its only caller.
+      // The menu deliberately stays open while this generates, so the spinner
+      // and the error label below are visible where the user clicked.
+      className={`${PLAN_MENU_ITEM_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
     >
       {loading ? (
         <Loader2
-          className="size-4 animate-spin motion-reduce:animate-none"
+          className="size-4 animate-spin motion-reduce:animate-none text-brand-purple-900"
           aria-hidden="true"
         />
       ) : (
-        <Download className="size-4" aria-hidden="true" />
+        <Download className="size-4 text-brand-purple-900" aria-hidden="true" />
       )}
-      <span className="truncate max-w-[12rem]">
+      <span className="truncate max-w-[14rem]">
         {status === "error"
           ? "تعذّر التحميل، يرجى المحاولة مرة أخرى"
           : `تحميل PDF لـ ${memberPlan.member_name_ar}`}

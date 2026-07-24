@@ -107,7 +107,10 @@ export function RegenerateButton({
         type="button"
         onClick={openDialog}
         disabled={isPending}
-        className="inline-flex items-center justify-center gap-2 bg-brand-purple-900 hover:bg-brand-purple-700 disabled:bg-brand-purple-900/40 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-[2.75rem]"
+        // Ring offset stays the Tailwind default (white): this button now sits
+        // on the plan header's white band and, on a failed day, on a near-white
+        // tinted box — never on the page's grey surface.
+        className="inline-flex items-center justify-center gap-2 bg-brand-purple-900 hover:bg-brand-purple-700 disabled:bg-brand-purple-900/40 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 min-h-[2.75rem]"
       >
         {isPending ? (
           <Loader2

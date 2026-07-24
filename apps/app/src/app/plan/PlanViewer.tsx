@@ -15,6 +15,7 @@ import {
   setSharedMealCheckin as setSharedMealCheckinAction,
 } from "@/lib/engagement/actions";
 import { RegenerateButton } from "./RegenerateButton";
+import { PlanActionsMenu, PLAN_MENU_ITEM_CLASS } from "./PlanActionsMenu";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
 import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
@@ -735,186 +736,184 @@ export function PlanViewer({
             ? "/journey"
             : `/journey?member=${journeyEntry.id}`
         }
-        className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+        className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border border-brand-purple-900/25 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
       >
         <TrendingUp className="size-4" aria-hidden="true" />
         الوزن والمتابعة
       </Link>
     ) : null;
 
+  // The «المزيد» menu only earns its slot when it has something to hold: a
+  // read-only history view with the export hidden has no secondaries at all.
+  const hasMenuActions =
+    !readOnly || (!translated && !hideExport);
+
   return (
     <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
-      {/* A solo plan has no member-tab row to host «الوزن والمتابعة», so it keeps
-          its own strip here; for a family the journey link lives beside the
-          tabs. The plan-type toggle rides in the week-range/actions row below. */}
-      {isSolo && journeyLink && (
-        <div className="flex items-center justify-end gap-3 flex-wrap">
-          {journeyLink}
+      {/* Unified header band: one white card holding the week context, the view
+          toggle, the primary CTA and the member chips. The action row used to
+          carry up to five same-weight pills that wrapped unpredictably at
+          laptop widths — every secondary now lives in the «المزيد» menu, so
+          the row is two controls wide no matter how many the account
+          qualifies for. Every control here is 44px tall. */}
+      <div className="rounded-3xl bg-white border border-brand-ink/5 px-4 py-4 sm:px-6 sm:py-5">
+        {/* Line 1: week range on the start side; the action cluster on the end
+            side, led by the meals/exercise toggle — it is the FIRST item, so in
+            RTL it sits to the RIGHT of the CTA (owner directive). The workout
+            viewer renders the same band with the toggle in the same slot. */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
+            <p className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
+              {formatWeekRange(plan.week_start_date, locale)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {planTypeToggle}
+            {!readOnly && (
+              <RegenerateButton
+                memberId={activeMember.member_id}
+                memberName={activeMember.member_name_ar}
+                hasSharedMeals={activeMemberHasShared}
+                locale={locale}
+                ownerSex={ownerSex}
+              />
+            )}
+            {hasMenuActions && (
+              <PlanActionsMenu>
+                {!readOnly && (
+                  <Link href="/plan/history" className={PLAN_MENU_ITEM_CLASS}>
+                    <History className="size-4 text-brand-purple-900" aria-hidden="true" />
+                    الخطط السابقة
+                  </Link>
+                )}
+                {!translated && !hideExport && (
+                  <DownloadPDFButton
+                    memberPlan={activeMember}
+                    planMetadata={{ week_start_date: plan.week_start_date }}
+                    memberNames={memberNames}
+                  />
+                )}
+                {!readOnly && isSolo && (
+                  <Link href="/family" className={PLAN_MENU_ITEM_CLASS}>
+                    <UserPlus className="size-4 text-brand-purple-900" aria-hidden="true" />
+                    إضافة فرد
+                  </Link>
+                )}
+                {!readOnly && !translated && showWorkoutOptIn && (
+                  <Link href="/onboarding/workout" className={PLAN_MENU_ITEM_CLASS}>
+                    <Dumbbell className="size-4 text-brand-purple-900" aria-hidden="true" />
+                    {genderPick(ownerSex)("أضيفي خطة التمارين", "أضِف خطة التمارين")}
+                  </Link>
+                )}
+                {!readOnly && housekeeperLocale && (
+                  <Link href="/plan/housekeeper" className={PLAN_MENU_ITEM_CLASS}>
+                    <ChefHat className="size-4 text-brand-purple-900" aria-hidden="true" />
+                    وصفات الخدامة
+                  </Link>
+                )}
+              </PlanActionsMenu>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Top strip: the week range is the section's MASTHEAD — a purple
-          headline with a short yellow rule, so the actual context leads the
-          page instead of being its smallest text. The action cluster sits on
-          the end side, led by the meals/exercise toggle — it is the FIRST
-          item, so in RTL it sits to the RIGHT of the action buttons (owner
-          directive). The workout viewer renders the same strip with the
-          toggle in the same leading slot. Every control in this row is 44px
-          tall; only the primary CTA carries a fill — the rest are quiet
-          ghosts. */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-          <p className="font-extrabold text-brand-purple-900 text-[28px] leading-tight tabular-nums">
-            {formatWeekRange(plan.week_start_date, locale)}
-          </p>
-          <div
-            className="w-14 h-[3px] rounded-full bg-brand-yellow mt-1.5"
-            aria-hidden="true"
-          />
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {planTypeToggle}
-          {!readOnly && isSolo && (
-            <Link
-              href="/family"
-              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <UserPlus className="size-4" aria-hidden="true" />
-              إضافة فرد
-            </Link>
-          )}
-          {!readOnly && (
-            <Link
-              href="/plan/history"
-              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <History className="size-4" aria-hidden="true" />
-              الخطط السابقة
-            </Link>
-          )}
-          {!readOnly && !translated && showWorkoutOptIn && (
-            <Link
-              href="/onboarding/workout"
-              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <Dumbbell className="size-4" aria-hidden="true" />
-              {genderPick(ownerSex)("أضيفي خطة التمارين", "أضِف خطة التمارين")}
-            </Link>
-          )}
-          {!readOnly && housekeeperLocale && (
-            <Link
-              href="/plan/housekeeper"
-              className="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              <ChefHat className="size-4" aria-hidden="true" />
-              وصفات الخدامة
-            </Link>
-          )}
-          {!translated && !hideExport && (
-            <DownloadPDFButton
-              memberPlan={activeMember}
-              planMetadata={{ week_start_date: plan.week_start_date }}
-              memberNames={memberNames}
-            />
-          )}
-          {!readOnly && (
-            <RegenerateButton
-              memberId={activeMember.member_id}
-              memberName={activeMember.member_name_ar}
-              hasSharedMeals={activeMemberHasShared}
-              locale={locale}
-              ownerSex={ownerSex}
-            />
-          )}
-        </div>
+        {/* Line 2: the household. A hairline separates context from people, and
+            the chips scroll horizontally on a phone rather than wrapping. A
+            solo plan has no chips — the row then carries «الوزن والمتابعة»
+            alone (it has nowhere else to live). */}
+        {(!isSolo || journeyLink) && (
+          <>
+            <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
+            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+              <div
+                className={`flex items-center gap-3 min-w-max ${
+                  isSolo ? "justify-end" : "justify-between"
+                }`}
+              >
+                {/* Member chips (hidden for a solo plan). «إضافة فرد» follows
+                    the last chip; «الوزن والمتابعة» takes the trailing (end)
+                    slot the add button used to occupy (owner directive
+                    07/2026). */}
+                {!isSolo && (
+                  <div className="flex items-center gap-2">
+                    {plan.members.map((m) => {
+                      const isActive = m.member_id === activeMemberId;
+                      const isMom = m.member_id === "mom";
+                      const transStatus = memberTranslationStatus(m);
+                      return (
+                        <button
+                          key={m.member_id}
+                          type="button"
+                          onClick={() => setActiveMemberId(m.member_id)}
+                          aria-pressed={isActive}
+                          className={`relative inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                            isActive
+                              ? "text-white"
+                              : "bg-brand-lavender/25 text-brand-purple-900 hover:bg-brand-lavender/40"
+                          }`}
+                        >
+                          {/* The selected pill slides between chips rather than
+                              cross-fading — the same single-element move the
+                              tab underline used to make. */}
+                          {isActive && (
+                            <motion.span
+                              layoutId="member-chip-fill"
+                              className="absolute inset-0 rounded-full bg-brand-purple-900"
+                            />
+                          )}
+                          <span className="relative">
+                            {/* «أنتِ» stays visible TEXT — the mom chip is never
+                                marked by color alone. It carries no pink dot:
+                                pink on the selected purple fill would vanish. */}
+                            {isMom && !translated && (
+                              <span className="me-1">
+                                {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                              </span>
+                            )}
+                            {memberLabel(m)}
+                            {translated && transStatus === "translating" && (
+                              <Loader2
+                                className={`inline-block ms-1.5 size-3 animate-spin motion-reduce:animate-none align-[-1px] ${
+                                  isActive ? "text-white" : "text-brand-purple-900"
+                                }`}
+                                aria-hidden="true"
+                              />
+                            )}
+                            {translated && transStatus === "queued" && (
+                              <Clock
+                                className="inline-block ms-1.5 size-3 align-[-1px] opacity-40"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {!readOnly && (
+                      <Link
+                        href="/family"
+                        className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                      >
+                        <UserPlus className="size-4" aria-hidden="true" />
+                        إضافة فرد
+                      </Link>
+                    )}
+                  </div>
+                )}
+                {journeyLink}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* «سارة عدّلت خطتك» — the engagement-loop payoff: what Sara changed this
-          week and why, citing the family's real logged marks. Plan-wide (above
-          the member tabs). The minimum-signal guard already ran in the engine,
+          week and why, citing the family's real logged marks. Plan-wide (below
+          the header band). The minimum-signal guard already ran in the engine,
           so a present week_changes is safe to show. Hidden on the housekeeper's
           translated view — it is the mom's فصحى adaptation narrative. */}
       {!translated && plan.week_changes && plan.week_changes.length > 0 && (
         <SaraChangesCard changes={plan.week_changes} />
-      )}
-
-      {/* Member tabs (hidden for a solo plan). «إضافة فرد» now sits right after
-          the last tab; «الوزن والمتابعة» takes the trailing (end) slot the add
-          button used to occupy (owner directive 07/2026). */}
-      {!isSolo && (
-      <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto no-scrollbar">
-        <div className="flex items-center justify-between gap-2 min-w-max">
-        <div className="flex items-center gap-1">
-        <div className="flex gap-1">
-          {plan.members.map((m) => {
-            const isActive = m.member_id === activeMemberId;
-            const isMom = m.member_id === "mom";
-            const transStatus = memberTranslationStatus(m);
-            return (
-              <button
-                key={m.member_id}
-                type="button"
-                onClick={() => setActiveMemberId(m.member_id)}
-                aria-pressed={isActive}
-                className={`relative px-3.5 py-3 text-[15px] font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                  isActive
-                    ? "text-brand-purple-900"
-                    : "text-brand-ink-muted hover:text-brand-ink"
-                }`}
-              >
-                {isMom && !translated && (
-                  <>
-                    {/* Pink DOT marker + the word in the tab's own color —
-                        pink text at small sizes is off-brand (headings 24px+
-                        only), but the «أنتِ» address itself must stay visible
-                        text, never color alone. */}
-                    <span
-                      className="inline-block size-[7px] rounded-full bg-brand-pink me-1.5 align-middle"
-                      aria-hidden="true"
-                    />
-                    <span className="me-1">
-                      {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                    </span>
-                  </>
-                )}
-                {memberLabel(m)}
-                {translated && transStatus === "translating" && (
-                  <Loader2
-                    className="inline-block ms-1.5 size-3 animate-spin motion-reduce:animate-none align-[-1px] text-brand-purple-900"
-                    aria-hidden="true"
-                  />
-                )}
-                {translated && transStatus === "queued" && (
-                  <Clock
-                    className="inline-block ms-1.5 size-3 align-[-1px] opacity-40"
-                    aria-hidden="true"
-                  />
-                )}
-                {isActive && (
-                  <motion.span
-                    layoutId="member-tab-underline"
-                    className="absolute inset-x-2 -bottom-px h-[3px] rounded-t-full bg-brand-purple-900"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        {!readOnly && (
-          <Link
-            href="/family"
-            aria-label="إضافة فرد"
-            title="إضافة فرد"
-            className="inline-flex items-center justify-center flex-shrink-0 size-11 rounded-full border-[1.5px] border-dashed border-brand-purple-900/40 text-brand-purple-900 hover:bg-brand-lavender/30 transition-colors ms-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-          >
-            <UserPlus className="size-4" aria-hidden="true" />
-          </Link>
-        )}
-        </div>
-        {journeyLink}
-        </div>
-      </div>
       )}
 
       {/* Member summary tiles */}

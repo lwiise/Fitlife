@@ -366,13 +366,15 @@ export default async function PlanPage({
 
   const planTypeToggle =
     workout != null ? (
-      // Segmented view switch on a lavender track — the active segment is a
-      // white inset thumb (brand purple text), so the near-black fill no longer
-      // competes with the primary CTA for attention. Each Link spans the FULL
-      // 44px track height (min-h-11) for the tap target; the inner span is the
-      // 36px visual thumb, vertically centered → the 4px inset look.
+      // Segmented view switch: brand-purple active segment on a lavender track.
+      // The track tint reads on BOTH surfaces the toggle appears on — the white
+      // header band and, before a plan is ready, the bare page background.
+      // Each Link spans the FULL 44px track height (min-h-11) for the tap
+      // target; the inner span is the 36px visual thumb, vertically centered →
+      // the 4px inset look. Hover lives on the Link (group) so the strips above
+      // and below the thumb respond like they click.
       <div
-        className="inline-flex rounded-full bg-brand-lavender/30 px-[3px]"
+        className="inline-flex rounded-full bg-brand-lavender/25 px-[3px]"
         role="tablist"
         aria-label="نوع الخطة"
       >
@@ -385,7 +387,7 @@ export default async function PlanPage({
           <span
             className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
               !workoutView
-                ? "bg-white text-brand-purple-900 shadow-sm"
+                ? "bg-brand-purple-900 text-white"
                 : "text-brand-ink/70 group-hover:text-brand-ink"
             }`}
           >
@@ -401,7 +403,7 @@ export default async function PlanPage({
           <span
             className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
               workoutView
-                ? "bg-white text-brand-purple-900 shadow-sm"
+                ? "bg-brand-purple-900 text-white"
                 : "text-brand-ink/70 group-hover:text-brand-ink"
             }`}
           >
