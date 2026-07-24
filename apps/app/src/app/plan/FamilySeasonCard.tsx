@@ -231,6 +231,8 @@ export function FamilySeasonCard({
   workoutCheckins = [],
   goalReached = [],
   weekStartDate,
+  workoutWeekStart,
+  workoutWeekEnd,
   todayIndex = null,
   today = null,
   ownerSex = null,
@@ -243,14 +245,19 @@ export function FamilySeasonCard({
   checkins: SeasonMealMark[];
   verdicts: SeasonVerdictMark[];
   /** Workout session marks (the exercise pillar); empty when no workout plan.
-   * Their local_date scopes them to the meal plan's week (weekday-anchored
-   * day_index alone cannot). */
+   * Scoped to the workout marking window below (weekday-anchored day_index alone
+   * cannot place them in a week). */
   workoutCheckins?: SeasonWorkoutMark[];
   /** Adults who reached their target weight — the achievement ONLY (no number,
    * no target); pregnant/lactating are never here (filtered on the server). */
   goalReached?: Array<{ id: string; name: string }>;
   /** Plan week start (YYYY-MM-DD) → real weekday initials on the strip. */
   weekStartDate?: string;
+  /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
+   * Sunday-anchored week the workout UI writes into. Scopes workout marks
+   * independently of the (possibly stale, generation-day-anchored) meal week. */
+  workoutWeekStart?: string;
+  workoutWeekEnd?: string;
   /** Plan day_index of TODAY (Riyadh) → the strip's «اليوم» marker. */
   todayIndex?: number | null;
   /** The «اليوم» action panel: today's dish + the invitation to mark it. */
@@ -283,6 +290,8 @@ export function FamilySeasonCard({
     verdicts,
     workoutCheckins,
     weekStartDate,
+    workoutWeekStart,
+    workoutWeekEnd,
   });
 
   // «اليوم» panel — fills the hero's second column with the next action (and

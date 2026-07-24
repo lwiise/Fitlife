@@ -212,6 +212,55 @@ describe("computeSeasonStats — workouts", () => {
   });
 });
 
+describe("computeSeasonStats — workout window (decoupled from the meal week)", () => {
+  it("scopes workouts to the explicit workout window, not the meal week_start_date", () => {
+    // The meal plan is a STALE prior week; the workout was marked THIS week.
+    // Under the old meal-week scoping the mark was dropped; it must now count.
+    const stats = computeSeasonStats({
+      members,
+      checkins: [],
+      verdicts: [],
+      workoutCheckins: [
+        workout({ member_id: "mom", day_index: 3, local_date: "2026-07-22" }),
+      ],
+      weekStartDate: "2026-07-06", // stale meal week [07-06 … 07-12]
+      workoutWeekStart: "2026-07-19", // current week [07-19 … 07-23]
+      workoutWeekEnd: "2026-07-23",
+    });
+    expect(stats.workoutActs).toBe(1);
+    expect(stats.ranked.find((m) => m.id === "mom")!.score).toBe(1);
+  });
+
+  it("drops a workout outside the workout window even if it lands inside the meal week", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [],
+      verdicts: [],
+      workoutCheckins: [
+        workout({ member_id: "mom", day_index: 3, local_date: "2026-07-10" }),
+      ],
+      weekStartDate: "2026-07-06", // meal week [07-06 … 07-12] contains 07-10
+      workoutWeekStart: "2026-07-19",
+      workoutWeekEnd: "2026-07-23",
+    });
+    expect(stats.workoutActs).toBe(0);
+    expect(stats.ranked.every((m) => m.score === 0)).toBe(true);
+  });
+
+  it("falls back to meal week+6 when no explicit workout window is given", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [],
+      verdicts: [],
+      workoutCheckins: [
+        workout({ member_id: "mom", day_index: 1, local_date: "2026-07-18" }),
+      ],
+      weekStartDate: WEEK_START, // [07-17 … 07-23]
+    });
+    expect(stats.workoutActs).toBe(1);
+  });
+});
+
 describe("computeSeasonStats — ranking", () => {
   it("caps the percentage at 100% and the family ring at 1", () => {
     const stats = computeSeasonStats({

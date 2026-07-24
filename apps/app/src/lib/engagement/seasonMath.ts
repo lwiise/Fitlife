@@ -105,11 +105,21 @@ export function computeSeasonStats(input: {
   checkins: SeasonMealMark[];
   verdicts: SeasonVerdictMark[];
   workoutCheckins?: SeasonWorkoutMark[];
-  /** Meal plan week anchor (YYYY-MM-DD). When valid, workout marks are scoped
-   * to local_date ∈ [weekStartDate, weekStartDate+6] and rows without a
-   * local_date are dropped (stale weeks must never buy rank). When absent or
-   * malformed, no scoping — degrade open rather than zero the pillar. */
+  /** Meal plan week anchor (YYYY-MM-DD) — drives the strip labels. Also the
+   * FALLBACK workout window ([weekStartDate, weekStartDate+6]) for callers that
+   * don't pass an explicit one. */
   weekStartDate?: string;
+  /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
+   * Sunday-anchored week the workout UI actually writes into (see
+   * setWorkoutCheckin). PREFERRED over weekStartDate for scoping workout marks:
+   * the meal plan's week_start_date is anchored to the meal generation day (an
+   * arbitrary weekday) and can even be a stale prior week, so tying workouts to
+   * it silently drops legitimate current-week sessions. Rows without a
+   * local_date, or outside this window, are dropped (stale weeks must never buy
+   * rank). When neither this nor weekStartDate is valid, no scoping — degrade
+   * open rather than zero the pillar. */
+  workoutWeekStart?: string;
+  workoutWeekEnd?: string;
 }): SeasonStats {
   const { members, checkins, verdicts } = input;
   const workoutCheckins = input.workoutCheckins ?? [];
@@ -138,19 +148,34 @@ export function computeSeasonStats(input: {
   const honored = activeDays >= HONOR_DAYS_GOAL;
 
   // ── Workouts: week-scoped, then done/moved only ─────────────────────────
-  const weekStartDate =
+  // Scope to the WORKOUT marking window (the current Sunday-anchored week the
+  // exercise UI writes into), NOT the meal plan's week_start_date. The meal
+  // anchor is the meal generation day (arbitrary weekday) and may be a stale
+  // prior week, so scoping workouts by it dropped genuine current-week sessions
+  // for most users. Prefer an explicit window; fall back to the meal week+6
+  // only when a caller supplies no explicit one (keeps older callers/tests).
+  const mealWeekStart =
     input.weekStartDate && ISO_DATE_RE.test(input.weekStartDate)
       ? input.weekStartDate
       : undefined;
-  const weekEnd = weekStartDate ? addDaysISO(weekStartDate, 6) : undefined;
+  const workoutStart =
+    input.workoutWeekStart && ISO_DATE_RE.test(input.workoutWeekStart)
+      ? input.workoutWeekStart
+      : mealWeekStart;
+  const workoutEnd =
+    input.workoutWeekEnd && ISO_DATE_RE.test(input.workoutWeekEnd)
+      ? input.workoutWeekEnd
+      : mealWeekStart
+        ? addDaysISO(mealWeekStart, 6)
+        : undefined;
   const effectiveWorkouts = workoutCheckins.filter((w) => {
     if (w.status !== "done" && w.status !== "moved") return false;
-    if (!weekStartDate || !weekEnd) return true;
+    if (!workoutStart || !workoutEnd) return true;
     // ISO dates compare correctly as strings.
     return (
       w.local_date != null &&
-      w.local_date >= weekStartDate &&
-      w.local_date <= weekEnd
+      w.local_date >= workoutStart &&
+      w.local_date <= workoutEnd
     );
   });
   const workoutActs = new Set(

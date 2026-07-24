@@ -46,6 +46,12 @@ export interface FamilySeasonProps {
   }>;
   goalReached: Array<{ id: string; name: string }>;
   weekStartDate?: string;
+  /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
+   * Sunday-anchored week the workout UI writes into. Scopes workout marks on the
+   * board independently of the meal plan's week (which is anchored to the meal
+   * generation day and may be stale). */
+  workoutWeekStart?: string;
+  workoutWeekEnd?: string;
   /** Plan day_index of TODAY (Riyadh calendar), or null when the plan week
    * doesn't contain today — drives the strip's «اليوم» marker. */
   todayIndex?: number | null;
@@ -75,7 +81,17 @@ function riyadhTodayISO(): string {
   );
 }
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// The floor of the workout marking window, mirrored from actions.ts GRACE_DAYS:
+// setWorkoutCheckin can stamp a session's local_date back to
+// today - max(todayWeekday, GRACE_DAYS), so the board's workout window must
+// span exactly that to count every mark the UI can produce.
+const WORKOUT_GRACE_DAYS = 2;
+
+/** Weekday (0=Sunday, matches setWorkoutCheckin's derivation) of a Riyadh-local
+ * YYYY-MM-DD date. */
+function weekdayOfISO(dateISO: string): number {
+  return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
+}
 
 // undefined_table (Postgres) / schema-cache miss (PostgREST) — the shape a
 // pre-migration prod returns. A warning, not an error: the board is built to
@@ -142,13 +158,23 @@ export async function getFamilySeasonProps(
 
   const supabase = await createClient();
 
-  // The week window is the MEAL plan's own week — meal day_index is anchored
-  // to week_start_date, and workout marks (weekday-anchored to their own plan)
-  // are scoped into it by local_date so a stale prior week can never buy rank.
+  // The MEAL week anchors meal day_index and the strip labels.
   const weekStartDate = latestPlan.plan_data.week_start_date;
-  const weekEndDate = ISO_DATE_RE.test(weekStartDate)
-    ? addDaysISO(weekStartDate, 6)
-    : null;
+
+  // Workout marks are scoped to the CURRENT (Sunday-anchored) week the marking
+  // UI writes into — exactly the span setWorkoutCheckin can stamp: today back to
+  // today - max(todayWeekday, GRACE_DAYS). This is DELIBERATELY decoupled from
+  // the meal plan's week_start_date, which is anchored to the meal generation
+  // day (an arbitrary weekday) and may even be a stale prior week — scoping
+  // workouts by it silently dropped legitimate current-week sessions (they still
+  // showed on /plan, but never reached this board). A current-week bound still
+  // keeps the "stale prior week can't buy rank" guarantee.
+  const workoutTodayISO = riyadhTodayISO();
+  const workoutWeekStart = addDaysISO(
+    workoutTodayISO,
+    -Math.max(weekdayOfISO(workoutTodayISO), WORKOUT_GRACE_DAYS),
+  );
+  const workoutWeekEnd = workoutTodayISO;
 
   // All four reads are independent — one parallel batch, not three stages.
   // Meal check-ins + verdicts: select("*") on purpose — member_id is a 00019
@@ -161,13 +187,12 @@ export async function getFamilySeasonProps(
     if (workoutPlan?.status !== "ready") {
       return Promise.resolve({ data: null, error: null });
     }
-    let q = (supabase as unknown as SupabaseClient)
+    const q = (supabase as unknown as SupabaseClient)
       .from("workout_checkins")
       .select("*")
-      .eq("workout_plan_id", workoutPlan.id);
-    if (weekEndDate) {
-      q = q.gte("local_date", weekStartDate).lte("local_date", weekEndDate);
-    }
+      .eq("workout_plan_id", workoutPlan.id)
+      .gte("local_date", workoutWeekStart)
+      .lte("local_date", workoutWeekEnd);
     return q.order("created_at", { ascending: true }).limit(400);
   };
   const [checkinRes, verdictRes, workoutRes, { data: logs, error: logsError }] =
@@ -285,6 +310,8 @@ export async function getFamilySeasonProps(
     workoutCheckins,
     goalReached,
     weekStartDate,
+    workoutWeekStart,
+    workoutWeekEnd,
     todayIndex,
     today,
     ownerSex: profile.sex ?? null,
