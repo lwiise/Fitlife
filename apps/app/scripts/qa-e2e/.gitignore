@@ -1,3 +1,7 @@
 # Run output: contains a real test account's email, user id and plaintext
 # password. Never commit it.
 results.json
+
+# Diagnostic dumps of a real account's plan_data.
+plan-dump.json
+probe-dump.json

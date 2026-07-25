@@ -35,6 +35,40 @@ Environment overrides: `FITLIFE_BASE_URL`, `FITLIFE_TEST_PASSWORD`,
 
 Results are written to `results.json`.
 
+## Diagnostic companions
+
+`run.mjs` answers "did it work". These answer "what actually happened" — they
+read the account's own rows under its JWT (`plan_generations` has a
+*"Users can view own plan generations"* select policy), which is the only
+generation telemetry reachable without Netlify/Sentry credentials.
+
+```bash
+node probe.mjs    <email> [--full]   # plan_generations + meal_plans state, true timing
+node timeline.mjs <email> [minutes]  # poll a LIVE run; logs when each day lands
+node analyze.mjs  <email> [كبدة,...] # targets vs actual day totals, dishes, dislike scan
+node cleanup.mjs  <email>            # hard-delete via the real /settings flow, then verify
+```
+
+Run `timeline.mjs` in parallel with `run.mjs` — it is the substitute for the
+background function's logs. The engine persists a full snapshot on every
+completed day, so a moving `meal_plans.updated_at` means a day landed and a
+static one means the run is stuck inside one day's retry budget.
+
+**`plan_generations`, not the plan row, is the finish line.** `plan_data`
+flips `generating: false` *before* the engine's second-chance retry wave and
+before the final token/cost write, so the harness can report `ready` while the
+background function is still running. Trust `status = completed|failed`,
+and read its `error_message` for the partial-day cause.
+
+## Observability that does NOT exist
+
+- `generate-plan-background.mts` has **no Sentry instrumentation** — it only
+  writes `console.*`. Sentry has traces for the *dispatch* server actions, never
+  for the generation itself. Its logs live only in Netlify's function log.
+- The deployed Sentry DSN is write-only; reading issues needs `SENTRY_AUTH_TOKEN`,
+  and Netlify's API needs `NETLIFY_AUTH_TOKEN`. Neither is in the repo or the
+  sandbox env, so a session without them must diagnose from the DB rows above.
+
 ## Network egress
 
 The sandbox must allow both hosts, added as bare domains (not URLs) in the
@@ -92,4 +126,17 @@ looks like `403 Host not in allowlist`, and the check happens before DNS.
 - **Chromium may need a TLS cap behind an egress proxy.** If a sandbox MITMs
   TLS, Chromium's 1.3 handshakes can be reset (`ERR_CONNECTION_RESET`) while
   Node's succeed. Point `CHROMIUM_PATH` at a wrapper that execs the real binary
-  with `--ssl-version-max=tls1.2`; certificate verification stays on.
+  with `--ssl-version-max=tls1.2`; certificate verification stays on. Observed
+  again on 2026-07-25 even with the sandbox on "full network access".
+- **`in_progress: false` still is not "done".** The harness's completion test is
+  the app's own, and it is right about the *viewer* — but the background function
+  keeps running through the second-chance retry wave afterwards. A run observed
+  on 2026-07-25 reported `ready` at 633s while the function settled at 891s. Both
+  runs that day also finished with a **permanently empty day** that the poller
+  reported as success, because a failed day counts as "attempted" and flips
+  `generating` off. Check `analyze.mjs` for `— EMPTY —` before believing a pass.
+- **A hard-killed worker leaves `plan_generations` at `started` forever.** The
+  terminal write lives in the function's own `try`/`catch`; Netlify's 15-min kill
+  runs neither. Nothing sweeps the row — it is only reclassified by the *next*
+  dispatch attempt, after `STALE_GENERATION_MIN`. An account observed on
+  2026-07-25 still held a `started` row 40 minutes later.
