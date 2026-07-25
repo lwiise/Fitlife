@@ -16,7 +16,7 @@ import { hasReachedWeightGoal } from "./goalMilestone";
 import {
   collapseMealMarks,
   collapseWorkoutMarks,
-  dayHasNonSkippedMark,
+  dayHasCookedMark,
   isISODate,
   workoutMarkingWindow,
   type PlannedTotals,
@@ -327,8 +327,8 @@ export async function getFamilySeasonProps(
         }).format(new Date()),
         slotLabel: SLOT_LABELS_AR[pick.slot] ?? "وجبة",
         dishName: pick.recipe_name_ar,
-        // Same definition as the strip cell: a skipped-only day is not lit.
-        alreadyLit: dayHasNonSkippedMark(checkins, todayIndex),
+        // Same definition as the strip cell: only «طبختها كما هي» lights a day.
+        alreadyLit: dayHasCookedMark(checkins, todayIndex),
       };
     }
   }
