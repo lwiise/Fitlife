@@ -129,11 +129,17 @@ export async function triggerPlanGeneration(params: {
   // the first emit and stays 'ready' for the whole run. The durable signal is the
   // plan_generations 'started' row, created at dispatch (createPlanRows) and
   // cleared only at terminal completion — the shell flip can't fake it.
+  // Scoped to plan_kind='meal': 00014 made the in-flight lock per (user, kind)
+  // so a meal run and a workout run may coexist. Without this filter a live
+  // WORKOUT row reads as a busy meal run (silently skipping meal generation on
+  // the post-subscribe path, which dispatches workout first) and, past the
+  // staleness bound, the reclassifier below would fail that workout row.
   const { data: liveGens } = await supabase
     .from("plan_generations")
     .select("id, started_at")
     .eq("user_id", userId)
     .eq("status", "started")
+    .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
     .returns<{ id: string; started_at: string }[]>();

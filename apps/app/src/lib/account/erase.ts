@@ -47,16 +47,31 @@ export async function eraseUserAccount(userId: string): Promise<void> {
     // Continue with erasure regardless (PDPL takes precedence).
   }
 
-  const { data: sub } = await admin
+  // NOT maybeSingle(): `subscriptions` has no unique(user_id) (see
+  // subscription/state.ts), so a second row made this read error out and
+  // return null — silently skipping the cancellation and leaving the deleted
+  // account still billing, with no UI left to cancel from. Read every row and
+  // cancel each live subscription.
+  const { data: subs, error: subsError } = await admin
     .from("subscriptions")
     .select("lemonsqueezy_subscription_id, status")
     .eq("user_id", userId)
-    .maybeSingle();
+    .returns<{ lemonsqueezy_subscription_id: string | null; status: string }[]>();
+  if (subsError) {
+    Sentry.captureException(subsError, {
+      tags: { area: "account-erase-ls-read", userId },
+    });
+  }
 
-  const lsId = (sub as { lemonsqueezy_subscription_id: string | null } | null)
-    ?.lemonsqueezy_subscription_id;
-  const lsStatus = (sub as { status: string } | null)?.status;
-  if (lsId && (lsStatus === "active" || lsStatus === "past_due")) {
+  const liveLsIds = [
+    ...new Set(
+      (subs ?? [])
+        .filter((s) => s.status === "active" || s.status === "past_due")
+        .map((s) => s.lemonsqueezy_subscription_id)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  for (const lsId of liveLsIds) {
     try {
       await cancelLemonsqueezySubscription(lsId);
     } catch (e) {
