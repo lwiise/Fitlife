@@ -14,6 +14,12 @@ import {
   setMealVerdict as setMealVerdictAction,
   setSharedMealCheckin as setSharedMealCheckinAction,
 } from "@/lib/engagement/actions";
+import {
+  checkinClearKeys,
+  checkinMapKey,
+  resolveCheckin,
+} from "@/lib/engagement/checkinMap";
+import { HOUSEHOLD_CHECKIN_MEMBER } from "@/lib/engagement/types";
 import { RegenerateButton } from "./RegenerateButton";
 import { PlanActionsMenu, PLAN_MENU_ITEM_CLASS } from "./PlanActionsMenu";
 // @react-pdf is dynamically imported inside this button's click handler, so it
@@ -61,7 +67,7 @@ function seedCheckinMap(checkins: CheckinRowProp[] | undefined) {
           c.status === "cooked" || c.status === "swapped" || c.status === "skipped",
       )
       .map((c) => [
-        `${c.day_index}|${c.slot}|${c.member_id ?? "household"}`,
+        checkinMapKey(c.day_index, c.slot, c.member_id ?? HOUSEHOLD_CHECKIN_MEMBER),
         { status: c.status, reason: c.reason },
       ]),
   );
@@ -248,11 +254,7 @@ export function PlanViewer({
 
   /** A member's effective mark: their own row, else the whole-house fallback. */
   function checkinFor(dayIndex: number, slot: string, memberId: string) {
-    return (
-      checkinMap.get(`${dayIndex}|${slot}|${memberId}`) ??
-      checkinMap.get(`${dayIndex}|${slot}|household`) ??
-      null
-    );
+    return resolveCheckin(checkinMap, dayIndex, slot, [memberId]);
   }
 
   /** A SHARED meal's single status: any sharer's row (the fan-out keeps them
@@ -265,11 +267,7 @@ export function PlanViewer({
     slot: string,
     sharerIds: string[],
   ) {
-    for (const id of sharerIds) {
-      const own = checkinMap.get(`${dayIndex}|${slot}|${id}`);
-      if (own) return own;
-    }
-    return checkinMap.get(`${dayIndex}|${slot}|household`) ?? null;
+    return resolveCheckin(checkinMap, dayIndex, slot, sharerIds);
   }
 
   /** A member's own verdict for a dish (no fallback — verdicts are personal). */
@@ -322,16 +320,19 @@ export function PlanViewer({
     status: "cooked" | "swapped" | "skipped" | null,
     reason: string | null,
   ) {
-    const key = `${activeDayIndex}|${slot}|${memberId}`;
-    const householdKey = `${activeDayIndex}|${slot}|household`;
-    const prev = checkinMap.get(key) ?? null;
-    const prevHousehold = checkinMap.get(householdKey) ?? null;
+    const key = checkinMapKey(activeDayIndex, slot, memberId);
+    const prevEntries = new Map(
+      checkinClearKeys(activeDayIndex, slot, [memberId]).map((k) => [
+        k,
+        checkinMap.get(k) ?? null,
+      ]),
+    );
     const next = new Map(checkinMap);
     if (status === null) {
-      // Mirror the server: clearing removes the member's own mark; un-tapping
-      // a chip lit only by the whole-house fallback retracts that row instead.
-      if (next.has(key)) next.delete(key);
-      else next.delete(householdKey);
+      // Mirror the server: clearing removes the member's own mark AND the
+      // whole-house fallback — leaving the fallback would re-light the chip
+      // the user just un-tapped, with whatever the kitchen last attested.
+      for (const k of prevEntries.keys()) next.delete(k);
     } else {
       // Setting never touches the whole-house row — it stays as the fallback
       // for the other members of this meal.
@@ -352,9 +353,10 @@ export function PlanViewer({
         if (!result.ok) {
           setCheckinMap((cur) => {
             const reverted = new Map(cur);
-            if (prev) reverted.set(key, prev);
-            else reverted.delete(key);
-            if (prevHousehold) reverted.set(householdKey, prevHousehold);
+            for (const [k, v] of prevEntries) {
+              if (v) reverted.set(k, v);
+              else reverted.delete(k);
+            }
             return reverted;
           });
           setCheckinError(result.error);
@@ -367,26 +369,26 @@ export function PlanViewer({
   }
 
   /** ONE tap = one status for the whole shared dish: optimistic fan-out to
-   * every present sharer, mirrored server-side by setSharedMealCheckin.
-   * Clearing removes the sharers' own marks; when the chip was lit only by a
-   * legacy whole-house row, that row is retracted instead (same as the
-   * individual clear). */
+   * every present sharer, mirrored server-side by setSharedMealCheckin. One
+   * tap un-answers it the same way — the sharers' own marks AND the
+   * whole-house fallback go, so the dish reads as unmarked instead of falling
+   * back to an older status (same as the individual clear). */
   function handleSharedCheckin(
     memberIds: string[],
     slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
     status: "cooked" | "swapped" | "skipped" | null,
     reason: string | null,
   ) {
-    const keys = memberIds.map((id) => `${activeDayIndex}|${slot}|${id}`);
-    const householdKey = `${activeDayIndex}|${slot}|household`;
+    const keys = memberIds.map((id) => checkinMapKey(activeDayIndex, slot, id));
     const prevEntries = new Map(
-      [...keys, householdKey].map((k) => [k, checkinMap.get(k) ?? null]),
+      checkinClearKeys(activeDayIndex, slot, memberIds).map((k) => [
+        k,
+        checkinMap.get(k) ?? null,
+      ]),
     );
     const next = new Map(checkinMap);
     if (status === null) {
-      const hadOwn = keys.some((k) => next.has(k));
-      for (const k of keys) next.delete(k);
-      if (!hadOwn) next.delete(householdKey);
+      for (const k of prevEntries.keys()) next.delete(k);
     } else {
       for (const k of keys) next.set(k, { status, reason });
     }
@@ -433,7 +435,7 @@ export function PlanViewer({
     absent: boolean,
     sharerIds: string[],
   ) {
-    const key = `${activeDayIndex}|${slot}|${memberId}`;
+    const key = checkinMapKey(activeDayIndex, slot, memberId);
     const prevAbsent = absenceSet.has(key);
     const prevCheckin = checkinMap.get(key) ?? null;
     // The dish's current mark among the OTHER present sharers — the status a
@@ -444,9 +446,9 @@ export function PlanViewer({
           .filter(
             (id) =>
               id !== memberId &&
-              !absenceSet.has(`${activeDayIndex}|${slot}|${id}`),
+              !absenceSet.has(checkinMapKey(activeDayIndex, slot, id)),
           )
-          .map((id) => checkinMap.get(`${activeDayIndex}|${slot}|${id}`))
+          .map((id) => checkinMap.get(checkinMapKey(activeDayIndex, slot, id)))
           .find(Boolean) ?? null);
     setAbsenceSet((cur) => {
       const next = new Set(cur);
