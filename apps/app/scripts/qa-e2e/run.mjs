@@ -23,11 +23,15 @@ const BASE = process.env.FITLIFE_BASE_URL ?? "https://fitlife-app-mvp.netlify.ap
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
 const PASSWORD = process.env.FITLIFE_TEST_PASSWORD ?? "FitLifeQA!2026";
 const POLL_MS = 10_000;
-// 16 min, deliberately past the app's STALE_GENERATION_MIN (15). A generation
-// that dies mid-flight is reclassified "failed" by getLatestPlan's dead-man's
-// switch at 15 min, so waiting that long turns an ambiguous timeout into a
-// definitive failed verdict.
-const PLAN_TIMEOUT_MS = 16 * 60_000;
+// getLatestPlan's dead-man's switch reclassifies a stuck generation as "failed"
+// STALE_GENERATION_MIN (15) after its LAST WRITE — not after it started. A run
+// that dribbles out a burst of days and then dies therefore resets that clock:
+// one observed failure wrote its shell at T+0.5min, a batch of days at
+// T+13.5min, then died, and only surfaced as failed at T+28.5min. 30 min covers
+// that. A healthy plan returns as soon as in_progress goes false, so the long
+// budget costs nothing except on failures — where waiting buys a definitive
+// "failed" instead of an ambiguous "timeout".
+const PLAN_TIMEOUT_MS = 30 * 60_000;
 
 const only = process.argv.find((a) => a.startsWith("--only="))?.split("=")[1];
 // Explicit address for a single-account run; otherwise a fresh random one.
