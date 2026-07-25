@@ -55,6 +55,10 @@ export interface FamilySeasonProps {
    * the member has a workout plan, meals-only otherwise). `sessions` present
    * ONLY when the member is in the ready workout plan. */
   planned: Record<string, PlannedTotals>;
+  /** Distinct meal slots planned for each day of the plan week (indexed by
+   * day_index, length 7) — the strip's star denominators, so a day shows three
+   * stars only when ALL of its meals were cooked as written. */
+  plannedMealSlotsPerDay: number[];
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
    * Sunday-anchored week the workout UI writes into. Scopes workout marks on the
@@ -183,6 +187,25 @@ export async function getFamilySeasonProps(
         : {}),
     };
   }
+
+  // Per-day star denominators — «كل وجبات اليوم» (owner directive 07/2026: the
+  // strip's third star is earned only by a fully cooked day). Meal identity is
+  // (day, slot) everywhere in the engagement layer — a shared lunch is ONE meal
+  // however many members eat it — so a day's plan is its DISTINCT slots, taken
+  // across the SEASON ROSTER only. The housekeeper is deliberately excluded
+  // (she is never in `members`, is never marked, and a slot only she carries
+  // would put a complete day out of the family's reach).
+  const rosterIds = new Set(members.map((m) => m.id));
+  const plannedSlotSets = Array.from({ length: 7 }, () => new Set<string>());
+  for (const pm of latestPlan.plan_data.members) {
+    if (!rosterIds.has(pm.member_id)) continue;
+    for (const d of pm.days) {
+      const set = plannedSlotSets[d.day_index];
+      if (!set) continue; // day_index outside [0,6] — never expected
+      for (const meal of d.meals) set.add(meal.slot);
+    }
+  }
+  const plannedMealSlotsPerDay = plannedSlotSets.map((s) => s.size);
 
   const supabase = await createClient();
 
@@ -339,6 +362,7 @@ export async function getFamilySeasonProps(
     workoutCheckins,
     goalReached,
     planned,
+    plannedMealSlotsPerDay,
     weekStartDate,
     workoutWeekStart,
     workoutWeekEnd,

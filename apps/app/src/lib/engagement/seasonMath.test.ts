@@ -153,7 +153,7 @@ describe("computeSeasonStats — meals", () => {
     expect(mom.pct).toBeCloseTo(1 / 3);
   });
 
-  it("stars cap at 3 distinct slots and ignore swapped/skipped slots", () => {
+  it("stars ignore swapped/skipped slots, and cap at 3 with no per-day plan", () => {
     const stats = computeSeasonStats({
       members,
       checkins: [
@@ -175,6 +175,116 @@ describe("computeSeasonStats — meals", () => {
       ],
     });
     expect(swapped.days[0]!.stars).toBe(1);
+  });
+});
+
+// Owner directive 07/2026: the third star is EARNED — it means «كل وجبات اليوم».
+describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
+  const dayPlan = (day0: number) => [day0, 0, 0, 0, 0, 0, 0];
+
+  it("gives the third star only when every planned meal of the day is cooked", () => {
+    const cooked = (slots: string[]) =>
+      computeSeasonStats({
+        members,
+        checkins: slots.map((slot) => mark({ slot })),
+        plannedMealSlotsPerDay: dayPlan(4),
+      }).days[0]!;
+
+    // A 4-meal day: three marks used to buy three stars — now it's two.
+    const three = cooked(["breakfast", "lunch", "dinner"]);
+    expect(three.stars).toBe(2);
+    expect(three.complete).toBe(false);
+    expect(three.cookedSlots).toBe(3);
+    expect(three.plannedSlots).toBe(4);
+
+    const all = cooked(["breakfast", "lunch", "dinner", "snack"]);
+    expect(all.stars).toBe(3);
+    expect(all.complete).toBe(true);
+  });
+
+  it("keeps the familiar 1/2/3 rating on a 3-meal day", () => {
+    const stars = (n: number) =>
+      computeSeasonStats({
+        members,
+        checkins: ["breakfast", "lunch", "dinner"]
+          .slice(0, n)
+          .map((slot) => mark({ slot })),
+        plannedMealSlotsPerDay: dayPlan(3),
+      }).days[0]!.stars;
+    expect([stars(0), stars(1), stars(2), stars(3)]).toEqual([0, 1, 2, 3]);
+  });
+
+  it("a partial day never reaches three stars, however many meals it plans", () => {
+    for (const planned of [2, 4, 5, 6]) {
+      const day = computeSeasonStats({
+        members,
+        checkins: ["breakfast", "lunch", "dinner", "snack", "snack2"]
+          .slice(0, planned - 1)
+          .map((slot) => mark({ slot })),
+        plannedMealSlotsPerDay: dayPlan(planned),
+      }).days[0]!;
+      expect(day.stars).toBeLessThanOrEqual(2);
+      expect(day.stars).toBeGreaterThanOrEqual(1);
+      expect(day.complete).toBe(false);
+    }
+  });
+
+  it("a single-meal day is complete at one mark", () => {
+    const day = computeSeasonStats({
+      members,
+      checkins: [mark({ slot: "lunch" })],
+      plannedMealSlotsPerDay: dayPlan(1),
+    }).days[0]!;
+    expect(day.stars).toBe(3);
+    expect(day.complete).toBe(true);
+  });
+
+  it("rates each day against its OWN plan", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ day_index: 0, slot: "breakfast" }),
+        mark({ day_index: 0, slot: "lunch" }),
+        mark({ day_index: 1, slot: "breakfast" }),
+        mark({ day_index: 1, slot: "lunch" }),
+      ],
+      plannedMealSlotsPerDay: [2, 4, 0, 0, 0, 0, 0],
+    });
+    expect(stats.days[0]!.stars).toBe(3); // 2 of 2 — complete
+    expect(stats.days[1]!.stars).toBe(1); // 2 of 4 — partial
+  });
+
+  it("degrades to the count-based rating for a day with no known plan", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ slot: "breakfast" }),
+        mark({ slot: "lunch" }),
+        mark({ slot: "dinner" }),
+      ],
+      plannedMealSlotsPerDay: dayPlan(0),
+    });
+    expect(stats.days[0]!.stars).toBe(3);
+    expect(stats.days[0]!.complete).toBe(false);
+  });
+
+  it("stays complete when marks outlive a shrunken plan", () => {
+    const day = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ slot: "breakfast" }),
+        mark({ slot: "lunch" }),
+        mark({ slot: "dinner" }),
+      ],
+      plannedMealSlotsPerDay: dayPlan(2),
+    }).days[0]!;
+    expect(day.stars).toBe(3);
+    expect(day.complete).toBe(true);
+  });
+
+  it("an unmarked day has no stars even when its plan is empty", () => {
+    const stats = computeSeasonStats({ members, checkins: [] });
+    expect(stats.days.every((d) => d.stars === 0 && !d.complete)).toBe(true);
   });
 });
 
