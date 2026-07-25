@@ -8,6 +8,54 @@ Classification: **CONFIRMED** (traced/reproducible) · **SUSPECTED** (looks wron
 
 ---
 
+## 2026-07-25 pass — security audit + dependency update
+
+Scope: full-codebase security review (secrets, authz, injection, data exposure), dependency vulnerabilities, duplication, dead code. Findings were produced by four parallel scans, each independently re-verified by an adversarial second pass, and every high-severity item re-confirmed by hand before any fix. Baseline before the pass was green (545 tests, type-check, lint, build).
+
+### Fixed — highest user impact
+
+- **[S0 · CONFIRMED] Meal busy-guard counted WORKOUT runs as live meal runs.** `triggerPlanGeneration`'s in-flight guard (`dispatch.ts:132`) filtered `plan_generations` on `user_id` + `status='started'` with **no `plan_kind` filter**, while the workout guard (`:527`) had one — but 00014 made the lock per (user, kind) so both may legitimately coexist. `syncFamilyPlanAfterSubscribe` (`onboarding/actions.ts:514`) dispatches the workout run BEFORE meal generation, so a family on the combined plan **paid, and their meal plan was silently never generated**. Past the staleness bound the meal reclassifier would also have failed the healthy workout row. **Fix:** `.eq("plan_kind", "meal")`. (`generateSoloAndContinue` orders meals first, so solo was unaffected.)
+- **[S0 · CONFIRMED] Account erasure could skip the LemonSqueezy cancellation.** `erase.ts:50` read `subscriptions` with `.maybeSingle()` on a table the codebase itself documents as having no `unique(user_id)` (`state.ts:37`). A second row made the read error, `data` came back null, the error was never checked, and the account was deleted **while billing continued** — with no account left to cancel from. **Fix:** read all rows, report the error, cancel every live subscription.
+
+### Fixed — security
+
+- **[S1 · CONFIRMED] Workout generation was completely ungated.** `triggerWorkoutGeneration` did no subscription, quota, or access check; its docstring said access was the caller's responsibility, which held only while both callers sat behind a gated meal flow. The post-onboarding opt-in and the plan-page retry (`onboarding/workout/actions.ts:130,146`) call it directly, so any authenticated account — never subscribed or trial-expired — could dispatch full paid Anthropic generations in a loop, and get workouts without paying. AUDIT.md's own 07/07 addendum recorded "add `canGenerateWorkoutPlan` before exposing a manual trigger"; the trigger shipped without it. **Fix:** `canGenerateWorkoutPlan` at the choke point (same subscription + person-count gate as meals, plus its own 3/week pool counted over distinct `workout_plan_id`, with `started` counted so a failed run isn't a free retry). The meals-first companion path passes `companion:true` so a denial stays silent. **BEHAVIOR CHANGE.**
+- **[S1 · CONFIRMED] Subscription takeover via email-matched reconcile.** `reconcile.ts` looks LS subscriptions up by EMAIL, and checkout deliberately doesn't prefill it, so the address on a paid subscription need not be the app account's. Registering with a matching address attached **someone else's live subscription** to the new account — their tier for free, plus cancel/pause control over the real payer's billing. **Fix:** refuse (and report) when the LS subscription id is already claimed by a different `user_id`.
+- **[S2 · CONFIRMED] Open redirects on both auth entry points.** `LoginForm.tsx` handed `redirect_to` to `window.location.assign` (an absolute URL navigates clean off-site right after a genuine sign-in); `/auth/callback` concatenated it as `${origin}${redirectTo}` (a leading `@` or `.` re-points the host). The admin actions already sanitized this exact thing. **Fix:** one shared `safeRedirectPath` helper + `new URL()` instead of concatenation; unit-tested.
+- **[S2 · CONFIRMED] member_id taken on trust in 3 of 7 engagement writers.** `setMealVerdict`, `setWorkoutCheckin` and `closeDay` skipped the ownership probe four sibling actions perform. RLS meant it was never cross-account, but it let a crafted request award «موسم بيتنا» credit to a member who never acted. **Fix:** batched `ownsMemberIds` helper.
+- **[S2 · CONFIRMED] Cookie-consent «رفض» was non-functional.** `Providers` initialized PostHog on mount, so a pageview was captured before the banner appeared and declining only wrote a localStorage key — contradicting the published privacy policy. **Fix:** consent gates initialization, declining drops the queued events, one shared consent module.
+- **[S3] Migration 00023 — `meal_verdicts` DELETE policy.** 00017 shipped SELECT/INSERT/UPDATE only (the same omission 00019 fixed for `meal_checkins`), and a missing DELETE policy is not an error under RLS: the delete matches zero rows and reports success, so every «كيف كانت؟» un-tap would have silently survived. Written as its own idempotent migration so it applies whether or not 00017 has run; `verify-migrations.sql` covers it.
+- **[S3] Smaller exposure fixes:** `/api/account/export` no longer ships model ids, token counts, USD cost and raw upstream failure text in a portability export; `/api/health` no longer returns Supabase error text unauthenticated; `/api/subscription/pause` double-filters its service-role writes on `user_id` and checks the write error; `set-password.mjs` no longer defaults to a hardcoded production user id; `.claude/settings.local.json` untracked + ignored.
+
+### Fixed — correctness / unbounded reads
+
+- **[S1 · CONFIRMED] Journey chart froze after 26 weigh-ins.** `journey/page.tsx:150` ordered ascending with `limit(26)` — the OLDEST 26 rows. Chart, latest weight and delta all stuck on ancient data permanently. **Fix:** newest-first + reverse.
+- **[S1 · CONFIRMED] Engagement legacy fallbacks fired on ANY write error.** Those fallbacks are deliberately wider than the writes they replace (an unscoped delete of every member's mark; a `'household'` row that reads as the fallback for every member of the slot). A transient failure was escalating into other members' data. **Fix:** all four sites gate on `isMissingMemberIdColumn`, extracted to its own module and unit-tested (`actions.ts` is `"use server"`, so a pure predicate can't live there and be tested).
+- **[S2] Unbounded reads bounded:** `/plan/history` and the admin subscriber page each pulled every plan's whole `plan_data` blob (capped at 52; `daysCovered` measures `members[].days`, so the blob can't be projected away without changing the figure). The season card's `body_logs` read is bounded generously on purpose — `hasReachedWeightGoal` infers direction from the EARLIEST weigh-in, so a tight window could flip a goal celebration.
+- **[S3] Weigh-in photo orphaned on a thrown action** — only the returned-error branch cleaned up the already-uploaded private object. Both failure paths now do.
+
+### Dependencies
+
+Advisories **50 → 27** (high 16 → 10). All bumps patch/minor; no major upgrades applied.
+
+- **next 16.2.6 → 16.2.11** clears nine advisories including a **middleware/proxy bypass in App Router** — this app gates all authentication through that proxy, so this was the single highest-value change in the audit. Also react/react-dom 19.2.4→19.2.8, @sentry/nextjs 10.53.1→10.68.0, @supabase/supabase-js 2.106.0→2.110.8, posthog-js 1.373.5→1.407.2, lucide-react, radix-ui, react-hook-form, motion, tailwind, and dev tooling.
+- A pnpm override moves `dompurify` 3.4.4 → 3.4.12 (posthog-js at its own latest still pins the vulnerable version). **Remove the override once posthog-js ships a newer pin.**
+- Everything still outstanding is transitive through dev/build tooling (shadcn's hono/express chain, eslint, vitest, the Sentry bundler plugin) or pinned inside next itself (sharp, postcss), where only a major bump would move it.
+
+### Cleanup
+
+~1,280 lines of verified-unreferenced code removed (the «وجبات اليوم» dashboard cluster orphaned by 8a55c39, six marketing components, eight dead exports, two dead server actions — one of which, `saveFamilyMembers`, was an unvalidated delete-then-insert still callable from a `"use server"` module). Three duplicated helpers consolidated (`addDaysISO`, `riyadhTodayISO`, and an order-fragile `subscriptionByUser` replaced by the unit-tested `latestSubByUser`).
+
+### Flagged — NOT coded, needs a decision
+
+1. **Apply migration 00023** (manual, no runner), and re-run `scripts/verify-migrations.sql`. Until then verdict-clearing stays a silent no-op wherever 00017 is already applied.
+2. **`/api/account/export` buffers every plan blob through `JSON.stringify`.** Deliberately left alone: capping a portability export would make it incomplete, and streaming it is a bigger change than a fix pass should make.
+3. **Background function still uses `SUPABASE_SERVICE_ROLE_KEY` as its wire secret**, compared with `!==` (`generate-plan-background.mts:442`). Not exploitable — it fails closed — but the DB master key travels as a request header on every dispatch, and rotating it means rotating Supabase everywhere. Recommend a dedicated `INTERNAL_FN_SECRET` + `timingSafeEqual`; needs an ops env change, so not coded here.
+4. **`sharp` and `postcss` advisories are pinned inside next** and need a major bump to clear.
+5. Duplication left in place as too invasive for this pass: the ~120-line meal-completion mirror between `generate.ts` and the background function (the workout path already solved this via `makeFetchSupabase`), the 5-way jsonb allergy/dislike coercion that **has already drifted on the `{name_ar}` object shape** (on the allergy-safety path — worth a dedicated pass), and the triplicated workout marking-window constant.
+
+---
+
 ## 2026-07-03 pass — deep engineering scan (post-admin-panel)
 
 Scope: everything landed since the 05-29 pass (~116 commits, dominated by the /admin panel, migrations 00008–00011, chat, meal_mode). Three parallel deep scans (backend/admin/billing · engine/background-function/dispatch · frontend/config/migrations), findings re-verified first-hand before fixing. **No S0 found** — RLS (admin tables deny-all by design), HMAC, secret handling, admin gating, and service-role double-filtering all check out. Baseline was fully green before the pass (type-check, lint, 262 tests, build).
