@@ -92,3 +92,19 @@ export function getLemonsqueezyWebhookSecret(): string {
 export function getSupabaseServiceRoleKey(): string {
   return requireServerEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
+
+/**
+ * The shared secret authenticating an internal dispatch to the Netlify
+ * background function (`x-internal-secret`).
+ *
+ * Falls back to the service-role key, which is what this header used to carry
+ * outright. That made the RLS-bypassing database master key travel on every
+ * generation, translation and workout dispatch — anywhere request headers get
+ * captured, that leaked full database access rather than a low-value internal
+ * token. Set INTERNAL_FN_SECRET (any random 32 bytes) in Netlify and local
+ * `.env.local` and the key stops being transmitted; the function accepts both
+ * during rollout, so neither side has to deploy first.
+ */
+export function getInternalFnSecret(): string {
+  return process.env.INTERNAL_FN_SECRET || requireServerEnv("SUPABASE_SERVICE_ROLE_KEY");
+}

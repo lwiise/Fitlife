@@ -18,14 +18,24 @@ regex = '''(?i)NEXT_SERVER_ACTIONS_ENCRYPTION_KEY['"]?\s*[:=]\s*['"]?([A-Za-z0-9
 keywords = ["next_server_actions_encryption_key"]
 
 # x-internal-secret — the internal header the app sends to the Netlify background
-# function; its value is the Supabase service-role key (a JWT). Flag the header
-# carrying an inline JWT or long token literal. The real code passes a function
-# call (getSupabaseServiceRoleKey()), which has no literal and won't match.
+# function. Its value is INTERNAL_FN_SECRET (random 32 bytes, base64), falling
+# back to the Supabase service-role key (a JWT) until that var is set. Flag the
+# header carrying either shape as an inline literal. The real code passes a
+# function call (getInternalFnSecret()), which has no literal and won't match.
 [[rules]]
 id = "fitlife-x-internal-secret"
-description = "Hardcoded x-internal-secret value (service-role JWT / long token)"
+description = "Hardcoded x-internal-secret value (internal token / service-role JWT)"
 regex = '''(?i)x-internal-secret['"]?\s*[:=]\s*['"](eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9+/_-]{40,}={0,2})['"]'''
 keywords = ["x-internal-secret"]
+
+# INTERNAL_FN_SECRET — the same secret assigned by name rather than as a header.
+# base64(32 bytes) = 43 chars + one "=" pad; the alternation also covers a hex or
+# raw-token style value. Never flags the empty placeholder in env.example.txt.
+[[rules]]
+id = "fitlife-internal-fn-secret"
+description = "Hardcoded INTERNAL_FN_SECRET value"
+regex = '''(?i)INTERNAL_FN_SECRET['"]?\s*[:=]\s*['"]?([A-Za-z0-9+/]{43}=|[A-Za-z0-9_-]{32,})(?:['"]|\s|$)'''
+keywords = ["internal_fn_secret"]
 
 # The env template documents variable NAMES with empty values on purpose — never
 # a finding source. (Belt-and-suspenders; the rules above already require a value.)

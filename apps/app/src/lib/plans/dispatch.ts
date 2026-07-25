@@ -30,7 +30,7 @@ import {
   canGenerateWorkoutPlan,
   type AccessResult,
 } from "@/lib/subscription/access";
-import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
+import { env, getAnthropicKey, getInternalFnSecret } from "@/lib/env";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -328,7 +328,7 @@ export async function triggerPlanGeneration(params: {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFnSecret(),
         },
         body: JSON.stringify({
           userId,
@@ -487,7 +487,7 @@ export async function triggerPlanTranslation(params: {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFnSecret(),
         },
         // Don't ship the whole plan in the body (same payload-limit reasoning as
         // generation above) — the bg fn re-reads plan_data by mealPlanId.
@@ -632,7 +632,7 @@ export async function triggerWorkoutGeneration(params: {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFnSecret(),
         },
         body: JSON.stringify({ mode: "workout", userId, workoutPlanId, weekStartDate }),
       },

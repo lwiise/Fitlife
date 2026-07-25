@@ -21,6 +21,7 @@ import {
 } from "../../../../packages/plan-engine/src/workout/generate";
 import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
 import { summarizeWorkoutFeedback } from "../../../../packages/plan-engine/src/workout/feedback";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 // Dependency-free by design — keeps this bundle SDK-free (see jsonList.ts).
 import { toStringList } from "../../../../packages/plan-engine/src/jsonList";
@@ -436,16 +437,71 @@ async function buildContextViaFetch(
   };
 }
 
+/**
+ * Constant-time compare of two secrets of arbitrary length.
+ *
+ * timingSafeEqual throws on a length mismatch, so both sides are hashed to a
+ * fixed 32 bytes first — that compares length differences in constant time too,
+ * instead of leaking them through an early return.
+ */
+function secretMatches(presented: string | null, expected: string): boolean {
+  if (!presented) return false;
+  const a = createHash("sha256").update(presented).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+/**
+ * Authenticate an internal dispatch.
+ *
+ * This endpoint is publicly reachable, and its credential used to BE
+ * SUPABASE_SERVICE_ROLE_KEY — the RLS-bypassing database master key, sent as a
+ * request header on every generation, translation and workout dispatch.
+ * Anywhere request headers get captured (function logs at debug level, an edge
+ * trace, a misconfigured APM) that leaked full database access rather than a
+ * low-value internal token, and rotating it meant rotating Supabase everywhere.
+ *
+ * INTERNAL_FN_SECRET replaces it. The service key is still ACCEPTED while the
+ * env var is being rolled out, so this deploys safely in either order and
+ * in-flight dispatches from the previous build keep working. The warning below
+ * is the signal that the fallback is still in use; once it stops appearing,
+ * delete the legacy branch.
+ */
+function authorizeDispatch(req: Request): boolean {
+  const presented = req.headers.get("x-internal-secret");
+  const internalSecret = process.env.INTERNAL_FN_SECRET;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (internalSecret && secretMatches(presented, internalSecret)) return true;
+
+  if (serviceKey && secretMatches(presented, serviceKey)) {
+    if (internalSecret) {
+      console.warn(
+        "[generate-plan-background] dispatch authenticated with the legacy " +
+          "service-role secret while INTERNAL_FN_SECRET is set — a stale build " +
+          "is still dispatching; the legacy branch can be removed once this stops.",
+      );
+    }
+    return true;
+  }
+
+  return false;
+}
+
 // ─── Handler ───────────────────────────────────────────────────────────────
 const handler = async (req: Request): Promise<Response> => {
-  const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  // The service-role key's only job here is PostgREST auth. It is no longer
+  // this endpoint's own wire credential — see authorizeDispatch.
+  const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!expected || req.headers.get("x-internal-secret") !== expected) {
+  // Fails closed: with neither secret configured, authorizeDispatch returns
+  // false and every call is rejected.
+  if (!authorizeDispatch(req)) {
     return new Response("Unauthorized", { status: 401 });
   }
-  if (!supabaseUrl || !anthropicKey) {
+  if (!supabaseUrl || !anthropicKey || !expected) {
     console.error("[generate-plan-background] missing env");
     return new Response("Server misconfigured", { status: 500 });
   }
