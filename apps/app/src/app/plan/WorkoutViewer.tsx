@@ -429,120 +429,128 @@ export function WorkoutViewer({
           ? "/journey"
           : `/journey?member=${journeyEntry.id}`
       }
-      className="inline-flex items-center flex-shrink-0 min-h-11 px-4 py-2 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border border-brand-purple-900/25 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
     >
+      <TrendingUp className="size-4" aria-hidden="true" />
       الوزن والمتابعة
     </Link>
   ) : null;
 
   return (
     <div className="space-y-6">
-      {/* A solo program has no member-tab row to host «الوزن والمتابعة», so it
-          keeps its own strip here — identical to the meal viewer's solo strip. */}
-      {isSolo && journeyLink && (
-        <div className="flex items-center justify-end gap-3 flex-wrap">
-          {journeyLink}
-        </div>
-      )}
-
-      {/* Top strip — the SAME contract as the meal PlanViewer: week range on
-          the start side, the action cluster on the end side led by the
-          meals/exercise toggle. This view has no action buttons of its own, so
-          the toggle is the cluster's only item and sits at the strip's end;
-          justify-end keeps it there on mobile too, where the stacked strip
-          makes the cluster full-width (a no-op at sm+, where the parent's
-          justify-between already pins the content-width cluster to the end). */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <p className="text-brand-ink-muted text-xs">الأسبوع</p>
-          <p className="font-bold text-brand-ink text-base tabular-nums">
-            {formatWeekRange(plan.week_start_date)}
-          </p>
-        </div>
-        <div className="flex items-center justify-end gap-2 flex-wrap">
-          {planTypeToggle}
-        </div>
-      </div>
-
-      {/* Member tabs — the SAME set/order as the meal viewer (owner directive
-          07/2026): every household member appears, «إضافة فرد» sits right after
-          the last tab (→ /family, exactly like meals), and «الوزن والمتابعة»
-          takes the trailing slot. A member without a program renders the
-          add-plan CTA in the body below; a solo household shows the invite
-          prompt instead of a lone tab. */}
-      {!isSolo && (
-        <div className="border-b border-brand-ink/10 -mx-4 px-4 overflow-x-auto no-scrollbar">
-          <div className="flex items-center justify-between gap-2 min-w-max">
-            <div className="flex items-center gap-1">
-              <div className="flex gap-1">
-                {tabs.map((m) => {
-                  const isActive = m.member_id === activeMemberId;
-                  return (
-                    <button
-                      key={m.member_id}
-                      type="button"
-                      onClick={() => setActiveMemberId(m.member_id)}
-                      aria-pressed={isActive}
-                      className={`relative px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                        isActive
-                          ? "text-brand-purple-900"
-                          : "text-brand-ink-muted hover:text-brand-ink"
-                      }`}
-                    >
-                      {m.member_id === "mom" && (
-                        <span className="text-brand-pink me-1">
-                          {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                        </span>
-                      )}
-                      {m.member_name_ar}
-                      {isActive && (
-                        <motion.span
-                          layoutId="workout-member-tab-underline"
-                          className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-purple-900"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <Link
-                href={addMemberHref}
-                className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-              >
-                <UserPlus className="size-4" aria-hidden="true" />
-                إضافة فرد
-              </Link>
-            </div>
-            {journeyLink}
+      {/* Unified header band — the SAME contract as the meal PlanViewer: week
+          range on the start side of line 1, the action cluster on the end side
+          led by the meals/exercise toggle, then a hairline and the member
+          chips. This view has no action buttons of its own, so the toggle is
+          the cluster's only item; justify-end keeps it at the end on mobile
+          too, where the stacked line makes the cluster full-width (a no-op at
+          sm+, where the parent's justify-between already pins the
+          content-width cluster to the end). */}
+      <div className="rounded-3xl bg-white border border-brand-ink/5 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-brand-ink-muted text-xs">الأسبوع</p>
+            <p className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
+              {formatWeekRange(plan.week_start_date)}
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            {planTypeToggle}
           </div>
         </div>
-      )}
 
-      {/* Solo program — no tabs to switch between yet. Since the whole point of
-          the exercise page's switcher is moving between people, surface a warm
-          prompt to give another adult their own program (workouts are
-          adults-only + opt-in per person, so this is the only way the switcher
-          grows). Sits where the tab row would be, so it reads as «this is where
-          other people appear». */}
-      {isSolo && (
-        <div className="border-b border-brand-ink/10 -mx-4 px-4 pb-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+        {/* Member chips — the SAME set/order as the meal viewer (owner directive
+            07/2026): every household member appears, «إضافة فرد» follows the
+            last chip (→ /family, exactly like meals), and «الوزن والمتابعة»
+            takes the trailing slot. A member without a program renders the
+            add-plan CTA in the body below; a solo household shows the invite
+            prompt instead of a lone chip. */}
+        {!isSolo && (
+          <>
+            <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
+            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+              <div className="flex items-center justify-between gap-3 min-w-max">
+                <div className="flex items-center gap-2">
+                  {tabs.map((m) => {
+                    const isActive = m.member_id === activeMemberId;
+                    return (
+                      <button
+                        key={m.member_id}
+                        type="button"
+                        onClick={() => setActiveMemberId(m.member_id)}
+                        aria-pressed={isActive}
+                        className={`relative inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                          isActive
+                            ? "text-white"
+                            : "bg-brand-lavender/25 text-brand-purple-900 hover:bg-brand-lavender/40"
+                        }`}
+                      >
+                        {isActive && (
+                          <motion.span
+                            layoutId="workout-member-chip-fill"
+                            className="absolute inset-0 rounded-full bg-brand-purple-900"
+                          />
+                        )}
+                        <span className="relative">
+                          {/* «أنتِ» stays visible TEXT — same treatment as the
+                              meal viewer's chips. */}
+                          {m.member_id === "mom" && (
+                            <span className="me-1">
+                              {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                            </span>
+                          )}
+                          {m.member_name_ar}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <Link
+                    href={addMemberHref}
+                    className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  >
+                    <UserPlus className="size-4" aria-hidden="true" />
+                    إضافة فرد
+                  </Link>
+                </div>
+                {journeyLink}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Solo program — no chips to switch between yet. Since the whole point
+            of the exercise page's switcher is moving between people, surface a
+            warm prompt to give another adult their own program (workouts are
+            adults-only + opt-in per person, so this is the only way the
+            switcher grows). Sits where the chip row would be, so it reads as
+            «this is where other people appear». */}
+        {isSolo && (
+          <>
+            <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-brand-ink-muted text-sm leading-relaxed max-w-sm">
               {genderPick(ownerSex)(
                 "يتدرّب معكِ فرد بالغ آخر؟ أضيفيه لخطة التمارين لتنتقلي بينكما من هنا.",
                 "يتدرّب معك فرد بالغ آخر؟ أضِفه لخطة التمارين لتنتقل بينكما من هنا.",
               )}
             </p>
-            <Link
-              href={addTraineeHref}
-              className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-3 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
-            >
-              <UserPlus className="size-4" aria-hidden="true" />
-              إضافة فرد للتمارين
-            </Link>
-          </div>
-        </div>
-      )}
+              <Link
+                href={addTraineeHref}
+                className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                <UserPlus className="size-4" aria-hidden="true" />
+                إضافة فرد للتمارين
+              </Link>
+            </div>
+          </>
+        )}
+
+        {/* Solo + eligible for a private journey: the chip has no chip row to
+            sit in, so it takes its own line at the band's end. */}
+        {isSolo && journeyLink && (
+          <div className="flex items-center justify-end mt-3">{journeyLink}</div>
+        )}
+      </div>
 
       {/* A member with a program shows it; one without shows the add-plan CTA
           (eligible adults) or an adults-only note (children) — the Exercise view
