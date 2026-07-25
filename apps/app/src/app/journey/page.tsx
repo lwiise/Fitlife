@@ -290,7 +290,9 @@ export default async function JourneyPage({
           </section>
         )}
 
-        {photos.length > 0 && <PhotoStrip photos={photos} />}
+        {photos.length > 0 && (
+          <PhotoStrip photos={photos} ownerSex={profile?.sex} />
+        )}
 
         {logs.length < 2 && (
           <p className="text-sm text-brand-ink-muted leading-relaxed">
