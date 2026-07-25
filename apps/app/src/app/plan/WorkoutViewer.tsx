@@ -10,6 +10,7 @@ import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/a
 import { ExerciseLottie } from "./ExerciseLottie";
 import { formatWeekRange } from "@/lib/plans/dayMapping";
 import { genderPick } from "@/lib/copy/gender";
+import { workoutMaxBackDays } from "@/lib/engagement/seasonMath";
 
 // Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
 // Date#getDay, where 0 = Sunday).
@@ -23,11 +24,6 @@ const DAY_NAMES_AR = [
   "السبت",
 ];
 
-// A session stays markable for the whole current week (Sunday-anchored), with a
-// 48h floor so the tail of the previous week keeps its grace — mirrors the meal
-// window (the whole plan week). The server re-derives + enforces this; the
-// client gate just hides the controls on future sessions.
-const WORKOUT_GRACE_DAYS = 2;
 const WORKOUT_STATUS_CHIPS: { value: WorkoutCheckinStatus; label: string }[] = [
   { value: "done", label: "أنجزتها" },
   { value: "moved", label: "بدّلتها" },
@@ -410,7 +406,11 @@ export function WorkoutViewer({
   const activeStatus = activeMark?.status ?? null;
   const activeIntensity = activeMark?.intensity ?? null;
   const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
-  const workoutMaxBack = Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
+  // A session stays markable for the whole current week (Sunday-anchored),
+  // with the 48h floor for the previous week's tail. Shared with the server's
+  // own derivation so the gate and the write authority cannot disagree; the
+  // server re-derives and enforces it regardless — this only hides controls.
+  const workoutMaxBack = workoutMaxBackDays(todayWeekday);
   const canMarkActive =
     checkins !== undefined &&
     !!planId &&

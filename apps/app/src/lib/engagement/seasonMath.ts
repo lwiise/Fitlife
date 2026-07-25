@@ -152,21 +152,36 @@ export function isISODate(v: string | null | undefined): v is string {
   return typeof v === "string" && ISO_DATE_RE.test(v);
 }
 
-/** The floor of the workout marking window, mirrored from actions.ts
- * GRACE_DAYS: setWorkoutCheckin can stamp a session's local_date back to
- * today - max(todayWeekday, GRACE_DAYS). */
+/** The floor of the workout marking window: the tail of the previous week
+ * keeps 48h of grace even early on a Sunday. */
 export const WORKOUT_GRACE_DAYS = 2;
 
 /** Weekday (0=Sunday, matches setWorkoutCheckin's derivation) of a
  * Riyadh-local YYYY-MM-DD date. */
-function weekdayOfISO(dateISO: string): number {
+export function weekdayOfISO(dateISO: string): number {
   return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
+}
+
+/**
+ * How many days back from today a workout session stays markable — the whole
+ * current week (Sunday-anchored), floored at WORKOUT_GRACE_DAYS.
+ *
+ * THE one definition of that bound. It is enforced in three places that must
+ * agree or the UI and the server disagree about what is markable: the write
+ * authority (setWorkoutCheckin, which derives a session's date by scanning
+ * back this far), the read window (workoutMarkingWindow, below), and the
+ * client gate (WorkoutViewer, which hides the controls past it). Each gets
+ * "today" differently — the server from riyadhTodayISO(), the viewer from the
+ * browser's own Date — so this takes the weekday rather than a date string.
+ */
+export function workoutMaxBackDays(todayWeekday: number): number {
+  return Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
 }
 
 /**
  * The current Sunday-anchored workout marking window (inclusive) — exactly the
  * span setWorkoutCheckin can stamp: today back to
- * today - max(todayWeekday, GRACE_DAYS). Pure — callers pass riyadhTodayISO().
+ * today - workoutMaxBackDays(todayWeekday). Pure — callers pass riyadhTodayISO().
  * The ONE definition shared by the board (seasonProps) and the /plan viewer
  * read (plan/page.tsx), so the two surfaces can never disagree on which
  * workout marks exist.
@@ -176,10 +191,7 @@ export function workoutMarkingWindow(todayISO: string): {
   end: string;
 } {
   return {
-    start: addDaysISO(
-      todayISO,
-      -Math.max(weekdayOfISO(todayISO), WORKOUT_GRACE_DAYS),
-    ),
+    start: addDaysISO(todayISO, -workoutMaxBackDays(weekdayOfISO(todayISO))),
     end: todayISO,
   };
 }

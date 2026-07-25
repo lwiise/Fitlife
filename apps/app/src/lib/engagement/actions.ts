@@ -12,6 +12,7 @@ import {
   isWeighInEligibleMom,
 } from "./eligibility";
 import { isMissingMemberIdColumn } from "./legacyFallback";
+import { weekdayOfISO, workoutMaxBackDays } from "./seasonMath";
 import { BODY_PHOTOS_BUCKET, HOUSEHOLD_CHECKIN_MEMBER } from "./types";
 import {
   closeDayInputSchema,
@@ -32,16 +33,6 @@ import {
 
 const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، يرجى المحاولة مرة أخرى";
 const AUTH_ERROR_AR = "انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى";
-
-/**
- * The floor of the retroactive marking window, in days. Meal marks now stay
- * open for the WHOLE plan week — any elapsed day, never the future (owner
- * directive 07/2026), so a mom can complete or correct earlier days anytime
- * before the week rolls over into history. Weekday-anchored workout sessions
- * stay markable for the whole current week too, with this as the floor so the
- * last couple days of the previous week keep their grace.
- */
-const GRACE_DAYS = 2;
 
 const CHECKIN_CLEAR_ERROR_AR = "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى";
 
@@ -340,11 +331,6 @@ export async function closeDay(rawInput: CloseDayInput) {
   return { ok: true as const, local_date: localDate };
 }
 
-/** Weekday (0=Sunday, matches JS getDay) of a Riyadh-local YYYY-MM-DD date. */
-function weekdayOfISO(dateISO: string): number {
-  return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
-}
-
 /**
  * Inline workout-session marking from the plan page (?view=workout) — «هل
  * أنجزت حصة اليوم؟» done/moved/skipped. The exercise pillar's honest signal:
@@ -385,12 +371,12 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
   }
 
   // Derive the session's calendar date from its weekday, scanning back over the
-  // whole current week (Sunday-anchored), with GRACE_DAYS as a floor so the tail
+  // whole current week (Sunday-anchored), with the shared grace floor so the tail
   // of the previous week keeps its grace. Never the future: within any ≤7-day
   // span a given weekday occurs at most once, so this resolves uniquely or not
   // at all, and a future session this week has no past date to resolve to.
   const today = riyadhTodayISO();
-  const maxBack = Math.max(weekdayOfISO(today), GRACE_DAYS);
+  const maxBack = workoutMaxBackDays(weekdayOfISO(today));
   let localDate: string | null = null;
   for (let off = 0; off <= maxBack; off++) {
     const candidate = addDaysISO(today, -off);

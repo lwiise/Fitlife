@@ -6,6 +6,8 @@ import {
   computeSeasonStats,
   dayHasCookedMark,
   workoutMarkingWindow,
+  workoutMaxBackDays,
+  WORKOUT_GRACE_DAYS,
   type RawSeasonMealRow,
   type SeasonMealMark,
   type SeasonMember,
@@ -502,6 +504,39 @@ describe("workoutMarkingWindow", () => {
       start: "2026-07-19",
       end: "2026-07-25",
     });
+  });
+});
+
+describe("workoutMaxBackDays", () => {
+  // THE shared bound. Three surfaces enforce it and must agree or the UI and
+  // the server disagree about what is markable: setWorkoutCheckin (derives a
+  // session's date by scanning back this far), workoutMarkingWindow (the read
+  // window), and WorkoutViewer's canMarkActive (hides controls past it).
+  it("returns the weekday once past the grace floor — the whole week so far", () => {
+    expect(workoutMaxBackDays(3)).toBe(3); // Wednesday → back to Sunday
+    expect(workoutMaxBackDays(6)).toBe(6); // Saturday → the whole week
+  });
+
+  it("holds the grace floor early in the week, keeping the previous week's tail", () => {
+    expect(workoutMaxBackDays(0)).toBe(WORKOUT_GRACE_DAYS); // Sunday
+    expect(workoutMaxBackDays(1)).toBe(WORKOUT_GRACE_DAYS); // Monday
+    expect(workoutMaxBackDays(2)).toBe(WORKOUT_GRACE_DAYS); // Tuesday, floor == weekday
+  });
+
+  it("agrees with the window workoutMarkingWindow reports", () => {
+    // 2026-07-22 is a Wednesday; 2026-07-19 a Sunday.
+    for (const [todayISO, weekday] of [
+      ["2026-07-22", 3],
+      ["2026-07-19", 0],
+      ["2026-07-25", 6],
+    ] as const) {
+      const { start, end } = workoutMarkingWindow(todayISO);
+      const spanDays = Math.round(
+        (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) /
+          86_400_000,
+      );
+      expect(spanDays).toBe(workoutMaxBackDays(weekday));
+    }
   });
 });
 
