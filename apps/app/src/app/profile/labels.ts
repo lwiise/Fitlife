@@ -76,7 +76,6 @@ export function labelFor(
 }
 
 // The jsonb columns (allergies/dislikes/cooking_methods/family_*) come back as
-// `Json | null`; coerce defensively to a clean string[] for forms + summaries.
-export function asStringArray(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-}
+// `Json | null`. Re-exported from the engine so the forms, the AI prompt and
+// the admin view can't disagree about what a row means (see jsonList.ts).
+export { toStringList as asStringArray } from "@fitlife/plan-engine";

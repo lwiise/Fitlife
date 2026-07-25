@@ -7,16 +7,12 @@ import {
 } from "@/lib/supabase/queries";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
 import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
+import { toStringList } from "@fitlife/plan-engine";
 
 /** Render a jsonb-ish value (usually a string[]) as a compact comma list. */
 function list(value: unknown): string {
-  if (Array.isArray(value)) {
-    const items = value
-      .map((v) => (typeof v === "string" ? v : typeof v === "object" && v && "name_ar" in v ? String((v as { name_ar: unknown }).name_ar) : ""))
-      .filter(Boolean);
-    return items.length ? items.join("، ") : "لا شيء";
-  }
-  return "لا شيء";
+  const items = toStringList(value);
+  return items.length ? items.join("، ") : "لا شيء";
 }
 
 function strList(value: string[] | null | undefined): string {

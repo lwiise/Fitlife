@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
+import { toStringList } from "./jsonList";
 import type { EngagementDigest } from "./engagementDigest";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
@@ -195,11 +196,6 @@ function ageFromBirthYear(birthYear: number | null): number | null {
 }
 
 /** jsonb columns come back as unknown JSON — coerce to a string[] defensively. */
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string");
-}
-
 function arabicNumber(n: number): string {
   return new Intl.NumberFormat("ar-SA", { useGrouping: false }).format(n);
 }
@@ -300,7 +296,7 @@ export async function buildPlanContext(
   // Per-member medical gate: a family member with a high-risk condition or a
   // high-risk pregnancy may not get a plan until their own doctor sign-off.
   for (const m of (family ?? []) as Record<string, unknown>[]) {
-    const conds = toStringArray(m.medical_conditions);
+    const conds = toStringList(m.medical_conditions);
     const memberHighRisk =
       conds.some((c) => HIGH_RISK_MEDICAL_FLAGS.includes(c)) ||
       !!m.high_risk_pregnancy;
@@ -322,8 +318,8 @@ export async function buildPlanContext(
     dietary_restrictions: profile.dietary_restrictions ?? [],
     cuisine_preference: profile.cuisine_preference,
     medical_conditions: medicalConditions,
-    allergies: toStringArray(profile.allergies),
-    dislikes: toStringArray(profile.dislikes),
+    allergies: toStringList(profile.allergies),
+    dislikes: toStringList(profile.dislikes),
     is_pregnant: profile.is_pregnant,
     pregnancy_trimester: profile.pregnancy_trimester,
     months_postpartum: profile.months_postpartum ?? null,
@@ -337,11 +333,11 @@ export async function buildPlanContext(
     water_cups: profile.water_cups ?? null,
     water_liters: profile.water_liters ?? null,
     sleep_hours: profile.sleep_hours ?? null,
-    medications: toStringArray(profile.medications),
-    supplements: toStringArray(profile.supplements),
-    nausea_foods: toStringArray(profile.nausea_foods),
+    medications: toStringList(profile.medications),
+    supplements: toStringList(profile.supplements),
+    nausea_foods: toStringList(profile.nausea_foods),
     notes: profile.notes ?? null,
-    never_eat_foods: toStringArray(profile.never_eat_foods),
+    never_eat_foods: toStringList(profile.never_eat_foods),
     sleep_band: profile.sleep_band ?? null,
     feeding_mode: profile.feeding_mode ?? null,
     pregnancy_month: profile.pregnancy_month ?? null,
@@ -350,7 +346,7 @@ export async function buildPlanContext(
       hip_cm: profile.hip_cm ?? null,
       steps_daily: profile.steps_daily ?? null,
       exercise_duration: profile.exercise_duration ?? null,
-      liked_foods: toStringArray(profile.liked_foods),
+      liked_foods: toStringList(profile.liked_foods),
       meals_per_day: profile.meals_per_day ?? null,
       snacks_habit: profile.snacks_habit ?? null,
       breakfast_habit: profile.breakfast_habit ?? null,
@@ -381,10 +377,10 @@ export async function buildPlanContext(
         weight_kg: (m.weight_kg as number | null) ?? null,
         activity_level: ((m.activity_level as string | null) ?? null) as Activity,
         primary_goal: (m.primary_goal as string | null) ?? null,
-        dietary_restrictions: toStringArray(m.dietary_restrictions),
-        medical_conditions: toStringArray(m.medical_conditions),
-        allergies: toStringArray(m.allergies),
-        dislikes: toStringArray(m.dislikes),
+        dietary_restrictions: toStringList(m.dietary_restrictions),
+        medical_conditions: toStringList(m.medical_conditions),
+        allergies: toStringList(m.allergies),
+        dislikes: toStringList(m.dislikes),
         trimester: (m.trimester as number | null) ?? null,
         months_postpartum: (m.months_postpartum as number | null) ?? null,
         high_risk_pregnancy: !!m.high_risk_pregnancy,
@@ -401,9 +397,9 @@ export async function buildPlanContext(
         water_cups: (m.water_cups as number | null) ?? null,
         water_liters: (m.water_liters as string | null) ?? null,
         sleep_hours: (m.sleep_hours as number | null) ?? null,
-        medications: toStringArray(m.medications),
-        supplements: toStringArray(m.supplements),
-        nausea_foods: toStringArray(m.nausea_foods),
+        medications: toStringList(m.medications),
+        supplements: toStringList(m.supplements),
+        nausea_foods: toStringList(m.nausea_foods),
         feeding_mode: (m.feeding_mode as string | null) ?? null,
         workout_profile: parseWorkoutProfile(m.workout_profile),
       };
@@ -411,9 +407,9 @@ export async function buildPlanContext(
   );
 
   const family_wide: PlanPromptContextFamilyWide = {
-    dietary_restrictions: toStringArray(profile.family_dietary_restrictions),
-    dislikes: toStringArray(profile.family_dislikes),
-    cooking_methods: toStringArray(profile.cooking_methods),
+    dietary_restrictions: toStringList(profile.family_dietary_restrictions),
+    dislikes: toStringList(profile.family_dislikes),
+    cooking_methods: toStringList(profile.cooking_methods),
     meal_out_frequency: profile.meal_out_frequency ?? null,
   };
 

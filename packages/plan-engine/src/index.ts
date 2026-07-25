@@ -99,3 +99,4 @@ export {
   runWorkoutPlanGeneration,
   mealGenBlocksWorkout,
 } from "./workout/generate";
+export { toStringList } from "./jsonList";

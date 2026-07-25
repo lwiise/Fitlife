@@ -22,6 +22,8 @@ import {
 import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
 import { summarizeWorkoutFeedback } from "../../../../packages/plan-engine/src/workout/feedback";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
+// Dependency-free by design — keeps this bundle SDK-free (see jsonList.ts).
+import { toStringList } from "../../../../packages/plan-engine/src/jsonList";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
@@ -299,12 +301,9 @@ async function buildContextViaFetch(
     `user_id=eq.${userId}&select=*&order=display_order.asc`,
   );
 
-  const asStrings = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-
   // Per-member medical gate (mirrors the engine's buildContext).
   for (const m of family) {
-    const conds = asStrings(m.medical_conditions);
+    const conds = toStringList(m.medical_conditions);
     const memberHighRisk =
       conds.some((c) => HIGH_RISK_FLAGS.includes(c)) || !!m.high_risk_pregnancy;
     if (memberHighRisk && m.consulted_doctor !== true) {
@@ -326,10 +325,10 @@ async function buildContextViaFetch(
       weight_kg: (m.weight_kg as number | null) ?? null,
       activity_level: ((m.activity_level as string | null) ?? null) as Activity,
       primary_goal: (m.primary_goal as string | null) ?? null,
-      dietary_restrictions: asStrings(m.dietary_restrictions),
-      medical_conditions: asStrings(m.medical_conditions),
-      allergies: asStrings(m.allergies),
-      dislikes: asStrings(m.dislikes),
+      dietary_restrictions: toStringList(m.dietary_restrictions),
+      medical_conditions: toStringList(m.medical_conditions),
+      allergies: toStringList(m.allergies),
+      dislikes: toStringList(m.dislikes),
       trimester: (m.trimester as number | null) ?? null,
       months_postpartum: (m.months_postpartum as number | null) ?? null,
       high_risk_pregnancy: !!m.high_risk_pregnancy,
@@ -346,9 +345,9 @@ async function buildContextViaFetch(
       water_cups: (m.water_cups as number | null) ?? null,
       water_liters: (m.water_liters as string | null) ?? null,
       sleep_hours: (m.sleep_hours as number | null) ?? null,
-      medications: asStrings(m.medications),
-      supplements: asStrings(m.supplements),
-      nausea_foods: asStrings(m.nausea_foods),
+      medications: toStringList(m.medications),
+      supplements: toStringList(m.supplements),
+      nausea_foods: toStringList(m.nausea_foods),
       feeding_mode: (m.feeding_mode as string | null) ?? null,
       workout_profile: parseWorkoutProfileLoose(m.workout_profile),
     };
@@ -377,8 +376,8 @@ async function buildContextViaFetch(
       dietary_restrictions: (profile.dietary_restrictions as string[] | null) ?? [],
       cuisine_preference: profile.cuisine_preference as string,
       medical_conditions: medicalConditions,
-      allergies: asStrings(profile.allergies),
-      dislikes: asStrings(profile.dislikes),
+      allergies: toStringList(profile.allergies),
+      dislikes: toStringList(profile.dislikes),
       is_pregnant: !!profile.is_pregnant,
       pregnancy_trimester: (profile.pregnancy_trimester as number | null) ?? null,
       months_postpartum: (profile.months_postpartum as number | null) ?? null,
@@ -394,11 +393,11 @@ async function buildContextViaFetch(
       water_cups: (profile.water_cups as number | null) ?? null,
       water_liters: (profile.water_liters as string | null) ?? null,
       sleep_hours: (profile.sleep_hours as number | null) ?? null,
-      medications: asStrings(profile.medications),
-      supplements: asStrings(profile.supplements),
-      nausea_foods: asStrings(profile.nausea_foods),
+      medications: toStringList(profile.medications),
+      supplements: toStringList(profile.supplements),
+      nausea_foods: toStringList(profile.nausea_foods),
       notes: (profile.notes as string | null) ?? null,
-      never_eat_foods: asStrings(profile.never_eat_foods),
+      never_eat_foods: toStringList(profile.never_eat_foods),
       sleep_band: (profile.sleep_band as string | null) ?? null,
       feeding_mode: (profile.feeding_mode as string | null) ?? null,
       pregnancy_month: (profile.pregnancy_month as number | null) ?? null,
@@ -408,7 +407,7 @@ async function buildContextViaFetch(
         hip_cm: (profile.hip_cm as number | null) ?? null,
         steps_daily: (profile.steps_daily as number | null) ?? null,
         exercise_duration: (profile.exercise_duration as string | null) ?? null,
-        liked_foods: asStrings(profile.liked_foods),
+        liked_foods: toStringList(profile.liked_foods),
         meals_per_day: (profile.meals_per_day as number | null) ?? null,
         snacks_habit: (profile.snacks_habit as string | null) ?? null,
         breakfast_habit: (profile.breakfast_habit as string | null) ?? null,
@@ -424,9 +423,9 @@ async function buildContextViaFetch(
     },
     family_members,
     family_wide: {
-      dietary_restrictions: asStrings(profile.family_dietary_restrictions),
-      dislikes: asStrings(profile.family_dislikes),
-      cooking_methods: asStrings(profile.cooking_methods),
+      dietary_restrictions: toStringList(profile.family_dietary_restrictions),
+      dislikes: toStringList(profile.family_dislikes),
+      cooking_methods: toStringList(profile.cooking_methods),
       meal_out_frequency: (profile.meal_out_frequency as string | null) ?? null,
     },
     composition_summary: buildCompositionSummary(

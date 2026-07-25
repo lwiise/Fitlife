@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
+import { toStringList } from "@fitlife/plan-engine";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import { loadSubscriberHealth, type MemberHealth } from "@/lib/admin/detail";
@@ -70,8 +71,8 @@ function MemberHealthCard({
   locale: AdminLocale;
 }) {
   const conditions = member.medicalConditions;
-  const allergies = listToStrings(member.allergies);
-  const dislikes = listToStrings(member.dislikes);
+  const allergies = toStringList(member.allergies);
+  const dislikes = toStringList(member.dislikes);
   const yn = (v: boolean | null) =>
     v == null ? "—" : v ? t("yes", locale) : t("no", locale);
 
@@ -138,15 +139,4 @@ function ListField({
   );
 }
 
-/** jsonb allergies/dislikes may be string[] or [{name_ar|name}] — normalize. */
-function listToStrings(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.map((item) => {
-    if (typeof item === "string") return item;
-    if (item && typeof item === "object") {
-      const o = item as Record<string, unknown>;
-      return String(o.name_ar ?? o.name ?? o.label ?? JSON.stringify(item));
-    }
-    return String(item);
-  });
-}
+
