@@ -14,12 +14,18 @@
     "clean": "turbo run clean"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.9.4",
-    "@types/node": "^22.0.0",
-    "prettier": "^3.4.0",
-    "supabase": "^2.107.0",
-    "turbo": "^2.3.0",
+    "@netlify/plugin-nextjs": "^5.15.12",
+    "@types/node": "^22.20.1",
+    "prettier": "^3.9.6",
+    "supabase": "^2.109.1",
+    "turbo": "^2.10.7",
     "typescript": "^5.6.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "dompurify@<3.4.12": "^3.4.12"
+    },
+    "overridesComment": "posthog-js 1.407.2 (latest) still pins dompurify 3.4.4, which carries a high-severity XSS advisory plus seven more. 3.4.12 is the same patch line, so this only moves the transitive pin forward until posthog-js updates its own. Drop this entry once it does."
   },
   "engines": {
     "node": ">=20.0.0",
