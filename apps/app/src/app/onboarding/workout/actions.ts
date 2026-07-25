@@ -10,8 +10,31 @@ import {
   isWorkoutEligibleMember,
   isWorkoutEligibleMom,
 } from "@/lib/plans/workoutEligibility";
-import { triggerWorkoutGeneration } from "@/lib/plans/dispatch";
+import {
+  triggerWorkoutGeneration,
+  type WorkoutDispatchResult,
+} from "@/lib/plans/dispatch";
 import { finishOnboardingToSubscription } from "../actions";
+
+/**
+ * Where a user-invoked workout dispatch lands. An inactive/expired
+ * subscription goes to the subscription page (the only place to fix it);
+ * everything else — including a spent weekly quota — lands on the workout
+ * view, which already renders the existing plan or its absence.
+ */
+function workoutDispatchDestination(result: WorkoutDispatchResult): string {
+  if (!result.ok && result.kind === "access") {
+    const { reason } = result.access;
+    if (
+      reason === "subscription_inactive" ||
+      reason === "trial_expired" ||
+      reason === "past_due"
+    ) {
+      return "/subscription";
+    }
+  }
+  return "/plan?view=workout";
+}
 
 const EntriesSchema = z
   .array(
@@ -127,8 +150,8 @@ export async function continueAfterWorkoutOptIn(): Promise<void> {
   }
 
   // Post-onboarding opt-in/edit: dispatch now (busy → the in-flight run wins).
-  await triggerWorkoutGeneration({ supabase, userId: user.id });
-  redirect("/plan?view=workout");
+  const result = await triggerWorkoutGeneration({ supabase, userId: user.id });
+  redirect(workoutDispatchDestination(result));
 }
 
 /**
@@ -143,7 +166,7 @@ export async function retryWorkoutGeneration(): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  await triggerWorkoutGeneration({ supabase, userId: user.id });
+  const result = await triggerWorkoutGeneration({ supabase, userId: user.id });
   revalidatePath("/plan");
-  redirect("/plan?view=workout");
+  redirect(workoutDispatchDestination(result));
 }

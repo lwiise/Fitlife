@@ -584,7 +584,9 @@ async function maybeTriggerWorkoutGeneration(
       if (row.status === "generating" && ageMin < 15) return;
     }
 
-    await triggerWorkoutGeneration({ supabase, userId });
+    // companion: the meal flow that got us here already ran its own access
+    // gate, and a denial here must stay silent rather than break that flow.
+    await triggerWorkoutGeneration({ supabase, userId, companion: true });
   } catch (err) {
     // Never let the workout companion break the meal flow.
     console.error("[maybeTriggerWorkoutGeneration] failed", err);

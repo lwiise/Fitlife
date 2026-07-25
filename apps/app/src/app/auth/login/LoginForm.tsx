@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 import { Loader2, Mail } from "lucide-react";
 
 type Mode = "signin" | "signup";
@@ -34,7 +35,7 @@ export function LoginForm() {
   const nextPath =
     isValidTier(tier) && isValidCadence(cadence)
       ? `/onboarding?tier=${tier}&cadence=${cadence}`
-      : searchParams.get("redirect_to") || "/dashboard";
+      : safeRedirectPath(searchParams.get("redirect_to"));
 
   // Landing CTAs pass ?mode=signup so new users start on "create account".
   const [mode, setMode] = useState<Mode>(

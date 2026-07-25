@@ -107,6 +107,38 @@ export async function canGeneratePlan(userId: string): Promise<boolean> {
 }
 
 /**
+ * Count workout generations started in the last 7 days. Counts DISTINCT
+ * workout_plan_id for the same reason canGeneratePlan counts distinct
+ * meal_plan_id — one generated plan is one slot however many audit rows it
+ * accumulates. Counts 'started' as well as 'completed': a run that failed
+ * still spent the API budget, so failures must not be a free retry loop.
+ * Best-effort — returns 0 on error so a transient read never blocks the user.
+ */
+export async function countWorkoutGensThisWeek(
+  userId: string,
+): Promise<number> {
+  const supabase = await createClient();
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  const { data, error } = await supabase
+    .from("plan_generations")
+    .select("workout_plan_id")
+    .eq("user_id", userId)
+    .eq("plan_kind", "workout")
+    .in("status", ["started", "completed"])
+    .gte("created_at", oneWeekAgo.toISOString());
+
+  if (error) return 0;
+  return new Set(
+    (data ?? [])
+      .map((r) => (r as { workout_plan_id: string | null }).workout_plan_id)
+      .filter((id): id is string => id != null),
+  ).size;
+}
+
+/**
  * Count this member's MANUAL regenerations in the last 7 days. Each regenerate
  * creates a new meal_plan tagged with plan_data.regenerated_for = member_id, so a
  * rolling-window count of non-failed plans carrying that tag is the per-member

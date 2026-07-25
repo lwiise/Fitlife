@@ -1,7 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { canGeneratePlan, countMemberRegensThisWeek } from "@/lib/supabase/queries";
+import {
+  canGeneratePlan,
+  countMemberRegensThisWeek,
+  countWorkoutGensThisWeek,
+} from "@/lib/supabase/queries";
 import {
   getCurrentSubscription,
   getTierLimit,
@@ -125,6 +129,35 @@ export async function canGenerateForFamilyChange(
   userId: string,
 ): Promise<AccessResult> {
   return checkSubscriptionAndPersonCount(userId);
+}
+
+/**
+ * Access check for a WORKOUT generation. Same subscription + person-count gate
+ * as the meal flows, plus its own weekly pool (workout runs never consume meal
+ * generation slots and vice versa).
+ *
+ * Previously triggerWorkoutGeneration ran ungated on the assumption that every
+ * caller sat behind a meal-flow gate. Once the post-onboarding opt-in and the
+ * plan-page retry began calling it directly, any authenticated account — never
+ * subscribed or trial-expired — could dispatch full paid generations in a loop.
+ */
+const WORKOUT_WEEKLY_LIMIT = 3;
+export async function canGenerateWorkoutPlan(
+  userId: string,
+): Promise<AccessResult> {
+  const base = await checkSubscriptionAndPersonCount(userId);
+  if (!base.allowed) return base;
+
+  const used = await countWorkoutGensThisWeek(userId);
+  if (used >= WORKOUT_WEEKLY_LIMIT) {
+    return {
+      allowed: false,
+      reason: "rate_limit",
+      details: { days_until_reset: 7 },
+    };
+  }
+
+  return { allowed: true };
 }
 
 /**

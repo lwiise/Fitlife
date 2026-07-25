@@ -27,6 +27,7 @@ import {
   canGenerateNewPlan,
   canGenerateForFamilyChange,
   canRegenerateMemberPlan,
+  canGenerateWorkoutPlan,
   type AccessResult,
 } from "@/lib/subscription/access";
 import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
@@ -510,21 +511,41 @@ export async function triggerPlanTranslation(params: {
 
 export type WorkoutDispatchResult =
   | { ok: true; workoutPlanId: string; status: "started" | "ready" }
-  | { ok: false; kind: "busy" | "no_trainees" | "dispatch" };
+  | { ok: true; skipped: "access" }
+  | { ok: false; kind: "busy" | "no_trainees" | "dispatch" }
+  | {
+      ok: false;
+      kind: "access";
+      access: Extract<AccessResult, { allowed: false }>;
+    };
 
 /**
  * Dispatch a workout generation for every opted-in adult (workout_profile
- * set). Mirrors triggerPlanGeneration's shape: per-kind busy-guard with the
- * 15-min stale reclassifier, placeholder rows via createWorkoutPlanRows (the
- * 00014 composite unique index is the authority), dev-inline / prod-bg fork.
- * Subscription access is the caller's responsibility (both callers sit behind
- * canGenerateForFamilyChange-gated meal flows).
+ * set). Mirrors triggerPlanGeneration's shape: subscription/quota gate,
+ * per-kind busy-guard with the 15-min stale reclassifier, placeholder rows via
+ * createWorkoutPlanRows (the 00014 composite unique index is the authority),
+ * dev-inline / prod-bg fork.
+ *
+ * The access gate lives HERE rather than in the callers: it started out as the
+ * callers' responsibility back when both of them sat behind a gated meal flow,
+ * but the post-onboarding opt-in and the plan-page retry now call in directly,
+ * which left workout generation reachable — and loopable — by any authenticated
+ * account. `companion: true` marks the meals-first path, where the meal flow has
+ * already gated and a denial should stay silent instead of surfacing an error.
  */
 export async function triggerWorkoutGeneration(params: {
   supabase: ServerClient;
   userId: string;
+  companion?: boolean;
 }): Promise<WorkoutDispatchResult> {
-  const { supabase, userId } = params;
+  const { supabase, userId, companion = false } = params;
+
+  const access = await canGenerateWorkoutPlan(userId);
+  if (!access.allowed) {
+    return companion
+      ? { ok: true, skipped: "access" }
+      : { ok: false, kind: "access", access };
+  }
 
   const { data: liveGens } = await supabase
     .from("plan_generations")
