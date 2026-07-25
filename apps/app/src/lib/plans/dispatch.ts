@@ -295,6 +295,9 @@ export async function triggerPlanGeneration(params: {
         mealPlanId,
         context,
         existingPlan,
+        // context.family_members is already narrowed above; the runner needs
+        // the same set again to judge translation-readiness against it.
+        limitMemberIds,
         independentRegen: effIndependentRegen,
         onlyMemberId,
         regenerateMemberId,

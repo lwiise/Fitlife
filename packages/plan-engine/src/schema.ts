@@ -10,6 +10,27 @@ import { z } from "zod";
 export const LOCALE_CODES = ["ar", "en", "tl", "id", "bn", "am", "ur"] as const;
 export type LocaleCode = (typeof LOCALE_CODES)[number];
 
+/**
+ * The locale a housekeeper's recipes should be translated into, or undefined
+ * when there is nothing to translate. Arabic is the source language, so an
+ * Arabic-reading housekeeper needs no pass; an unrecognized locale is ignored
+ * rather than trusted into a prompt.
+ *
+ * Lives here beside LOCALE_CODES because four places decide this — context
+ * building (buildContext and the background function's fetch-based mirror) and
+ * end-of-run completion (runMealPlanGeneration and that function again) — and
+ * they must not fork.
+ */
+export function resolveHousekeeperLocale(
+  hkLang: string | null | undefined,
+): LocaleCode | undefined {
+  return hkLang &&
+    hkLang !== "ar" &&
+    (LOCALE_CODES as readonly string[]).includes(hkLang)
+    ? (hkLang as LocaleCode)
+    : undefined;
+}
+
 // ─── Macros ────────────────────────────────────────────────────────────
 export const MacrosSchema = z.object({
   protein_g: z.number(),

@@ -35,6 +35,7 @@ import {
   type Ingredient,
   type PerMemberPortion,
   type LocaleCode,
+  resolveHousekeeperLocale,
 } from "./schema";
 import {
   PlanValidationError,
@@ -2294,6 +2295,11 @@ export async function runMealPlanGeneration(params: {
   regenerateMemberId?: string;
   regenScope?: "individual" | "shared" | "both";
   suppressTargetedMember?: boolean;
+  /** Tier-capped run: the beneficiaries this plan actually covers. The caller
+   * has already narrowed `context.family_members`; this is needed again at the
+   * end so translation-readiness is judged against the SAME set (see
+   * translationMemberIds). */
+  limitMemberIds?: string[];
 }): Promise<GenerateResult> {
   const {
     supabase,
@@ -2306,6 +2312,7 @@ export async function runMealPlanGeneration(params: {
     regenerateMemberId,
     regenScope,
     suppressTargetedMember,
+    limitMemberIds,
   } = params;
   const startMs = Date.now();
 
@@ -2376,18 +2383,10 @@ export async function runMealPlanGeneration(params: {
       .eq("role", "housekeeper")
       .limit(1)
       .returns<{ preferred_language: string | null }[]>();
-    const hkLang = hkRows?.[0]?.preferred_language ?? undefined;
-    const endLocale =
-      hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
-        ? (hkLang as LocaleCode)
-        : undefined;
-    const needsTranslate =
-      !!endLocale &&
-      plan.members.some((m) =>
-        m.days.some((d) =>
-          d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
-        ),
-      );
+    const endLocale = resolveHousekeeperLocale(
+      hkRows?.[0]?.preferred_language ?? undefined,
+    );
+    const needsTranslate = planNeedsTranslation(plan, endLocale);
     // Only translate once the WHOLE family is fully generated — every member, day
     // 1 → last day. Skip while any member is absent OR still has an unfilled day
     // (under the retry cap); the drain finishes them first and a later run
@@ -2398,9 +2397,7 @@ export async function runMealPlanGeneration(params: {
       .select("id, role")
       .eq("user_id", context.mom.id)
       .returns<{ id: string; role: string }[]>();
-    const familyMemberIds = (memberRows ?? [])
-      .filter((m) => m.role !== "housekeeper")
-      .map((m) => m.id);
+    const familyMemberIds = translationMemberIds(memberRows ?? [], limitMemberIds);
     const stillGenerating = hasPendingGeneration({
       plan,
       familyMemberIds,
@@ -2448,10 +2445,7 @@ export async function runMealPlanGeneration(params: {
   // Partial plan: some days were dropped after retries. Status stays "completed"
   // (the CHECK allows only started/completed/failed), but record a PII-safe note
   // (day indices only — never recipe/member content) so partials are auditable.
-  const partialNote =
-    missingDays.length > 0
-      ? `partial: days [${missingDays.join(", ")}] failed${missingDaysCause ? ` — ${missingDaysCause}` : ""}`
-      : null;
+  const partialNote = partialPlanNote(missingDays, missingDaysCause);
   if (partialNote) {
     console.warn(`[runMealPlanGeneration] ${partialNote}`);
   }
@@ -2499,6 +2493,69 @@ export async function runMealPlanGeneration(params: {
  * can't block translation forever — it surfaces as "failed", consistent with the
  * generation cap.
  */
+/**
+ * The end-of-run completion decisions, extracted so the two runners can't fork.
+ *
+ * `runMealPlanGeneration` (dev, inline, Supabase SDK) and the Netlify
+ * background function (prod, SDK-free fetch) both have to reach the same
+ * conclusions here. Their IO genuinely differs and stays duplicated — but the
+ * DECISIONS below are pure, and they had already drifted once: the background
+ * function narrowed the translation gate to a tier-capped run's members while
+ * the engine copy did not, so a capped family's housekeeper translation could
+ * never start. Anything either runner decides rather than performs belongs
+ * here.
+ */
+
+/** True when any meal is not yet translated into `endLocale`. */
+export { resolveHousekeeperLocale };
+
+export function planNeedsTranslation(
+  plan: MealPlan,
+  endLocale: LocaleCode | undefined,
+): boolean {
+  return (
+    !!endLocale &&
+    plan.members.some((m) =>
+      m.days.some((d) =>
+        d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
+      ),
+    )
+  );
+}
+
+/**
+ * The member ids translation-readiness is judged against: every non-housekeeper
+ * family member, narrowed to the tier-capped allow-list when the run had one.
+ *
+ * The narrowing is load-bearing. On a capped run the deferred members are
+ * deliberately absent from the plan, so counting them leaves hasPendingGeneration
+ * permanently true and the housekeeper never gets a translated plan at all.
+ */
+export function translationMemberIds(
+  rows: readonly { id: string; role: string }[],
+  limitMemberIds?: readonly string[],
+): string[] {
+  const ids = rows.filter((m) => m.role !== "housekeeper").map((m) => m.id);
+  if (!limitMemberIds) return ids;
+  const keep = new Set(limitMemberIds);
+  return ids.filter((id) => keep.has(id));
+}
+
+/**
+ * The PII-safe audit note for a partial plan — day indices only, never recipe
+ * or member content. Status stays 'completed' (the CHECK allows only
+ * started/completed/failed), so this note is the only record that days were
+ * dropped. Null when the plan is whole.
+ */
+export function partialPlanNote(
+  missingDays: readonly number[],
+  missingDaysCause?: string,
+): string | null {
+  if (missingDays.length === 0) return null;
+  const cause = missingDaysCause ? ` — ${missingDaysCause}` : "";
+  return `partial: days [${missingDays.join(", ")}] failed${cause}`;
+}
+
 export function hasPendingGeneration(params: {
   plan: MealPlan;
   familyMemberIds: string[];

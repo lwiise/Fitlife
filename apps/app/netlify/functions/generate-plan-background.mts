@@ -14,6 +14,9 @@ import {
   hasPendingGeneration,
   generationAlreadySettled,
   prepareSharedGroupRegen,
+  planNeedsTranslation,
+  translationMemberIds,
+  partialPlanNote,
 } from "../../../../packages/plan-engine/src/generate";
 import {
   runWorkoutPlanGeneration,
@@ -25,7 +28,10 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 // Dependency-free by design — keeps this bundle SDK-free (see jsonList.ts).
 import { toStringList } from "../../../../packages/plan-engine/src/jsonList";
-import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
+import {
+  MealPlanSchema,
+  resolveHousekeeperLocale,
+} from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
@@ -358,10 +364,7 @@ async function buildContextViaFetch(
   // drives the day-prompt translation directive. Mirrors buildContext.ts.
   const housekeeper = family_members.find((m) => m.role === "housekeeper");
   const hkLang = housekeeper?.preferred_language;
-  const housekeeper_locale =
-    hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
-      ? (hkLang as LocaleCode)
-      : undefined;
+  const housekeeper_locale = resolveHousekeeperLocale(hkLang);
 
   return {
     mom: {
@@ -901,18 +904,10 @@ const handler = async (req: Request): Promise<Response> => {
         "family_members",
         `user_id=eq.${userId}&role=eq.housekeeper&select=preferred_language&limit=1`,
       );
-      const hkLang = hkRows[0]?.preferred_language as string | undefined;
-      const endLocale =
-        hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
-          ? (hkLang as LocaleCode)
-          : undefined;
-      const needsTranslate =
-        !!endLocale &&
-        plan.members.some((m) =>
-          m.days.some((d) =>
-            d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
-          ),
-        );
+      const endLocale = resolveHousekeeperLocale(
+        hkRows[0]?.preferred_language as string | undefined,
+      );
+      const needsTranslate = planNeedsTranslation(plan, endLocale);
       // Only translate once the WHOLE family is fully generated — every member,
       // day 1 → last day. Skip while any member is absent OR still has an unfilled
       // day (under the retry cap): the drain finishes them one at a time and a
@@ -924,16 +919,10 @@ const handler = async (req: Request): Promise<Response> => {
         "family_members",
         `user_id=eq.${userId}&select=id,role`,
       );
-      let familyMemberIds = memberRows
-        .filter((m) => m.role !== "housekeeper")
-        .map((m) => m.id as string);
-      // Tier-capped run: only mom + the allow-listed members are in this plan, so
-      // gate translation on THAT set — otherwise the deferred (tier-blocked) members
-      // would keep it "still generating" forever and the maid never gets translated.
-      if (body.limitMemberIds) {
-        const keep = new Set(body.limitMemberIds);
-        familyMemberIds = familyMemberIds.filter((id) => keep.has(id));
-      }
+      const familyMemberIds = translationMemberIds(
+        memberRows as { id: string; role: string }[],
+        body.limitMemberIds,
+      );
       const stillGenerating = hasPendingGeneration({
         plan,
         familyMemberIds,
@@ -971,10 +960,7 @@ const handler = async (req: Request): Promise<Response> => {
     // "completed" (the CHECK allows only started/completed/failed), but record a
     // PII-safe note (day indices only — never recipe/member content) so partials
     // are auditable.
-    const partialNote =
-      missingDays.length > 0
-        ? `partial: days [${missingDays.join(", ")}] failed${missingDaysCause ? ` — ${missingDaysCause}` : ""}`
-        : null;
+    const partialNote = partialPlanNote(missingDays, missingDaysCause);
     if (partialNote) {
       console.warn(`[generate-plan-background] ${partialNote}`, { userId, mealPlanId });
     }

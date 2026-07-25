@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
 import { toStringList } from "./jsonList";
 import type { EngagementDigest } from "./engagementDigest";
-import { LOCALE_CODES, type LocaleCode } from "./schema";
+import {
+  LOCALE_CODES,
+  resolveHousekeeperLocale,
+  type LocaleCode,
+} from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
 import type { WorkoutFeedbackSummary } from "./workout/feedback";
 
@@ -415,11 +419,9 @@ export async function buildPlanContext(
 
   // Housekeeper's reading language (only when she exists and it's not Arabic).
   const housekeeper = family_members.find((m) => m.role === "housekeeper");
-  const hkLang = housekeeper?.preferred_language;
-  const housekeeper_locale =
-    hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
-      ? (hkLang as LocaleCode)
-      : undefined;
+  const housekeeper_locale = resolveHousekeeperLocale(
+    housekeeper?.preferred_language,
+  );
 
   return {
     mom,
