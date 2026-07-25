@@ -47,16 +47,42 @@ export function resolveCheckin(
 }
 
 /**
+ * The member's OWN mark, with NO whole-house fallback — for a member who is
+ * out of a shared meal occurrence (00021). The kitchen's attestation covers
+ * the dish they were excluded from, so it must never answer for them: their
+ * tab would otherwise read «طُبخت» for a meal they had no part in. Their mark
+ * is personal («بدّلتها»/«تجاوزتها»), and unanswered stays unknown.
+ */
+export function ownCheckin(
+  map: ReadonlyMap<string, CheckinMark>,
+  dayIndex: number,
+  slot: string,
+  memberId: string,
+): CheckinMark | null {
+  return map.get(checkinMapKey(dayIndex, slot, memberId)) ?? null;
+}
+
+/**
  * Every key a clear must remove for the meal to actually read as unmarked:
  * the members' own rows PLUS the whole-house fallback. Anything less leaves a
  * row that resolveCheckin would still surface, and the un-tap looks ignored.
+ *
+ * `sweepHousehold: false` is the out-of-meal case, and it mirrors ownCheckin:
+ * an excluded member's chip is read without the fallback, so clearing it needs
+ * no sweep — and must not have one, or one un-tap on the tab of someone who
+ * sat the meal out would retract the kitchen's attestation for the dish the
+ * others shared. The server decides which of the two it is (see setMealCheckin
+ * in engagement/actions.ts) — a tab opened before the absence landed still
+ * thinks that member is a sharer.
  */
 export function checkinClearKeys(
   dayIndex: number,
   slot: string,
   memberIds: readonly string[],
+  { sweepHousehold = true }: { sweepHousehold?: boolean } = {},
 ): string[] {
-  return [
-    ...new Set([...memberIds, HOUSEHOLD_CHECKIN_MEMBER]),
-  ].map((id) => checkinMapKey(dayIndex, slot, id));
+  const targets = sweepHousehold
+    ? [...memberIds, HOUSEHOLD_CHECKIN_MEMBER]
+    : [...memberIds];
+  return [...new Set(targets)].map((id) => checkinMapKey(dayIndex, slot, id));
 }

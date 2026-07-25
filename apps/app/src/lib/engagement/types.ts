@@ -25,6 +25,14 @@ export type CheckinSlot = (typeof CHECKIN_SLOTS)[number];
 export const CHECKIN_STATUSES = ["cooked", "swapped", "skipped"] as const;
 export type CheckinStatus = (typeof CHECKIN_STATUSES)[number];
 
+/** The statuses a member who is OUT of a shared meal occurrence (00021
+ * meal_absences) may record — «بدّلتها» or «تجاوزتها» only (owner directive
+ * 07/2026). The planned dish never reached them, so «طبختها كما هي» is not an
+ * answer they can honestly give: either the meal was replaced for them, or it
+ * passed. Derived from CHECKIN_STATUSES so the two vocabularies can't fork. */
+export const OUT_OF_MEAL_CHECKIN_STATUSES: readonly CheckinStatus[] =
+  CHECKIN_STATUSES.filter((s) => s !== "cooked");
+
 // No-shame reason chips («جاءنا ضيوف» is honored, not excused; «طلبنا اليوم»
 // is Riyadh reality). Absence of a reason is always valid.
 export const CHECKIN_REASONS = [

@@ -69,6 +69,12 @@ const CHECKIN_CLEAR_ERROR_AR = "تعذر مسح التسجيل، يرجى الم
  *     the moment the current one was gone. Deleting by (user, local_date,
  *     slot, member) is exactly the read key.
  *
+ * `sweepHousehold: false` is the OUT-OF-MEAL case: a member excluded from a
+ * shared occurrence (00021) keeps a PERSONAL mark — «بدّلتها»/«تجاوزتها» about
+ * a meal they never shared — and /plan reads that mark without the whole-house
+ * fallback. So their un-tap needs no sweep, and must not have one: it would
+ * retract the kitchen's attestation for the dish the others did share.
+ *
  * Pre-00019 prod (no member_id column) degrades to the legacy whole-meal
  * clear — that schema's own semantics, where one row speaks for the house.
  */
@@ -80,16 +86,24 @@ async function clearMealMarks(
     localDate,
     slot,
     memberIds,
+    sweepHousehold = true,
     step,
   }: {
     userId: string;
     localDate: string;
     slot: string;
     memberIds: string[];
+    sweepHousehold?: boolean;
     step: string;
   },
 ): Promise<boolean> {
-  const targets = [...new Set([...memberIds, HOUSEHOLD_CHECKIN_MEMBER])];
+  const targets = [
+    ...new Set(
+      sweepHousehold
+        ? [...memberIds, HOUSEHOLD_CHECKIN_MEMBER]
+        : [...memberIds],
+    ),
+  ];
   const { error } = await db
     .from("meal_checkins")
     .delete()
@@ -276,6 +290,42 @@ export async function closeDay(rawInput: CloseDayInput) {
   revalidatePath("/dashboard");
   revalidatePath("/plan");
   return { ok: true as const, local_date: localDate };
+}
+
+/**
+ * Is this member excluded from that meal occurrence (00021 meal_absences)?
+ *
+ * The SERVER decides this, never the client: a tab opened before the absence
+ * landed still thinks the member is a sharer, and a tab that saw the absence
+ * may not know it was undone elsewhere. Pre-00021 prod (table missing) answers
+ * false — the whole-meal semantics that shipped before absences existed.
+ */
+async function isOutOfMeal(
+  db: SupabaseClient,
+  {
+    userId,
+    mealPlanId,
+    dayIndex,
+    slot,
+    memberId,
+  }: {
+    userId: string;
+    mealPlanId: string;
+    dayIndex: number;
+    slot: string;
+    memberId: string;
+  },
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("meal_absences")
+    .select("member_id")
+    .eq("user_id", userId)
+    .eq("meal_plan_id", mealPlanId)
+    .eq("day_index", dayIndex)
+    .eq("slot", slot)
+    .eq("member_id", memberId)
+    .maybeSingle();
+  return !error && !!data;
 }
 
 /** Weekday (0=Sunday, matches JS getDay) of a Riyadh-local YYYY-MM-DD date. */
@@ -508,8 +558,14 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
  * day (adherence cannot be fabricated ahead of time). status null clears an
  * accidental mark.
  *
- * PER-PERSON (00019): member_id says whose status this is — on a shared meal
- * each participant is marked separately (Louis can skip the dish anas ate).
+ * PER-PERSON (00019): member_id says whose status this is. A shared dish is
+ * marked ONCE for its sharers (setSharedMealCheckin), so on /plan this action
+ * now serves two callers: an INDIVIDUAL meal, and a member who is OUT of a
+ * shared occurrence (00021). The second is personal by nature — the planned
+ * dish never reached them, so their only honest answers are «بدّلتها» and
+ * «تجاوزتها» (owner directive 07/2026; the chip row offers just those two), and
+ * their mark speaks for nobody else.
+ *
  * A whole-house row ('household': legacy, or ختام اليوم) is NEVER destroyed
  * by a per-member write — it is the kitchen's attestation and stays as the
  * read-time fallback for members without their own row (member_exceptions
@@ -570,12 +626,24 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
   if (input.status === null) {
     // Clear the member's row AND the whole-house fallback that would otherwise
     // answer for this meal again, calendar-keyed so an older plan version of
-    // the same week can't hand the chip back (see clearMealMarks).
+    // the same week can't hand the chip back (see clearMealMarks). The one
+    // exception is a member OUT of this shared occurrence: their mark is
+    // personal and is read without that fallback, so their un-tap takes back
+    // their own row only — the kitchen's attestation for the dish the others
+    // shared is not theirs to retract.
+    const outOfMeal = await isOutOfMeal(db, {
+      userId: user.id,
+      mealPlanId: input.meal_plan_id,
+      dayIndex: input.day_index,
+      slot: input.slot,
+      memberId,
+    });
     const cleared = await clearMealMarks(supabase, db, {
       userId: user.id,
       localDate,
       slot: input.slot,
       memberIds: [memberId],
+      sweepHousehold: !outOfMeal,
       step: "checkin-clear",
     });
     if (!cleared) return { ok: false as const, error: CHECKIN_CLEAR_ERROR_AR };
@@ -694,10 +762,12 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
   const db = supabase as unknown as SupabaseClient;
 
   if (input.status === null) {
-    // One tap answered for the whole dish, so one tap un-answers it: every
-    // sharer's row plus the whole-house fallback, calendar-keyed across plan
-    // versions (see clearMealMarks). Anything left behind would re-light the
-    // chip with an older status.
+    // One tap answered for the whole dish, so one tap un-answers it: the row of
+    // every sharer in member_ids plus the whole-house fallback, calendar-keyed
+    // across plan versions (see clearMealMarks). Anything left behind would
+    // re-light the chip with an older status. Members OUT of the occurrence are
+    // not in member_ids, and their PERSONAL mark survives on purpose — it is
+    // about a meal they never shared, and /plan never reads it as this dish's.
     const cleared = await clearMealMarks(supabase, db, {
       userId: user.id,
       localDate,
@@ -773,11 +843,17 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
  * الخميس»), not adherence, so future days of the plan week are legitimate
  * targets. local_date is the MEAL's date, derived server-side.
  *
- * Marking absent also clears the member's own status row for that meal (a
- * person outside the meal has no serving to attest, and keeps no leaderboard
- * credit for it). Their dish VERDICTS are left alone — an opinion about the
- * dish is theirs regardless. Restoring deletes only the absence row; the meal
- * can then be re-marked to give them a status again.
+ * EITHER direction resets the member's own status row for that meal, because
+ * the row means something different on each side of the line: outside the meal
+ * it is a PERSONAL record («بدّلتها»/«تجاوزتها» — the dish never reached them),
+ * while a present sharer's row speaks for the whole dish (/plan reads it as the
+ * dish's single status). Leaving it in place would therefore either attest to a
+ * serving they never had, or re-brand the shared dish with the record of a meal
+ * they sat out. Restoring is followed by the client re-attaching them to the
+ * dish's current status, so «تسجيل واحد يشمل كل من شاركها» stays true.
+ *
+ * Their dish VERDICTS are left alone in both directions — an opinion about the
+ * dish is theirs regardless.
  */
 export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
   const supabase = await createClient();
@@ -838,26 +914,6 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       });
       return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
     }
-    // Outside the meal ⇒ no status for it. Calendar-keyed like clearMealMarks
-    // (a mid-week regenerate leaves same-week rows on the older plan id, and
-    // /plan reads them by date), but the whole-house row stays: the kitchen's
-    // attestation is not one member's to retract. Best-effort (pre-00019 prod
-    // has no member_id column — the shared status there is household-level
-    // anyway).
-    const { error: clearError } = await db
-      .from("meal_checkins")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("local_date", localDate)
-      .eq("slot", input.slot)
-      .eq("member_id", input.member_id);
-    if (clearError) {
-      // Best-effort by design (pre-00019 prod has no member_id column) — the
-      // absence itself saved; keep the real error for diagnosis.
-      Sentry.captureException(clearError, {
-        tags: { area: "engagement", step: "absence-clear-checkin", userId: user.id },
-      });
-    }
   } else {
     const { error: deleteError } = await db
       .from("meal_absences")
@@ -873,6 +929,29 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       });
       return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
     }
+  }
+
+  // Crossing the line either way resets this member's own mark for the meal
+  // (see the header): out of the meal it would attest to a serving they never
+  // had; back in it, their out-of-meal record would become the shared dish's
+  // status. Calendar-keyed like clearMealMarks (a mid-week regenerate leaves
+  // same-week rows on the older plan id, and /plan reads them by date), but the
+  // whole-house row stays — the kitchen's attestation is not one member's to
+  // retract. Best-effort (pre-00019 prod has no member_id column — the shared
+  // status there is household-level anyway).
+  const { error: clearError } = await db
+    .from("meal_checkins")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("local_date", localDate)
+    .eq("slot", input.slot)
+    .eq("member_id", input.member_id);
+  if (clearError) {
+    // Best-effort by design (pre-00019 prod has no member_id column) — the
+    // absence change itself saved; keep the real error for diagnosis.
+    Sentry.captureException(clearError, {
+      tags: { area: "engagement", step: "absence-clear-checkin", userId: user.id },
+    });
   }
 
   revalidatePath("/plan");

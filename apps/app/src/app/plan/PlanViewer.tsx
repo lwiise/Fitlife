@@ -17,9 +17,13 @@ import {
 import {
   checkinClearKeys,
   checkinMapKey,
+  ownCheckin,
   resolveCheckin,
 } from "@/lib/engagement/checkinMap";
-import { HOUSEHOLD_CHECKIN_MEMBER } from "@/lib/engagement/types";
+import {
+  HOUSEHOLD_CHECKIN_MEMBER,
+  OUT_OF_MEAL_CHECKIN_STATUSES,
+} from "@/lib/engagement/types";
 import { RegenerateButton } from "./RegenerateButton";
 import { PlanActionsMenu, PLAN_MENU_ITEM_CLASS } from "./PlanActionsMenu";
 // @react-pdf is dynamically imported inside this button's click handler, so it
@@ -257,17 +261,32 @@ export function PlanViewer({
     return resolveCheckin(checkinMap, dayIndex, slot, [memberId]);
   }
 
-  /** A SHARED meal's single status: any sharer's row (the fan-out keeps them
-   * in agreement; legacy per-person rows surface the same way), else the
-   * whole-house fallback. Callers pass the sharers PRESENT-FIRST so a stale
-   * row on an absentee (best-effort clear that failed) never outranks a
-   * present sharer's mark. */
+  /** A SHARED meal's single status: any PRESENT sharer's row (the fan-out keeps
+   * them in agreement; legacy per-person rows surface the same way), else the
+   * whole-house fallback. Callers pass the present sharers ONLY — a member
+   * excluded from the occurrence keeps a personal mark about a meal they did
+   * not share («بدّلتها»/«تجاوزتها»), and that must never become the dish's
+   * status for everyone else. */
   function sharedCheckinFor(
     dayIndex: number,
     slot: string,
     sharerIds: string[],
   ) {
     return resolveCheckin(checkinMap, dayIndex, slot, sharerIds);
+  }
+
+  /** The mark of a member who is OUT of a shared occurrence: their own row and
+   * nothing else. The whole-house fallback attests to the dish they were
+   * excluded from, so it must not answer for them (owner directive 07/2026 —
+   * an out-of-meal member records بديل/تجاوز for themselves, never «طُبخت»).
+   * A «طبختها كما هي» row can only be a leftover from before they were excluded
+   * (setMealAbsence clears it best-effort), never an answer they gave, so it
+   * doesn't show as theirs either — tapping a chip overwrites it. */
+  function outOfMealCheckinFor(dayIndex: number, slot: string, memberId: string) {
+    const mark = ownCheckin(checkinMap, dayIndex, slot, memberId);
+    return mark && OUT_OF_MEAL_CHECKIN_STATUSES.includes(mark.status)
+      ? mark
+      : null;
   }
 
   /** A member's own verdict for a dish (no fallback — verdicts are personal). */
@@ -314,18 +333,22 @@ export function PlanViewer({
       .finally(endWrite);
   }
 
+  /** One member's own mark: an individual meal, or a member who is OUT of a
+   * shared occurrence (`outOfMeal` — their mark is personal, so clearing it
+   * leaves the whole-house attestation alone; the server derives the same scope
+   * from meal_absences). */
   function handleCheckin(
     memberId: string,
     slot: (typeof plan.members)[number]["days"][number]["meals"][number]["slot"],
     status: "cooked" | "swapped" | "skipped" | null,
     reason: string | null,
+    outOfMeal = false,
   ) {
     const key = checkinMapKey(activeDayIndex, slot, memberId);
     const prevEntries = new Map(
-      checkinClearKeys(activeDayIndex, slot, [memberId]).map((k) => [
-        k,
-        checkinMap.get(k) ?? null,
-      ]),
+      checkinClearKeys(activeDayIndex, slot, [memberId], {
+        sweepHousehold: !outOfMeal,
+      }).map((k) => [k, checkinMap.get(k) ?? null]),
     );
     const next = new Map(checkinMap);
     if (status === null) {
@@ -423,9 +446,13 @@ export function PlanViewer({
   }
 
   /** Exclude/restore a sharer for one meal occurrence («إزالة من الوجبة»).
-   * Marking absent also drops that member's own status mark for the meal —
-   * someone outside the meal has no serving to attest (the server does the
-   * same). Restoring re-attaches them to the dish's single status: when the
+   * EITHER direction resets that member's own status mark for the meal, because
+   * the mark means something different on each side of the line: outside the
+   * meal it is personal («بدّلتها»/«تجاوزتها» — the dish never reached them),
+   * while a present sharer's row speaks for the whole dish. So leaving it
+   * behind would either attest to a serving they never had, or re-brand the
+   * shared dish with the record of a meal they sat out. The server does the
+   * same. Restoring then re-attaches them to the dish's single status: when the
    * other present sharers already carry a mark, it fans out to the restored
    * member too, so «تسجيل واحد يشمل كل من شاركها» stays literally true.
    * Works on any day of the plan week: absence is planning. */
@@ -456,7 +483,7 @@ export function PlanViewer({
       else next.delete(key);
       return next;
     });
-    if (absent && prevCheckin) {
+    if (prevCheckin) {
       setCheckinMap((cur) => {
         const next = new Map(cur);
         next.delete(key);
@@ -483,16 +510,14 @@ export function PlanViewer({
             else reverted.delete(key);
             return reverted;
           });
-          if (absent && prevCheckin) {
-            setCheckinMap((cur) => new Map(cur).set(key, prevCheckin));
-          }
-          if (!absent && donorState) {
-            setCheckinMap((cur) => {
-              const reverted = new Map(cur);
-              reverted.delete(key);
-              return reverted;
-            });
-          }
+          // One revert for both directions: the member's mark goes back to
+          // whatever it was before the toggle (a donor mirror never ran).
+          setCheckinMap((cur) => {
+            const reverted = new Map(cur);
+            if (prevCheckin) reverted.set(key, prevCheckin);
+            else reverted.delete(key);
+            return reverted;
+          });
           setCheckinError(result.error);
           return;
         }
@@ -1105,6 +1130,24 @@ export function PlanViewer({
                 const presentIds = sharerIds
                   ? sharerIds.filter((id) => !absentIds.includes(id))
                   : null;
+                // The open tab belongs to a sharer who is OUT of this
+                // occurrence (owner directive 07/2026): their controls become
+                // PERSONAL — their own row, read without the whole-house
+                // fallback, and MealCard drops «طبختها كما هي» from the chips.
+                // The everyone-absent edge (data only — the UI refuses to
+                // remove the last sharer) keeps the shared path.
+                const viewerOutOfMeal =
+                  !!presentIds &&
+                  presentIds.length > 0 &&
+                  absentIds.includes(activeMember.member_id);
+                // The dish's own roster: the present sharers. Absentees are
+                // excluded from BOTH sides — their row is a personal record, so
+                // it neither lights the shared chip nor gets swept when the
+                // dish is un-marked. (Everyone-absent is a data-only edge: the
+                // status still needs someone to land on, so it keeps the full
+                // roster.)
+                const dishIds =
+                  presentIds && presentIds.length > 0 ? presentIds : sharerIds;
                 return (
                   <MealCard
                     key={i}
@@ -1113,34 +1156,32 @@ export function PlanViewer({
                     locale={locale}
                     currentMemberId={activeMember.member_id}
                     checkin={
-                      sharerIds
-                        ? sharedCheckinFor(activeDayIndex, meal.slot, [
-                            ...(presentIds ?? []),
-                            ...absentIds,
-                          ])
-                        : checkinFor(
+                      viewerOutOfMeal
+                        ? outOfMealCheckinFor(
                             activeDayIndex,
                             meal.slot,
                             activeMember.member_id,
                           )
+                        : dishIds
+                          ? sharedCheckinFor(activeDayIndex, meal.slot, dishIds)
+                          : checkinFor(
+                              activeDayIndex,
+                              meal.slot,
+                              activeMember.member_id,
+                            )
                     }
                     onCheckin={
                       canCheckinActiveDay
                         ? (status, reason) =>
-                            sharerIds
+                            dishIds && !viewerOutOfMeal
                               ? handleSharedCheckin(
-                                  // SET lands on the present sharers only (an
-                                  // absentee gets no mark) — with an
-                                  // everyone-absent guard so the status always
-                                  // has someone to land on. CLEAR sweeps ALL
-                                  // sharers, so a stale row (e.g. an absentee's
-                                  // legacy per-person mark) can't keep the
-                                  // chip lit after an un-tap.
-                                  status === null ||
-                                    !presentIds ||
-                                    presentIds.length === 0
-                                    ? sharerIds
-                                    : presentIds,
+                                  // One roster for set AND clear: the sharers
+                                  // this dish actually belongs to. Setting gives
+                                  // each of them the same status; clearing takes
+                                  // it back from all of them (plus the
+                                  // whole-house fallback), so an un-tap really
+                                  // leaves the dish unmarked.
+                                  dishIds,
                                   meal.slot,
                                   status,
                                   reason,
@@ -1150,6 +1191,7 @@ export function PlanViewer({
                                   meal.slot,
                                   status,
                                   reason,
+                                  viewerOutOfMeal,
                                 )
                         : undefined
                     }
