@@ -10,6 +10,12 @@
 //     the weekly recap keep reading every status), but the season celebrates
 //     the plan actually cooked as written. Superseded the earlier
 //     "cooked-or-swapped" rule at the owner's direction.
+//   • The strip's THIRD star is EARNED, not a cap: three stars mean the day's
+//     meals were ALL cooked as written. The rating is measured against the
+//     day's OWN plan (its distinct planned slots), so a partial day tops out at
+//     two stars however many meals it holds. Superseded the earlier
+//     `min(3, cookedSlots)` cap, which handed a 4-meal day its third star at
+//     three marks.
 //   • The % is PLAN COMPLETION, not an act count (owner directive): a member
 //     with meals only is measured purely on meals — each meal worth
 //     100% / their planned meals. A member with a workout plan splits 50/50 —
@@ -107,7 +113,14 @@ export interface SeasonDayCell {
   dayIndex: number;
   /** The house cooked the plan as written this day («طبختها كما هي» exists). */
   lit: boolean;
-  /** Distinct cooked-as-is meal slots that day, capped at 3 — the star rating. */
+  /** Distinct meal slots cooked as-is that day. */
+  cookedSlots: number;
+  /** Distinct meal slots the plan holds that day — the star denominator. 0 when
+   * the caller passed no per-day plan (legacy/degraded read). */
+  plannedSlots: number;
+  /** Every planned meal of the day was cooked as written — the third star. */
+  complete: boolean;
+  /** 0-3 rating of the day against its OWN plan; 3 ONLY on a complete day. */
   stars: number;
 }
 
@@ -260,6 +273,25 @@ export function dayHasCookedMark(
   return checkins.some((c) => c.day_index === dayIndex && isCookedAsIs(c));
 }
 
+/**
+ * The 0-3 star rating of one strip day, measured against THAT DAY'S plan
+ * (owner directive 07/2026): the third star means «كل وجبات اليوم» — every
+ * planned meal of the day cooked as written. A partial day never reaches it,
+ * so a family with four meals a day can no longer collect three stars at three
+ * marks. Partial days split the day's own plan into thirds (floored) and are
+ * clamped to 1-2, so any real progress still reads as progress.
+ *
+ * `plannedSlots <= 0` means the caller supplied no per-day plan (legacy caller,
+ * or a day the plan doesn't describe): degrade to the pre-directive count-based
+ * rating rather than inventing — or withholding — a completeness claim.
+ */
+export function starsForDay(cookedSlots: number, plannedSlots: number): number {
+  if (cookedSlots <= 0) return 0;
+  if (plannedSlots <= 0) return Math.min(3, cookedSlots);
+  if (cookedSlots >= plannedSlots) return 3;
+  return Math.min(2, Math.max(1, Math.floor((3 * cookedSlots) / plannedSlots)));
+}
+
 export function computeSeasonStats(input: {
   members: SeasonMember[];
   checkins: SeasonMealMark[];
@@ -279,6 +311,13 @@ export function computeSeasonStats(input: {
    * open rather than zero the pillar. */
   workoutWeekStart?: string;
   workoutWeekEnd?: string;
+  /** Distinct meal slots the plan holds for each day of the week, indexed by
+   * plan day_index (length 7). The star denominators — a day earns its third
+   * star only when all of its planned meals were cooked as written. Omitted (or
+   * 0 for a day) degrades that day to the legacy count-based rating. Built from
+   * the SEASON ROSTER's meals only: the housekeeper is never marked, so her
+   * slots must never be part of «كل وجبات اليوم». */
+  plannedMealSlotsPerDay?: number[];
   /** Per-member weekly plan totals (the % denominators — owner directive:
    * the % measures completion of the member's OWN plan). A missing member or
    * zero planned meals yields 0% for that pillar (never a division by zero);
@@ -300,15 +339,26 @@ export function computeSeasonStats(input: {
   const followedMeals = new Set(happened.map((c) => `${c.day_index}|${c.slot}`))
     .size;
 
-  // Distinct cooked-as-is meal slots per plan day → strip cells + stars.
+  // Distinct cooked-as-is meal slots per plan day → strip cells + stars. Each
+  // day is rated against ITS OWN planned slots, so the third star always means
+  // «كل وجبات اليوم» (see starsForDay).
   const slotsPerDay = new Map<number, Set<string>>();
   for (const c of happened) {
     if (!slotsPerDay.has(c.day_index)) slotsPerDay.set(c.day_index, new Set());
     slotsPerDay.get(c.day_index)!.add(c.slot);
   }
+  const plannedPerDay = input.plannedMealSlotsPerDay ?? [];
   const days: SeasonDayCell[] = Array.from({ length: 7 }, (_, i) => {
-    const slots = slotsPerDay.get(i)?.size ?? 0;
-    return { dayIndex: i, lit: slots > 0, stars: Math.min(3, slots) };
+    const cookedSlots = slotsPerDay.get(i)?.size ?? 0;
+    const plannedSlots = Math.max(0, Math.floor(plannedPerDay[i] ?? 0));
+    return {
+      dayIndex: i,
+      lit: cookedSlots > 0,
+      cookedSlots,
+      plannedSlots,
+      complete: plannedSlots > 0 && cookedSlots >= plannedSlots,
+      stars: starsForDay(cookedSlots, plannedSlots),
+    };
   });
   const activeDays = slotsPerDay.size;
   const honored = activeDays >= HONOR_DAYS_GOAL;

@@ -25,6 +25,9 @@ import {
 //   • Top card — the shared header: a family meal-total ring, the week's pride
 //     line, the most-consistent member, and a 7-day meal strip (a day the house
 //     cooked lights up with a star rating + a utensils mark; other days dashed).
+//     The third star is EARNED (owner directive 07/2026): three stars mean the
+//     day's meals were ALL cooked as written, so the rating is measured against
+//     each day's own planned slots (see starsForDay in seasonMath).
 //   • Leaderboard — every household member ranked by PLAN COMPLETION (owner
 //     directive 07/2026): meals-only members are measured purely on meals
 //     (each meal worth 100% / their planned meals); a member with a workout
@@ -236,6 +239,7 @@ export function FamilySeasonCard({
   workoutCheckins = [],
   goalReached = [],
   planned,
+  plannedMealSlotsPerDay,
   weekStartDate,
   workoutWeekStart,
   workoutWeekEnd,
@@ -259,6 +263,10 @@ export function FamilySeasonCard({
   /** Per-member plan totals — the % denominators. `sessions` present only for
    * members in the ready workout plan (switches them to the 50/50 formula). */
   planned?: Record<string, PlannedTotals>;
+  /** Distinct meal slots planned per day of the week (by day_index, length 7) —
+   * the star denominators: a day shows three stars only when ALL of its meals
+   * were cooked as written. Omitted → the legacy count-based rating. */
+  plannedMealSlotsPerDay?: number[];
   /** Plan week start (YYYY-MM-DD) → real weekday initials on the strip. */
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
@@ -300,6 +308,7 @@ export function FamilySeasonCard({
     workoutWeekStart,
     workoutWeekEnd,
     planned,
+    plannedMealSlotsPerDay,
   });
 
   // «اليوم» panel — fills the hero's second column with the next action (and
@@ -405,21 +414,31 @@ export function FamilySeasonCard({
             </div>
 
             {/* 7-day meal strip — earliest day on the RIGHT (RTL-native). A day
-                the house cooked lights up with its star rating + a utensils
-                mark; a day without a meal mark is a dashed placeholder. Fixed
-                compact height so the whole section fits a laptop screen. */}
+                the house cooked lights up with its star rating (three stars
+                ONLY when every planned meal of that day was cooked as written)
+                + a utensils mark; a day without a meal mark is a dashed
+                placeholder. Fixed compact height so the whole section fits a
+                laptop screen. */}
             <ul className="grid grid-cols-7 gap-1.5 sm:gap-2.5 mt-4 list-none p-0 m-0" aria-label="أيام الأسبوع">
-              {days.map(({ dayIndex: i, lit: cooked, stars }) => {
+              {days.map(({ dayIndex: i, lit: cooked, stars, cookedSlots, plannedSlots, complete }) => {
                 const isToday = todayIndex === i;
                 const label = weekdayInitial(weekStartDate, i);
                 const dateNum = dayOfMonth(weekStartDate, i);
+                // The stars are decorative inside this cell, so the progress
+                // they encode has to be spoken here — otherwise a partial day
+                // and a complete one read identically.
+                const cookedLabel = complete
+                  ? "طُبخت وجبات اليوم كاملة"
+                  : plannedSlots > 0
+                    ? `طُبخ من الخطة: ${ar(cookedSlots)} من ${ar(plannedSlots)} وجبات`
+                    : "طُبخ من الخطة";
                 return (
                   <li key={i} className="flex flex-col items-center gap-1.5">
                     <div
                       role="img"
                       aria-label={`${label}: ${
                         cooked
-                          ? "طُبخ من الخطة"
+                          ? cookedLabel
                           : isToday
                             ? "اليوم — بانتظار التسجيل"
                             : "بلا تسجيل"
