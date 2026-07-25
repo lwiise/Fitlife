@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
-import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation ,
   triggerWorkoutGeneration,
 } from "@/lib/plans/dispatch";
@@ -57,8 +56,6 @@ type ProfileUpdates = Partial<{
   consulted_doctor: boolean;
 }>;
 
-type FamilyMemberInsertRow =
-  Database["public"]["Tables"]["family_members"]["Insert"];
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -96,103 +93,6 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
   }
 
   return { ok: true };
-}
-
-/**
- * Save the family members (Step 5). Replaces the existing set.
- *
- * Note: delete-then-insert is NOT transactional. Acceptable during onboarding
- * (user can re-run Step 5). Tighten later via a Postgres RPC if it becomes a problem.
- */
-export async function saveFamilyMembers(
-  members: Array<{
-    name: string;
-    role: string;
-    birth_year?: number;
-    preferred_language: string;
-  }>,
-): Promise<ActionResult> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { ok: false, error: "Not authenticated" };
-  }
-
-  const { error: deleteError } = await supabase
-    .from("family_members")
-    .delete()
-    .eq("user_id", user.id);
-
-  if (deleteError) {
-    Sentry.captureException(deleteError, {
-      tags: { area: "onboarding", step: "saveFamilyMembers.delete", userId: user.id },
-    });
-    return { ok: false, error: deleteError.message };
-  }
-
-  if (members.length > 0) {
-    const rows: FamilyMemberInsertRow[] = members.map((m, idx) => ({
-      ...m,
-      user_id: user.id,
-      display_order: idx,
-    }));
-    const { error: insertError } = await supabase
-      .from("family_members")
-      .insert(rows);
-
-    if (insertError) {
-      Sentry.captureException(insertError, {
-        tags: { area: "onboarding", step: "saveFamilyMembers.insert", userId: user.id },
-      });
-      return { ok: false, error: insertError.message };
-    }
-  }
-
-  return { ok: true };
-}
-
-/**
- * Complete onboarding: mark profile, then redirect. If the user arrived from a
- * landing-page tier CTA, send them to /pricing with that tier preselected;
- * otherwise to the dashboard.
- */
-export async function completeOnboarding(
-  tier?: string,
-  cadence?: string,
-): Promise<void> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    throw new Error("Not authenticated");
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ onboarding_completed_at: new Date().toISOString() })
-    .eq("id", user.id);
-
-  if (error) {
-    console.error("[completeOnboarding] error:", error);
-    Sentry.captureException(error, {
-      tags: { area: "onboarding", step: "completeOnboarding", userId: user.id },
-    });
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard");
-
-  if (isValidTier(tier) && isValidCadence(cadence)) {
-    redirect(`/pricing?tier=${tier}&cadence=${cadence}`);
-  }
-  redirect("/dashboard");
 }
 
 // ─── Prompt 1.8c: restructured onboarding ──────────────────────────────────

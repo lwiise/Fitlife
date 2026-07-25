@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
 import { computeMrr } from "@/lib/admin/revenue";
+import { latestSubByUser } from "@/lib/admin/metrics";
 import { trend, type Trend } from "@/lib/admin/period";
 import {
   computeActiveUserIds,
@@ -281,15 +282,6 @@ export async function loadAdminDataset(): Promise<AdminDataset> {
 // Aggregation (pure over the dataset)
 // ---------------------------------------------------------------------------
 
-/** Most-recent subscription per user (subscriptions are pre-sorted desc). */
-function subscriptionByUser(ds: AdminDataset): Map<string, SubscriptionLite> {
-  const map = new Map<string, SubscriptionLite>();
-  for (const s of ds.subscriptions) {
-    if (!map.has(s.user_id)) map.set(s.user_id, s);
-  }
-  return map;
-}
-
 function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const r of rows) {
@@ -308,7 +300,7 @@ function maxIso(a: string | null, b: string | null): string | null {
 }
 
 export function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
-  const subByUser = subscriptionByUser(ds);
+  const subByUser = latestSubByUser(ds.subscriptions);
   const membersByUser = groupBy(ds.members, (m) => m.user_id);
   const plansByUser = groupBy(ds.plans, (p) => p.user_id);
   const genByUser = groupBy(ds.generations, (g) => g.user_id);
@@ -384,7 +376,7 @@ export function buildOverviewView(
   },
   now: Date = new Date(),
 ): OverviewView {
-  const subs = [...subscriptionByUser(ds).values()];
+  const subs = [...latestSubByUser(ds.subscriptions).values()];
   const selectedMetric = parseMetric(params.metric);
   const shownMetrics = parseMetrics(params.metrics);
   const comparisonOn = params.cmp !== "off";

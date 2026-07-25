@@ -189,19 +189,6 @@ export async function canRegenerateMemberPlan(
 }
 
 /**
- * True when the user is allowed to VIEW their existing plans (vs. generate
- * new ones). Permissive on expired/cancelled subs so users can still see
- * the last plan they paid for — locks them out of generation, not history.
- */
-export async function canViewExistingPlans(userId: string): Promise<boolean> {
-  const sub = await getCurrentSubscription(userId);
-  if (!sub) return false;
-  // Trialing (even if expired), active, past_due, cancelled all see history.
-  // Only fully purged accounts (no subscription row) cannot view.
-  return true;
-}
-
-/**
  * Access check for the read-only advisor chat: requires an active subscription
  * or a valid trial — same bar as plan generation. Deliberately does NOT apply
  * the person-count or weekly plan rate-limit (those gate plan GENERATION, not a

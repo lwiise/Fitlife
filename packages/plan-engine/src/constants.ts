@@ -168,13 +168,6 @@ export function dayConcurrency(memberCount: number, hasTranslation: boolean): nu
   return DAY_CONCURRENCY_OVERRIDE ?? (hasTranslation ? 5 : 4);
 }
 
-// Translation (maid/housekeeper) is a separate pass over already-generated meals.
-// Strictly sequential (one day at a time, today-first): day 1's recipes fully
-// translate and appear, THEN day 2, etc. — never several days landing at once.
-// (Parallelizing was faster overall but made the recipes pop in unpredictable
-// batches, which read as broken; sequential is the intended UX.)
-export const TRANSLATE_CONCURRENCY = 1;
-
 // One-at-a-time member adds: the drain re-runs an incomplete member (a day that
 // failed after in-run retries) until it's whole BEFORE starting the next member.
 // This caps those completion-retries per member so a deterministically-failing

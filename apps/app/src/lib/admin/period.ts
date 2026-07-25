@@ -83,31 +83,3 @@ export function lastMonths(
   return out;
 }
 
-/**
- * Bucket timestamped items into `buckets` equal slices across a range — the
- * cheap per-KPI series behind a sparkline. Counts items by default; pass
- * `getValue` to sum a quantity instead (e.g. AI cost). Returns a fixed-length
- * number[] (length === buckets), zero-filled where there's no data.
- */
-export function bucketSeries<T>(
-  items: T[],
-  range: DateRange,
-  buckets: number,
-  getIso: (t: T) => string | null | undefined,
-  getValue?: (t: T) => number,
-): number[] {
-  const n = Math.max(1, buckets);
-  const out = new Array<number>(n).fill(0);
-  const startMs = range.start.getTime();
-  const span = range.end.getTime() - startMs;
-  if (span <= 0) return out;
-  for (const it of items) {
-    const iso = getIso(it);
-    if (!iso) continue;
-    const t = new Date(iso).getTime();
-    if (t < startMs || t >= range.end.getTime()) continue;
-    const idx = Math.min(n - 1, Math.floor(((t - startMs) / span) * n));
-    out[idx] = (out[idx] ?? 0) + (getValue ? getValue(it) : 1);
-  }
-  return out;
-}

@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { addDaysISO } from "@/lib/plans/dayMapping";
+import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
 import {
   getCurrentUserProfile,
@@ -87,13 +87,6 @@ const SLOT_LABELS_AR: Record<string, string> = {
   dinner: "عشاء",
   snack: "وجبة خفيفة",
 };
-
-/** Today's date in Riyadh as YYYY-MM-DD (the plan week is Riyadh-anchored). */
-function riyadhTodayISO(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(
-    new Date(),
-  );
-}
 
 // undefined_table (Postgres) / schema-cache miss (PostgREST) — the shape a
 // pre-migration prod returns. A warning, not an error: the board is built to

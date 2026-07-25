@@ -31,6 +31,3 @@ export function buildPersonLimitMessage(
   return `خطتك (${tierName}) تسمح بـ ${max} أشخاص فقط. عائلتك ${current} أشخاص. ترقي للفاميلي`;
 }
 
-export function buildUpgradeRequiredMessage(tierName: string): string {
-  return `يلزم الترقية إلى ${tierName} للوصول`;
-}

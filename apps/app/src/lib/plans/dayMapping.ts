@@ -39,22 +39,6 @@ export function getDayNameAr(index: KhaleejiDayIndex): string {
   return DAYS_AR[index] ?? "";
 }
 
-export function getTodayDayName(): string {
-  return getDayNameAr(getCurrentKhaleejiDayIndex());
-}
-
-// Gregorian calendar forced — ar-SA defaults to the Hijri calendar, which would
-// show a Hijri month name. We want e.g. "اليوم الأحد — ١٢ مايو".
-const HEADER_DATE_FMT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
-  day: "numeric",
-  month: "long",
-});
-
-export function formatTodayHeader(date: Date = new Date()): string {
-  const dayName = getDayNameAr(getCurrentKhaleejiDayIndex(date));
-  return `اليوم ${dayName} — ${HEADER_DATE_FMT.format(date)}`;
-}
-
 /**
  * «١٧ يوليو — ٢٣ يوليو» — the plan week's date range (start + 6 days). Shared
  * by the meal AND workout viewers so the top strip reads identically in both

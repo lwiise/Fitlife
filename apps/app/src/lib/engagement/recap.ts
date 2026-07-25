@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
 import { planHasContent, type MealPlan } from "@fitlife/plan-engine";
-import { riyadhTodayISO } from "@/lib/plans/dayMapping";
+import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
 
 // رسالتك الأسبوعية — deterministic template-and-numbers recap (v1 has NO model
@@ -45,12 +45,6 @@ export interface WeeklyRecap {
   weight_delta_kg: number | null;
   /** True when no events landed — letter renders the baseline framing. */
   baseline: boolean;
-}
-
-function addDaysISO(dateISO: string, days: number): string {
-  const d = new Date(`${dateISO}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 export function computeWeeklyRecap(input: {

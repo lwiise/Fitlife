@@ -17,13 +17,6 @@ export class MedicalGateError extends Error {
   }
 }
 
-export class RateLimitError extends Error {
-  constructor(public daysUntilReset: number) {
-    super("Rate limit exceeded");
-    this.name = "RateLimitError";
-  }
-}
-
 export class AnthropicCallError extends Error {
   // retryAfterMs: when the failure is a 429/529 carrying a Retry-After header, the
   // server-advised wait (ms). The retry loop honors it so we wait out the actual

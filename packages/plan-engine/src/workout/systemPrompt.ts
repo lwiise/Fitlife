@@ -74,11 +74,6 @@ ${exerciseCatalogPromptBlock()}`;
 
 // ─── Trainee description (reuses the meal context + workout answers) ───────
 
-const LOCATION_AR: Record<string, string> = {
-  home: "المنزل",
-  gym: "النادي",
-  both: "المنزل والنادي معاً",
-};
 const EQUIPMENT_AR: Record<string, string> = {
   none: "بدون أدوات",
   dumbbells: "دمبل",
