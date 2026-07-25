@@ -4,7 +4,7 @@ import {
   collapseMealMarks,
   collapseWorkoutMarks,
   computeSeasonStats,
-  dayHasNonSkippedMark,
+  dayHasCookedMark,
   workoutMarkingWindow,
   type RawSeasonMealRow,
   type SeasonMealMark,
@@ -105,16 +105,55 @@ describe("computeSeasonStats — meals", () => {
     expect(byId.m1).toBe(0);
   });
 
-  it("swapped counts like cooked (a meal that happened)", () => {
+  it("swapped earns nothing either — only «طبختها كما هي» scores", () => {
     const stats = computeSeasonStats({
       members,
       checkins: [mark({ status: "swapped" })],
+      planned: { mom: { meals: 5 }, m1: { meals: 5 }, m2: { meals: 5 } },
     });
-    expect(stats.followedMeals).toBe(1);
-    expect(stats.ranked[0]!.score).toBe(1);
+    expect(stats.followedMeals).toBe(0);
+    expect(stats.activeDays).toBe(0);
+    expect(stats.days[0]!.lit).toBe(false);
+    expect(stats.hasActivity).toBe(false);
+    expect(stats.ranked[0]!.score).toBe(0);
+    expect(stats.ranked[0]!.pct).toBe(0);
+    expect(stats.hasWinner).toBe(false);
   });
 
-  it("stars cap at 3 distinct slots and ignore skipped slots", () => {
+  it("a swap on a shared meal never lights the slot for anyone", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", status: "swapped" }),
+        mark({ member_id: "m1", status: "swapped" }),
+        mark({ member_id: "m2", status: "swapped" }),
+      ],
+    });
+    expect(stats.followedMeals).toBe(0);
+    expect(stats.ranked.every((m) => m.score === 0)).toBe(true);
+  });
+
+  it("credits only the cooked-as-is meal in a mixed week", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", day_index: 0, slot: "lunch", status: "cooked" }),
+        mark({ member_id: "mom", day_index: 1, slot: "lunch", status: "swapped" }),
+        mark({ member_id: "mom", day_index: 2, slot: "lunch", status: "skipped" }),
+      ],
+      planned: { mom: { meals: 3 }, m1: { meals: 3 }, m2: { meals: 3 } },
+    });
+    expect(stats.followedMeals).toBe(1);
+    expect(stats.activeDays).toBe(1);
+    expect(stats.days.map((d) => d.lit)).toEqual([
+      true, false, false, false, false, false, false,
+    ]);
+    const mom = stats.ranked.find((m) => m.id === "mom")!;
+    expect(mom.mealsMarked).toBe(1);
+    expect(mom.pct).toBeCloseTo(1 / 3);
+  });
+
+  it("stars cap at 3 distinct slots and ignore swapped/skipped slots", () => {
     const stats = computeSeasonStats({
       members,
       checkins: [
@@ -126,6 +165,16 @@ describe("computeSeasonStats — meals", () => {
       ],
     });
     expect(stats.days[0]!.stars).toBe(3);
+
+    const swapped = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ slot: "breakfast" }),
+        mark({ slot: "lunch", status: "swapped" }),
+        mark({ slot: "dinner", status: "swapped" }),
+      ],
+    });
+    expect(swapped.days[0]!.stars).toBe(1);
   });
 });
 
@@ -601,14 +650,16 @@ describe("collapseWorkoutMarks", () => {
   });
 });
 
-describe("dayHasNonSkippedMark", () => {
-  it("is false for a skipped-only day, true for a household cooked mark", () => {
+describe("dayHasCookedMark", () => {
+  it("is false for a skipped- or swapped-only day, true for a household cooked mark", () => {
     const checkins = [
       mark({ day_index: 0, status: "skipped" }),
       mark({ day_index: 1, member_id: "household" }),
+      mark({ day_index: 3, status: "swapped" }),
     ];
-    expect(dayHasNonSkippedMark(checkins, 0)).toBe(false);
-    expect(dayHasNonSkippedMark(checkins, 1)).toBe(true);
-    expect(dayHasNonSkippedMark(checkins, 2)).toBe(false);
+    expect(dayHasCookedMark(checkins, 0)).toBe(false);
+    expect(dayHasCookedMark(checkins, 1)).toBe(true);
+    expect(dayHasCookedMark(checkins, 2)).toBe(false);
+    expect(dayHasCookedMark(checkins, 3)).toBe(false);
   });
 });

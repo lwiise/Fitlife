@@ -4,9 +4,12 @@
 // the strip, the ring, and the per-member scores.
 //
 // Owner decisions (07/2026) encoded here:
-//   • A skipped meal earns NOTHING — no member credit, no family ring, no strip
-//     cell. Marking «تجاوزتها» is honest logging, but the season celebrates
-//     meals that happened (cooked/swapped).
+//   • ONLY «طبختها كما هي» (status "cooked") scores. «بدّلتها» (swapped) and
+//     «تجاوزتها» (skipped) earn NOTHING — no member credit, no family ring, no
+//     strip cell. Marking them is still honest logging (Sara's adaptation and
+//     the weekly recap keep reading every status), but the season celebrates
+//     the plan actually cooked as written. Superseded the earlier
+//     "cooked-or-swapped" rule at the owner's direction.
 //   • The % is PLAN COMPLETION, not an act count (owner directive): a member
 //     with meals only is measured purely on meals — each meal worth
 //     100% / their planned meals. A member with a workout plan splits 50/50 —
@@ -102,17 +105,17 @@ export interface RankedMember extends SeasonMember {
 
 export interface SeasonDayCell {
   dayIndex: number;
-  /** The house cooked from the plan this day (non-skipped mark exists). */
+  /** The house cooked the plan as written this day («طبختها كما هي» exists). */
   lit: boolean;
-  /** Distinct non-skipped meal slots that day, capped at 3 — the star rating. */
+  /** Distinct cooked-as-is meal slots that day, capped at 3 — the star rating. */
   stars: number;
 }
 
 export interface SeasonStats {
-  /** Distinct non-skipped (day, slot) meals — the ring figure AND its sentence
+  /** Distinct (day, slot) meals cooked as-is — the ring figure AND its sentence
    * (one number; a shared dinner marked by three people is ONE meal). */
   followedMeals: number;
-  /** Distinct days with at least one non-skipped meal mark. */
+  /** Distinct days with at least one «طبختها كما هي» mark. */
   activeDays: number;
   honored: boolean;
   /** Distinct (date, member) workout sessions done/moved inside the week. */
@@ -184,7 +187,7 @@ function daysFromStart(startISO: string, dateISO: string): number {
  * LAST write wins — including a later «تجاوزتها» correction overriding an
  * older «طبختها». The day identity is then re-derived from local_date against
  * the plan week anchor (uniform across plan versions); rows without a
- * resolvable day inside [0,6] are dropped. Skipped-filtering happens later in
+ * resolvable day inside [0,6] are dropped. Status-filtering happens later in
  * computeSeasonStats — corrections must win BEFORE statuses are judged.
  */
 export function collapseMealMarks(
@@ -238,19 +241,23 @@ export function collapseWorkoutMarks(
   return [...latest.values()];
 }
 
-/** A meal mark that actually happened — skipped earns nothing anywhere. */
-function isNonSkipped(mark: SeasonMealMark): boolean {
-  return mark.status !== "skipped";
+/** The ONE meal status the season counts (owner directive): «طبختها كما هي».
+ * Swapped and skipped are honest logging, not season credit. */
+export const SEASON_COUNTED_MEAL_STATUS = "cooked";
+
+/** A meal cooked from the plan as written — the only mark that scores. */
+function isCookedAsIs(mark: SeasonMealMark): boolean {
+  return mark.status === SEASON_COUNTED_MEAL_STATUS;
 }
 
-/** Any non-skipped mark on this plan day (the 'household' sentinel counts —
+/** Any «طبختها كما هي» mark on this plan day (the 'household' sentinel counts —
  * whole-kitchen attestation lights family surfaces). The single definition of
  * «the day lit», shared by the strip cells and the hero's alreadyLit. */
-export function dayHasNonSkippedMark(
+export function dayHasCookedMark(
   checkins: SeasonMealMark[],
   dayIndex: number,
 ): boolean {
-  return checkins.some((c) => c.day_index === dayIndex && isNonSkipped(c));
+  return checkins.some((c) => c.day_index === dayIndex && isCookedAsIs(c));
 }
 
 export function computeSeasonStats(input: {
@@ -282,8 +289,10 @@ export function computeSeasonStats(input: {
   const workoutCheckins = input.workoutCheckins ?? [];
   const memberIds = new Set(members.map((m) => m.id));
 
-  // ── Meals: skipped rows are invisible to the season ──────────────────────
-  const happened = checkins.filter(isNonSkipped);
+  // ── Meals: only «طبختها كما هي» is visible to the season ─────────────────
+  // Swapped and skipped rows are invisible everywhere below (ring, strip,
+  // stars, member scores) — one filter, so the surfaces can never disagree.
+  const happened = checkins.filter(isCookedAsIs);
 
   // Meal-true family total: (day, slot) is the meal's identity, so a shared
   // dinner marked by three people is ONE followed meal (household size can
@@ -291,7 +300,7 @@ export function computeSeasonStats(input: {
   const followedMeals = new Set(happened.map((c) => `${c.day_index}|${c.slot}`))
     .size;
 
-  // Distinct non-skipped meal slots per plan day → strip cells + stars.
+  // Distinct cooked-as-is meal slots per plan day → strip cells + stars.
   const slotsPerDay = new Map<number, Set<string>>();
   for (const c of happened) {
     if (!slotsPerDay.has(c.day_index)) slotsPerDay.set(c.day_index, new Set());

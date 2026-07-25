@@ -32,6 +32,8 @@ import {
 //     against its own planned count. Dish verdicts do NOT score. #1 gets the
 //     gold winner card with a crown and a «فائز هذا الأسبوع» badge; the rest
 //     are purple rank cards.
+// ONLY «طبختها كما هي» counts as a meal here (owner directive 07/2026) —
+// «بدّلتها» and «تجاوزتها» score nothing on any number of this card.
 // The WHOLE household competes — mom, adults, and CHILDREN alike (owner
 // directive 07/2026: children rank exactly like adults and may take the #1 spot;
 // the earlier no-sibling-comparison stance is superseded here alongside the
@@ -276,8 +278,8 @@ export function FamilySeasonCard({
   /** Account owner's sex → gendered فصحى in the today panel («علّمي/علّم»). */
   ownerSex?: string | null;
 }) {
-  // All counting happens in seasonMath (skipped meals excluded, workouts
-  // week-scoped by local_date, deterministic tie-break) — one shared,
+  // All counting happens in seasonMath (only «طبختها كما هي» meals counted,
+  // workouts week-scoped by local_date, deterministic tie-break) — one shared,
   // unit-tested definition of every number on this card.
   const {
     followedMeals,
@@ -482,8 +484,8 @@ export function FamilySeasonCard({
           // first step when today's meals exist.
           <div className={`grid gap-4 sm:gap-5 items-center mt-3 ${todayPanel ? "md:grid-cols-2" : ""}`}>
             <p className="text-brand-ink text-sm leading-relaxed">
-              موسم بيتكم يبدأ بأول تسجيل — سجّلوا وجباتكم وتمارينكم من الخطة،
-              وتبدأ لوحة الصدارة هنا.
+              موسم بيتكم يبدأ بأول وجبة تطبخونها كما هي من الخطة — سجّلوا
+              وجباتكم وتمارينكم، وتبدأ لوحة الصدارة هنا.
             </p>
             {todayPanel}
           </div>
@@ -621,9 +623,9 @@ export function FamilySeasonCard({
 
       {/* One line explaining the ranking metric — kills the mystery %. */}
       <p className="text-center text-brand-ink-muted text-[11.5px] leading-relaxed">
-        النسبة = ما أُتمّ من خطة كل فرد: الوجبات المسجّلة من وجبات خطته، ولمن
-        لديه خطة تمارين تُحتسب الوجبات نصفاً والتمارين نصفاً — الوجبة المتجاوزة
-        لا تُحسب
+        النسبة = ما أُتمّ من خطة كل فرد: الوجبات المطبوخة كما هي من وجبات خطته،
+        ولمن لديه خطة تمارين تُحتسب الوجبات نصفاً والتمارين نصفاً — الوجبة
+        المبدّلة أو المتجاوزة لا تُحسب
       </p>
 
       {/* Goal achievements (kept as an achievement event only — no numbers). */}
