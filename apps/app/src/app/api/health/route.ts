@@ -13,12 +13,10 @@ export async function GET() {
 
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) {
+      // Endpoint is public and unauthenticated — log the detail, don't return it.
+      console.error("[health] Supabase auth check failed", sessionError);
       return NextResponse.json(
-        {
-          status: "error",
-          message: "Supabase auth check failed",
-          error: sessionError.message,
-        },
+        { status: "error", message: "Supabase auth check failed" },
         { status: 500 }
       );
     }
@@ -37,13 +35,9 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
-    const error = err instanceof Error ? err.message : "Unknown error";
+    console.error("[health] Failed to initialize Supabase client", err);
     return NextResponse.json(
-      {
-        status: "error",
-        message: "Failed to initialize Supabase client",
-        error,
-      },
+      { status: "error", message: "Failed to initialize Supabase client" },
       { status: 500 }
     );
   }

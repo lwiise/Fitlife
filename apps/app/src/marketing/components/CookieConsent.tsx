@@ -4,30 +4,33 @@ import { useEffect, useState } from "react";
 
 import { Sheet, SheetContent } from "@/marketing/components/ui/sheet";
 import { track } from "@/marketing/lib/analytics";
-
-const CONSENT_KEY = "fitlife_cookie_consent";
+import { readConsent, writeConsent } from "@/marketing/lib/consent";
+import { disableTracking, initPostHog } from "@/marketing/lib/posthog";
 
 export function CookieConsent() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(CONSENT_KEY);
-    if (stored) return;
+    if (readConsent()) return;
 
     const timer = window.setTimeout(() => setOpen(true), 1500);
     return () => window.clearTimeout(timer);
   }, []);
 
   const accept = () => {
-    window.localStorage.setItem(CONSENT_KEY, "accepted");
+    writeConsent("accepted");
+    // Consent is what starts tracking — Providers deliberately doesn't.
+    initPostHog();
     track("cookie_consent_accepted");
     setOpen(false);
   };
 
   const decline = () => {
-    window.localStorage.setItem(CONSENT_KEY, "declined");
-    track("cookie_consent_declined");
+    writeConsent("declined");
+    // No tracking call here: reporting the refusal would itself be the thing
+    // being refused. Drop whatever queued before the banner was answered.
+    disableTracking();
     setOpen(false);
   };
 

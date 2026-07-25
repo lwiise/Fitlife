@@ -4,13 +4,19 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 import { track } from "@/marketing/lib/analytics";
-import { capture, initPostHog } from "@/marketing/lib/posthog";
+import { readConsent } from "@/marketing/lib/consent";
+import { capture, disableTracking, initPostHog } from "@/marketing/lib/posthog";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    initPostHog();
+    // Only load PostHog for a visitor who has actually accepted. Undecided
+    // visitors stay un-initialized until the banner's accept handler inits;
+    // a declined visitor drops the queue so nothing is captured later.
+    const consent = readConsent();
+    if (consent === "accepted") initPostHog();
+    else if (consent === "declined") disableTracking();
   }, []);
 
   useEffect(() => {

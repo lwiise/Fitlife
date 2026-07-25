@@ -60,6 +60,16 @@ export function initPostHog() {
   }
 }
 
+/**
+ * Turn tracking off for this page load and drop anything queued. Called when
+ * the visitor declines cookies — the queue must not survive to be flushed by a
+ * later init, or «رفض» would only postpone the capture.
+ */
+export function disableTracking() {
+  pending = null;
+  loadStarted = true;
+}
+
 /** Capture an event now if PostHog is loaded, else queue it until it is. */
 export function capture(event: string, props?: Record<string, unknown>) {
   if (typeof window === "undefined") return;

@@ -49,6 +49,28 @@ function stripInternal(
   return clone;
 }
 
+// A portability export is the user's own data, not our ops telemetry. The
+// generation rows carry the model id, token counts, our cost in USD, and the
+// raw upstream failure text — none of which is theirs, and the failure text
+// can quote internal errors verbatim. Keep only what describes THEIR plan.
+const EXPORTED_GENERATION_FIELDS = [
+  "status",
+  "created_at",
+  "started_at",
+  "completed_at",
+  "meal_plan_id",
+  "workout_plan_id",
+  "plan_kind",
+] as const;
+
+function publicGeneration(row: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const f of EXPORTED_GENERATION_FIELDS) {
+    if (f in row) out[f] = row[f];
+  }
+  return out;
+}
+
 /**
  * Data export (PDPL right to portability). Returns everything the user owns as
  * a downloadable JSON file. Auth-gated; reads run through the user's own
@@ -179,7 +201,9 @@ export async function GET() {
     subscription: stripInternal(
       subscription.data as Record<string, unknown> | null,
     ),
-    generation_history: generations.data ?? [],
+    generation_history: (generations.data ?? []).map((g) =>
+      publicGeneration(g as Record<string, unknown>),
+    ),
     meal_checkins: mealCheckins,
     member_exceptions: memberExceptions,
     meal_verdicts: mealVerdicts,

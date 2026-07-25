@@ -50,10 +50,16 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
-    await admin
+    const { error: resumeWriteError } = await admin
       .from("subscriptions")
       .update({ status: "active" })
-      .eq("id", sub.id);
+      .eq("id", sub.id)
+      .eq("user_id", user.id);
+    if (resumeWriteError) {
+      Sentry.captureException(resumeWriteError, {
+        tags: { area: "subscription-pause", step: "resume-write", userId: user.id },
+      });
+    }
     return NextResponse.json({ resumed: true });
   }
 
@@ -76,10 +82,16 @@ export async function POST(request: Request) {
 
   // current_period_end doubles as the visible resume date while paused (the
   // subscription_updated webhook restores real billing dates on resume).
-  await admin
+  const { error: pauseWriteError } = await admin
     .from("subscriptions")
     .update({ status: "paused", ends_at: resumesAt, current_period_end: resumesAt })
-    .eq("id", sub.id);
+    .eq("id", sub.id)
+    .eq("user_id", user.id);
+  if (pauseWriteError) {
+    Sentry.captureException(pauseWriteError, {
+      tags: { area: "subscription-pause", step: "pause-write", userId: user.id },
+    });
+  }
 
   return NextResponse.json({ paused: true, resumes_at: resumesAt });
 }

@@ -5,9 +5,10 @@
 // email-confirmed) account a password so you can sign in without losing data.
 //
 // Usage (from repo root):
-//   node apps/app/scripts/set-password.mjs "YourChosenPassword123"
+//   node apps/app/scripts/set-password.mjs "YourChosenPassword123" <user-id>
 //
-// Optional: pass a user id as the 2nd arg; defaults to the current test user.
+// The user id is REQUIRED. It used to default to a hardcoded id, so running
+// the script with only a password silently reset that one account.
 // Reads NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY from
 // apps/app/.env.local — the service-role key never appears on the command line.
 
@@ -18,8 +19,6 @@ import { createClient } from "@supabase/supabase-js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = join(__dirname, "..", ".env.local");
-
-const DEFAULT_USER_ID = "f6ad936f-0921-428f-923c-e7c8dc3b7048";
 
 function loadEnv(path) {
   const out = {};
@@ -43,11 +42,17 @@ function loadEnv(path) {
 }
 
 const password = process.argv[2];
-const userId = process.argv[3] || DEFAULT_USER_ID;
+const userId = process.argv[3];
 
 if (!password || password.length < 8) {
   console.error("Provide a password of at least 8 characters:");
-  console.error('  node apps/app/scripts/set-password.mjs "YourPassword123"');
+  console.error('  node apps/app/scripts/set-password.mjs "YourPassword123" <user-id>');
+  process.exit(1);
+}
+
+if (!userId) {
+  console.error("Provide the target user id as the second argument:");
+  console.error('  node apps/app/scripts/set-password.mjs "YourPassword123" <user-id>');
   process.exit(1);
 }
 

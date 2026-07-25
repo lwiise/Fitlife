@@ -45,6 +45,41 @@ const GRACE_DAYS = 2;
 const CHECKIN_CLEAR_ERROR_AR = "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى";
 
 /**
+ * True when a member_id is one the caller may write for: the 'mom' / household
+ * sentinels, or a family_members row the RLS-scoped read confirms is theirs.
+ *
+ * RLS already stamps user_id on every engagement row, so an unowned id was
+ * never a cross-account write. What it WAS is a way to award «موسم بيتنا»
+ * credit to a roster member who never acted, and to accumulate rows keyed to
+ * removed or invented members that then flow into the digest and the export.
+ * setMealCheckin, setSharedMealCheckin, setMealAbsence and logBodyWeight
+ * already checked; setMealVerdict, setWorkoutCheckin and closeDay did not.
+ */
+async function ownsMemberIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  memberIds: readonly string[],
+): Promise<boolean> {
+  const real = [
+    ...new Set(
+      memberIds.filter(
+        (id) => id !== "mom" && id !== HOUSEHOLD_CHECKIN_MEMBER,
+      ),
+    ),
+  ];
+  if (real.length === 0) return true;
+
+  const { data, error } = await supabase
+    .from("family_members")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", real)
+    .returns<{ id: string }[]>();
+  if (error) return false;
+  return (data?.length ?? 0) === real.length;
+}
+
+/**
  * Clear a meal's marks the way /plan READS them — otherwise an un-tap looks
  * ignored, or worse: an older status takes the chip back (owner report
  * 07/2026 — un-marking a shared meal turned it into «تجاوزتها»).
@@ -135,6 +170,16 @@ export async function closeDay(rawInput: CloseDayInput) {
   const parsed = closeDayInputSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
   const input = parsed.data;
+
+  // The slot answers carry the household sentinel, but the verdicts and
+  // exceptions are per-person and were taken on trust — one batched check.
+  const namedMembers = [
+    ...input.verdicts.map((v) => v.member_id),
+    ...input.exceptions.map((e) => e.member_id),
+  ];
+  if (!(await ownsMemberIds(supabase, user.id, namedMembers))) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
 
   // Ownership + week anchor in one RLS-scoped read. Archived plans are valid
   // targets on purpose: a mid-week regen must not orphan yesterday's close.
@@ -307,7 +352,8 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
   if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
   const input = parsed.data;
 
-  // Ownership (RLS-scoped): the workout plan must belong to the caller.
+  // Ownership (RLS-scoped): the workout plan AND the member must be the
+  // caller's — the plan check alone let any member_id take workout credit.
   const { data: planRow, error: planError } = await supabase
     .from("workout_plans")
     .select("id")
@@ -315,6 +361,9 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
     .eq("user_id", user.id)
     .single();
   if (planError || !planRow) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
+  if (!(await ownsMemberIds(supabase, user.id, [input.member_id]))) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
@@ -419,6 +468,10 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
   const parsed = setMealVerdictSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false as const, error: VALIDATION_ERROR_AR };
   const input = parsed.data;
+
+  if (!(await ownsMemberIds(supabase, user.id, [input.member_id]))) {
+    return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
 
   // Ownership + week anchor (RLS-scoped). Archived plans stay valid targets so
   // a mid-week regen never orphans yesterday's verdict.

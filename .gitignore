@@ -57,3 +57,6 @@ next-env.d.ts
 # If committed they become submodule gitlinks with no .gitmodules url and break the
 # Netlify build's submodule checkout.
 .claude/worktrees/
+
+# Personal, per-developer Claude Code permission grants — not shared policy.
+.claude/settings.local.json

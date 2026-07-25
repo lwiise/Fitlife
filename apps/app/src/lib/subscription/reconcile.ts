@@ -1,5 +1,6 @@
 import "server-only";
 
+import * as Sentry from "@sentry/nextjs";
 import { listSubscriptions } from "@lemonsqueezy/lemonsqueezy.js";
 import { getTierCadenceByVariantId } from "@fitlife/config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -99,6 +100,37 @@ export async function reconcileSubscriptionFromLemonSqueezy(
     }
 
     const admin = createAdminClient();
+
+    // The Lemonsqueezy lookup keys on EMAIL, and checkout deliberately doesn't
+    // prefill it (api/checkout/route.ts), so the address on an LS subscription
+    // is whatever the payer typed — it need not be the app account's email.
+    // Without this check, registering an account with an address that matches
+    // someone else's paid subscription would attach THEIR subscription to the
+    // new account: the paid tier for free, plus cancel/pause control over the
+    // real payer's billing. A subscription already claimed by another user is
+    // never re-pointed; the self-heal continues to work for everyone else.
+    const { data: claimed } = await admin
+      .from("subscriptions")
+      .select("user_id")
+      .eq("lemonsqueezy_subscription_id", String(best.id))
+      .neq("user_id", userId)
+      .limit(1)
+      .returns<{ user_id: string }[]>();
+    if (claimed && claimed.length > 0) {
+      console.error("[reconcileSubscription] refusing cross-account attach", {
+        userId,
+        lsSubscriptionId: String(best.id),
+      });
+      Sentry.captureMessage(
+        "reconcileSubscription: LS subscription already claimed by another user",
+        {
+          level: "warning",
+          tags: { area: "subscription-reconcile", userId },
+        },
+      );
+      return getCurrentSubscription(userId);
+    }
+
     const { error } = await admin
       .from("subscriptions")
       .update(update)
