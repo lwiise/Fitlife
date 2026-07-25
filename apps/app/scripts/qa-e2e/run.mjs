@@ -23,7 +23,11 @@ const BASE = process.env.FITLIFE_BASE_URL ?? "https://fitlife-app-mvp.netlify.ap
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
 const PASSWORD = process.env.FITLIFE_TEST_PASSWORD ?? "FitLifeQA!2026";
 const POLL_MS = 10_000;
-const PLAN_TIMEOUT_MS = 12 * 60_000;
+// 16 min, deliberately past the app's STALE_GENERATION_MIN (15). A generation
+// that dies mid-flight is reclassified "failed" by getLatestPlan's dead-man's
+// switch at 15 min, so waiting that long turns an ambiguous timeout into a
+// definitive failed verdict.
+const PLAN_TIMEOUT_MS = 16 * 60_000;
 
 const only = process.argv.find((a) => a.startsWith("--only="))?.split("=")[1];
 // Explicit address for a single-account run; otherwise a fresh random one.
@@ -147,13 +151,42 @@ async function writeQuestionnaire(sb, userId, account) {
 // Trigger generation through the real free-path button, then poll.
 // ---------------------------------------------------------------------------
 async function triggerGeneration(page) {
-  await page.goto(`${BASE}/pricing?from=onboarding`, { waitUntil: "domcontentloaded" });
+  // "domcontentloaded" is NOT enough: the button is server-rendered, so
+  // Playwright's actionability checks pass while React has yet to attach the
+  // click handler, and the click is silently swallowed. Wait for the network to
+  // settle AND for the fiber to exist before clicking.
+  await page.goto(`${BASE}/pricing?from=onboarding`, { waitUntil: "networkidle" });
   const btn = page.getByRole("button", { name: /أكملي بخطتك/ });
   if ((await btn.count()) === 0) {
     throw new Error("free-path button «أكملي بخطتك» not rendered on /pricing?from=onboarding");
   }
+  await btn
+    .first()
+    .evaluate((el) => {
+      if (!Object.keys(el).some((k) => k.startsWith("__react"))) throw new Error("not hydrated");
+    })
+    .catch(async () => {
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("button")].some((el) =>
+            Object.keys(el).some((k) => k.startsWith("__react")),
+          ),
+        { timeout: 30_000 },
+      );
+    });
+
   await btn.first().click();
-  await page.waitForURL((u) => u.pathname.startsWith("/plan"), { timeout: 120_000 }).catch(() => null);
+  // A click that lands fires the server action and routes to /plan. If that
+  // never happens the trigger did NOT work — fail loudly instead of letting the
+  // poller spend its whole budget on a plan that was never requested.
+  try {
+    await page.waitForURL((u) => u.pathname.startsWith("/plan"), { timeout: 120_000 });
+  } catch {
+    throw new Error(
+      `clicked «أكملي بخطتك» but never navigated to /plan (still ${page.url()}); ` +
+        `the server action did not fire`,
+    );
+  }
 }
 
 async function pollStatus(page, path, timeoutMs, labelForLog) {
@@ -167,7 +200,12 @@ async function pollStatus(page, path, timeoutMs, labelForLog) {
     } else if (res.ok()) {
       last = body;
       const st = body.status;
-      if (st === "ready" || st === "failed") {
+      // "ready" alone is NOT done. plan-engine flips the row to ready on the
+      // first EMPTY shell (generate.ts: "flip 'ready' on the first emit"), so a
+      // plan whose days never filled reports ready with zero meals. The app's
+      // own watcher (GeneratingPlanWatcher.tsx) requires in_progress === false,
+      // and so do we — otherwise a dead generation is reported as success.
+      if (st === "failed" || (st === "ready" && body.in_progress === false)) {
         return { ...body, seconds: Math.round((Date.now() - started) / 1000) };
       }
       if (body.waiting_for_meals) {
@@ -178,7 +216,14 @@ async function pollStatus(page, path, timeoutMs, labelForLog) {
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
-  return { ...(last ?? {}), status: last?.status ?? "timeout", timedOut: true };
+  // Report the timeout as such. Carrying `last.status` through would relabel a
+  // stalled empty shell as "ready" and read as success downstream.
+  return {
+    ...(last ?? {}),
+    status: "timeout",
+    last_status: last?.status ?? null,
+    timedOut: true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -239,9 +284,11 @@ async function runAccount(browser, creds, account) {
     }
 
     result.outcome =
-      meal.status === "ready"
+      meal.status === "ready" && !meal.timedOut
         ? "OK"
-        : `meal plan ended as "${meal.status}"${meal.error_message ? ` — ${meal.error_message}` : ""}`;
+        : `meal plan ended as "${meal.status}"${
+            meal.last_status ? ` (last seen "${meal.last_status}")` : ""
+          }${meal.error_message ? ` — ${meal.error_message}` : ""}`;
     return result;
   } catch (err) {
     result.outcome = `ERROR — ${err.message}`;

@@ -78,3 +78,18 @@ looks like `403 Host not in allowlist`, and the check happens before DNS.
   `family-workout` still only generates the mom's plan on the free path.
 - **Workout needs migration 00014.** If `profiles.workout_profile` is absent the
   opt-in write is reported as `FAILED (...)` rather than throwing.
+- **`status: "ready"` does not mean the plan has meals.** plan-engine flips the
+  row to `ready` on the first *empty* shell so the viewer can render the
+  skeleton, then fills days in progressively. A generation that dies after the
+  flip leaves a `ready` plan with zero meals and `plan_data.generating` still
+  `true`. Completion is `status === "ready" && in_progress === false` — the same
+  test `GeneratingPlanWatcher.tsx` uses. The poller enforces this; don't relax it.
+- **The trigger click needs a hydrated page.** The free-path button is
+  server-rendered, so it is visible and "clickable" before React attaches its
+  handler — a click at `domcontentloaded` is silently swallowed and no
+  generation starts. Navigation waits for `networkidle` plus a React fiber, and
+  a click that does not reach `/plan` now throws instead of being ignored.
+- **Chromium may need a TLS cap behind an egress proxy.** If a sandbox MITMs
+  TLS, Chromium's 1.3 handshakes can be reset (`ERR_CONNECTION_RESET`) while
+  Node's succeed. Point `CHROMIUM_PATH` at a wrapper that execs the real binary
+  with `--ssl-version-max=tls1.2`; certificate verification stays on.
