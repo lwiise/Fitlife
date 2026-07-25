@@ -4,7 +4,10 @@ import { useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Users } from "lucide-react";
 import type { Meal, Ingredient, LocaleCode } from "@fitlife/plan-engine";
-import type { Verdict } from "@/lib/engagement/types";
+import {
+  OUT_OF_MEAL_CHECKIN_STATUSES,
+  type Verdict,
+} from "@/lib/engagement/types";
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
 import { formatNameList } from "@/lib/plans/formatNames";
@@ -68,6 +71,13 @@ const CHECKIN_STATUS_CHIPS = [
   { value: "swapped" as const, label: "بدّلتها" },
   { value: "skipped" as const, label: "تجاوزتها" },
 ];
+// What a member who sat this shared meal out may record (owner directive
+// 07/2026): the dish never reached them, so «طبختها كما هي» is off the table —
+// what is left is what actually happened for them. Filtered from the row above
+// so the labels stay one vocabulary.
+const OUT_OF_MEAL_STATUS_CHIPS = CHECKIN_STATUS_CHIPS.filter((c) =>
+  OUT_OF_MEAL_CHECKIN_STATUSES.includes(c.value),
+);
 const CHECKIN_REASON_CHIPS = [
   { value: "guests", label: "جاءنا ضيوف" },
   { value: "ordered_in", label: "طلبنا اليوم" },
@@ -98,12 +108,15 @@ const VERDICT_CHIPS: { value: Verdict; label: string }[] = [
 // The meal's status chips (+ reason chips when swapped). ONE row per meal
 // (owner directive 07/2026): a shared dish carries a single status for
 // everyone who shares it; an individual meal's row belongs to the member
-// whose tab is open.
+// whose tab is open. `chips` narrows the vocabulary for a member who is out of
+// the meal — same row, two options.
 function CheckinChips({
   state,
+  chips = CHECKIN_STATUS_CHIPS,
   onChange,
 }: {
   state: MealCheckinState | null;
+  chips?: typeof CHECKIN_STATUS_CHIPS;
   onChange: (
     status: MealCheckinState["status"] | null,
     reason: string | null,
@@ -112,7 +125,7 @@ function CheckinChips({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {CHECKIN_STATUS_CHIPS.map((c) => (
+        {chips.map((c) => (
           <button
             key={c.value}
             type="button"
@@ -176,11 +189,14 @@ export function MealCard({
   currentMemberId?: string;
   /** The meal's inline mark (header badge + the single chip row). ONE status
    * per meal (owner directive 07/2026): on a shared dish it speaks for every
-   * sharer; on an individual meal it is the viewed member's own. */
+   * sharer; on an individual meal it is the viewed member's own. When the
+   * viewed member is OUT of a shared occurrence the caller passes their OWN
+   * mark instead (no whole-house fallback) — the dish's status isn't theirs. */
   checkin?: MealCheckinState | null;
   /** Present only on trackable days (any elapsed day of the plan week, never a
    * future day) — absent hides controls. The caller routes the write (fan-out
-   * to the present sharers on a shared meal; the viewed member otherwise). */
+   * to the present sharers on a shared meal; the viewed member alone otherwise,
+   * including when they are out of the meal). */
   onCheckin?: (
     status: MealCheckinState["status"] | null,
     reason: string | null,
@@ -255,9 +271,13 @@ export function MealCard({
         scaleFactor,
       )
     : (meal.batch_finished_weight_g ?? null);
+  // The open tab belongs to someone excluded from THIS occurrence — the dish
+  // was never theirs, so their tracking row narrows to «بدّلتها / تجاوزتها»
+  // and their verdict control hides.
   const viewerAbsent =
     currentMemberId != null && hasAbsence && absentSet.has(currentMemberId);
   const memberName = (id: string) => memberNames?.[id] ?? id;
+  const viewerName = currentMemberId ? memberName(currentMemberId) : "";
   const absentNames = formatNameList(
     absentPortions.map((p) => memberName(p.member_id)),
     locale ?? "ar",
@@ -555,13 +575,27 @@ export function MealCard({
                   className="pt-3 border-t border-brand-ink/5 space-y-2"
                   aria-label="تتبّع الوجبة"
                 >
-                  {sharedPortions && (
-                    <p className="text-xs font-bold text-brand-purple-900">
-                      تسجيل واحد للوجبة المشتركة — يشمل كل من شاركها
+                  {viewerAbsent ? (
+                    // Out of the meal ⇒ the planned dish never reached this
+                    // member, so «طبختها كما هي» is not an answer they can give
+                    // (owner directive 07/2026) — what is left is بديل or
+                    // تجاوز. The mark is theirs alone: it never speaks for the
+                    // dish the others shared, and never for the kitchen.
+                    <p className="text-xs font-bold text-brand-purple-900 leading-relaxed">
+                      {viewerName} خارج هذه الوجبة — التسجيل هنا: بديل أو تجاوز
                     </p>
+                  ) : (
+                    sharedPortions && (
+                      <p className="text-xs font-bold text-brand-purple-900">
+                        تسجيل واحد للوجبة المشتركة — يشمل كل من شاركها
+                      </p>
+                    )
                   )}
                   <CheckinChips
                     state={checkin ?? null}
+                    chips={
+                      viewerAbsent ? OUT_OF_MEAL_STATUS_CHIPS : CHECKIN_STATUS_CHIPS
+                    }
                     onChange={(status, reason) => onCheckin(status, reason)}
                   />
                   {/* Verdict — only for a dish that was actually cooked (you can
