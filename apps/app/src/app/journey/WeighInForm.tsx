@@ -109,12 +109,33 @@ export function WeighInForm({
           return;
         }
       }
-      const result = await logBodyWeight({
-        member_id: memberId,
-        weight_kg: weightNum,
-        waist_cm: waistNum,
-        photo_path: photoPath,
-      });
+      // The photo is already in the bucket by now, so EVERY path that doesn't
+      // save the row has to take it back out — a thrown action (network drop,
+      // an expired server-action key) used to leave it stranded there, private
+      // and unreferenced, because only the returned-error branch cleaned up.
+      const discardPhoto = async () => {
+        if (!photoPath) return;
+        const supabase = createClient();
+        await supabase.storage
+          .from(BODY_PHOTOS_BUCKET)
+          .remove([photoPath])
+          .catch(() => undefined);
+      };
+
+      let result: Awaited<ReturnType<typeof logBodyWeight>>;
+      try {
+        result = await logBodyWeight({
+          member_id: memberId,
+          weight_kg: weightNum,
+          waist_cm: waistNum,
+          photo_path: photoPath,
+        });
+      } catch {
+        await discardPhoto();
+        setMessage(g("تعذر الحفظ، حاولي مرة أخرى", "تعذر الحفظ، حاول مرة أخرى"));
+        return;
+      }
+
       if (result.ok) {
         setSaved(true);
         setMessage(null);
@@ -125,13 +146,7 @@ export function WeighInForm({
         router.refresh();
       } else {
         // The save was refused — don't leave the fresh object stranded.
-        if (photoPath) {
-          const supabase = createClient();
-          await supabase.storage
-            .from(BODY_PHOTOS_BUCKET)
-            .remove([photoPath])
-            .catch(() => undefined);
-        }
+        await discardPhoto();
         setMessage(result.error);
       }
     });

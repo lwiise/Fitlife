@@ -262,11 +262,17 @@ export async function getFamilySeasonProps(
     await Promise.all([
       mealQuery(),
       workoutQuery(),
+      // Bounded like its two siblings above, but generously: hasReachedWeightGoal
+      // infers the journey's DIRECTION from the earliest weigh-in, so dropping
+      // old rows could flip a goal celebration. At a weekly cadence this cap is
+      // decades of history per household — a safety valve against an unbounded
+      // read on every dashboard render, not a window.
       supabase
         .from("body_logs")
         .select("member_id, weight_kg, recorded_on")
         .eq("user_id", profile.id)
-        .order("recorded_on", { ascending: true }),
+        .order("recorded_on", { ascending: true })
+        .limit(2000),
     ]);
   reportSeasonReadError("checkins", checkinRes.error);
   reportSeasonReadError("workouts", workoutRes.error);

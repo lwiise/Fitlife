@@ -147,14 +147,17 @@ export default async function JourneyPage({
   // select("*") on purpose: photo_path is a 00018 column — naming it here
   // would fail the whole read on a pre-apply prod, while * degrades to
   // rows-without-the-column (house tolerance pattern).
+  // Newest-first + limit, then reverse for display. Ordering ascending with a
+  // limit returned the OLDEST 26 weigh-ins, so once a member logged 26 the
+  // chart, latest weight and delta all froze on ancient data forever.
   const { data: logRows } = await supabase
     .from("body_logs")
     .select("*")
     .eq("user_id", user.id)
     .eq("member_id", memberId)
-    .order("recorded_on", { ascending: true })
+    .order("recorded_on", { ascending: false })
     .limit(26);
-  const allRows = (logRows ?? []) as BodyLogPoint[];
+  const allRows = ((logRows ?? []) as BodyLogPoint[]).slice().reverse();
   const logs = allRows.filter(
     (p): p is { recorded_on: string; weight_kg: number } =>
       typeof p.weight_kg === "number",

@@ -57,9 +57,18 @@ type HistoryRow = {
 };
 
 /**
- * All of the user's completed plans, newest first. The newest is the "current"
- * one (what getLatestPlan shows). Rows whose plan_data fails validation are
- * skipped. RLS scopes the query to the user; the explicit user_id is belt-and-suspenders.
+ * A year of weekly plans is plenty of history for the list, and this query
+ * pulls each row's WHOLE plan_data blob — every meal of every day for every
+ * member — then schema-parses and stringifies it. Unbounded, that payload and
+ * its parse cost grow with account age forever.
+ */
+const HISTORY_LIMIT = 52;
+
+/**
+ * The user's completed plans, newest first, capped at HISTORY_LIMIT. The newest
+ * is the "current" one (what getLatestPlan shows). Rows whose plan_data fails
+ * validation are skipped. RLS scopes the query to the user; the explicit
+ * user_id is belt-and-suspenders.
  */
 export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]> {
   const supabase = await createClient();
@@ -69,6 +78,7 @@ export async function getPlanHistory(userId: string): Promise<PlanHistoryItem[]>
     .eq("user_id", userId)
     .eq("status", "ready")
     .order("created_at", { ascending: false })
+    .limit(HISTORY_LIMIT)
     .returns<HistoryRow[]>();
 
   if (error || !data) return [];

@@ -11,6 +11,7 @@ import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "./eligibility";
+import { isMissingMemberIdColumn } from "./legacyFallback";
 import { BODY_PHOTOS_BUCKET, HOUSEHOLD_CHECKIN_MEMBER } from "./types";
 import {
   closeDayInputSchema,
@@ -134,6 +135,16 @@ async function clearMealMarks(
     .in("member_id", targets);
   if (!error) return true;
 
+  // Only fall through to the unscoped legacy delete when the column genuinely
+  // isn't there — otherwise a transient error would wipe every member's mark
+  // for this meal instead of just the targeted ones.
+  if (!isMissingMemberIdColumn(error)) {
+    Sentry.captureException(error, {
+      tags: { area: "engagement", step, userId },
+    });
+    return false;
+  }
+
   const { error: legacyError } = await supabase
     .from("meal_checkins")
     .delete()
@@ -229,6 +240,12 @@ export async function closeDay(rawInput: CloseDayInput) {
       { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
   if (checkinError) {
+    if (!isMissingMemberIdColumn(checkinError)) {
+      Sentry.captureException(checkinError, {
+        tags: { area: "engagement", step: "checkin-upsert", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ يومك، يرجى المحاولة مرة أخرى" };
+    }
     const { error: legacyError } = await db
       .from("meal_checkins")
       .upsert(checkinRowsInput, { onConflict: "meal_plan_id,day_index,slot" });
@@ -648,7 +665,15 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
     );
     if (upsertError) {
       // Pre-00019 prod: degrade to the legacy household-level write so the
-      // mark still saves, and flag ops to apply the migration.
+      // mark still saves, and flag ops to apply the migration. Any OTHER error
+      // must not take this path — the legacy row speaks for the whole house,
+      // so a transient failure would answer for members who never marked.
+      if (!isMissingMemberIdColumn(upsertError)) {
+        Sentry.captureException(upsertError, {
+          tags: { area: "engagement", step: "checkin-inline", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
+      }
       const { error: legacyError } = await supabase
         .from("meal_checkins")
         .upsert(row, { onConflict: "meal_plan_id,day_index,slot" });
@@ -795,6 +820,15 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
     );
     if (upsertError) {
       // Pre-00019 prod: one legacy household-level row so the mark still saves.
+      // Gated to that case only — the household row is the read-time fallback
+      // for EVERY member of the slot, so writing it on an unrelated error
+      // would bleed this status onto non-sharers' individual meals.
+      if (!isMissingMemberIdColumn(upsertError)) {
+        Sentry.captureException(upsertError, {
+          tags: { area: "engagement", step: "shared-checkin", userId: user.id },
+        });
+        return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
+      }
       const { error: legacyError } = await supabase
         .from("meal_checkins")
         .upsert(base, { onConflict: "meal_plan_id,day_index,slot" });

@@ -120,6 +120,9 @@ function asPlanData(v: unknown): PlanDataMin {
   return v && typeof v === "object" ? (v as PlanDataMin) : {};
 }
 
+/** Most-recent plans shown on the subscriber detail page (~a year of weeks). */
+const ADMIN_PLAN_LIST_LIMIT = 52;
+
 function daysCovered(pd: PlanDataMin): number {
   if (typeof pd.days_total === "number") return pd.days_total;
   let max = 0;
@@ -202,13 +205,18 @@ export async function loadSubscriberDetail(
       )
       .eq("user_id", userId)
       .order("display_order", { ascending: true }),
+    // plan_data is the whole week's plan JSON and this selects it for every
+    // plan the account ever had, to derive two numbers per row. daysCovered
+    // falls back to measuring members[].days, so the blob can't be projected
+    // away without changing the figure — bound the row count instead.
     db
       .from("meal_plans")
       .select(
         "id, status, created_at, generated_at, plan_data, ai_input_tokens, ai_output_tokens, ai_model",
       )
       .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(ADMIN_PLAN_LIST_LIMIT),
     db
       .from("plan_generations")
       .select(
