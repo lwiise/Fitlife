@@ -1,0 +1,3 @@
+# Run output: contains a real test account's email, user id and plaintext
+# password. Never commit it.
+results.json
