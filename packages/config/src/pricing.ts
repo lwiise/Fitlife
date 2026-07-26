@@ -9,11 +9,20 @@
  *
  * Arabic display names match the landing page (البداية, المتقدمة, العائلة, البريميوم).
  *
- * ⚠️ The Lemonsqueezy variant IDs below are TEST MODE — real money cannot be
- * taken with them. Going live needs no code change: set one env var per
- * (tier, cadence) on the deployed site and getVariantId prefers it. See
- * variantEnvVar() for the naming, and usingLiveVariantIds() for the check the
- * checkout route logs at startup.
+ * ⚠️ The Lemonsqueezy variant IDs below are **LIVE** — they charge real cards.
+ * This comment previously claimed the opposite ("TEST MODE — real money cannot
+ * be taken with them"); that was false and it is what a reader trusts before
+ * deciding whether it is safe to click through a checkout. Verified 2026-07-26:
+ * the hosted checkout for variant 1677781 (starter-annual, below) reports
+ * `isTestMode: false`.
+ *
+ * Nothing in this repo can tell you the store's mode — that is Lemonsqueezy-side
+ * state. If you need test mode, create test-mode variants in the store and point
+ * the env overrides at them; do NOT assume the built-ins are safe.
+ *
+ * The env overrides exist so the ids can be swapped per (tier, cadence) without
+ * a code change — see variantEnvVar() for the naming, and usingLiveVariantIds()
+ * for what it does and does not tell you.
  *
  *   LEMONSQUEEZY_VARIANT_STARTER_MONTHLY   LEMONSQUEEZY_VARIANT_STARTER_ANNUAL
  *   LEMONSQUEEZY_VARIANT_PRO_MONTHLY       LEMONSQUEEZY_VARIANT_PRO_ANNUAL
@@ -45,7 +54,7 @@ export interface TierDefinition {
   price_annual_sar: number;
   highlighted: boolean;
   features_ar: string[];
-  /** Lemonsqueezy variant IDs (TEST MODE — swap for live before launch). */
+  /** Lemonsqueezy variant IDs. These are LIVE — see the file header. */
   lemonsqueezy_variant_id_monthly: string;
   lemonsqueezy_variant_id_annual: string;
 }
@@ -142,11 +151,10 @@ export function variantEnvVar(tier: Tier, cadence: Cadence): string {
  * Resolve the Lemonsqueezy variant ID for a (tier, cadence) pair.
  * Used by the checkout API to look up the variant to charge.
  *
- * The ids baked into PRICING_TIERS are TEST MODE. Going live does not need a
- * code change: set the matching env var (see variantEnvVar) on the deployed
- * site and it wins. Per-pair rather than a single mode flag, so tiers can be
- * migrated one at a time and a half-configured store fails loudly on the pair
- * that is missing instead of silently charging in the wrong mode.
+ * The ids baked into PRICING_TIERS are LIVE and charge real cards (see the file
+ * header). Setting the matching env var (see variantEnvVar) overrides one pair
+ * without a code change. Per-pair rather than a single mode flag, so tiers can
+ * be migrated one at a time instead of flipping the whole store at once.
  *
  * Read lazily on each call — not at module load — because this module is also
  * imported by the marketing client bundle, where process.env is not populated.
@@ -166,9 +174,16 @@ export function getVariantId(tier: Tier, cadence: Cadence): string {
 }
 
 /**
- * True when every (tier, cadence) pair has a live override configured. The
- * checkout route logs this once so a store left half-migrated is visible before
- * a customer finds it.
+ * True when every (tier, cadence) pair has an env override configured.
+ *
+ * ⚠️ This says NOTHING about the store's mode. It answers "are all eight
+ * overrides set", not "are we in test mode" — the built-in fallbacks are LIVE,
+ * so `false` here does not mean payments are safe. It was previously documented
+ * (and logged) as if it detected mode, which read as a reassurance at the exact
+ * moment a real card was being charged.
+ *
+ * Its actual use: spotting a HALF-configured store, where some pairs resolve to
+ * an override and others fall back, before a customer finds the inconsistency.
  */
 export function usingLiveVariantIds(): boolean {
   if (typeof process === "undefined") return false;

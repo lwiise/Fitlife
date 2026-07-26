@@ -32,6 +32,10 @@ import {
   ownerRequiresDoctorSignOff,
   memberRequiresDoctorSignOff,
 } from "../../../../packages/plan-engine/src/medicalGate";
+// Error reporting over plain fetch — @sentry/* cannot be bundled here for the
+// same reason @supabase/supabase-js cannot (see the note above). Without this
+// the function reported nothing at all: every failure died in the Netlify log.
+import { captureToSentry } from "../../../../packages/plan-engine/src/sentryReport";
 import { computeEngagementDigest } from "../../../../packages/plan-engine/src/engagementDigest";
 import type {
   EngagementCheckinRow,
@@ -509,6 +513,13 @@ const handler = async (req: Request): Promise<Response> => {
       }
     } catch (guardErr) {
       console.error("[generate-plan-background] workout idempotency probe failed", guardErr);
+      // Warning, not error: the run proceeds. But a probe that keeps failing
+      // means duplicate-run protection is silently off.
+      await captureToSentry(guardErr, {
+        step: "workout-idempotency-probe",
+        userId,
+        level: "warning",
+      });
     }
 
     // Meals-first sequencing: while a meal generation is live for this user,
@@ -595,6 +606,7 @@ const handler = async (req: Request): Promise<Response> => {
     } catch (err) {
       // runWorkoutPlanGeneration already terminalized both rows on failure.
       console.error("[generate-plan-background] workout generation failed", err);
+      await captureToSentry(err, { step: "workout-generation", userId });
       return new Response("Workout generation failed", { status: 200 });
     }
   }
@@ -659,7 +671,9 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response("OK", { status: 200 });
     } catch (err) {
       console.error("[generate-plan-background] translate failed", err);
-      // Non-fatal: leave the plan as-is (maid view falls back to Arabic).
+      // Non-fatal for the run, but the housekeeper silently gets Arabic she may
+      // not read — worth an alert rather than a log line nobody opens.
+      await captureToSentry(err, { step: "translate", userId });
       return new Response("Translate failed", { status: 200 });
     }
   }
@@ -698,6 +712,12 @@ const handler = async (req: Request): Promise<Response> => {
     // The guard is best-effort: if the probe itself fails, proceed — the run
     // would rather risk a duplicate than drop a legitimate generation.
     console.error("[generate-plan-background] idempotency probe failed", guardErr);
+    await captureToSentry(guardErr, {
+      step: "meal-idempotency-probe",
+      userId,
+      mealPlanId,
+      level: "warning",
+    });
   }
 
   const startMs = Date.now();
@@ -945,6 +965,9 @@ const handler = async (req: Request): Promise<Response> => {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const durationMs = Date.now() - startMs;
     console.error("[generate-plan-background] error", { userId, mealPlanId, errorMessage });
+    // The one that matters: a whole meal generation died. The DB row only ever
+    // kept the message, so the stack and the failing step were unrecoverable.
+    await captureToSentry(err, { step: "meal-generation", userId, mealPlanId });
     try {
       await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
         status: "failed",

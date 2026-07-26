@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   getAnalyticsConsent,
@@ -28,6 +28,7 @@ import {
 export function CookieConsent() {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
+  const barRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (getAnalyticsConsent() !== "unset") return;
@@ -39,6 +40,36 @@ export function CookieConsent() {
     }, 1500);
     return () => window.clearTimeout(timer);
   }, []);
+
+  /**
+   * Reserve the bar's height at the bottom of the page while it is up.
+   *
+   * Being non-modal is not enough on its own: a `fixed bottom-0` bar still
+   * COVERS whatever sits at the bottom of the page, and in this app that is the
+   * primary CTA — «التالي» on every onboarding wizard step. Production QA caught
+   * the click being swallowed on the mom wizard, which is the highest-drop-off
+   * screen in the funnel; a user could still dismiss the bar first, but having
+   * to is not acceptable there.
+   *
+   * Measured rather than hardcoded because the copy wraps to a different height
+   * on narrow screens.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const el = barRef.current;
+    if (!el) return;
+    const prev = document.body.style.paddingBottom;
+    const apply = () => {
+      document.body.style.paddingBottom = `${el.offsetHeight}px`;
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.body.style.paddingBottom = prev;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -59,6 +90,7 @@ export function CookieConsent() {
 
   return (
     <section
+      ref={barRef}
       aria-label="إعدادات القياس والخصوصية"
       className={`fixed inset-x-0 bottom-0 z-50 p-3 transition-transform duration-300 ease-out motion-reduce:transition-none ${
         shown ? "translate-y-0" : "translate-y-full"

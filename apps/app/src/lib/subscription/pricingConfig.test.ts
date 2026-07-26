@@ -19,10 +19,13 @@ afterEach(() => {
   for (const v of ALL_VARS) delete process.env[v];
 });
 
-describe("live/test variant switch", () => {
-  // The shipped ids are TEST MODE, so real money cannot be taken with them.
-  // Going live must not require a code change — only env on the deployed site.
-  it("falls back to the built-in test ids when nothing is configured", () => {
+describe("variant id override", () => {
+  // The shipped ids are LIVE and charge real cards (verified 2026-07-26). The
+  // env overrides let one (tier, cadence) pair be pointed elsewhere — e.g. at a
+  // genuine test-mode variant — without a code change. usingLiveVariantIds()
+  // reports whether all eight overrides are set; it does NOT detect the store's
+  // mode, which is Lemonsqueezy-side state this process cannot see.
+  it("falls back to the built-in ids when nothing is configured", () => {
     expect(getVariantId("family", "monthly")).toBe(
       PRICING_TIERS.family.lemonsqueezy_variant_id_monthly,
     );
@@ -57,7 +60,7 @@ describe("live/test variant switch", () => {
 });
 
 describe("getTierCadenceByVariantId", () => {
-  it("resolves the built-in test ids", () => {
+  it("resolves the built-in ids", () => {
     expect(getTierCadenceByVariantId(PRICING_TIERS.pro.lemonsqueezy_variant_id_annual)).toEqual({
       tier: "pro",
       cadence: "annual",
@@ -74,7 +77,7 @@ describe("getTierCadenceByVariantId", () => {
     });
   });
 
-  it("still resolves test ids after the live switch, for pre-existing subscriptions", () => {
+  it("still resolves built-in ids after an override is set, for pre-existing subscriptions", () => {
     process.env[variantEnvVar("premium", "monthly")] = "555000";
     expect(
       getTierCadenceByVariantId(PRICING_TIERS.premium.lemonsqueezy_variant_id_monthly),
