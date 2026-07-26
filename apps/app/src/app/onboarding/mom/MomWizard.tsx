@@ -140,6 +140,12 @@ export function MomWizard() {
   const [highRisk, setHighRisk] = useState<boolean | null>(null);
   const [feedingMode, setFeedingMode] = useState<FeedingMode | null>(null);
   const [monthsPP, setMonthsPP] = useState<string>("");
+  // Postpartum WITHOUT lactation: a woman who formula-feeds selected «لست
+  // حاملاً ولا مرضعة» and the recovery rules (and the workout pelvic-floor
+  // rules) never fired, because months_postpartum was only stored for
+  // lactating owners. Asked separately now; it does NOT make her "lactating".
+  const [recentBirth, setRecentBirth] = useState<boolean | null>(null);
+  const [monthsSinceBirth, setMonthsSinceBirth] = useState<string>("");
   const [nauseaFoods, setNauseaFoods] = useState<string[]>([]);
   const [restrictions, setRestrictions] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
@@ -260,7 +266,14 @@ export function MomWizard() {
         trimester: pregMonth != null ? trimesterFromMonth(pregMonth) : undefined,
         high_risk_pregnancy: highRisk === true,
         feeding_mode: feedingMode ?? undefined,
-        months_postpartum: monthsPP ? Number(monthsPP) : undefined,
+        months_postpartum:
+          pregStatus === "lactating"
+            ? monthsPP
+              ? Number(monthsPP)
+              : undefined
+            : recentBirth === true && monthsSinceBirth
+              ? Number(monthsSinceBirth)
+              : undefined,
         dietary_restrictions: restrictions,
         allergies,
         liked_foods: likedFoods,
@@ -559,11 +572,72 @@ export function MomWizard() {
                   </div>
                 )}
 
+                {pregStatus === "none" && (
+                  <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+                    <div>
+                      <p className="text-sm font-bold text-brand-ink mb-2">
+                        هل ولدتِ خلال آخر 12 شهراً؟
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <OptionButton
+                          active={recentBirth === false}
+                          onClick={() => {
+                            setRecentBirth(false);
+                            setMonthsSinceBirth("");
+                          }}
+                        >
+                          لا
+                        </OptionButton>
+                        <OptionButton
+                          active={recentBirth === true}
+                          onClick={() => setRecentBirth(true)}
+                        >
+                          نعم
+                        </OptionButton>
+                      </div>
+                      <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                        نراعي تعافي الجسم بعد الولادة حتى لو توقفتِ عن الرضاعة.
+                      </p>
+                    </div>
+                    {recentBirth === true && (
+                      <div>
+                        <label
+                          htmlFor="months-since-birth"
+                          className="block text-sm font-bold text-brand-ink mb-2"
+                        >
+                          كم شهراً مضى على الولادة؟
+                        </label>
+                        <input
+                          id="months-since-birth"
+                          type="number"
+                          inputMode="numeric"
+                          dir="ltr"
+                          min={0}
+                          max={12}
+                          value={monthsSinceBirth}
+                          onChange={(e) => setMonthsSinceBirth(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <PrimaryButton
                   onClick={() => {
                     if (!pregStatus) return setError(g("اختاري حالتك", "اختر حالتك"));
                     if (pregStatus === "pregnant" && (pregMonth == null || highRisk == null))
                       return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
+                    if (pregStatus === "none" && recentBirth === true) {
+                      const msb = Number(monthsSinceBirth);
+                      if (!monthsSinceBirth || Number.isNaN(msb) || msb < 0 || msb > 12)
+                        return setError(
+                          g(
+                            "اكتبي عدد الأشهر منذ الولادة بين 0 و12",
+                            "اكتب عدد الأشهر منذ الولادة بين 0 و12",
+                          ),
+                        );
+                    }
                     if (pregStatus === "lactating") {
                       const mpp = Number(monthsPP);
                       if (!feedingMode || !monthsPP || Number.isNaN(mpp) || mpp < 0 || mpp > 24)

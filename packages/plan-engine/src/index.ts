@@ -4,6 +4,7 @@ export {
   HIGH_RISK_MEDICAL_FLAGS,
   ownerRequiresDoctorSignOff,
   memberRequiresDoctorSignOff,
+  hasHighRiskCondition,
   DOCTOR_SIGN_OFF_REQUIRED_AR,
 } from "./medicalGate";
 export type { OwnerMedicalFacts, MemberMedicalFacts } from "./medicalGate";

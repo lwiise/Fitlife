@@ -414,7 +414,12 @@ export async function saveMomProfile(
         : null,
       high_risk_pregnancy: isPregnant ? input.high_risk_pregnancy : false,
       feeding_mode: isLactating ? (input.feeding_mode ?? null) : null,
-      months_postpartum: isLactating ? (input.months_postpartum ?? null) : null,
+      // «Months since giving birth», not a lactation flag — a woman who
+      // formula-feeds still needs the postpartum recovery rules (and the
+      // workout pelvic-floor rules). member_type === "lactating" is what adds
+      // the lactation calories. Never set while pregnant, never for a male.
+      months_postpartum:
+        isMale || isPregnant ? null : (input.months_postpartum ?? null),
       consulted_doctor: input.consulted_doctor,
       mom_profile_completed_at: now,
     })

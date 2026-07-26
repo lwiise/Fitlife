@@ -28,6 +28,18 @@ export const HIGH_RISK_MEDICAL_FLAGS = [
   "unexplained_symptoms",
 ];
 
+/**
+ * True when at least one condition is high-risk. Exported so the goal mapping
+ * can use the SAME list to decide when a condition should LEAD the plan instead
+ * of the user's stated goal — a stable, managed condition informs the plan
+ * without erasing what she asked for.
+ */
+export function hasHighRiskCondition(
+  conditions: readonly string[] | null | undefined,
+): boolean {
+  return (conditions ?? []).some((c) => HIGH_RISK_MEDICAL_FLAGS.includes(c));
+}
+
 export interface OwnerMedicalFacts {
   /** Every stored condition, INCLUDING the free-text "حالة أخرى" entry — the
    * save actions append it to medical_conditions, so callers building this

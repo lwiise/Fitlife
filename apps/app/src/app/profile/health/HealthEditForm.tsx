@@ -135,6 +135,14 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
   const [monthsPP, setMonthsPP] = useState<string>(
     initial.months_postpartum != null ? String(initial.months_postpartum) : "",
   );
+  // Postpartum WITHOUT lactation — months_postpartum used to be stored only for
+  // lactating owners, so a woman who formula-feeds got no recovery rules at all.
+  // Seeded from a stored value so an existing answer shows on re-open.
+  const [recentBirth, setRecentBirth] = useState<boolean | null>(
+    initial.pregnancy_status === "none" && initial.months_postpartum != null
+      ? true
+      : null,
+  );
   const [allergies, setAllergies] = useState<string[]>(initial.allergies);
   const [dislikes, setDislikes] = useState<string[]>(initial.dislikes);
   const [conditions, setConditions] = useState<string[]>(initial.conditions);
@@ -178,6 +186,16 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
       return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
     if (pregStatus === "lactating" && !monthsPP)
       return setError(g("اكتبي كم شهراً مضى على الولادة", "اكتب كم شهراً مضى على الولادة"));
+    if (pregStatus === "none" && recentBirth === true) {
+      const msb = Number(monthsPP);
+      if (!monthsPP || Number.isNaN(msb) || msb < 0 || msb > 12)
+        return setError(
+          g(
+            "اكتبي عدد الأشهر منذ الولادة بين 0 و12",
+            "اكتب عدد الأشهر منذ الولادة بين 0 و12",
+          ),
+        );
+    }
     // Whenever the confirmation renders it is REQUIRED — saving without it
     // stored a profile the engine then refused to plan for, with no
     // explanation of what was missing.
@@ -201,7 +219,11 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         pregnancy_status: pregStatus,
         trimester: pregStatus === "pregnant" ? trimester : null,
         high_risk_pregnancy: pregStatus === "pregnant" ? highRisk === true : false,
-        months_postpartum: pregStatus === "lactating" && monthsPP ? Number(monthsPP) : null,
+        months_postpartum:
+          (pregStatus === "lactating" || (pregStatus === "none" && recentBirth === true)) &&
+          monthsPP
+            ? Number(monthsPP)
+            : null,
         allergies,
         dislikes,
         conditions,
@@ -405,6 +427,57 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               onChange={(e) => setMonthsPP(e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             />
+          </div>
+        )}
+
+        {pregStatus === "none" && (
+          <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+            <div>
+              <p className="text-sm font-bold text-brand-ink mb-2">
+                هل ولدتِ خلال آخر 12 شهراً؟
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <OptionButton
+                  active={recentBirth === false}
+                  onClick={() => {
+                    setRecentBirth(false);
+                    setMonthsPP("");
+                  }}
+                >
+                  لا
+                </OptionButton>
+                <OptionButton
+                  active={recentBirth === true}
+                  onClick={() => setRecentBirth(true)}
+                >
+                  نعم
+                </OptionButton>
+              </div>
+              <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                نراعي تعافي الجسم بعد الولادة حتى لو توقفتِ عن الرضاعة.
+              </p>
+            </div>
+            {recentBirth === true && (
+              <div>
+                <label
+                  htmlFor="months-since-birth"
+                  className="block text-sm font-bold text-brand-ink mb-2"
+                >
+                  كم شهراً مضى على الولادة؟
+                </label>
+                <input
+                  id="months-since-birth"
+                  type="number"
+                  inputMode="numeric"
+                  dir="ltr"
+                  min={0}
+                  max={12}
+                  value={monthsPP}
+                  onChange={(e) => setMonthsPP(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                />
+              </div>
+            )}
           </div>
         )}
       </section>

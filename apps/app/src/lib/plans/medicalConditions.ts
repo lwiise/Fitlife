@@ -34,9 +34,10 @@ export const STABLE_CONDITIONS: ConditionOption[] = [
   { slug: "anemia", label_ar: "فقر الدم" },
 ];
 
-const GATE_SLUGS = new Set(GATE_CONDITIONS.map((c) => c.slug));
-
-/** True if any selected condition is a high-risk gate condition. */
-export function hasGateCondition(conditions: string[]): boolean {
-  return conditions.some((c) => GATE_SLUGS.has(c));
-}
+/**
+ * True if any selected condition is a high-risk gate condition. Delegates to
+ * the engine's list (plan-engine/medicalGate) rather than re-deriving one from
+ * GATE_CONDITIONS above — that second list is the UI's chip roster, and the two
+ * had already drifted by one slug (`unexplained_symptoms`).
+ */
+export { hasHighRiskCondition as hasGateCondition } from "@fitlife/plan-engine";

@@ -186,7 +186,9 @@ export async function saveMomHealthInfo(
       // contradict it in the prompt (month renders with precedence) — clear it.
       pregnancy_month: null,
       high_risk_pregnancy: isPregnant ? data.high_risk_pregnancy : false,
-      months_postpartum: isLactating ? (data.months_postpartum ?? null) : null,
+      // «Months since giving birth», not a lactation flag — see saveMomProfile.
+      months_postpartum:
+        isMale || isPregnant ? null : (data.months_postpartum ?? null),
       feeding_mode: isLactating ? undefined : null,
       allergies: data.allergies,
       dislikes: data.dislikes,
