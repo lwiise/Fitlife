@@ -15,3 +15,7 @@ probe-dump.json
 # they show personal data and account state.
 shots/
 *.png
+
+# Runner logs. They carry account emails once the verify phase writes its
+# summary, and they are pure run artifacts either way.
+*.log
