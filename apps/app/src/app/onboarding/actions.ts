@@ -15,6 +15,7 @@ import {
   getTierLimit,
 } from "@/lib/subscription/state";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
+import { memberEditIsSubstantive } from "@/lib/plans/memberEdit";
 import {
   planHasContent,
   MEMBER_GEN_MAX_ATTEMPTS,
@@ -35,6 +36,7 @@ import {
   familyMemberInputSchema,
   familyWideInputSchema,
   profileStepSchema,
+  firstFieldErrorAr,
   VALIDATION_ERROR_AR,
 } from "./serverSchemas";
 import type { Database } from "@/lib/supabase/database.types";
@@ -86,7 +88,9 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
 
   // The update object goes straight into a profiles UPDATE — strict whitelist.
   const parsed = profileStepSchema.safeParse(updates);
-  if (!parsed.success) return { ok: false, error: VALIDATION_ERROR_AR };
+  if (!parsed.success) {
+    return { ok: false, error: firstFieldErrorAr(parsed.error) };
+  }
 
   const { error } = await supabase
     .from("profiles")
@@ -916,9 +920,17 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
   }
 
   const isAdult = input.member_type === "adult";
+  // Pregnancy and lactation calories are maintenance (TDEE) plus a stage
+  // addition, so they need an activity factor exactly like an adult does —
+  // these fields used to be adult-only, which left activity_level null for
+  // both and forced the model to guess the multiplier.
+  const isAdultLike =
+    isAdult ||
+    input.member_type === "pregnant" ||
+    input.member_type === "lactating";
   // Derive the canonical level from the concrete answers when available.
   const activityLevel =
-    isAdult && input.day_nature && input.exercise_days
+    isAdultLike && input.day_nature && input.exercise_days
       ? activityLevelFrom(input.day_nature, input.exercise_days)
       : (input.activity_level ?? null);
 
@@ -951,10 +963,12 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     // the old lactating wizard folded them into medical_conditions via
     // other_condition (data corruption, fixed with the wizard in the same
     // release). Children get none of these.
+    // A weight target stays adult-only — pregnancy and lactation are not
+    // weight-change goals.
     target_weight_kg: isAdult ? (input.target_weight_kg ?? null) : null,
-    day_nature: isAdult ? (input.day_nature ?? null) : null,
-    exercise_days: isAdult ? (input.exercise_days ?? null) : null,
-    exercise_type: isAdult ? (input.exercise_type ?? null) : null,
+    day_nature: isAdultLike ? (input.day_nature ?? null) : null,
+    exercise_days: isAdultLike ? (input.exercise_days ?? null) : null,
+    exercise_type: isAdultLike ? (input.exercise_type ?? null) : null,
     sleep_hours: isAdult ? (input.sleep_hours ?? null) : null,
     water_liters: input.member_type === "child" ? null : (input.water_liters ?? null),
     medications: input.member_type === "child" ? [] : (input.medications ?? []),
@@ -977,8 +991,9 @@ export async function addFamilyMember(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  if (!familyMemberInputSchema.safeParse(input).success) {
-    return { ok: false, error: VALIDATION_ERROR_AR };
+  const parsedMember = familyMemberInputSchema.safeParse(input);
+  if (!parsedMember.success) {
+    return { ok: false, error: firstFieldErrorAr(parsedMember.error) };
   }
 
   // Next display_order = current max + 1.
@@ -1228,8 +1243,9 @@ export async function updateFamilyMember(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  if (!familyMemberInputSchema.safeParse(input).success) {
-    return { ok: false, error: VALIDATION_ERROR_AR };
+  const parsedMember = familyMemberInputSchema.safeParse(input);
+  if (!parsedMember.success) {
+    return { ok: false, error: firstFieldErrorAr(parsedMember.error) };
   }
 
   const { data: beforeRow } = await supabase
@@ -1261,21 +1277,10 @@ export async function updateFamilyMember(
   revalidatePath("/dashboard");
 
   // Substantive change → regenerate; cosmetic (name only) → skip.
-  const substantive =
-    !before ||
-    before.birth_year !== input.birth_year ||
-    Number(before.weight_kg) !== Number(input.weight_kg ?? before.weight_kg) ||
-    before.primary_goal !== row.primary_goal ||
-    before.member_type !== row.member_type ||
-    before.meal_mode !== row.meal_mode ||
-    before.activity_level !== row.activity_level ||
-    Number(before.target_weight_kg ?? 0) !== Number(row.target_weight_kg ?? 0) ||
-    before.feeding_mode !== row.feeding_mode ||
-    JSON.stringify(before.medications ?? []) !== JSON.stringify(row.medications) ||
-    JSON.stringify(before.supplements ?? []) !== JSON.stringify(row.supplements) ||
-    JSON.stringify(before.nausea_foods ?? []) !== JSON.stringify(row.nausea_foods) ||
-    JSON.stringify(before.medical_conditions ?? []) !==
-      JSON.stringify(row.medical_conditions);
+  const substantive = memberEditIsSubstantive(
+    before as unknown as Record<string, unknown> | null,
+    row,
+  );
 
   if (!substantive) {
     return { ok: true, member_id: memberId, plan_generation_id: null };

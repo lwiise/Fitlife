@@ -46,6 +46,7 @@ import {
   type PlanPromptContext,
   type PlanPromptContextMember,
 } from "./buildContext";
+import { isChildByAge } from "./childRule";
 import { riyadhTodayISO, khaleejiDayName } from "./dates";
 import { canonicalRecipeKey } from "./canonicalRecipeKey";
 
@@ -423,7 +424,7 @@ export function dayCalorieDeviations(
     if (!sk) continue;
     const isChild =
       m.member_id === "mom"
-        ? context.mom.member_type === "child"
+        ? isChildByAge(context.mom.member_type, context.mom.age)
         : (context.family_members.find((f) => f.id === m.member_id)?.is_child ?? false);
     if (isChild) continue;
     const target = sk.daily_calories_target;
@@ -455,7 +456,7 @@ export function dayProteinDeviations(
     if (!sk) continue;
     const isChild =
       m.member_id === "mom"
-        ? context.mom.member_type === "child"
+        ? isChildByAge(context.mom.member_type, context.mom.age)
         : (context.family_members.find((f) => f.id === m.member_id)?.is_child ?? false);
     if (isChild) continue;
     const target = sk.macros_target.protein_g;
@@ -1210,11 +1211,7 @@ export async function generateMealPlan(params: {
     beneficiaries.map((b) => [b.member_id, b.member_name_ar]),
   );
   const isChildById = new Map<string, boolean>([
-    [
-      "mom",
-      context.mom.member_type === "child" ||
-        (context.mom.age != null && context.mom.age < 18),
-    ],
+    ["mom", isChildByAge(context.mom.member_type, context.mom.age)],
     ...context.family_members.map(
       (m) => [m.id, m.is_child] as [string, boolean],
     ),

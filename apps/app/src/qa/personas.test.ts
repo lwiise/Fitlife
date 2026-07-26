@@ -19,6 +19,7 @@ import { fakeSupabase, baseProfile, baseMember, type FakeAccount } from "./perso
 import {
   familyMemberInputSchema,
   momProfileInputSchema,
+  firstFieldErrorAr,
 } from "@/app/onboarding/serverSchemas";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
 import { activityLevelFrom } from "@/lib/plans/activityLevel";
@@ -203,7 +204,8 @@ const ACCOUNTS: FakeAccount[] = [
   },
   {
     email: "claude10@gmail.com",
-    label: "Family with a PREGNANT member (not high-risk) added via the member wizard",
+    label:
+      "Family with a PREGNANT member — LEGACY row from before the wizard asked about activity (activity_level null)",
     profile: baseProfile(),
     members: [
       baseMember({
@@ -214,7 +216,33 @@ const ACCOUNTS: FakeAccount[] = [
         birth_year: 1996,
         height_cm: 165,
         weight_kg: 68,
-        activity_level: null, // ← what the member wizard actually saves
+        activity_level: null, // the wizard now asks; see claude10b
+        primary_goal: "pregnancy_lactation",
+        trimester: 2,
+        high_risk_pregnancy: false,
+        consulted_doctor: true,
+        water_liters: "l1_2",
+      }),
+    ],
+  },
+  {
+    email: "claude10b@gmail.com",
+    label:
+      "Pregnant member added AFTER the fix — the wizard's exercise step now stores an activity level",
+    profile: baseProfile(),
+    members: [
+      baseMember({
+        name: "هند",
+        role: "other_adult",
+        member_type: "pregnant",
+        sex: "female",
+        birth_year: 1996,
+        height_cm: 165,
+        weight_kg: 68,
+        day_nature: "moderate_movement",
+        exercise_days: "d1_2",
+        exercise_type: "cardio",
+        activity_level: activityLevelFrom("moderate_movement", "d1_2"),
         primary_goal: "pregnancy_lactation",
         trimester: 2,
         high_risk_pregnancy: false,
@@ -460,18 +488,21 @@ describe("wizard → server-schema contract", () => {
     months_postpartum: null,
   };
 
-  it("a 4-year-old that the CLIENT accepts is rejected by the SERVER schema", () => {
+  it("a 4-year-old the CLIENT accepts is now accepted by the SERVER schema too", () => {
     const parsed = familyMemberInputSchema.safeParse(smallChild);
-    console.log(
-      "\n[small child] server schema:",
-      parsed.success ? "ACCEPTED" : `REJECTED → ${JSON.stringify(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`))}`,
-    );
-    expect(parsed.success).toBe(false); // KNOWN-BUG: weight_kg floor of 20 kg blocks under-6s
+    if (!parsed.success) {
+      console.log(
+        "[small child] REJECTED →",
+        JSON.stringify(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)),
+      );
+    }
+    expect(parsed.success).toBe(true);
   });
 
-  it("finds the youngest child the server schema accepts (weight/height floors)", () => {
-    const rows: string[] = [];
+  it("accepts every realistic child size, down to a toddler", () => {
+    const rejected: string[] = [];
     for (const [age, h, w] of [
+      [1, 76, 10],
       [3, 96, 14],
       [5, 110, 18],
       [6, 116, 21],
@@ -480,20 +511,29 @@ describe("wizard → server-schema contract", () => {
     ] as [number, number, number][]) {
       const ok = familyMemberInputSchema.safeParse({
         ...smallChild,
-        birth_year: 2026 - age,
+        birth_year: new Date().getFullYear() - age,
         height_cm: h,
         weight_kg: w,
       }).success;
-      rows.push(`  age ${age} (${h}cm/${w}kg): ${ok ? "accepted" : "REJECTED"}`);
+      if (!ok) rejected.push(`age ${age} (${h}cm/${w}kg)`);
     }
-    console.log("\n[child size sweep]\n" + rows.join("\n"));
-    expect(rows.length).toBe(5);
+    expect(rejected).toEqual([]);
   });
 
-  it("mom schema accepts a birth_year that makes her a minor (client blocks it, server does not)", () => {
-    const minorMom = {
+  it("still rejects impossible sizes, with a field-level Arabic message", () => {
+    const parsed = familyMemberInputSchema.safeParse({
+      ...smallChild,
+      weight_kg: 2,
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(firstFieldErrorAr(parsed.error)).toBe("يجب أن يكون الوزن بين 5 و300 كجم");
+    }
+  });
+
+  it("mom schema now enforces the same 13+ floor the client does", () => {
+    const base = {
       display_name: "لينا",
-      birth_year: 2020,
       height_cm: 120,
       weight_kg: 30,
       activity_level: "light" as const,
@@ -505,10 +545,16 @@ describe("wizard → server-schema contract", () => {
       conditions: [],
       consulted_doctor: false,
     };
-    const parsed = momProfileInputSchema.safeParse(minorMom);
-    console.log("\n[minor mom] server schema:", parsed.success ? "ACCEPTED" : "rejected");
-    console.log("[minor mom] workout gate:", isWorkoutEligibleMom({ birth_year: 2020 }));
-    expect(parsed.success).toBe(true); // KNOWN-BUG: server allows a minor owner, client (step1Schema) does not
+    const year = new Date().getFullYear();
+    // A toddler owner is impossible now.
+    expect(momProfileInputSchema.safeParse({ ...base, birth_year: year - 4 }).success).toBe(
+      false,
+    );
+    // 13 is the floor both sides agree on, and she stays workout-ineligible.
+    expect(momProfileInputSchema.safeParse({ ...base, birth_year: year - 13 }).success).toBe(
+      true,
+    );
+    expect(isWorkoutEligibleMom({ birth_year: year - 13 })).toBe(false);
   });
 });
 

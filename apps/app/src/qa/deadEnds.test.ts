@@ -1,14 +1,15 @@
 /**
  * Regression guard for the three "no way out" states the persona sweep found.
+ * All three are fixed; these tests fail if any of them comes back.
  *
- * Dead ends 1 and 2 are FIXED: every surface that decides whether to ask for
- * the doctor confirmation now calls the same `ownerRequiresDoctorSignOff` the
- * generation gate calls, so a profile the UI accepts is always a profile the
- * engine will plan for. These tests replicate each surface's call and assert
- * the agreement — if a surface ever forks its own rule again, they fail.
+ * Dead ends 1 and 2: every surface that decides whether to ask for the doctor
+ * confirmation now calls the same `ownerRequiresDoctorSignOff` the generation
+ * gate calls, so a profile the UI accepts is always a profile the engine will
+ * plan for. The tests replicate each surface's call and assert the agreement
+ * exhaustively — if a surface ever forks its own rule again, they fail.
  *
- * Dead end 3 (under-18 account owner planned as an adult) is NOT fixed; it is
- * a P1 and its assertions are still marked KNOWN-BUG.
+ * Dead end 3: the under-18 account owner is planned by portions, the same rule
+ * (`isChildByAge`) every family member already got.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -205,8 +206,8 @@ describe("every surface agrees with the engine gate (exhaustive)", () => {
   });
 });
 
-describe("KNOWN-BUG (P1) — under-18 account owner is planned as an adult", () => {
-  it("engine assembly says child, but the prompts say adult", async () => {
+describe("FIXED — under-18 account owner is planned as a child", () => {
+  it("the prompts now agree with the assembly: portions, not an adult target", async () => {
     const minor = baseProfile({
       birth_year: 2012, // 14 in 2026
       height_cm: 158,
@@ -247,8 +248,20 @@ describe("KNOWN-BUG (P1) — under-18 account owner is planned as an adult", () 
       0,
     );
 
-    expect(hasChildClause).toBe(false); // KNOWN-BUG: the owner never gets the child-portions clause
-    expect(day.includes("الهدف: 1900 سعرة")).toBe(true); // KNOWN-BUG: adult calorie target for a minor
+    // The skeleton roster now carries the same child clause a member gets…
+    expect(hasChildClause).toBe(true);
+    // …and the day prompt asks for portions instead of an adult calorie target.
+    expect(day.includes("طفل — بالحصص")).toBe(true);
+    expect(day.includes("الهدف: 1900 سعرة")).toBe(false);
+  });
+
+  it("an adult owner is unaffected", async () => {
+    const adult = baseProfile({ birth_year: 1990, primary_goal: "fat_loss" });
+    const ctx = await buildPlanContext(
+      fakeSupabase({ email: "x", label: "x", profile: adult, members: [] }),
+      "mom",
+    );
+    expect(buildSkeletonPrompt(ctx)).not.toContain("حصص الهرم الغذائي");
   });
 
   it("an under-18 FAMILY MEMBER is handled correctly (the asymmetry)", async () => {

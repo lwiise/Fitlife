@@ -7,6 +7,11 @@ import { z } from "zod";
 // these — they exist for hand-crafted requests.
 
 const CURRENT_YEAR = new Date().getFullYear();
+// The account owner must be 13+, matching the client's step1Schema. The server
+// accepted any year up to the current one, so a hand-crafted request could
+// create an owner aged 0 and the whole adult calorie path would run on her.
+const OWNER_MAX_BIRTH_YEAR = CURRENT_YEAR - 13;
+const OWNER_BIRTH_YEAR_AR = `يجب أن تكون سنة الميلاد بين 1940 و${OWNER_MAX_BIRTH_YEAR}`;
 
 const chipArray = z.array(z.string().trim().min(1).max(80)).max(30);
 
@@ -66,7 +71,11 @@ export const momProfileInputSchema = z
     // defaults missing values to "female" (the product's historical baseline).
     sex: z.enum(["female", "male"]).optional(),
     display_name: z.string().trim().min(2).max(60),
-    birth_year: z.number().int().min(1940).max(CURRENT_YEAR),
+    birth_year: z
+      .number()
+      .int()
+      .min(1940, OWNER_BIRTH_YEAR_AR)
+      .max(OWNER_MAX_BIRTH_YEAR, OWNER_BIRTH_YEAR_AR),
     height_cm: z.number().min(80).max(250),
     weight_kg: z.number().min(20).max(300),
     // Legacy direct level (pre-exercise-step clients). The server prefers
@@ -96,11 +105,27 @@ export const momProfileInputSchema = z
 export const familyMemberInputSchema = z.object({
   member_type: z.enum(["adult", "child", "pregnant", "lactating"]),
   role: z.string().trim().min(2).max(30),
-  name: z.string().trim().min(2).max(60),
-  birth_year: z.number().int().min(1940).max(CURRENT_YEAR),
+  name: z.string().trim().min(2, "الاسم حرفان على الأقل").max(60, "الاسم طويل"),
+  birth_year: z
+    .number()
+    .int()
+    .min(1940, `يجب أن تكون سنة الميلاد بين 1940 و${CURRENT_YEAR}`)
+    .max(CURRENT_YEAR, `يجب أن تكون سنة الميلاد بين 1940 و${CURRENT_YEAR}`),
   sex: z.string().max(10).nullish(),
-  height_cm: z.number().min(80).max(250).nullish(),
-  weight_kg: z.number().min(20).max(300).nullish(),
+  // Bounds match the family_members DB CHECK constraints and the wizard's own
+  // physicalRangeError. They were 80 cm / 20 kg, which rejected every child
+  // under about six with an opaque "بيانات غير صالحة" — the wizard accepted
+  // the values, the server refused them, and nothing said which field.
+  height_cm: z
+    .number()
+    .min(40, "يجب أن يكون الطول بين 40 و250 سم")
+    .max(250, "يجب أن يكون الطول بين 40 و250 سم")
+    .nullish(),
+  weight_kg: z
+    .number()
+    .min(5, "يجب أن يكون الوزن بين 5 و300 كجم")
+    .max(300, "يجب أن يكون الوزن بين 5 و300 كجم")
+    .nullish(),
   activity_level: z
     .enum(["sedentary", "light", "moderate", "active", "very_active"])
     .nullish(),
@@ -135,7 +160,11 @@ export const profileStepSchema = z
   .object({
     sex: z.enum(["female", "male"]),
     display_name: z.string().trim().min(2).max(60),
-    birth_year: z.number().int().min(1940).max(CURRENT_YEAR),
+    birth_year: z
+      .number()
+      .int()
+      .min(1940, OWNER_BIRTH_YEAR_AR)
+      .max(OWNER_MAX_BIRTH_YEAR, OWNER_BIRTH_YEAR_AR),
     phone: z.string().trim().max(30).nullable(),
     height_cm: z.number().min(80).max(250),
     weight_kg: z.number().min(20).max(300),
@@ -157,3 +186,17 @@ export const profileStepSchema = z
   .strict();
 
 export const VALIDATION_ERROR_AR = "بيانات غير صالحة — يلزم التحقق من الحقول والمحاولة مرة أخرى";
+
+// Arabic block, so we can tell one of OUR messages from a zod default
+// ("Number must be greater than…") and never show the user English internals.
+const ARABIC_RE = /[؀-ۿ]/;
+
+/**
+ * The first field-level message a user can act on, or the generic fallback.
+ * A schema rejection used to surface as VALIDATION_ERROR_AR with no hint at
+ * WHICH field was wrong — the child height/weight floors were unfindable.
+ */
+export function firstFieldErrorAr(error: z.ZodError): string {
+  const named = error.issues.find((i) => ARABIC_RE.test(i.message));
+  return named?.message ?? VALIDATION_ERROR_AR;
+}

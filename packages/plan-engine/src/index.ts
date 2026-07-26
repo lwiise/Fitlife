@@ -8,6 +8,12 @@ export {
 } from "./medicalGate";
 export type { OwnerMedicalFacts, MemberMedicalFacts } from "./medicalGate";
 
+export {
+  CHILD_AGE_CUTOFF,
+  isChildByAge,
+  isChildByBirthYear,
+} from "./childRule";
+
 export type {
   PlanPromptContext,
   PlanPromptContextMom,

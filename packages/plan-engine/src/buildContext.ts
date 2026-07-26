@@ -4,6 +4,7 @@ import {
   ownerRequiresDoctorSignOff,
   memberRequiresDoctorSignOff,
 } from "./medicalGate";
+import { isChildByAge } from "./childRule";
 import type { EngagementDigest } from "./engagementDigest";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
@@ -378,7 +379,7 @@ export async function buildPlanContext(
         school_meal_handling: (m.school_meal_handling as string | null) ?? null,
         picky_eater: !!m.picky_eater,
         consulted_doctor: m.consulted_doctor === true,
-        is_child: memberType === "child" || (age != null && age < 18),
+        is_child: isChildByAge(memberType, age),
         preferred_language: m.preferred_language as string,
         meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
         target_weight_kg: (m.target_weight_kg as number | null) ?? null,

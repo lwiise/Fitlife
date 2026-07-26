@@ -337,12 +337,15 @@ export function MomWizard() {
                 onSubmit={(d) => {
                   setIdentity(d);
                   startTransition(async () => {
-                    await saveProfileStep({
+                    // A failed progressive save used to advance the wizard
+                    // anyway, so the answer was silently lost on refresh.
+                    const saved = await saveProfileStep({
                       sex: d.sex,
                       display_name: d.display_name,
                       birth_year: d.birth_year,
                       phone: d.phone ?? null,
                     });
+                    if (!saved.ok) return setError(saved.error);
                     goNext();
                   });
                 }}
@@ -357,13 +360,14 @@ export function MomWizard() {
                 onSubmit={(d) => {
                   setPhysical(d);
                   startTransition(async () => {
-                    await saveProfileStep({
+                    const saved = await saveProfileStep({
                       height_cm: d.height_cm,
                       weight_kg: d.weight_kg,
                       waist_cm: d.waist_cm,
                       hip_cm: d.hip_cm ?? null,
                       target_weight_kg: d.target_weight_kg ?? null,
                     });
+                    if (!saved.ok) return setError(saved.error);
                     goNext();
                   });
                 }}
@@ -434,7 +438,10 @@ export function MomWizard() {
                     // The goal itself persists at final submit — its Sara
                     // mapping needs the health answers from later steps.
                     startTransition(async () => {
-                      await saveProfileStep({ activity_level: activityLevel });
+                      const saved = await saveProfileStep({
+                        activity_level: activityLevel,
+                      });
+                      if (!saved.ok) return setError(saved.error);
                       goNext();
                     });
                   }}

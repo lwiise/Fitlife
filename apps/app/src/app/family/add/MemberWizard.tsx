@@ -58,6 +58,11 @@ const FEEDING: { value: string; label: string }[] = [
   { value: "formula", label: "صناعية" },
 ];
 
+/** Member types planned on BMR/TDEE, so the activity factor is asked and
+ * stored for all of them. Children are planned by portions and keep their own
+ * 3-level scale instead. */
+const ADULT_LIKE = new Set<MemberType>(["adult", "pregnant", "lactating"]);
+
 const PREGNANT_CONDITIONS = [
   { slug: "gestational_diabetes", label_ar: "سكري الحمل" },
   { slug: "pregnancy_hypertension", label_ar: "ارتفاع ضغط الحمل" },
@@ -305,13 +310,18 @@ export function MemberWizard({
       case "child":
         return ["identity", "sex", "physical", "childActivity", "school", "picky", "allergies", "mealMode", "chronic"];
       case "pregnant":
-        // Safe subset: meds/supplements + water; no exercise/target/sleep. Nausea
-        // foods go to their OWN column (temporary aversions, not allergens).
-        return ["identity", "physical", "trimester", "highRisk", "pregConditions", "allergies", "nausea", "medsSupps", "water", "mealMode"];
+        // Safe subset: meds/supplements + water; no weight target or sleep.
+        // The activity step IS included — pregnancy calories are maintenance
+        // (TDEE) plus a trimester addition, and TDEE needs an activity factor.
+        // Without it activity_level saved as null and the model had to guess
+        // the multiplier for the two people it matters most for. Nausea foods
+        // go to their OWN column (temporary aversions, not allergens).
+        return ["identity", "physical", "exercise", "trimester", "highRisk", "pregConditions", "allergies", "nausea", "medsSupps", "water", "mealMode"];
       case "lactating":
-        // The old free-text supplements step (which corrupted medical_conditions)
-        // is replaced by the structured medsSupps step.
-        return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "medsSupps", "water", "mealMode"];
+        // Same reasoning for lactation (maintenance + 200-300). The old
+        // free-text supplements step (which corrupted medical_conditions) is
+        // replaced by the structured medsSupps step.
+        return ["identity", "physical", "exercise", "monthsPP", "feeding", "lactConditions", "allergies", "medsSupps", "water", "mealMode"];
     }
   }, [type, role]);
 
@@ -348,16 +358,16 @@ export function MemberWizard({
     sex: sex || null,
     height_cm: heightCm ? Number(heightCm) : null,
     weight_kg: weightKg ? Number(weightKg) : null,
-    // Adults: the server re-derives from the raw answers; children keep their
-    // 3-level scale. Sent for display parity only.
+    // Adults AND pregnant/lactating members: the server re-derives from the raw
+    // answers; children keep their 3-level scale. Sent for display parity only.
     activity_level:
-      type === "adult" && dayNature && exerciseDays
+      ADULT_LIKE.has(type) && dayNature && exerciseDays
         ? activityLevelFrom(dayNature, exerciseDays)
         : activity || null,
-    day_nature: type === "adult" ? (dayNature ?? undefined) : undefined,
-    exercise_days: type === "adult" ? (exerciseDays ?? undefined) : undefined,
+    day_nature: ADULT_LIKE.has(type) ? (dayNature ?? undefined) : undefined,
+    exercise_days: ADULT_LIKE.has(type) ? (exerciseDays ?? undefined) : undefined,
     exercise_type:
-      type === "adult" && exerciseDays && exerciseDays !== "none"
+      ADULT_LIKE.has(type) && exerciseDays && exerciseDays !== "none"
         ? exerciseType
         : null,
     target_weight_kg:

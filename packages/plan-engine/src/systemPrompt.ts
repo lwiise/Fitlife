@@ -6,6 +6,7 @@ import {
 import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
 import { engagementText } from "./engagementDigest";
+import { isChildByAge } from "./childRule";
 
 /**
  * Standalone translation prompt — translates an existing plan's meals into the
@@ -191,6 +192,12 @@ function describeMom(c: PlanPromptContext): string {
   // imperatives addressed to Sara herself (طبّقي، نسّقي…) stay feminine.
   const male = m.sex === "male";
   const g = (f: string, mm: string) => (male ? mm : f);
+  // Signup accepts an owner as young as 13 (step1Schema), and the plan
+  // assembly already stamps is_child for her — the prompts used to not, so she
+  // was handed an adult BMR/TDEE target in direct violation of the
+  // methodology's "لا تستخدمي معادلات BMR/TDEE للأطفال إطلاقاً". Same rule as
+  // every family member now.
+  const isChild = isChildByAge(m.member_type, m.age);
   const parts: string[] = [];
   parts.push(
     `${g("العميلة (الأم)", "العميل (رب الأسرة)")}: ${m.display_name ?? "غير معروف"}`,
@@ -239,7 +246,8 @@ function describeMom(c: PlanPromptContext): string {
   }
   // Coach questionnaire (00013). Raw exercise answers ride with the derived
   // level so the TDEE multiplier match is explicit, not inferred.
-  if (m.target_weight_kg != null) {
+  // A weight target is never framed for a minor — growth, not weight change.
+  if (m.target_weight_kg != null && !isChild) {
     line += ` ${g("هدفها", "هدفه")} الوصول إلى ${m.target_weight_kg} كيلو — اجعلي وتيرة التغيير واقعية ومستدامة.`;
   }
   if (m.day_nature || m.exercise_days) {
@@ -273,6 +281,11 @@ function describeMom(c: PlanPromptContext): string {
     line += ` ${g("تنام", "ينام")} نحو ${m.sleep_hours} ساعات${m.sleep_hours < 7 ? " — راعي وجبات مسائية خفيفة تدعم نوماً أفضل" : ""}.`;
   }
   line += ` ${g("تفضل", "يفضل")} مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
+  // Same clause the member roster uses — keeps the two paths identical.
+  if (isChild) {
+    line +=
+      " (طفل — استخدمي حصص الهرم الغذائي الصحي للأطفال، بدون معادلات BMR/TDEE ولا حد سعرات.)";
+  }
   // meal_mode is discretionary: 'shared' is the default (cook once, split), so it
   // needs no instruction. Only flag 'independent' — and it must be surfaced HERE,
   // in the roster the SKELETON sees, because the skeleton is the phase that decides
@@ -904,7 +917,7 @@ export function buildDayPrompt(
           : context.family_members.find((m) => m.id === sm.member_id);
       const isChild =
         sm.member_id === "mom"
-          ? context.mom.member_type === "child"
+          ? isChildByAge(context.mom.member_type, context.mom.age)
           : (ctxMember?.is_child ?? false);
 
       const constraints: string[] = [];
