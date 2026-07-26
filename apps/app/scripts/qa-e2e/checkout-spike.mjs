@@ -1,26 +1,30 @@
-// Spike: is Lemonsqueezy TEST-MODE checkout usable from the harness?
+// Spike: what MODE is the Lemonsqueezy checkout actually in?
 //
-// This is the single largest unknown in the full-matrix run: every multi-member
-// household needs a paid subscription (starter trial caps at max_people: 1), and
-// the store is in test mode. Rather than build the whole matrix and discover at
-// run time that checkout is a dead end, this answers it for ~$0 — it creates ONE
-// account and NEVER triggers a generation.
+// Every multi-member household needs a paid subscription (the starter trial caps
+// at max_people: 1), so the matrix depends on being able to complete a checkout.
+// Rather than build all of that and find out at run time, this answers it for
+// ~$0 — it creates ONE account and NEVER triggers a generation.
 //
-// It reports, in order: does /api/checkout return a URL, does the LS page load,
-// and what fields does that page actually present. Everything else in Group A
-// depends on the answer.
+// ⚠️ WHAT IT FOUND (2026-07-26): the store is **LIVE**, not test mode. The
+// hosted checkout reports `isTestMode: false` and serves variant 1677781 —
+// starter-annual straight out of PRICING_TIERS. So the ids compiled into the app
+// charge real cards, despite the comment at packages/config/src/pricing.ts:12
+// asserting they are test mode, and despite the checkout route logging
+// "using TEST-MODE variant id" whenever the env overrides are unset.
 //
-//   node checkout-spike.mjs [--tier=pro] [--keep]
+// Consequently NOTHING here fills a card field, and nothing should be added that
+// does until the store is genuinely in test mode. Re-run this after any billing
+// change to re-check the mode.
+//
+//   node checkout-spike.mjs [--keep]
+//
+// It clicks the FIRST paid CTA on /pricing — which tier does not matter, the
+// question is what mode the store is in.
 
 import { chromium } from "playwright-core";
 import { createClient } from "@supabase/supabase-js";
 import { discoverSupabaseCreds, BASE, PASSWORD } from "./creds.mjs";
 
-const arg = (k) => {
-  const hit = process.argv.slice(2).find((a) => a.startsWith(`--${k}=`));
-  return hit ? hit.slice(k.length + 3) : null;
-};
-const TIER = arg("tier") ?? "pro";
 const KEEP = process.argv.includes("--keep");
 const EMAIL = `fitlife.qa+ckspike-${Math.random().toString(36).slice(2, 10)}@gmail.com`;
 
