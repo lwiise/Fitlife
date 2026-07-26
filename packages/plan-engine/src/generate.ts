@@ -14,6 +14,7 @@ import {
 } from "./constants";
 import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
+import { applyCalorieFloor, type CalorieFloorSubject } from "./calorieFloor";
 import {
   STATIC_SYSTEM,
   buildSkeletonPrompt,
@@ -1540,6 +1541,40 @@ export async function generateMealPlan(params: {
   }
   const skeletonById = new Map(skeleton.members.map((m) => [m.member_id, m]));
 
+  // Safety backstop on the calorie target, applied to BOTH sources (a fresh
+  // skeleton and a carried prior plan). A live run produced a 630 kcal/day plan
+  // for a 15-year-old: the minor was correctly detected and adult equations
+  // correctly skipped, but nothing checked the resulting number was survivable.
+  // In normal operation the floor sits below every legitimate target and never
+  // fires; if it fires, something upstream is wrong and this logs it.
+  const floorSubjectFor = (memberId: string): CalorieFloorSubject => {
+    if (memberId === "mom") {
+      return {
+        age: context.mom.age,
+        sex: context.mom.sex,
+        is_child: context.mom.age != null && context.mom.age < 18,
+      };
+    }
+    const m = context.family_members.find((x) => x.id === memberId);
+    return { age: m?.age ?? null, sex: m?.sex ?? null, is_child: m?.is_child };
+  };
+  const withCalorieFloor = <T extends { daily_calories_target: number; macros_target: MemberPlan["macros_target"] }>(
+    memberId: string,
+    targets: T,
+  ): T => {
+    const floored = applyCalorieFloor(targets, floorSubjectFor(memberId));
+    if (floored.raisedFrom !== undefined) {
+      console.warn(
+        `[plan-generate] calorie floor raised ${memberId} from ${floored.raisedFrom} to ${floored.daily_calories_target} kcal — check the upstream target computation`,
+      );
+    }
+    return {
+      ...targets,
+      daily_calories_target: floored.daily_calories_target,
+      macros_target: floored.macros_target,
+    };
+  };
+
   // Day grid: the family's (when carrying over) else the skeleton's own.
   const dayIndices =
     familyDayIndices.length > 0
@@ -1603,7 +1638,7 @@ export async function generateMealPlan(params: {
         const alignThis = aligned && !independentIds.has(b.member_id);
         return {
           member_id: b.member_id,
-          ...targets,
+          ...withCalorieFloor(b.member_id, targets),
           days: dayIndices.map((di) => ({
             day_index: di,
             day_name_ar: dayNameByIndex.get(di)!,
@@ -1642,21 +1677,24 @@ export async function generateMealPlan(params: {
     const skM = skeletonById.get(b.member_id);
     targetsById.set(
       b.member_id,
-      prior
-        ? {
-            primary_goal: prior.primary_goal,
-            daily_calories_target: prior.daily_calories_target,
-            macros_target: prior.macros_target,
-          }
-        : {
-            primary_goal: skM?.primary_goal,
-            daily_calories_target: skM?.daily_calories_target ?? 0,
-            macros_target: skM?.macros_target ?? {
-              protein_g: 0,
-              carbs_g: 0,
-              fat_g: 0,
+      withCalorieFloor(
+        b.member_id,
+        prior
+          ? {
+              primary_goal: prior.primary_goal,
+              daily_calories_target: prior.daily_calories_target,
+              macros_target: prior.macros_target,
+            }
+          : {
+              primary_goal: skM?.primary_goal,
+              daily_calories_target: skM?.daily_calories_target ?? 0,
+              macros_target: skM?.macros_target ?? {
+                protein_g: 0,
+                carbs_g: 0,
+                fat_g: 0,
+              },
             },
-          },
+      ),
     );
   }
   const done = new Set<number>(); // generated days completed successfully

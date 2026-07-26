@@ -531,7 +531,12 @@ describe("wizard → server-schema contract", () => {
     }
   });
 
-  it("mom schema now enforces the same 13+ floor the client does", () => {
+  // Raised from 13 to 18 (07/2026). A live QA run signed up a 15-year-old as
+  // the ACCOUNT OWNER and she was planned for directly — the result was a
+  // 630 kcal/day plan. Minors are still fully supported, but as family members
+  // under an adult's account, where the engine uses the child pyramid path and
+  // a parent is accountable. The owner also accepts the terms and pays.
+  it("mom schema enforces the same 18+ owner floor the client does", () => {
     const base = {
       display_name: "لينا",
       height_cm: 120,
@@ -546,15 +551,25 @@ describe("wizard → server-schema contract", () => {
       consulted_doctor: false,
     };
     const year = new Date().getFullYear();
-    // A toddler owner is impossible now.
+    // A toddler owner is impossible.
     expect(momProfileInputSchema.safeParse({ ...base, birth_year: year - 4 }).success).toBe(
       false,
     );
-    // 13 is the floor both sides agree on, and she stays workout-ineligible.
-    expect(momProfileInputSchema.safeParse({ ...base, birth_year: year - 13 }).success).toBe(
+    // The whole 13–17 band is now refused as an OWNER — this is the exact case
+    // that reached production and produced a 630 kcal plan.
+    for (const age of [13, 15, 17]) {
+      expect(momProfileInputSchema.safeParse({ ...base, birth_year: year - age }).success).toBe(
+        false,
+      );
+    }
+    // 18 is the floor both sides agree on.
+    expect(momProfileInputSchema.safeParse({ ...base, birth_year: year - 18 }).success).toBe(
       true,
     );
-    expect(isWorkoutEligibleMom({ birth_year: year - 13 })).toBe(false);
+    // Workout eligibility keeps its own independent 18 gate — it must not
+    // start depending on the schema having already refused the signup.
+    expect(isWorkoutEligibleMom({ birth_year: year - 17 })).toBe(false);
+    expect(isWorkoutEligibleMom({ birth_year: year - 18 })).toBe(true);
   });
 });
 
