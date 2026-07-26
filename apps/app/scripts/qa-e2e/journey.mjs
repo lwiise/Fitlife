@@ -392,12 +392,21 @@ try {
     const clicked = path.startsWith("/onboarding/plan-scope")
       ? await handlePlanScope(page)
       : await clickAdvance(page);
-    await page.waitForTimeout(1800);
-    const after = await screenState(page);
-    // Must be built exactly like `key` — a shape mismatch here makes every
-    // screen look like it advanced, so the escalation never fires and the
-    // driver spins on step 1 forever.
-    const movedTo = `${new URL(page.url()).pathname}::${after.progress}::${after.heading}`;
+    // POLL for the transition rather than sleeping a fixed amount. A single
+    // fixed wait has to be longer than the slowest server action or it reports a
+    // screen that DID advance as stuck — and because `stuck` drives both the
+    // escalation and the 3-strike abort, two mis-reads in a row kill a run that
+    // was progressing fine. Must be built exactly like `key`: a shape mismatch
+    // here makes every screen look like it advanced instead.
+    const settleKey = async () => {
+      const s = await screenState(page);
+      return [`${new URL(page.url()).pathname}::${s.progress}::${s.heading}`, s];
+    };
+    let [movedTo, after] = await settleKey();
+    for (let waited = 0; movedTo === key && waited < 9000; waited += 600) {
+      await page.waitForTimeout(600);
+      [movedTo, after] = await settleKey();
+    }
     const advanced = movedTo !== key;
 
     const entry = {
