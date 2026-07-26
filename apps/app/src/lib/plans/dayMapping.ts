@@ -56,6 +56,26 @@ export function formatTodayHeader(date: Date = new Date()): string {
 }
 
 /**
+ * Intl locale tag for the week range, with the calendar ALWAYS pinned to
+ * Gregorian.
+ *
+ * The Arabic branch used to be a bare "ar-SA", whose default calendar is NOT
+ * stable across JS engines: Node's ICU resolves it to gregory, Chromium's to
+ * islamic-umalqura. Server and client therefore rendered different text for the
+ * same plan ("٢٦ يوليو — ١ أغسطس" vs "١٢ صفر — ١٨ صفر"), tripping a React
+ * hydration text mismatch (#418) on /plan and leaving Arabic users reading Hijri
+ * months while the rest of the app (settings, history, recap) showed Gregorian.
+ *
+ * Exported so a test can assert the TAG rather than the formatted output. That
+ * distinction matters: under Node's ICU both the output and the resolved
+ * calendar look correct with or without the override, so only the tag itself
+ * can catch a regression here.
+ */
+export function weekRangeLocale(locale?: LocaleCode): string {
+  return `${locale && locale !== "ar" ? locale : "ar-SA"}-u-ca-gregory`;
+}
+
+/**
  * «١٧ يوليو — ٢٣ يوليو» — the plan week's date range (start + 6 days). Shared
  * by the meal AND workout viewers so the top strip reads identically in both
  * (moved verbatim from PlanViewer when the workout view gained the same strip).
@@ -65,8 +85,7 @@ export function formatWeekRange(weekStart: string, locale?: LocaleCode): string 
     const start = new Date(weekStart);
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
-    const intlLocale = locale && locale !== "ar" ? `${locale}-u-ca-gregory` : "ar-SA";
-    const fmt = new Intl.DateTimeFormat(intlLocale, {
+    const fmt = new Intl.DateTimeFormat(weekRangeLocale(locale), {
       day: "numeric",
       month: "long",
     });

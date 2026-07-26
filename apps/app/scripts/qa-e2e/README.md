@@ -49,6 +49,33 @@ node analyze.mjs  <email> [كبدة,...] # targets vs actual day totals, dishes,
 node cleanup.mjs  <email>            # hard-delete via the real /settings flow, then verify
 ```
 
+## Walking the app as a real user
+
+`run.mjs` writes the questionnaire straight to PostgREST, so the 10-step adaptive
+Arabic wizard it bypasses is never exercised. These three cover that gap.
+
+```bash
+node journey.mjs    [--email=<addr>] [--shots=dir]  # signup → wizard → members → pricing → /plan
+node tour.mjs       <email> [--paths=/plan,/dashboard]  # visit pages, screenshot, audit
+node engagement.mjs <email>                          # tap a check-in chip, verify it persisted
+```
+
+`journey.mjs` is **adaptive rather than a hardcoded step list** — it reads each
+screen, fills what it finds, and presses the advance button. Two reasons: prod
+drifts from the checked-out code, and it fails where a user fails (a button that
+doesn't advance) instead of on a stale selector. It escalates the way a person
+does — first just press التالي, and only start selecting options once the step
+refuses to move. That matters because most option groups here are OPTIONAL
+multi-selects with no "none" choice (health conditions, allergies), so
+auto-picking the first chip would silently invent a medical condition.
+
+`tour.mjs` flags what a user would hit: HTTP errors, console/page errors, images
+without alt text, tap targets under 44px, and horizontal body overflow.
+
+`engagement.mjs` taps a chip and then checks the DATABASE. The engagement write
+paths fail soft, so a tap that persists nothing looks exactly like one that
+worked — only the row tells you.
+
 Run `timeline.mjs` in parallel with `run.mjs` — it is the substitute for the
 background function's logs. The engine persists a full snapshot on every
 completed day, so a moving `meal_plans.updated_at` means a day landed and a
