@@ -3,7 +3,25 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { capture } from "@/lib/analytics";
+
 const POLL_INTERVAL_MS = 3000;
+// Dedupe key for plan_ready. Three separate pollers hit /api/plans/status and
+// one of them does a full window.location.reload(), so an in-memory guard is
+// not enough — the same plan would be counted several times and the
+// signup → plan_ready rate would read above 100%.
+const PLAN_READY_KEY = "fitlife_plan_ready_seen";
+
+function captureOncePerPlan(event: string, planId: string) {
+  try {
+    if (window.localStorage.getItem(PLAN_READY_KEY) === planId) return;
+    window.localStorage.setItem(PLAN_READY_KEY, planId);
+  } catch {
+    // Storage unavailable (private mode): fall through and capture. A possible
+    // duplicate beats losing the event that defines activation.
+  }
+  capture(event, { plan_id: planId });
+}
 
 /**
  * Polls plan status while the dashboard shows the "generating" state and
@@ -25,6 +43,7 @@ export function GeneratingPlanWatcher() {
         const res = await fetch("/api/plans/status", { cache: "no-store" });
         if (!res.ok) return;
         const body = (await res.json()) as {
+          id?: string;
           status?: string;
           in_progress?: boolean;
           updated_at?: string;
@@ -37,6 +56,15 @@ export function GeneratingPlanWatcher() {
           (body.status === "ready" && body.in_progress === false);
         if (active && done) {
           clearInterval(poll);
+          // The only place in the app with the correct end-of-generation test
+          // (`ready` alone flips on the empty shell, minutes early). This is
+          // the activation event — everything upstream is just intent.
+          if (body.id) {
+            captureOncePerPlan(
+              body.status === "failed" ? "plan_generation_failed" : "plan_ready",
+              body.id,
+            );
+          }
           router.refresh();
           return;
         }

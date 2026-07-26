@@ -68,9 +68,9 @@ export function EmptyState({
         <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-purple-900/10 mb-6">
           <Sparkles className="size-7 text-brand-purple-900" aria-hidden="true" />
         </div>
-        <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+        <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
           {g("أكملي بياناتك أولاً", "أكمل بياناتك أولاً")}
-        </h2>
+        </h1>
         <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
           {g(
             "نحتاج بعض المعلومات عشان نحضّر لكِ خطة على مقاسك.",
@@ -99,9 +99,9 @@ export function EmptyState({
               aria-hidden="true"
             />
           </div>
-          <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+          <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
             خطوة واحدة قبل خطتك
-          </h2>
+          </h1>
           <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
             {g(
               "بسبب حالتك، نتأكد من استشارة الطبيب قبل بناء الخطة. هذا يحمي صحتك ويجعل الخطة مبنية على وضعك الفعلي.",
@@ -165,9 +165,9 @@ export function EmptyState({
       <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-yellow/20 mb-6">
         <Sparkles className="size-7 text-brand-yellow" aria-hidden="true" />
       </div>
-      <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+      <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
         {g("جاهزة لخطتك الأولى", "جاهز لخطتك الأولى")}
-      </h2>
+      </h1>
       <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
         خطة غذائية أسبوعية لكل أفراد العائلة، مصممة على مقاسكم.
       </p>

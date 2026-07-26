@@ -10,7 +10,7 @@ import {
 } from "motion/react";
 import { useState } from "react";
 
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 
 export function ScrollToTop() {
   const reduced = useReducedMotion() ?? false;

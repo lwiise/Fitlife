@@ -98,9 +98,9 @@ export function PlanGeneratingState({
   if (timedOut) {
     return (
       <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
-        <h2 className="font-extrabold text-xl text-brand-ink leading-tight">
+        <h1 className="font-extrabold text-xl text-brand-ink leading-tight">
           العملية تاخذ وقت أطول من المتوقع
-        </h2>
+        </h1>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
           {g(
             "حدّثي الصفحة عشان تشيكين إذا الخطة جاهزة، أو حاولي مرة ثانية بعد دقيقة.",
@@ -126,9 +126,9 @@ export function PlanGeneratingState({
           aria-hidden="true"
         />
       </div>
-      <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+      <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
         {name ? `نحضّر خطة ${name}...` : "نحضّر خطتك..."}
-      </h2>
+      </h1>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {isLong
           ? g(

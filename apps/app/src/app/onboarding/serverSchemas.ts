@@ -10,8 +10,19 @@ const CURRENT_YEAR = new Date().getFullYear();
 // The account owner must be 13+, matching the client's step1Schema. The server
 // accepted any year up to the current one, so a hand-crafted request could
 // create an owner aged 0 and the whole adult calorie path would run on her.
-const OWNER_MAX_BIRTH_YEAR = CURRENT_YEAR - 13;
-const OWNER_BIRTH_YEAR_AR = `يجب أن تكون سنة الميلاد بين 1940 و${OWNER_MAX_BIRTH_YEAR}`;
+/**
+ * The ACCOUNT OWNER must be an adult. This bound used to be 13, which let a
+ * minor create her own account and be planned for directly — a live QA run with
+ * a 15-year-old owner produced a 630 kcal/day plan.
+ *
+ * Children are still fully supported, but as FAMILY MEMBERS under an adult's
+ * account, where a parent is accountable for the plate and the engine applies
+ * the child pyramid-serving path instead of adult equations. The owner is the
+ * person who accepts the terms and pays, so 18 is also the contracting floor.
+ */
+export const OWNER_MIN_AGE = 18;
+const OWNER_MAX_BIRTH_YEAR = CURRENT_YEAR - OWNER_MIN_AGE;
+const OWNER_BIRTH_YEAR_AR = `يجب ألا يقل عمرك عن ${OWNER_MIN_AGE} سنة لفتح حساب. يمكن لولي الأمر إضافة الأصغر سناً كأفراد في العائلة.`;
 
 const chipArray = z.array(z.string().trim().min(1).max(80)).max(30);
 

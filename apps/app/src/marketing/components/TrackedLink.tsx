@@ -1,6 +1,6 @@
 "use client";
 
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 
 // Tiny client wrappers so server-rendered sections can fire an analytics event
 // on interaction without shipping their whole markup as client JS.

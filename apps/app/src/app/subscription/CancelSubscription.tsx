@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PauseCircle, MessageCircleHeart, ArrowDownCircle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { genderPick } from "@/lib/copy/gender";
+import { capture } from "@/lib/analytics";
 
 const DATE_FMT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
   day: "numeric",
@@ -34,6 +35,17 @@ const REASONS: Array<{ key: CancelReason; label: string }> = [
   { key: "price", label: "السعر ما يناسبني" },
   { key: "not_suitable", label: "الخطط ما ناسبتنا" },
 ];
+
+// Mirrors the three `step === "offer"` render branches below. Kept as data so
+// the deflection rate can be read per offer — which offer actually saves a
+// subscription is the whole point of a reason-matched flow.
+const SAVE_OFFER_BY_REASON: Record<CancelReason, "pause" | "downgrade" | "sara"> =
+  {
+    traveling: "pause",
+    not_using: "pause",
+    price: "downgrade",
+    not_suitable: "sara",
+  };
 
 export function CancelSubscription({
   tierName,
@@ -71,6 +83,7 @@ export function CancelSubscription({
       try {
         const res = await fetch("/api/subscription/cancel", { method: "POST" });
         if (res.ok) {
+          capture("cancel_confirmed", { reason });
           setOpen(false);
           router.refresh();
           return;
@@ -93,6 +106,9 @@ export function CancelSubscription({
           body: JSON.stringify({}),
         });
         if (res.ok) {
+          // The save-offer conversion: a subscription that would have been
+          // cancelled and was not. Commercially the most valuable event here.
+          capture("subscription_paused", { reason });
           setPaused(true);
           setOpen(false);
           router.refresh();
@@ -137,6 +153,7 @@ export function CancelSubscription({
           setError(null);
           setStep("reason");
           setOpen(true);
+          capture("cancel_flow_opened");
         }}
         disabled={isPending}
         className="inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-full border border-red-300 text-red-600 hover:bg-red-50 text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
@@ -175,6 +192,15 @@ export function CancelSubscription({
                 key={r.key}
                 type="button"
                 onClick={() => {
+                  capture("cancel_reason_selected", { reason: r.key });
+                  // The offer is fully determined by the reason, so it is
+                  // derived here rather than in the three render branches —
+                  // those re-run on every re-render and would inflate the
+                  // deflection denominator.
+                  capture("cancel_save_offer_shown", {
+                    reason: r.key,
+                    offer: SAVE_OFFER_BY_REASON[r.key],
+                  });
                   setReason(r.key);
                   setStep("offer");
                 }}

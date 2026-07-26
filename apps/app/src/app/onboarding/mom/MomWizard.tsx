@@ -32,6 +32,13 @@ import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
 import { ownerRequiresDoctorSignOff } from "@fitlife/plan-engine";
 import { saveMomProfile, saveProfileStep } from "../actions";
+import { capture } from "@/lib/analytics";
+import {
+  restoreActivityLevel,
+  restoreIdentity,
+  restorePhysical,
+  type SavedMomAnswers,
+} from "./restoreAnswers";
 import { genderPick } from "@/lib/copy/gender";
 import { CUISINES, COOKING } from "@/app/profile/labels";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
@@ -124,16 +131,22 @@ function PrimaryButton({
   );
 }
 
-export function MomWizard() {
+export function MomWizard({ saved }: { saved?: SavedMomAnswers } = {}) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
 
-  const [identity, setIdentity] = useState<Identity>();
-  const [physical, setPhysical] = useState<Physical>();
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(null);
+  const [identity, setIdentity] = useState<Identity | undefined>(() =>
+    restoreIdentity(saved),
+  );
+  const [physical, setPhysical] = useState<Physical | undefined>(() =>
+    restorePhysical(saved),
+  );
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(() =>
+    restoreActivityLevel(saved),
+  );
   const [userGoal, setUserGoal] = useState<UserGoal | "">("");
   const [pregStatus, setPregStatus] = useState<"none" | "pregnant" | "lactating" | "">("");
   const [pregMonth, setPregMonth] = useState<number | null>(null);
@@ -205,6 +218,19 @@ export function MomWizard() {
 
   const goNext = () => {
     setError(null);
+    // Only report a real advance. The Math.min clamp makes goNext a no-op on
+    // the last step, and counting that would show a phantom step-N → step-N hop
+    // and blur the true drop-off shape. Computed out here rather than inside
+    // the updater: StrictMode double-invokes updaters, so an event fired in
+    // there would double-count in dev.
+    if (stepIndex < totalSteps - 1) {
+      capture("onboarding_step_advanced", {
+        phase: "mom",
+        step,
+        index: stepIndex,
+        total: totalSteps,
+      });
+    }
     setStepIndex((s) => Math.min(s + 1, totalSteps - 1));
   };
   const goBack = () => {
@@ -290,9 +316,11 @@ export function MomWizard() {
         consulted_doctor: consultedDoctor,
       });
       if (!result.ok) {
+        capture("onboarding_phase_rejected", { phase: "mom" });
         setError(result.error);
         return;
       }
+      capture("onboarding_phase_completed", { phase: "mom", steps: totalSteps });
       router.push("/onboarding/members");
     });
   };

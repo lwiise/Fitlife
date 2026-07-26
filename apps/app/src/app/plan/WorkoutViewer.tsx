@@ -450,9 +450,12 @@ export function WorkoutViewer({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <p className="text-brand-ink-muted text-xs">الأسبوع</p>
-            <p className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
+            {/* The page's <h1> — see the matching note in PlanViewer. /plan
+                renders this instead when ?view=workout, so without it the
+                exercise view has no heading either. */}
+            <h1 className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
               {formatWeekRange(plan.week_start_date)}
-            </p>
+            </h1>
           </div>
           <div className="flex items-center justify-end gap-2 flex-wrap">
             {planTypeToggle}

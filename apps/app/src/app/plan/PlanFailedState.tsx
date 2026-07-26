@@ -44,9 +44,9 @@ export function PlanFailedState({
           aria-hidden="true"
         />
       </div>
-      <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+      <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
         ما قدرنا ننشئ خطتك
-      </h2>
+      </h1>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {g(
           "صار خطأ غير متوقع. حاولي مرة ثانية، وإذا تكرر تواصلي معنا.",

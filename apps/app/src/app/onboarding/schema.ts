@@ -11,11 +11,17 @@ export const step1Schema = z.object({
     errorMap: () => ({ message: "يلزم تحديد الجنس" }),
   }),
   display_name: z.string().min(2, "يجب أن يكون الاسم حرفين أو أكثر").max(50),
+  // 18+, matching OWNER_MIN_AGE in serverSchemas.ts — the owner accepts the
+  // terms and pays, and is planned for directly. Under-18s belong in a
+  // household as family members, where the engine uses the child path.
   birth_year: z
     .number()
     .int()
     .min(1940, "يجب أن تكون السنة بعد 1940")
-    .max(currentYear - 13, "يجب أن يكون عمرك فوق 13 سنة"),
+    .max(
+      currentYear - 18,
+      "يجب ألا يقل عمرك عن 18 سنة لفتح حساب. يمكن لولي الأمر إضافة الأصغر سناً كأفراد في العائلة.",
+    ),
   // اختياري — رقم للتواصل فقط، لا يؤثر على الخطة.
   phone: z
     .string()

@@ -12,7 +12,7 @@ import { useRef, useState } from "react";
 import { NumberTicker } from "@/marketing/components/ui/number-ticker";
 import { Button } from "@/marketing/components/ui/button";
 import { Switch } from "@/marketing/components/ui/switch";
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 import {
   PRICING_TIERS,
   getAnnualMonthlyEquivalent,
@@ -25,6 +25,12 @@ type Tier = {
   name: string;
   monthlyPrice: number;
   annualPrice: number;
+  /**
+   * The real annual charge. Must come from price_annual_sar — deriving it as
+   * annualPrice * 12 re-introduces the rounding in the per-month equivalent and
+   * under-quoted every tier by 2 SAR against what Lemonsqueezy actually bills.
+   */
+  annualTotal: number;
   description: string;
   features: string[];
   cta: string;
@@ -42,6 +48,7 @@ const tiers: Tier[] = [
     name: PRICING_TIERS.starter.name_ar,
     monthlyPrice: PRICING_TIERS.starter.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.starter),
+    annualTotal: PRICING_TIERS.starter.price_annual_sar,
     description: "للشخص الواحد، تبدئين رحلتك",
     features: PRICING_TIERS.starter.features_ar,
     cta: "ابدئي البداية",
@@ -52,6 +59,7 @@ const tiers: Tier[] = [
     name: PRICING_TIERS.pro.name_ar,
     monthlyPrice: PRICING_TIERS.pro.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.pro),
+    annualTotal: PRICING_TIERS.pro.price_annual_sar,
     description: "للأم، مع تتبع متقدم",
     features: PRICING_TIERS.pro.features_ar,
     cta: "اختاري المتقدمة",
@@ -62,6 +70,7 @@ const tiers: Tier[] = [
     name: PRICING_TIERS.family.name_ar,
     monthlyPrice: PRICING_TIERS.family.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.family),
+    annualTotal: PRICING_TIERS.family.price_annual_sar,
     description: "للبيت كامل — حتى 6 أفراد",
     features: PRICING_TIERS.family.features_ar,
     cta: "اشتركي بباقة العائلة",
@@ -73,15 +82,21 @@ const tiers: Tier[] = [
     name: PRICING_TIERS.premium.name_ar,
     monthlyPrice: PRICING_TIERS.premium.price_monthly_sar,
     annualPrice: getAnnualMonthlyEquivalent(PRICING_TIERS.premium),
-    description: "العائلة + جلسات مع خبيرة تغذية",
+    annualTotal: PRICING_TIERS.premium.price_annual_sar,
+    description: "لكل البيت — أفراد بلا حد",
     features: PRICING_TIERS.premium.features_ar,
     cta: "اختاري البريميوم",
     highlighted: PRICING_TIERS.premium.highlighted,
   },
 ];
 
+// The risk-reversal line is the 7-day trial, which is real: handle_new_user
+// grants it on signup with no card. The previous "14-day refund guarantee" was
+// advertised in four places with NO refund mechanism behind it and a /refunds
+// link that 404'd — a chargeback and consumer-protection risk. Do not re-add it
+// unless a refund flow exists and the policy has legal sign-off.
 const trustItems = [
-  { Icon: Shield, label: "ضمان استرداد 14 يوم" },
+  { Icon: Shield, label: "7 أيام مجاناً بدون بطاقة" },
   { Icon: X, label: "إلغاء أي وقت" },
   { Icon: Unlock, label: "بدون التزام" },
 ];
@@ -113,6 +128,7 @@ function PricingCard({
     name,
     monthlyPrice,
     annualPrice,
+    annualTotal,
     description,
     features,
     cta,
@@ -233,7 +249,7 @@ function PricingCard({
             transition={{ duration: 0.2, ease: "easeOut" as const }}
             className={`mt-2 text-xs ${annualLineClass}`}
           >
-            تُدفع سنوياً ({annualPrice * 12} ر.س/سنة)
+            تُدفع سنوياً ({annualTotal} ر.س/سنة)
           </motion.p>
         )}
       </AnimatePresence>
@@ -352,7 +368,7 @@ export default function Pricing() {
             transition={topTransition(0.2)}
             className="max-w-[600px] text-base leading-[1.7] text-ink-muted lg:text-lg"
           >
-            غيّري اشتراكك أو ألغيه بضغطة. أول 7 أيام مجانية، وضمان استرداد 14 يوم بعدها.
+            غيّري اشتراكك أو ألغيه بضغطة. أول 7 أيام مجانية بدون بطاقة، وبعدها تختارين.
           </motion.p>
 
           <motion.div

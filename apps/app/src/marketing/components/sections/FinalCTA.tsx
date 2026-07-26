@@ -4,14 +4,14 @@ import { Check, ChevronLeft } from "lucide-react";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 
 const headlineWords = "ابدئي رحلة عائلتك الغذائية اليوم.".split(" ");
 
 const reassuranceItems = [
   "بدون بطاقة",
   "إلغاء أي وقت",
-  "استرداد 14 يوم",
+  "7 أيام مجاناً",
 ];
 
 const overshootEase = [0.34, 1.56, 0.64, 1] as const;

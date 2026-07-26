@@ -12,15 +12,20 @@ import {
   setupLemonsqueezy,
   describeLsError,
 } from "@/lib/lemonsqueezy/client";
-import { getVariantId } from "@fitlife/config";
+import {
+  getVariantId,
+  usingLiveVariantIds,
+  variantEnvVar,
+} from "@fitlife/config";
 
 export const runtime = "nodejs";
 
-// TEMPORARY (pre-launch diagnosis): failure responses carry a `debug` string
-// that the pricing page renders, because the operator has no easy access to
-// the Netlify function logs. Remove `debug` (and its rendering in
-// CheckoutButton) once checkout works. It never contains keys — only the
-// LemonSqueezy rejection reason.
+// Failure responses return the Arabic message ONLY. They used to also carry a
+// `debug` string that the pricing page rendered, which put LemonSqueezy
+// rejection reasons and internal variant IDs in front of paying customers.
+// Nothing was lost by removing it: every failure path already console.errors
+// the same detail (and reports to Sentry), so diagnosis lives in the logs where
+// it belongs rather than in the checkout UI.
 
 const bodySchema = z.object({
   tier: z.enum(["starter", "pro", "family", "premium"]),
@@ -79,18 +84,26 @@ export async function POST(request: Request) {
     storeId = getLemonsqueezyStoreId();
   } catch (err) {
     console.error(
-      "[checkout] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID)",
-      err,
+      "[checkout] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID):",
+      describeLsError(err),
     );
     return NextResponse.json(
       {
         error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-        debug: `config: ${describeLsError(err)}`,
       },
       { status: 500 },
     );
   }
   const variantId = getVariantId(parsed.tier, parsed.cadence);
+  // The built-in ids are TEST MODE. A store that is only partly migrated will
+  // happily create a test-mode checkout for one tier and a live one for
+  // another, which looks like a working payment right up until the money
+  // doesn't arrive — so say so once per attempt rather than never.
+  if (!usingLiveVariantIds()) {
+    console.warn(
+      `[checkout] using TEST-MODE variant id ${variantId} for ${parsed.tier}/${parsed.cadence} — set ${variantEnvVar(parsed.tier, parsed.cadence)} (and the other seven) to take real payments`,
+    );
+  }
 
   // Return to the EXACT origin the user is browsing (the same-origin POST sends
   // an Origin header), so the post-payment redirect carries the session cookie.
@@ -139,7 +152,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-          debug: `LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
         },
         { status: 502 },
       );
@@ -147,7 +159,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ checkout_url: checkoutUrl }, { status: 200 });
   } catch (err) {
-    console.error("[checkout] LS error:", err);
+    console.error("[checkout] LS error:", describeLsError(err));
     Sentry.captureException(err, {
       tags: {
         area: "checkout-creation",
@@ -159,7 +171,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-        debug: `exception: ${describeLsError(err)}`,
       },
       { status: 502 },
     );
