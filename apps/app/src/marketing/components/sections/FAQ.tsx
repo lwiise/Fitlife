@@ -10,7 +10,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/marketing/components/ui/accordion";
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 
 type FAQItem = {
   question: string;

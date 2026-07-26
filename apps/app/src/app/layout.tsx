@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
 import { SentryUserSync } from "./SentryUserSync";
+import { AnalyticsProvider } from "./AnalyticsProvider";
 import { VersionWatcher } from "@/components/VersionWatcher";
 import { BuildStamp } from "@/components/BuildStamp";
+import { CookieConsent } from "@/components/CookieConsent";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -36,9 +38,13 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" className={tajawal.variable}>
       <body className="antialiased">
         <SentryUserSync />
+        <AnalyticsProvider />
         {children}
         <VersionWatcher />
         <BuildStamp />
+        {/* App-wide, not marketing-only: a deep-link signup never sees `/`, and
+            under opt-in consent that would mean never measured. */}
+        <CookieConsent />
       </body>
     </html>
   );

@@ -3,7 +3,7 @@
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 
 interface WhatsAppCTAProps {
   phoneNumber?: string;

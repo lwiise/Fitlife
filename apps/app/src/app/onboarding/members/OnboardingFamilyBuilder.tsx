@@ -7,6 +7,7 @@ import { PregLactSwitch } from "@/app/family/add/PregLactSwitch";
 import { HousekeeperForm } from "@/app/family/add/HousekeeperForm";
 import { CheckRow, StepperRow } from "@/app/family/add/FamilyComposerControls";
 import { genderPick } from "@/lib/copy/gender";
+import { capture } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 
 // One step of the guided sequence. Husband and maid are singular; the rest carry a count.
@@ -43,7 +44,28 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
   const totalSelected =
     (husband ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
 
-  const finalize = () => {
+  // `source` matters: finalize() is reached four very different ways — the
+  // queue running out, an empty selection, the skip link on the picker, and
+  // bailing out PART-WAY through the per-member sequence. Conflating them
+  // would merge "built a household of five" with "declined to add anyone",
+  // and household size is exactly what tier value rests on.
+  //
+  // `members_selected` is what she CHOSE, not what got saved: on an abandoned
+  // sequence only the members before `queue_index` exist. Naming it honestly
+  // keeps the two apart.
+  const finalize = (
+    source: "completed" | "empty_selection" | "skipped" | "abandoned_sequence",
+  ) => {
+    capture("household_submitted", {
+      source,
+      members_selected: totalSelected,
+      queue_index: index,
+      husband,
+      maid,
+      adults: adult,
+      children: child,
+      pregnant_or_lactating: preg,
+    });
     // Route through the family-wide questions: that page checks server-side
     // whether the household has more than one person and either renders the
     // 5 questions or falls straight through to the plan-scope fork — so solo
@@ -61,7 +83,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
     if (preg > 0) q.push({ kind: "preg", count: preg });
     if (maid) q.push({ kind: "maid" });
     if (q.length === 0) {
-      finalize();
+      finalize("empty_selection");
       return;
     }
     setQueue(q);
@@ -70,7 +92,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
   };
 
   const advance = () => {
-    if (index + 1 >= queue.length) finalize();
+    if (index + 1 >= queue.length) finalize("completed");
     else setIndex(index + 1);
   };
 
@@ -105,7 +127,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
             onboarding
             count={1}
             onComplete={advance}
-            onSkip={finalize}
+            onSkip={() => finalize("abandoned_sequence")}
             terminalLabel={terminalLabel}
           />
         )}
@@ -117,7 +139,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
             onboarding
             count={task.count}
             onComplete={advance}
-            onSkip={finalize}
+            onSkip={() => finalize("abandoned_sequence")}
             terminalLabel={terminalLabel}
           />
         )}
@@ -129,7 +151,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
             onboarding
             count={task.count}
             onComplete={advance}
-            onSkip={finalize}
+            onSkip={() => finalize("abandoned_sequence")}
             terminalLabel={terminalLabel}
           />
         )}
@@ -139,7 +161,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
             onboarding
             count={task.count}
             onComplete={advance}
-            onSkip={finalize}
+            onSkip={() => finalize("abandoned_sequence")}
           />
         )}
         {task.kind === "maid" && (
@@ -147,7 +169,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
             key={`maid-${index}`}
             onboarding
             onComplete={advance}
-            onSkip={finalize}
+            onSkip={() => finalize("abandoned_sequence")}
           />
         )}
       </div>
@@ -215,7 +237,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
               Always visible so the way out is clear before any selection. */}
           <button
             type="button"
-            onClick={finalize}
+            onClick={() => finalize("skipped")}
             className="w-full min-h-11 text-center text-brand-ink-muted hover:text-brand-ink text-sm font-bold py-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
           >
             تخطّي الآن — أضيفهم لاحقاً

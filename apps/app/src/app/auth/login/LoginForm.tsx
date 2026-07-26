@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { capture, captureBeacon } from "@/lib/analytics";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { Loader2, Mail } from "lucide-react";
 
@@ -35,6 +36,9 @@ export function LoginForm() {
     isValidTier(tier) && isValidCadence(cadence)
       ? `/onboarding?tier=${tier}&cadence=${cadence}`
       : searchParams.get("redirect_to") || "/dashboard";
+  // Validated before it becomes an event property — `tier` is raw query input,
+  // and an unbounded string would shred the funnel breakdown.
+  const intentTier = isValidTier(tier) ? tier : null;
 
   // Landing CTAs pass ?mode=signup so new users start on "create account".
   const [mode, setMode] = useState<Mode>(
@@ -72,9 +76,17 @@ export function LoginForm() {
       // log straight in. If it's ON, there's no session yet → ask the user
       // to confirm via the email link.
       if (data.session) {
+        // Beacon, not capture: the assign() below tears down the page, and a
+        // queued event (SDK still lazy-loading) would go with it. This is the
+        // top of the funnel — losing it costs every rate below.
+        await captureBeacon("signup_completed", { intent_tier: intentTier });
         window.location.assign(nextPath);
         return;
       }
+      // A distinct outcome, not a signup: the account exists but the user is
+      // parked in their inbox and may never come back. Counting it as
+      // signup_completed would inflate the top of the funnel.
+      capture("signup_confirmation_sent", { intent_tier: intentTier });
       setStatus("confirm-sent");
       return;
     }

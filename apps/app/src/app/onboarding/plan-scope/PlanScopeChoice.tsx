@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dumbbell, UtensilsCrossed, Loader2 } from "lucide-react";
 import { finishOnboardingToSubscription } from "../actions";
+import { capture } from "@/lib/analytics";
 
 /** The meals-only vs meals+workout fork at the end of onboarding. */
 export function PlanScopeChoice() {
@@ -13,6 +14,7 @@ export function PlanScopeChoice() {
 
   const go = (picked: "meals" | "both") => {
     setChoice(picked);
+    capture("plan_scope_selected", { scope: picked });
     if (picked === "both") {
       router.push("/onboarding/workout");
       return;

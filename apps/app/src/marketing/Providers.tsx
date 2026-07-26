@@ -1,23 +1,22 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
-import { track } from "@/marketing/lib/analytics";
-import { capture, initPostHog } from "@/marketing/lib/posthog";
+import { track } from "@/lib/analytics";
 
+/**
+ * Landing-page-only effects.
+ *
+ * initPostHog() and $pageview used to live here. They moved to
+ * app/AnalyticsProvider.tsx (mounted from the ROOT layout) when the
+ * authenticated funnel was instrumented — the root layout also wraps this
+ * marketing group, so keeping them here as well would initialise twice and
+ * double-count every landing-page view.
+ *
+ * What is left is genuinely landing-page-specific: scroll depth only means
+ * something on a long marketing page.
+ */
 export function Providers({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    initPostHog();
-  }, []);
-
-  useEffect(() => {
-    // Queued until posthog-js lazy-loads, so the first pageview still lands.
-    capture("$pageview", { path: pathname });
-  }, [pathname]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
 

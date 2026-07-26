@@ -30,6 +30,7 @@ import {
   type MemberType,
 } from "@/app/onboarding/actions";
 import { genderPick } from "@/lib/copy/gender";
+import { capture } from "@/lib/analytics";
 
 const GOALS: { value: UserGoal; label: string }[] = [
   { value: "lose_weight", label: "خسارة الدهون" },
@@ -451,6 +452,14 @@ export function MemberWizard({
       if (!result.ok) {
         // Member is saved, but their tier can't cover the new headcount → upgrade.
         if ("upgrade_required" in result) {
+          // On the state transition, not the `upgrade &&` render below — that
+          // re-fires on every re-render while the screen is up and would turn
+          // one paywall hit into a dozen.
+          capture("tier_cap_hit", {
+            source: "member_wizard",
+            current: result.current,
+            max: result.max,
+          });
           setUpgrade({ current: result.current, max: result.max });
           return;
         }

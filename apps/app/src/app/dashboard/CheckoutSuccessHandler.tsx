@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { syncFamilyPlanAfterSubscribe } from "@/app/onboarding/actions";
+import { capture } from "@/lib/analytics";
 
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS = 30_000;
@@ -39,6 +40,8 @@ export function CheckoutSuccessHandler() {
             active?: boolean;
           };
           if (!cancelled && body.active) {
+            // BEST-EFFORT ONLY — see the note on the poll branch below.
+            capture("checkout_completed", { via: "reconcile" });
             setStage("active");
             const { triggered } = await syncFamilyPlanAfterSubscribe().catch(
               () => ({ triggered: false }),
@@ -66,6 +69,13 @@ export function CheckoutSuccessHandler() {
         const body = (await res.json()) as { status?: string };
         if (body.status === "active") {
           clearInterval(interval);
+          // BEST-EFFORT ONLY. Requires the browser to still be on /dashboard
+          // when activation lands (up to 30s). A user who pays and closes the
+          // tab is invisible here, so this UNDERCOUNTS by construction — do
+          // NOT use it for revenue reporting. The Lemonsqueezy webhook is the
+          // authority; measuring it needs server-side capture, which this
+          // repo does not have yet.
+          capture("checkout_completed", { via: "poll" });
           setStage("active");
           // Subscription is live → generate the whole family together (shared
           // meals synced). If it kicks off, watch it on /plan; else go home.

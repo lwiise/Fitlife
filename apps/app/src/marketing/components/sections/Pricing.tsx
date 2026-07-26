@@ -12,7 +12,7 @@ import { useRef, useState } from "react";
 import { NumberTicker } from "@/marketing/components/ui/number-ticker";
 import { Button } from "@/marketing/components/ui/button";
 import { Switch } from "@/marketing/components/ui/switch";
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 import {
   PRICING_TIERS,
   getAnnualMonthlyEquivalent,

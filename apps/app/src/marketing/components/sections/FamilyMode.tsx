@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { ChevronLeftIcon } from "lucide-react";
 
-import { track } from "@/marketing/lib/analytics";
+import { track } from "@/lib/analytics";
 import { cn } from "@/marketing/lib/utils";
 import { Spotlight } from "@/marketing/components/ui/spotlight";
 import { CardBody, CardContainer, CardItem } from "@/marketing/components/ui/3d-card";

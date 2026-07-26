@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import { saveFamilyWidePreferences } from "../actions";
+import { capture } from "@/lib/analytics";
 
 // Cuisine + cooking methods moved into the personal wizard (every user
 // answers them); this form keeps only the genuinely family-wide questions.
@@ -69,6 +70,14 @@ export function FamilyWideForm() {
 
   const goNext = () => {
     setError(null);
+    // Guarded against the clamp — see the same note in MomWizard.goNext.
+    if (step < TOTAL_STEPS - 1) {
+      capture("onboarding_step_advanced", {
+        phase: "family_wide",
+        index: step,
+        total: TOTAL_STEPS,
+      });
+    }
     setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
   };
   const goBack = () => {
@@ -87,7 +96,14 @@ export function FamilyWideForm() {
         family_dislikes: dislikes,
         meal_out_frequency: mealOut,
       });
-      if (!result.ok) return setError(result.error);
+      if (!result.ok) {
+        capture("onboarding_phase_rejected", { phase: "family_wide" });
+        return setError(result.error);
+      }
+      capture("onboarding_phase_completed", {
+        phase: "family_wide",
+        steps: TOTAL_STEPS,
+      });
       // The family screen now sits AFTER the members step — continue to the
       // plan-scope fork, not back into the personal wizard.
       router.push("/onboarding/plan-scope");

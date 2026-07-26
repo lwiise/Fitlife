@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { generateSoloAndContinue } from "@/app/onboarding/actions";
+import { capture } from "@/lib/analytics";
 
 /**
  * Post-onboarding "continue with just my plan" escape from the subscription screen.
@@ -21,12 +22,22 @@ export function SkipSubscriptionButton() {
 
   const run = () => {
     setError(null);
+    // Two events, not one. This is THE business question — free path vs paid —
+    // and the action genuinely refuses (medical gate, inactive subscription,
+    // dispatch failure). Firing once on click would count every refusal as a
+    // free-cohort member and overstate it; firing once on success would hide
+    // demand that the product blocked. Intent and outcome are different
+    // numbers, so `free_path_clicked` is the denominator and
+    // `free_path_chosen` the numerator.
+    capture("free_path_clicked");
     startTransition(async () => {
       const result = await generateSoloAndContinue();
       if (!result.ok) {
+        capture("free_path_refused");
         setError(result.error);
         return;
       }
+      capture("free_path_chosen");
       router.push("/plan");
       router.refresh();
     });
