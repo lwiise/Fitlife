@@ -8,7 +8,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { BASE, PASSWORD } from "./creds.mjs";
 
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
-const arg = (k) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split("=")[1];
+const arg = (k) =>
+  process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3); // keep "=" inside values
 const email = process.argv[2];
 const SHOTS = arg("shots") ?? "./tour";
 const PATHS = (arg("paths") ?? "/dashboard,/plan,/journey,/settings,/profile,/family").split(",");

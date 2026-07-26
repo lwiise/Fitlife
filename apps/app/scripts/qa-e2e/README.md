@@ -55,10 +55,19 @@ node cleanup.mjs  <email>            # hard-delete via the real /settings flow, 
 Arabic wizard it bypasses is never exercised. These three cover that gap.
 
 ```bash
-node journey.mjs    [--email=<addr>] [--shots=dir]  # signup → wizard → members → pricing → /plan
-node tour.mjs       <email> [--paths=/plan,/dashboard]  # visit pages, screenshot, audit
-node engagement.mjs <email>                          # tap a check-in chip, verify it persisted
+node journey.mjs [--email=<addr>] [--scope=meals|workout] [--shots=dir]
+node tour.mjs             <email> [--paths=/plan,/dashboard]  # visit pages, screenshot, audit
+node engagement.mjs       <email>          # tap a check-in chip, verify it persisted
+node workout-ui.mjs       <email>          # open an exercise, mark a session, rate intensity
+node workout-timeline.mjs <email> [mins]   # watch a COMBINED meal + workout generation
 ```
+
+`--scope=workout` takes the «وجبات وتمارين معاً» branch at plan-scope and fills
+the 3-step workout questionnaire. Its weekday picker needs special handling —
+it wants EXACTLY `desired_days` chips and disables the rest at the cap, and each
+chip's handler recomputes from React state, so the clicks go one at a time
+rather than in a single `evaluate()` burst (a synchronous burst has every click
+read the same stale draft and only the last one sticks).
 
 `journey.mjs` is **adaptive rather than a hardcoded step list** — it reads each
 screen, fills what it finds, and presses the advance button. Two reasons: prod
@@ -167,3 +176,16 @@ looks like `403 Host not in allowlist`, and the check happens before DNS.
   runs neither. Nothing sweeps the row — it is only reclassified by the *next*
   dispatch attempt, after `STALE_GENERATION_MIN`. An account observed on
   2026-07-25 still held a `started` row 40 minutes later.
+- **Expect to lose a day to JSON parsing.** Two of three meal runs on
+  2026-07-25/26 shipped a plan with one permanently empty day, both because the
+  day model's reply would not `JSON.parse`: once an Arabic prose preamble
+  (`أولاً سأحس…`), once an unclosed ```` ```json ```` fence.
+  `stripMarkdownFence` only unwraps a fence that wraps the WHOLE reply, so
+  neither survives. The cause is recorded in `plan_generations.error_message`;
+  `analyze.mjs` shows it as `— EMPTY —`.
+- **The workout run does not wait for meals indefinitely.** Meals-first holds the
+  workout function while a meal generation is live, but only to an 8-minute cap,
+  after which it proceeds "in the meal run's tail". On 2026-07-26 the workout
+  finished at 10:14:56 while the meal run continued to 10:16:31 — both
+  `plan_generations` rows sat at `started` together, which is 00014's per-kind
+  lock working as intended, not a double dispatch.

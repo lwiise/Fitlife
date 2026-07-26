@@ -16,8 +16,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { BASE, PASSWORD } from "./creds.mjs";
 
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
-const arg = (k) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split("=")[1];
+const arg = (k) =>
+  process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3); // keep "=" inside values
 const SHOTS = arg("shots") ?? "./shots";
+// "meals" (free path) or "workout" (combined meals + exercise opt-in).
+const SCOPE = arg("scope") ?? "meals";
 const email =
   arg("email") ??
   `fitlife.qa+journey-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 7)}@gmail.com`;
@@ -204,16 +207,80 @@ async function clickAdvance(page) {
 }
 
 /**
- * The plan-scope fork is a two-card choice, not an option group. Pick meals-only
- * so the run matches the free path run.mjs exercises (workout opt-in is a
- * separate journey).
+ * The plan-scope fork is a two-card choice, not an option group. `--scope`
+ * selects which branch: meals-only (the free path run.mjs exercises) or the
+ * combined meals+workout opt-in.
  */
 async function handlePlanScope(page) {
-  const btn = page.locator("button:visible, a:visible").filter({ hasText: /وجبات فقط/ });
+  const wanted = SCOPE === "workout" ? /وجبات وتمارين/ : /وجبات فقط/;
+  const btn = page.locator("button:visible, a:visible").filter({ hasText: wanted });
   if ((await btn.count()) === 0) return null;
   const text = (await btn.first().textContent())?.trim().replace(/\s+/g, " ").slice(0, 40) ?? "";
   await btn.first().click();
   return text;
+}
+
+/**
+ * The workout "shape" step needs the weekday picker filled to EXACTLY
+ * desired_days, and its chips disable once that cap is reached. Two reasons this
+ * can't ride on the generic option handler: the group needs N selections rather
+ * than one, and the chips only render after a day count is chosen.
+ *
+ * Clicks go one at a time through Playwright rather than in a single evaluate()
+ * — each handler recomputes from React state, so a synchronous burst would have
+ * every click read the same stale draft and only the last would stick.
+ */
+async function handleWorkoutDays(page) {
+  const acted = [];
+  const countGroup = page.locator("button:visible").filter({ hasText: /^[3-6]$/ });
+  const anyChosen = await page.evaluate(() =>
+    [...document.querySelectorAll("button")].some(
+      (b) => /^[3-6]$/.test(b.textContent.trim()) && b.getAttribute("aria-pressed") === "true",
+    ),
+  );
+  if (!anyChosen && (await countGroup.count())) {
+    await countGroup.first().click(); // 3 days/week
+    acted.push("desired_days=3");
+    await page.waitForTimeout(600);
+  }
+
+  // Take the element with the SHORTEST textContent among those containing the
+  // label — i.e. the deepest one. Matching "first in document order" instead
+  // selects <html>, whose textContent is the whole page, so the count is read
+  // from whatever digit appears first (the "1 / 3" step counter).
+  const wanted = await page.evaluate(() => {
+    const hits = [...document.querySelectorAll("*")].filter((e) =>
+      /أي أيام الأسبوع؟/.test(e.textContent ?? ""),
+    );
+    if (!hits.length) return 0;
+    const deepest = hits.reduce((a, b) =>
+      (a.textContent ?? "").length <= (b.textContent ?? "").length ? a : b,
+    );
+    const m = deepest.textContent?.match(/(\d+)/);
+    return m ? Number(m[1]) : 0;
+  });
+  if (!wanted) return acted;
+
+  for (let guard = 0; guard < 10; guard++) {
+    const state = await page.evaluate(() => {
+      // Note the spelling: the app uses "الاثنين" (no hamza).
+      const NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+      const chips = [...document.querySelectorAll("button")].filter((b) =>
+        NAMES.includes(b.textContent.trim()),
+      );
+      return {
+        pressed: chips.filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.textContent.trim()),
+        next: chips.find((b) => b.getAttribute("aria-pressed") !== "true" && !b.disabled)?.textContent.trim() ?? null,
+      };
+    });
+    if (state.pressed.length >= wanted || !state.next) {
+      if (state.pressed.length) acted.push(`days=${state.pressed.join("،")}`);
+      break;
+    }
+    await page.locator("button:visible").filter({ hasText: new RegExp(`^${state.next}$`) }).first().click();
+    await page.waitForTimeout(450);
+  }
+  return acted;
 }
 
 const browser = await chromium.launch({ executablePath: CHROME });
@@ -315,6 +382,12 @@ try {
     // profile honest AND tells us which groups are genuinely required.
     const filled = await fillInputs(page);
     const chosen = stuck >= 1 ? await chooseOptions(page) : [];
+    // The weekday picker needs N selections, so it runs after the generic pass
+    // (which supplies focus area / day count / session length) rather than
+    // instead of it.
+    if (stuck >= 1 && path.startsWith("/onboarding/workout")) {
+      chosen.push(...(await handleWorkoutDays(page)));
+    }
     const ticked = stuck >= 2 ? await checkBoxes(page) : [];
     await page.waitForTimeout(200);
     const clicked = path.startsWith("/onboarding/plan-scope")
