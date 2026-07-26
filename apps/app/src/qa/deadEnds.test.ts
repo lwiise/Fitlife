@@ -28,7 +28,8 @@ function momWizardDoctorNeeded(o: {
   );
 }
 
-/** HealthEditForm.doctorNeeded (/profile/health) — verbatim. */
+/** HealthEditForm.doctorNeeded (/profile/health) — verbatim. Controls whether
+ * the confirmation checkbox is RENDERED at all; submit() never requires it. */
 function healthFormDoctorNeeded(o: {
   conditions: string[];
   otherCondition: string;
@@ -36,7 +37,7 @@ function healthFormDoctorNeeded(o: {
   highRisk: boolean | null;
 }) {
   return (
-    hasGateCondition(o.conditions) ||
+    o.conditions.length > 0 ||
     o.otherCondition.trim().length > 0 ||
     (o.pregStatus === "pregnant" && o.highRisk === true)
   );
@@ -115,22 +116,22 @@ describe("DEAD END 1 — pregnant, low-risk account owner", () => {
   });
 });
 
-describe("DEAD END 2 — adding a STABLE condition from /profile/health", () => {
+describe("DEAD END 2 — a STABLE condition saved from /profile/health with the box unticked", () => {
   const conditions = ["anemia"]; // فقر الدم — a STABLE_CONDITIONS entry
 
-  it("the edit form hides the doctor checkbox for a stable condition", () => {
+  it("the edit form DOES render the checkbox for a stable condition…", () => {
     expect(
       healthFormDoctorNeeded({ conditions, otherCondition: "", pregStatus: "none", highRisk: null }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("and the save-time gate lets it through with consulted_doctor=false", () => {
+  it("…but nothing requires it: the save-time gate only blocks GATE conditions", () => {
     expect(
       healthSaveBlocked({ conditions, isPregnant: false, highRisk: false, consultedDoctor: false }),
     ).toBe(false);
   });
 
-  it("but the engine's gate fires on ANY condition → generation blocked forever", async () => {
+  it("so the row saves, and the engine's gate then fires on ANY condition", async () => {
     const stored = baseProfile({
       medical_conditions: conditions,
       has_medical_conditions: true,
