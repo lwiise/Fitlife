@@ -131,8 +131,11 @@ export function RegenerateButton({
              the two fields below feed the plan engine — and it was written in
              عامية («قوليلنا ايش تبين»، «عشان»، «بتنحفظ»). Feminine أنتِ
              address kept. */
+          /* «فقط», never «وحدها»: memberName is the VIEWED member, who can be
+             the husband or a son, and g() here follows the OWNER's sex — so a
+             gendered word about the member would be wrong half the time. */
           memberName
-            ? `ننشئ خطة جديدة لـ ${memberName} وحدها — خطط بقية الأفراد لا تتغيّر، والخطة الحالية تُحفظ في السجل. ${g("أخبرينا ما الذي تودّين تغييره.", "أخبرنا ما الذي تودّ تغييره.")}`
+            ? `ننشئ خطة جديدة لـ ${memberName} فقط. خطط بقية الأفراد لا تتغيّر، والخطة الحالية تُحفظ في السجل. ${g("أخبرينا ما الذي تودّين تغييره.", "أخبرنا ما الذي تودّ تغييره.")}`
             : g(
                 "لنصمّم لكِ خطة أنسب، أخبرينا ما الذي تودّين تغييره. الخطة الحالية تُحفظ في السجل.",
                 "لنصمّم لك خطة أنسب، أخبرنا ما الذي تودّ تغييره. الخطة الحالية تُحفظ في السجل.",
