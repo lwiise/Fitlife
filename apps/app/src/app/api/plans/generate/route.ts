@@ -150,8 +150,14 @@ async function handleGenerate(req: Request) {
         { status: 400 },
       );
     case "medical":
+      // `gate` is the machine-readable marker the callers key off to send the
+      // user to /plan, where the doctor confirmation lives. Without it every
+      // CTA could only print the reason and leave her stuck on it.
       return NextResponse.json(
-        { error: "يجب استشارة الطبيب قبل إنشاء الخطة بسبب حالتك الصحية" },
+        {
+          error: "يجب استشارة الطبيب قبل إنشاء الخطة بسبب حالتك الصحية",
+          gate: "medical",
+        },
         { status: 403 },
       );
     case "busy":

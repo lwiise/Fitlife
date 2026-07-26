@@ -21,7 +21,11 @@ import {
 import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS } from "@fitlife/plan-engine";
+import {
+  planHasContent,
+  MEMBER_GEN_MAX_ATTEMPTS,
+  ownerRequiresDoctorSignOff,
+} from "@fitlife/plan-engine";
 import { applyChildDisplayTargets } from "@/lib/plans/childTargets";
 import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 import { genderPick } from "@/lib/copy/gender";
@@ -73,6 +77,18 @@ export default async function PlanPage({
   };
 
   const isOnboarded = !!profile?.onboarding_completed_at;
+  // The generation gate (plan-engine/medicalGate) refuses a plan while this is
+  // true, and it fails BEFORE any meal_plans row exists — so the user lands on
+  // the empty state. Surface the confirmation there rather than a create button
+  // that can only ever come back refused.
+  const needsDoctorSignOff =
+    !!profile &&
+    !profile.consulted_doctor &&
+    ownerRequiresDoctorSignOff({
+      medical_conditions: profile.medical_conditions,
+      has_medical_conditions: profile.has_medical_conditions,
+      is_pregnant: profile.is_pregnant,
+    });
   // Members saved but not yet in the plan (deferred while a prior gen was in
   // flight). When onboarding is done and the plan is ready, a lazy drain fills
   // them in (mirrors the dashboard's pending diff; see DeferredMemberDrain).
@@ -541,7 +557,11 @@ export default async function PlanPage({
         )}
 
         {!workoutView && !latest && (
-          <EmptyState isOnboarded={isOnboarded} ownerSex={profile?.sex} />
+          <EmptyState
+            isOnboarded={isOnboarded}
+            ownerSex={profile?.sex}
+            needsDoctorSignOff={needsDoctorSignOff}
+          />
         )}
 
         {!workoutView && latest?.status === "generating" && (

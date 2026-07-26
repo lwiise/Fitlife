@@ -7,7 +7,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { mapUserGoalToSara } from "@/lib/plans/goalMapping";
 import { activityLevelFrom } from "@/lib/plans/activityLevel";
-import { hasGateCondition } from "@/lib/plans/medicalConditions";
+import {
+  ownerRequiresDoctorSignOff,
+  DOCTOR_SIGN_OFF_REQUIRED_AR,
+} from "@fitlife/plan-engine";
 import { triggerPlanTranslation } from "@/lib/plans/dispatch";
 
 export type SaveResult = { ok: true } | { ok: false; error: string };
@@ -133,13 +136,18 @@ export async function saveMomHealthInfo(
   if (other) conditions.push(other);
   const hasMedical = conditions.length > 0;
 
-  // Save-time medical gate — mirrors the real plan-generation gate: a high-risk
-  // condition (or high-risk pregnancy) requires confirming a doctor consult.
-  const gateBlocked =
-    (hasGateCondition(conditions) || (isPregnant && data.high_risk_pregnancy)) &&
-    !data.consulted_doctor;
-  if (gateBlocked) {
-    return { ok: false, error: "يجب تأكيد استشارة الطبيب قبل الحفظ" };
+  // Save-time medical gate — the SAME rule the plan-generation gate uses
+  // (plan-engine/medicalGate), not a narrower mirror of it. It previously only
+  // blocked HIGH-RISK conditions, so a stable condition or a low-risk pregnancy
+  // saved with consulted_doctor=false and the engine then refused to plan.
+  if (
+    ownerRequiresDoctorSignOff({
+      medical_conditions: conditions,
+      is_pregnant: isPregnant,
+    }) &&
+    !data.consulted_doctor
+  ) {
+    return { ok: false, error: DOCTOR_SIGN_OFF_REQUIRED_AR };
   }
 
   const primaryGoal = mapUserGoalToSara(data.user_goal, {

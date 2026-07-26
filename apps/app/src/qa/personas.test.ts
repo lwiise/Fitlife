@@ -56,14 +56,30 @@ const ACCOUNTS: FakeAccount[] = [
   },
   {
     email: "claude3@gmail.com",
-    label: "Solo female, PREGNANT month 5, NOT high-risk (wizard never asks the doctor step)",
+    label:
+      "Solo female, PREGNANT month 5, NOT high-risk — LEGACY row saved before the doctor-gate fix (still gated; /plan now offers the confirmation)",
     profile: baseProfile({
       member_type: "pregnant",
       is_pregnant: true,
       pregnancy_month: 5,
       pregnancy_trimester: 2,
       high_risk_pregnancy: false,
-      consulted_doctor: false, // ← what the wizard actually saves
+      consulted_doctor: false, // the wizard now requires this before saving
+      primary_goal: "pregnancy_lactation",
+      nausea_foods: ["بيض"],
+    }),
+    members: [],
+  },
+  {
+    email: "claude3b@gmail.com",
+    label: "Solo female, PREGNANT month 5, NOT high-risk — post-fix (doctor step confirmed)",
+    profile: baseProfile({
+      member_type: "pregnant",
+      is_pregnant: true,
+      pregnancy_month: 5,
+      pregnancy_trimester: 2,
+      high_risk_pregnancy: false,
+      consulted_doctor: true,
       primary_goal: "pregnancy_lactation",
       nausea_foods: ["بيض"],
     }),

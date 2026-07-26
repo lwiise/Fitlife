@@ -1,4 +1,13 @@
 export { buildPlanContext, getBeneficiaries } from "./buildContext";
+
+export {
+  HIGH_RISK_MEDICAL_FLAGS,
+  ownerRequiresDoctorSignOff,
+  memberRequiresDoctorSignOff,
+  DOCTOR_SIGN_OFF_REQUIRED_AR,
+} from "./medicalGate";
+export type { OwnerMedicalFacts, MemberMedicalFacts } from "./medicalGate";
+
 export type {
   PlanPromptContext,
   PlanPromptContextMom,

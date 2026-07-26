@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OnboardingIncompleteError, MedicalGateError } from "./errors";
+import {
+  ownerRequiresDoctorSignOff,
+  memberRequiresDoctorSignOff,
+} from "./medicalGate";
 import type { EngagementDigest } from "./engagementDigest";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
@@ -12,24 +16,11 @@ type AnyClient = SupabaseClient<any, any, any>;
 
 type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active" | null;
 
-// Sara's "no plan without doctor sign-off" conditions. Most aren't captured by
-// the current onboarding yet (Prompt 1.8c expands it) — the check is ?.-safe and
-// OR'd with the existing broad gate, so today's behavior is unchanged and it's
-// ready to enforce these as soon as onboarding surfaces them.
-export const HIGH_RISK_MEDICAL_FLAGS = [
-  "unstable_diabetes",
-  "uncontrolled_hypertension",
-  "heart_disease",
-  "kidney_disease",
-  "liver_disease",
-  "unstable_thyroid",
-  "severe_food_allergy",
-  "acute_digestive",
-  "eating_disorder",
-  "post_surgical",
-  "bariatric_surgery",
-  "unexplained_symptoms",
-];
+// Sara's "no plan without doctor sign-off" conditions. The list and both gate
+// rules now live in ./medicalGate so the wizards, the profile form, the server
+// actions, and the SDK-free background bundle enforce exactly what this file
+// enforces. Re-exported here for existing importers.
+export { HIGH_RISK_MEDICAL_FLAGS } from "./medicalGate";
 
 /**
  * Optional post-onboarding "deep dive" lifestyle answers (all nullable; the
@@ -274,18 +265,12 @@ export async function buildPlanContext(
   }
 
   const medicalConditions: string[] = profile.medical_conditions ?? [];
-  const hasMedical =
-    profile.has_medical_conditions || medicalConditions.length > 0;
-  const hasHighRiskFlag = medicalConditions.some((c: string) =>
-    HIGH_RISK_MEDICAL_FLAGS.includes(c),
-  );
-  const isHighRiskPregnancy =
-    !!profile.is_pregnant && !!profile.high_risk_pregnancy;
   if (
-    (hasMedical ||
-      profile.is_pregnant ||
-      hasHighRiskFlag ||
-      isHighRiskPregnancy) &&
+    ownerRequiresDoctorSignOff({
+      medical_conditions: medicalConditions,
+      has_medical_conditions: profile.has_medical_conditions,
+      is_pregnant: profile.is_pregnant,
+    }) &&
     !profile.consulted_doctor
   ) {
     throw new MedicalGateError();
@@ -300,11 +285,13 @@ export async function buildPlanContext(
   // Per-member medical gate: a family member with a high-risk condition or a
   // high-risk pregnancy may not get a plan until their own doctor sign-off.
   for (const m of (family ?? []) as Record<string, unknown>[]) {
-    const conds = toStringArray(m.medical_conditions);
-    const memberHighRisk =
-      conds.some((c) => HIGH_RISK_MEDICAL_FLAGS.includes(c)) ||
-      !!m.high_risk_pregnancy;
-    if (memberHighRisk && m.consulted_doctor !== true) {
+    if (
+      memberRequiresDoctorSignOff({
+        medical_conditions: toStringArray(m.medical_conditions),
+        high_risk_pregnancy: m.high_risk_pregnancy as boolean | null,
+      }) &&
+      m.consulted_doctor !== true
+    ) {
       throw new MedicalGateError();
     }
   }

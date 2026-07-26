@@ -10,7 +10,7 @@ its `family_members` rows, exactly like the queries `buildPlanContext` makes.
 | --- | --- |
 | `personaHarness.ts` | fake Supabase client + fully-defaulted `profiles` / `family_members` row builders |
 | `personas.test.ts` | the persona matrix; prints a per-account report (gate outcome, beneficiaries, trainees, prompt warnings) plus the wizard→server-schema contract and the goal-mapping matrix |
-| `deadEnds.test.ts` | reproduces the three states a real signup can reach and never get out of |
+| `deadEnds.test.ts` | guards the doctor-gate fix (every surface must agree with the engine, checked exhaustively over the owner input space) and still pins the one unfixed P1 |
 
 Run just this suite:
 
@@ -30,3 +30,11 @@ fixed, flip the assertion in the same commit:
   the account owner a minor, while the client `step1Schema` requires 13+.
 - `deadEnds.test.ts` — the minor-owner prompts (no child clause in the skeleton,
   adult calorie target in the day prompt).
+
+## Doctor sign-off
+
+`deadEnds.test.ts` walks the whole owner input space (conditions × free-text
+condition × pregnancy state) and asserts that what the wizard asks, what
+`/profile/health` asks, and what the engine blocks are the same set. All four
+surfaces call `ownerRequiresDoctorSignOff` from `@fitlife/plan-engine`, so a new
+surface that re-derives the rule locally will fail this test.

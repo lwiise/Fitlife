@@ -30,6 +30,7 @@ import {
 import type { step1Schema, step2Schema } from "../schema";
 import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
+import { ownerRequiresDoctorSignOff } from "@fitlife/plan-engine";
 import { saveMomProfile, saveProfileStep } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
 import { CUISINES, COOKING } from "@/app/profile/labels";
@@ -169,15 +170,23 @@ export function MomWizard() {
   const isMale = identity?.sex === "male";
   const g = genderPick(identity?.sex);
 
-  // The pregnancy clause is ignored for male owners — stale answers can
-  // linger if the user answered the pregnancy step then flipped sex back
-  // on the identity screen.
+  // The SAME rule the engine gates generation on (plan-engine/medicalGate) —
+  // any condition, or pregnancy at ANY risk level. It used to require a
+  // HIGH-RISK pregnancy, so a low-risk pregnant owner never saw this step,
+  // saved consulted_doctor=false, and was then blocked from every generation
+  // with no way to fix it. The pregnancy clause is ignored for male owners —
+  // stale answers can linger if the user answered the pregnancy step then
+  // flipped sex back on the identity screen.
   const doctorNeeded = useMemo(
     () =>
-      conditions.length > 0 ||
-      otherCondition.trim().length > 0 ||
-      (!isMale && pregStatus === "pregnant" && highRisk === true),
-    [conditions, otherCondition, pregStatus, highRisk, isMale],
+      ownerRequiresDoctorSignOff({
+        medical_conditions: [
+          ...conditions,
+          ...(otherCondition.trim() ? [otherCondition.trim()] : []),
+        ],
+        is_pregnant: !isMale && pregStatus === "pregnant",
+      }),
+    [conditions, otherCondition, pregStatus, isMale],
   );
 
   // Male owners skip the pregnancy/lactation step entirely.

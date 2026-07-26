@@ -21,6 +21,10 @@ import {
 } from "@/lib/plans/activityLevel";
 import { ACTIVITY_OPTIONS, GOALS } from "../labels";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
+import {
+  ownerRequiresDoctorSignOff,
+  DOCTOR_SIGN_OFF_REQUIRED_AR,
+} from "@fitlife/plan-engine";
 import { saveMomHealthInfo } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -140,12 +144,20 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
     initial.meal_mode,
   );
 
+  // The SAME rule the engine gates generation on (plan-engine/medicalGate):
+  // any condition, or pregnancy at ANY risk level. Previously a low-risk
+  // pregnancy hid this checkbox here too, so an owner blocked by the engine
+  // had nowhere in the product to unblock herself.
   const doctorNeeded = useMemo(
     () =>
-      conditions.length > 0 ||
-      otherCondition.trim().length > 0 ||
-      (pregStatus === "pregnant" && highRisk === true),
-    [conditions, otherCondition, pregStatus, highRisk],
+      ownerRequiresDoctorSignOff({
+        medical_conditions: [
+          ...conditions,
+          ...(otherCondition.trim() ? [otherCondition.trim()] : []),
+        ],
+        is_pregnant: pregStatus === "pregnant",
+      }),
+    [conditions, otherCondition, pregStatus],
   );
 
   const toggleCondition = (slug: string) =>
@@ -166,6 +178,11 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
       return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
     if (pregStatus === "lactating" && !monthsPP)
       return setError(g("اكتبي كم شهراً مضى على الولادة", "اكتب كم شهراً مضى على الولادة"));
+    // Whenever the confirmation renders it is REQUIRED — saving without it
+    // stored a profile the engine then refused to plan for, with no
+    // explanation of what was missing.
+    if (doctorNeeded && !consultedDoctor)
+      return setError(DOCTOR_SIGN_OFF_REQUIRED_AR);
 
     startTransition(async () => {
       const result = await saveMomHealthInfo({

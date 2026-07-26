@@ -15,7 +15,13 @@ import {
   getTierLimit,
 } from "@/lib/subscription/state";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
-import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS, type MealPlan } from "@fitlife/plan-engine";
+import {
+  planHasContent,
+  MEMBER_GEN_MAX_ATTEMPTS,
+  ownerRequiresDoctorSignOff,
+  DOCTOR_SIGN_OFF_REQUIRED_AR,
+  type MealPlan,
+} from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import {
@@ -325,6 +331,19 @@ export async function saveMomProfile(
   if (other) conditions.push(other);
   const hasMedical = conditions.length > 0;
 
+  // Never persist a profile the engine will then refuse to plan for. The wizard
+  // requires the confirmation on its own doctor step; this is the server-side
+  // guarantee, using the SAME rule the generation gate uses.
+  if (
+    ownerRequiresDoctorSignOff({
+      medical_conditions: conditions,
+      is_pregnant: isPregnant,
+    }) &&
+    !input.consulted_doctor
+  ) {
+    return { ok: false, error: DOCTOR_SIGN_OFF_REQUIRED_AR };
+  }
+
   const primaryGoal = mapUserGoalToSara(input.user_goal, {
     hasMedical,
     isPregnantOrLactating: isPregnant || isLactating,
@@ -456,27 +475,44 @@ export async function finishOnboardingToSubscription(): Promise<void> {
   redirect("/pricing?from=onboarding");
 }
 
+export type SoloGenResult = { ok: true } | { ok: false; error: string };
+
 /**
  * "Continue with just my plan" from the post-onboarding subscription screen. Runs a
  * normal family generation; on the free trial's starter tier (max 1 person) it caps
  * to the primary user (mom) and defers the rest behind the subscription notice.
  * Subscribing later regenerates the whole family together (see the LemonSqueezy
  * webhook). Onboarding is already completed by finishOnboardingToSubscription.
+ *
+ * Returns the outcome instead of redirecting so the caller can show a real
+ * reason; navigation happens client-side on success.
  */
-export async function generateSoloAndContinue(): Promise<void> {
+export async function generateSoloAndContinue(): Promise<SoloGenResult> {
   const supabase = await createClient();
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error("Not authenticated");
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
   // Full run → tier cap (trial starter = 1) yields a mom-only plan; any extra
   // members defer until a covering subscription unlocks the whole-family regen.
-  await runFamilyGeneration(supabase, user.id);
+  const gen = await runFamilyGeneration(supabase, user.id);
   // Combined generation: fire the workout companion too (no-op unless opted in).
   await maybeTriggerWorkoutGeneration(supabase, user.id);
-  redirect("/plan");
+
+  // The result used to be discarded and the user redirected to /plan
+  // regardless — a medical gate, an inactive subscription, or a dispatch
+  // failure all landed her on an empty page with no idea why. Report it
+  // instead; the caller navigates only on a real success.
+  // 'busy' IS a success from her side: a run is already in flight, and /plan
+  // renders its progress. 'upgrade' can't happen on a full run (the tier cap
+  // is applied instead of denying), but it is handled for completeness.
+  if (gen.ok || gen.kind === "busy") return { ok: true };
+  if (gen.kind === "upgrade") {
+    return { ok: false, error: "باقتك الحالية لا تكفي عدد أفراد العائلة" };
+  }
+  return { ok: false, error: gen.error };
 }
 
 /**

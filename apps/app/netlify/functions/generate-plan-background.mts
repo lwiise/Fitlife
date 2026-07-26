@@ -28,6 +28,10 @@ import type {
   PlanPromptContext,
   PlanPromptContextMember,
 } from "../../../../packages/plan-engine/src/buildContext";
+import {
+  ownerRequiresDoctorSignOff,
+  memberRequiresDoctorSignOff,
+} from "../../../../packages/plan-engine/src/medicalGate";
 import { computeEngagementDigest } from "../../../../packages/plan-engine/src/engagementDigest";
 import type {
   EngagementCheckinRow,
@@ -258,35 +262,14 @@ async function buildContextViaFetch(
   if (!profile.onboarding_completed_at) throw new GateError("Onboarding incomplete");
 
   const medicalConditions = (profile.medical_conditions as string[] | null) ?? [];
-  const hasMedical =
-    !!profile.has_medical_conditions || medicalConditions.length > 0;
-  // Mirrors HIGH_RISK_MEDICAL_FLAGS in the engine's buildContext (kept inline so
-  // this bundle stays SDK-free). Most aren't captured by onboarding yet; OR'd
-  // with the broad gate so today's behavior is unchanged.
-  const HIGH_RISK_FLAGS = [
-    "unstable_diabetes",
-    "uncontrolled_hypertension",
-    "heart_disease",
-    "kidney_disease",
-    "liver_disease",
-    "unstable_thyroid",
-    "severe_food_allergy",
-    "acute_digestive",
-    "eating_disorder",
-    "post_surgical",
-    "bariatric_surgery",
-    "unexplained_symptoms",
-  ];
-  const hasHighRiskFlag = medicalConditions.some((c) =>
-    HIGH_RISK_FLAGS.includes(c),
-  );
-  const isHighRiskPregnancy =
-    !!profile.is_pregnant && !!profile.high_risk_pregnancy;
+  // Same rule as the app — imported, not mirrored. medicalGate.ts is pure and
+  // dependency-free, so the bundle stays SDK-free.
   if (
-    (hasMedical ||
-      profile.is_pregnant ||
-      hasHighRiskFlag ||
-      isHighRiskPregnancy) &&
+    ownerRequiresDoctorSignOff({
+      medical_conditions: medicalConditions,
+      has_medical_conditions: profile.has_medical_conditions as boolean | null,
+      is_pregnant: profile.is_pregnant as boolean | null,
+    }) &&
     !profile.consulted_doctor
   ) {
     throw new GateError("Medical consultation required");
@@ -302,12 +285,15 @@ async function buildContextViaFetch(
   const asStrings = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
-  // Per-member medical gate (mirrors the engine's buildContext).
+  // Per-member medical gate (same shared rule as the engine's buildContext).
   for (const m of family) {
-    const conds = asStrings(m.medical_conditions);
-    const memberHighRisk =
-      conds.some((c) => HIGH_RISK_FLAGS.includes(c)) || !!m.high_risk_pregnancy;
-    if (memberHighRisk && m.consulted_doctor !== true) {
+    if (
+      memberRequiresDoctorSignOff({
+        medical_conditions: asStrings(m.medical_conditions),
+        high_risk_pregnancy: m.high_risk_pregnancy as boolean | null,
+      }) &&
+      m.consulted_doctor !== true
+    ) {
       throw new GateError("Medical consultation required");
     }
   }
