@@ -14,23 +14,28 @@
 import { chromium } from "playwright-core";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { BASE, PASSWORD } from "./creds.mjs";
+import { getPersona } from "./personas.mjs";
 
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
 const arg = (k) =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3); // keep "=" inside values
 const SHOTS = arg("shots") ?? "./shots";
-// "meals" (free path) or "workout" (combined meals + exercise opt-in).
-const SCOPE = arg("scope") ?? "meals";
+// A persona supplies the whole profile — field values, the option preferences
+// that steer each step, forced choices, and the plan scope. Without one the
+// driver runs the original solo fat-loss profile.
+const persona = arg("persona") ? getPersona(arg("persona")) : null;
+const SCOPE = persona?.scope ?? arg("scope") ?? "meals";
 const email =
   arg("email") ??
+  persona?.email ??
   `fitlife.qa+journey-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 7)}@gmail.com`;
 
-const MAX_SCREENS = 30;
+const MAX_SCREENS = 40;
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
 mkdirSync(SHOTS, { recursive: true });
 
-// Values for inputs we recognise. Mirrors run.mjs's solo-loss profile so the
-// generated plan is comparable to a harness run.
+// Values for inputs we recognise, by input id. Defaults mirror run.mjs's
+// solo-loss profile so a persona-less run stays comparable to a harness run.
 const FIELD_VALUES = {
   display_name: "نورة",
   birth_year: "1992",
@@ -40,13 +45,21 @@ const FIELD_VALUES = {
   waist_cm: "88",
   hip_cm: "104",
   phone: "",
+  ...(persona?.fields ?? {}),
 };
-// When an option group has nothing selected, prefer a label matching one of
-// these; otherwise take the first option (which is the neutral/no answer for
-// sex→أنثى and pregnancy→none).
-const PREFERRED_OPTIONS = [/خسارة\s*الوزن|إنقاص/, /نشاط\s*خفيف|خفيف/, /نادراً/];
-// Free-text chip fields: matched on the input's placeholder.
-const CHIP_ANSWERS = [{ match: /كبدة/, chips: ["كبدة"] }];
+// ORDERED: the first match in an unanswered option group wins, otherwise that
+// group's first option is taken (which is the neutral answer for sex→أنثى and
+// pregnancy→«لست حاملاً»).
+const PREFERRED_OPTIONS = persona?.preferred ?? [/خسارة\s*الوزن|إنقاص/, /نشاط\s*خفيف|خفيف/, /نادراً/];
+// Choices the escalation would NEVER make on its own: either the group is an
+// optional multi-select nothing forces (medical conditions) or its default is
+// the wrong branch for this persona (sex, pregnancy status). Applied on every
+// attempt, before the generic pass.
+const FORCED_OPTIONS = persona?.force ?? [];
+// Free-text chip fields, matched on the input's placeholder.
+const CHIP_ANSWERS = persona?.chips ?? [{ match: /كبدة/, chips: ["كبدة"] }];
+// Members screen: toggles/steppers to apply before pressing the CTA.
+const HOUSEHOLD = persona?.household ?? null;
 
 const journal = [];
 
@@ -165,12 +178,102 @@ async function chooseOptions(page) {
 const ADVANCE_PATTERNS = [
   /أنشئي خطتي|أنشئ خطتي/,
   /حفظ ومتابعة/,
-  /^التالي$/,
+  // NOT anchored. On the members screen the CTA gains a suffix once a household
+  // is selected ("التالي — إضافة زوج"); an anchored /^التالي$/ misses it and the
+  // click falls through to the «تخطّي» skip link, silently discarding the
+  // household that was just configured.
+  /التالي/,
   /جاهزة/,
   /^متابعة$/,
   /^(ابدئي|ابدأ|تم)$/,
   /تخطّي|تخطي/,
 ];
+
+/**
+ * Click persona-forced options that aren't already selected. Runs BEFORE the
+ * generic pass on every attempt, because these are choices the escalation can't
+ * reach: an optional multi-select (conditions) never blocks the step, and the
+ * groups whose default is wrong (sex, pregnancy) would be silently accepted.
+ * Clicks go one at a time — a revealed sub-block (pregnancy month, high-risk)
+ * only exists after the parent choice has re-rendered.
+ */
+async function forceOptions(page) {
+  const acted = [];
+  for (const pattern of FORCED_OPTIONS) {
+    const hit = await page.evaluate((src) => {
+      const re = new RegExp(src);
+      const btn = [...document.querySelectorAll("button")]
+        .filter((b) => {
+          const r = b.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && !b.disabled;
+        })
+        .find(
+          (b) =>
+            re.test(b.textContent.trim()) &&
+            b.getAttribute("aria-pressed") !== "true" &&
+            b.getAttribute("aria-checked") !== "true",
+        );
+      if (!btn) return null;
+      btn.click();
+      return btn.textContent.trim().replace(/\s+/g, " ").slice(0, 30);
+    }, pattern.source);
+    if (hit) {
+      acted.push(hit);
+      await page.waitForTimeout(500); // let the revealed sub-block mount
+    }
+  }
+  return acted;
+}
+
+/**
+ * Members screen: apply the persona's household before pressing the CTA.
+ * Toggles are switch-like buttons; steppers are +/- pairs inside the row, so
+ * the "+" is located relative to the row's label rather than by index.
+ */
+async function applyHousehold(page, household) {
+  const acted = [];
+  for (const row of household) {
+    for (let i = 0; i < (row.type === "stepper" ? row.count : 1); i++) {
+      const done = await page.evaluate(
+        ({ label, type }) => {
+          const vis = (el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          };
+          // Deepest element that still contains both the label and a button —
+          // that is the row, not the whole card.
+          const rows = [...document.querySelectorAll("div,li,label,section")].filter(
+            (el) => vis(el) && el.textContent.includes(label) && el.querySelector("button"),
+          );
+          if (!rows.length) return false;
+          const rowEl = rows.reduce((a, b) =>
+            (a.textContent ?? "").length <= (b.textContent ?? "").length ? a : b,
+          );
+          const buttons = [...rowEl.querySelectorAll("button")].filter(vis);
+          if (type === "toggle") {
+            const btn = buttons.find((b) => b.getAttribute("aria-pressed") !== "true");
+            if (!btn) return false;
+            btn.click();
+            return true;
+          }
+          // Stepper: the increment is the button whose own text is "+" or which
+          // sits last in the row; never the one showing the current count.
+          const plus =
+            buttons.find((b) => /^\+$/.test(b.textContent.trim())) ??
+            buttons.find((b) => /increment|زيادة|add/i.test(b.getAttribute("aria-label") ?? "")) ??
+            buttons[0];
+          if (!plus || plus.disabled) return false;
+          plus.click();
+          return true;
+        },
+        { label: row.label, type: row.type },
+      );
+      if (done) acted.push(`${row.label}${row.type === "stepper" ? "+1" : ""}`);
+      await page.waitForTimeout(400);
+    }
+  }
+  return acted;
+}
 
 /** Tick visible unchecked checkboxes (consent/confirmation gates). */
 async function checkBoxes(page) {
@@ -197,6 +300,9 @@ async function clickAdvance(page) {
     if (await b.isEnabled()) candidates.push({ b, text });
   }
   for (const pattern of ADVANCE_PATTERNS) {
+    // Never take the skip link when a household is configured — skipping is
+    // exactly what we are trying not to do on that screen.
+    if (HOUSEHOLD && /تخطّي|تخطي/.source === pattern.source) continue;
     const hit = candidates.find((c) => pattern.test(c.text));
     if (hit) {
       await hit.b.click();
@@ -332,6 +438,7 @@ try {
   await page.goto(`${BASE}/onboarding`, { waitUntil: "networkidle" });
 
   let stuck = 0;
+  let pricingClicked = false;
   for (let screen = 1; screen <= MAX_SCREENS; screen++) {
     await page.waitForTimeout(600); // let the step transition settle
     const before = await screenState(page);
@@ -351,6 +458,16 @@ try {
     // server-rendered, so it is clickable before React attaches its handler and
     // an early click is swallowed with no generation started.
     if (path.startsWith("/pricing")) {
+      // Only ever click the free path ONCE. The server action can take longer
+      // than waitForURL allows, which drops us back here with the button now
+      // disabled (pending) — a second attempt then dies on a click timeout and
+      // masks a generation that actually started fine.
+      if (pricingClicked) {
+        log(`${String(screen).padStart(2)}. still on ${path} after the free-path click — generation may already be running; stopping the driver`);
+        journal.push({ screen, path, note: "free path clicked once; did not route to /plan in time" });
+        break;
+      }
+      pricingClicked = true;
       const free = page.getByRole("button", { name: /أكملي بخطتك/ });
       if ((await free.count()) === 0) {
         log(`✗ /pricing rendered without the free-path button — stopping`);
@@ -380,6 +497,10 @@ try {
     // consent boxes only once the step actually refuses to move. That keeps the
     // profile honest AND tells us which groups are genuinely required.
     const filled = await fillInputs(page);
+    const forced = await forceOptions(page);
+    if (HOUSEHOLD && path.startsWith("/onboarding/members")) {
+      forced.push(...(await applyHousehold(page, HOUSEHOLD)));
+    }
     const chosen = stuck >= 1 ? await chooseOptions(page) : [];
     // The weekday picker needs N selections, so it runs after the generic pass
     // (which supplies focus area / day count / session length) rather than
@@ -415,6 +536,7 @@ try {
       heading: before.heading,
       progress: before.progress,
       filled,
+      forced,
       chosen,
       ticked,
       clicked,
@@ -430,6 +552,7 @@ try {
         `${stuck ? ` (retry ${stuck})` : ""}` +
         ` → ${clicked ? `«${clicked}»` : "NO ADVANCE BUTTON"} ${advanced ? "✓" : "✗ did not move"}` +
         `${filled.length ? ` | filled: ${filled.join(", ")}` : ""}` +
+        `${forced.length ? ` | FORCED: ${forced.join(" / ")}` : ""}` +
         `${chosen.length ? ` | chose: ${chosen.join(" / ")}` : ""}` +
         `${ticked.length ? ` | ticked: ${ticked.join(" / ")}` : ""}` +
         `${after.alerts.length ? ` | ALERT: ${after.alerts.join(" ¶ ")}` : ""}`,
