@@ -12,7 +12,11 @@ import {
   setupLemonsqueezy,
   describeLsError,
 } from "@/lib/lemonsqueezy/client";
-import { getVariantId } from "@fitlife/config";
+import {
+  getVariantId,
+  usingLiveVariantIds,
+  variantEnvVar,
+} from "@fitlife/config";
 
 export const runtime = "nodejs";
 
@@ -91,6 +95,15 @@ export async function POST(request: Request) {
     );
   }
   const variantId = getVariantId(parsed.tier, parsed.cadence);
+  // The built-in ids are TEST MODE. A store that is only partly migrated will
+  // happily create a test-mode checkout for one tier and a live one for
+  // another, which looks like a working payment right up until the money
+  // doesn't arrive — so say so once per attempt rather than never.
+  if (!usingLiveVariantIds()) {
+    console.warn(
+      `[checkout] using TEST-MODE variant id ${variantId} for ${parsed.tier}/${parsed.cadence} — set ${variantEnvVar(parsed.tier, parsed.cadence)} (and the other seven) to take real payments`,
+    );
+  }
 
   // Return to the EXACT origin the user is browsing (the same-origin POST sends
   // an Origin header), so the post-payment redirect carries the session cookie.
