@@ -127,11 +127,15 @@ export function RegenerateButton({
         open={confirmOpen}
         title={memberName ? `إنشاء خطة جديدة لـ ${memberName}` : "إنشاء خطة جديدة"}
         body={
+          /* فصحى, per the Coach Sara directive: this is questionnaire copy —
+             the two fields below feed the plan engine — and it was written in
+             عامية («قوليلنا ايش تبين»، «عشان»، «بتنحفظ»). Feminine أنتِ
+             address kept. */
           memberName
-            ? `بننشئ خطة جديدة لـ ${memberName} فقط — باقي الأفراد ما تتغيّر خططهم. الخطة الحالية تنحفظ في السجل. ${g("قوليلنا ايش تبين نغيّر.", "قل لنا ايش تبي نغيّر.")}`
+            ? `ننشئ خطة جديدة لـ ${memberName} وحدها — خطط بقية الأفراد لا تتغيّر، والخطة الحالية تُحفظ في السجل. ${g("أخبرينا ما الذي تودّين تغييره.", "أخبرنا ما الذي تودّ تغييره.")}`
             : g(
-                "عشان نصمم لكِ خطة أنسب، قوليلنا ايش تبين نغيّر. الخطة الحالية بتنحفظ في السجل.",
-                "عشان نصمم لك خطة أنسب، قل لنا ايش تبي نغيّر. الخطة الحالية بتنحفظ في السجل.",
+                "لنصمّم لكِ خطة أنسب، أخبرينا ما الذي تودّين تغييره. الخطة الحالية تُحفظ في السجل.",
+                "لنصمّم لك خطة أنسب، أخبرنا ما الذي تودّ تغييره. الخطة الحالية تُحفظ في السجل.",
               )
         }
         confirmLabel={g("أنشئي الخطة", "أنشئ الخطة")}
@@ -190,7 +194,7 @@ export function RegenerateButton({
               htmlFor="regen-issues"
               className="block text-sm font-bold text-brand-ink mb-1.5"
             >
-              {g("ايش ما عجبكِ في الخطة الحالية؟", "ايش ما عجبك في الخطة الحالية؟")} <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+              {g("ما الذي لم يناسبكِ في الخطة الحالية؟", "ما الذي لم يناسبك في الخطة الحالية؟")} <span className="text-brand-ink-muted font-medium">(اختياري)</span>
             </label>
             <textarea
               id="regen-issues"
@@ -198,7 +202,7 @@ export function RegenerateButton({
               onChange={(e) => setIssues(e.target.value)}
               disabled={isPending}
               rows={2}
-              placeholder="مثلاً: الوجبات متكررة، أو ما أحب السمك"
+              placeholder="مثلاً: الوجبات متكرّرة، أو لا أحب السمك"
               className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
             />
           </div>
@@ -207,7 +211,7 @@ export function RegenerateButton({
               htmlFor="regen-improvements"
               className="block text-sm font-bold text-brand-ink mb-1.5"
             >
-              {g("ايش تحبين نغيّر أو نحسّن؟", "ايش تحب نغيّر أو نحسّن؟")} <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+              {g("ما الذي تودّين تغييره أو تحسينه؟", "ما الذي تودّ تغييره أو تحسينه؟")} <span className="text-brand-ink-muted font-medium">(اختياري)</span>
             </label>
             <textarea
               id="regen-improvements"
@@ -215,7 +219,7 @@ export function RegenerateButton({
               onChange={(e) => setImprovements(e.target.value)}
               disabled={isPending}
               rows={2}
-              placeholder="مثلاً: تنوع أكثر، وجبات أخف للعشاء"
+              placeholder="مثلاً: تنوّع أكثر، ووجبات أخفّ للعشاء"
               className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
             />
           </div>

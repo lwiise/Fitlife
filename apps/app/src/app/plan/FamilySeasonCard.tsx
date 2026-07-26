@@ -331,7 +331,7 @@ export function FamilySeasonCard({
       </p>
       <Link
         href="/plan"
-        className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-brand-ink hover:bg-brand-purple-900 px-4 py-2 min-h-10 text-xs font-extrabold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+        className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-brand-ink hover:bg-brand-purple-900 px-4 py-2 min-h-11 text-xs font-extrabold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
       >
         إلى خطة اليوم
         <ChevronLeft className="size-3.5" aria-hidden="true" />

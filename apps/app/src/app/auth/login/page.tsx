@@ -79,7 +79,7 @@ export default async function LoginPage({
         <p className="text-center mt-4">
           <Link
             href="/"
-            className="inline-block text-brand-ink-muted text-sm hover:text-brand-purple-900 transition-colors"
+            className="inline-flex items-center min-h-11 px-3 rounded-lg text-brand-ink-muted text-sm hover:text-brand-purple-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
           >
             ← الرجوع للصفحة الرئيسية
           </Link>

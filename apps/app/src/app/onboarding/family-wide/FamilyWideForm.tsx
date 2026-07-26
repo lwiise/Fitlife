@@ -241,7 +241,7 @@ export function FamilyWideForm() {
             type="button"
             onClick={goBack}
             disabled={isPending}
-            className="mt-6 inline-flex items-center gap-1 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
+            className="mt-6 inline-flex items-center gap-1 min-h-11 px-3 py-2 -ms-3 text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
             رجوع

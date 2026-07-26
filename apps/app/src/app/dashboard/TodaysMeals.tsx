@@ -103,7 +103,7 @@ export async function TodaysMeals({
             <EmptyPlanCTA isOnboarded={isOnboarded} variant="failed" ownerSex={ownerSex} />
             <Link
               href="/settings"
-              className="text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors"
+              className="inline-flex items-center min-h-11 px-3 rounded-lg text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
               {g("تواصلي معنا", "تواصل معنا")}
             </Link>

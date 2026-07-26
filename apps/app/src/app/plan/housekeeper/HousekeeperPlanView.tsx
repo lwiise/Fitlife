@@ -96,6 +96,14 @@ export function HousekeeperPlanView({
       </header>
 
       <div className="container-app py-6 md:py-10 space-y-4">
+        {/* The plan itself carries the page's <h1> (PlanViewer's week range),
+            but the preparing/translating states render instead of it — so
+            those screens had no heading at all. Visually hidden because the
+            design deliberately leads with the status card; `preparing_title`
+            already exists in all seven locales, so this needs no new copy. */}
+        {(preparing || needsTranslation || !plan) && (
+          <h1 className="sr-only">{t.preparing_title}</h1>
+        )}
         <AllergyBackstop entries={allergyEntries} locale={locale} />
         {preparing ? (
           // Family plans still generating (incl. members queued) — translation is

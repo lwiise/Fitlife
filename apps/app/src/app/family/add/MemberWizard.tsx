@@ -547,7 +547,7 @@ export function MemberWizard({
             </a>
             <a
               href="/family"
-              className="mt-3 inline-block text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
+              className="mt-3 inline-flex items-center min-h-11 px-3 rounded-lg text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
               رجوع للعائلة
             </a>

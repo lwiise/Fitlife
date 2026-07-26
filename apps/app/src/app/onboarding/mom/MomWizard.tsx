@@ -33,6 +33,12 @@ import { Step2Physical } from "../steps/Step2Physical";
 import { ownerRequiresDoctorSignOff } from "@fitlife/plan-engine";
 import { saveMomProfile, saveProfileStep } from "../actions";
 import { capture } from "@/lib/analytics";
+import {
+  restoreActivityLevel,
+  restoreIdentity,
+  restorePhysical,
+  type SavedMomAnswers,
+} from "./restoreAnswers";
 import { genderPick } from "@/lib/copy/gender";
 import { CUISINES, COOKING } from "@/app/profile/labels";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
@@ -125,16 +131,22 @@ function PrimaryButton({
   );
 }
 
-export function MomWizard() {
+export function MomWizard({ saved }: { saved?: SavedMomAnswers } = {}) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
 
-  const [identity, setIdentity] = useState<Identity>();
-  const [physical, setPhysical] = useState<Physical>();
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(null);
+  const [identity, setIdentity] = useState<Identity | undefined>(() =>
+    restoreIdentity(saved),
+  );
+  const [physical, setPhysical] = useState<Physical | undefined>(() =>
+    restorePhysical(saved),
+  );
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(() =>
+    restoreActivityLevel(saved),
+  );
   const [userGoal, setUserGoal] = useState<UserGoal | "">("");
   const [pregStatus, setPregStatus] = useState<"none" | "pregnant" | "lactating" | "">("");
   const [pregMonth, setPregMonth] = useState<number | null>(null);

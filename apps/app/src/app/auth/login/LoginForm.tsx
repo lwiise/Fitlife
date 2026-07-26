@@ -112,7 +112,9 @@ export function LoginForm() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-emerald/10 mb-4">
           <Mail className="size-7 text-brand-emerald" aria-hidden="true" />
         </div>
-        <h3 className="font-bold text-lg text-brand-ink mb-2">رسالة التأكيد في إيميلك</h3>
+        {/* Early return — this branch replaces the whole form, so this is the
+            page's only heading. It was an h3 under no h1 or h2. */}
+        <h1 className="font-bold text-lg text-brand-ink mb-2">رسالة التأكيد في إيميلك</h1>
         <p className="text-brand-ink-muted text-sm leading-relaxed">
           أرسلنا رابط تأكيد إلى
           <br />
@@ -142,9 +144,11 @@ export function LoginForm() {
   return (
     <div>
       <div className="text-center mb-6">
-        <h2 className="font-bold text-2xl text-brand-ink leading-tight">
+        {/* h1, not h2: this is the page's title and /auth/login had no h1 at
+            all. Same classes, so nothing moves visually. */}
+        <h1 className="font-bold text-2xl text-brand-ink leading-tight">
           {mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب"}
-        </h2>
+        </h1>
         <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
           {mode === "signin"
             ? "الإيميل وكلمة المرور لتسجيل الدخول."

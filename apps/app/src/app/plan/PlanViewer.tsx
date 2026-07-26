@@ -789,11 +789,18 @@ export function PlanViewer({
             RTL it sits to the RIGHT of the CTA (owner directive). The workout
             viewer renders the same band with the toggle in the same slot. */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* This is the page's <h1>. /plan, /plan/housekeeper and
+              /plan/history/[planId] all render PlanViewer and had NO h1 at all
+              — the main screen of the product gave a screen reader nothing to
+              announce and no heading to navigate to. The week range is what
+              the page actually is, and it is already translated for all seven
+              locales, so this needs no new copy and changes nothing visually
+              (h1 carries the same classes the <p> did). */}
           <div>
             <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-            <p className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
+            <h1 className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
               {formatWeekRange(plan.week_start_date, locale)}
-            </p>
+            </h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {planTypeToggle}
