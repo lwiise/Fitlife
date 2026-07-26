@@ -13,7 +13,7 @@
  * taken with them. Going live needs no code change: set one env var per
  * (tier, cadence) on the deployed site and getVariantId prefers it. See
  * variantEnvVar() for the naming, and usingLiveVariantIds() for the check the
- * checkout route logs at startup.
+ * checkout route logs on each attempt.
  *
  *   LEMONSQUEEZY_VARIANT_STARTER_MONTHLY   LEMONSQUEEZY_VARIANT_STARTER_ANNUAL
  *   LEMONSQUEEZY_VARIANT_PRO_MONTHLY       LEMONSQUEEZY_VARIANT_PRO_ANNUAL
@@ -167,7 +167,7 @@ export function getVariantId(tier: Tier, cadence: Cadence): string {
 
 /**
  * True when every (tier, cadence) pair has a live override configured. The
- * checkout route logs this once so a store left half-migrated is visible before
+ * checkout route logs this on every attempt so a half-migrated store is visible before
  * a customer finds it.
  */
 export function usingLiveVariantIds(): boolean {
