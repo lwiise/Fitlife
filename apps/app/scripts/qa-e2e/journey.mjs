@@ -331,7 +331,6 @@ try {
 
   await page.goto(`${BASE}/onboarding`, { waitUntil: "networkidle" });
 
-  let lastKey = null;
   let stuck = 0;
   for (let screen = 1; screen <= MAX_SCREENS; screen++) {
     await page.waitForTimeout(600); // let the step transition settle
@@ -437,7 +436,6 @@ try {
     } else {
       stuck = 0;
     }
-    lastKey = key;
   }
 } catch (err) {
   log(`ERROR: ${err.message.split("\n")[0]}`);

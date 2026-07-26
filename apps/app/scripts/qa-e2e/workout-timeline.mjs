@@ -5,7 +5,7 @@
 // settles so meals get the whole Anthropic budget.
 //
 // Usage: node workout-timeline.mjs <email> [minutes]
-import { signInAs, BASE } from "./creds.mjs";
+import { signInAs } from "./creds.mjs";
 
 const email = process.argv[2];
 const minutes = Number(process.argv[3] ?? 30);
