@@ -50,12 +50,22 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
     price_monthly_sar: 29,
     price_annual_sar: 278,
     highlighted: false,
+    // HONESTY RULE (07/2026): every line here must name something the product
+    // actually does today. Tier gates exactly ONE thing — max_people — so a
+    // line that implies a per-tier capability is a promise no code keeps.
+    // Audited against the codebase after a QA pass found five advertised
+    // features with no implementation (wearable sync, unlimited chat, monthly
+    // family reports, daily health reports, dietitian sessions) and two that
+    // were real but available on every tier (before/after photos, weekly
+    // recap). Before adding a line, either gate it or don't sell it.
     features_ar: [
-      "خطة غذائية شخصية",
-      "5 أسئلة يومياً للمساعد الذكي",
-      "تتبع الوزن والقياسات",
-      "وصفات خليجية أساسية",
-      "بالعربي",
+      "خطة غذائية أسبوعية شخصية",
+      "برنامج تمارين أسبوعي",
+      "30 رسالة يومياً مع المستشارة الذكية",
+      "تتبع الوزن والقياسات مع صور التقدّم",
+      "رسالة أسبوعية تلخّص أسبوعك",
+      "وصفات خليجية، بالعربي",
+      "لفرد واحد",
     ],
     lemonsqueezy_variant_id_monthly: "1677645",
     lemonsqueezy_variant_id_annual: "1677781",
@@ -69,10 +79,9 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
     highlighted: false,
     features_ar: [
       "كل ميزات البداية",
-      "محادثات غير محدودة مع الذكاء الاصطناعي",
-      "تكامل مع Apple Watch و Fitbit",
-      "صور قبل/بعد",
-      "تقارير أسبوعية",
+      "لفردين — خطة لكل واحد",
+      "وجبات مشتركة منسّقة بين الفردين",
+      "خطط للحمل والرضاعة والحالات الصحية",
     ],
     lemonsqueezy_variant_id_monthly: "1677648",
     lemonsqueezy_variant_id_annual: "1677755",
@@ -89,7 +98,7 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
       "حتى 6 أفراد في الباقة",
       "تعليمات طبخ بلغة الخدامة",
       "خطط للأولاد حسب أعمارهم",
-      "تقارير عائلية شهرية",
+      "لوحة «موسم بيتنا» للعائلة",
       "أولوية في الدعم",
     ],
     lemonsqueezy_variant_id_monthly: "1677653",
@@ -104,9 +113,8 @@ export const PRICING_TIERS: Record<Tier, TierDefinition> = {
     highlighted: false,
     features_ar: [
       "كل ميزات العائلة",
-      "جلستان شهرياً مع خبيرة تغذية معتمدة",
-      "خطط مخصصة لحالات خاصة (حمل، سكري، ضغط)",
-      "تقارير صحية يومية",
+      "أفراد بلا حد — لكل فرد خطته",
+      "أولوية قصوى في الدعم",
     ],
     lemonsqueezy_variant_id_monthly: "1677655",
     lemonsqueezy_variant_id_annual: "1677749",

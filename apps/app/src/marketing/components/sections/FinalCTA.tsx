@@ -11,7 +11,7 @@ const headlineWords = "ابدئي رحلة عائلتك الغذائية الي�
 const reassuranceItems = [
   "بدون بطاقة",
   "إلغاء أي وقت",
-  "استرداد 14 يوم",
+  "7 أيام مجاناً",
 ];
 
 const overshootEase = [0.34, 1.56, 0.64, 1] as const;

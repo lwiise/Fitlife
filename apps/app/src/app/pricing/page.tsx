@@ -54,7 +54,13 @@ export default async function PricingPage({
           <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
             {fromOnboarding
               ? "اشتركي عشان نجهّز خطط كل أفراد العائلة بوجبات منسقة. أو أكملي بخطتك أنتِ فقط الآن."
-              : "ابدئي بفترة تجريبية مجانية لمدة 7 أيام. ألغي في أي وقت."}
+              : // NOT "start a 7-day free trial" — the trial is granted at
+                // SIGNUP (handle_new_user) and has usually already elapsed by
+                // the time a user reads this page. Checkout passes no trial to
+                // Lemonsqueezy, so choosing a tier here charges immediately;
+                // promising a trial at this point is a chargeback waiting to
+                // happen.
+                "اختاري باقتك وتبدأ اليوم. ألغي في أي وقت."}
           </p>
         </div>
 
