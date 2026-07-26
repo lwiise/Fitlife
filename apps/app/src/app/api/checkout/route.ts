@@ -95,13 +95,17 @@ export async function POST(request: Request) {
     );
   }
   const variantId = getVariantId(parsed.tier, parsed.cadence);
-  // The built-in ids are TEST MODE. A store that is only partly migrated will
-  // happily create a test-mode checkout for one tier and a live one for
-  // another, which looks like a working payment right up until the money
-  // doesn't arrive — so say so once per attempt rather than never.
+  // Report only what is actually knowable here: whether this pair resolved to an
+  // env override or to the built-in id. The store's mode is Lemonsqueezy-side
+  // state that this process cannot see.
+  //
+  // This used to log "using TEST-MODE variant id … to take real payments"
+  // whenever the overrides were unset — which was backwards. The built-ins are
+  // LIVE, so the message reassured whoever read the log at the exact moment a
+  // real card was charged.
   if (!usingLiveVariantIds()) {
     console.warn(
-      `[checkout] using TEST-MODE variant id ${variantId} for ${parsed.tier}/${parsed.cadence} — set ${variantEnvVar(parsed.tier, parsed.cadence)} (and the other seven) to take real payments`,
+      `[checkout] ${parsed.tier}/${parsed.cadence}: no ${variantEnvVar(parsed.tier, parsed.cadence)} set, using built-in variant id ${variantId} — the built-ins are LIVE and charge real cards`,
     );
   }
 
