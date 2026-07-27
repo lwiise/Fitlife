@@ -9,9 +9,11 @@ import { CheckoutButton } from "./CheckoutButton";
 export function TierCard({
   tier,
   cadence,
+  ownerSex,
 }: {
   tier: TierDefinition;
   cadence: Cadence;
+  ownerSex?: string | null;
 }) {
   const isAnnual = cadence === "annual";
   const displayPrice = isAnnual
@@ -69,7 +71,12 @@ export function TierCard({
         ))}
       </ul>
 
-      <CheckoutButton tier={tier.id} cadence={cadence} tierName={tier.name_ar} />
+      <CheckoutButton
+        tier={tier.id}
+        cadence={cadence}
+        tierName={tier.name_ar}
+        ownerSex={ownerSex}
+      />
     </article>
   );
 }

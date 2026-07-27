@@ -17,6 +17,7 @@ import {
   usingLiveVariantIds,
   variantEnvVar,
 } from "@fitlife/config";
+import { genderPick } from "@/lib/copy/gender";
 
 export const runtime = "nodejs";
 
@@ -70,8 +71,24 @@ export async function POST(request: Request) {
   // the newer one.
   const currentSub = await getCurrentSubscription(user.id);
   if (hasLiveLemonsqueezySubscription(currentSub)) {
+    // Owner-directed instruction ("غيّري الباقة") — inflect it for the answered
+    // الجنس. Looked up only on this branch: it is the one response body here
+    // that addresses the user, so the common path keeps its single query.
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("sex")
+      .eq("id", user.id)
+      .single();
+    const g = genderPick(
+      (ownerProfile as { sex?: string | null } | null)?.sex ?? null,
+    );
     return NextResponse.json(
-      { error: "عندك اشتراك نشط بالفعل — غيّري الباقة من صفحة الاشتراك" },
+      {
+        error: g(
+          "عندك اشتراك نشط بالفعل — غيّري الباقة من صفحة الاشتراك",
+          "عندك اشتراك نشط بالفعل — غيّر الباقة من صفحة الاشتراك",
+        ),
+      },
       { status: 409 },
     );
   }

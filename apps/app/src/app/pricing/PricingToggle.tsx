@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
+import { genderPick } from "@/lib/copy/gender";
 
 /**
  * Billing-cadence segmented control. Two equal halves, one clear selection.
@@ -10,11 +11,18 @@ import { useTransition } from "react";
  * deleted the param for "monthly" (the old default), which silently broke the
  * monthly button when the page default flipped to annual-first.
  */
-export function PricingToggle({ cadence }: { cadence: "monthly" | "annual" }) {
+export function PricingToggle({
+  cadence,
+  ownerSex,
+}: {
+  cadence: "monthly" | "annual";
+  ownerSex?: string | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const g = genderPick(ownerSex);
 
   function setCadence(next: "monthly" | "annual") {
     if (next === cadence) return;
@@ -61,7 +69,7 @@ export function PricingToggle({ cadence }: { cadence: "monthly" | "annual" }) {
               : "bg-brand-lavender/40 text-brand-purple-900"
           }`}
         >
-          وفّري 20%
+          {g("وفّري 20%", "وفّر 20%")}
         </span>
       </button>
     </div>
