@@ -608,6 +608,7 @@ export default async function PlanPage({
               journeyMembers={journeyMembers}
               planTypeToggle={planTypeToggle}
               ownerSex={profile?.sex}
+              partialWeek={hasIncompleteMember}
             />
           </>
         )}
