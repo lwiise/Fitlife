@@ -388,13 +388,20 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
   const db = supabase as unknown as SupabaseClient;
 
   if (input.status === null) {
+    // Clear by the CALENDAR key, not the plan id — the same key the viewer and
+    // collapseWorkoutMarks read by. triggerWorkoutGeneration mints a new
+    // workout_plans row on every dispatch (an answer edit or a second adult
+    // opting in is enough), so a mark made against last dispatch's plan is still
+    // read, still scoring on «موسم بيتنا», and was un-clearable: the delete
+    // matched zero rows, returned ok, and the optimistic clear was undone by the
+    // next revalidate re-seeding the chip from the surviving row. Mirrors
+    // clearMealMarks, which is calendar-keyed for exactly this reason.
     const { error } = await db
       .from("workout_checkins")
       .delete()
       .eq("user_id", user.id)
-      .eq("workout_plan_id", input.workout_plan_id)
       .eq("member_id", input.member_id)
-      .eq("day_index", input.day_index);
+      .eq("local_date", localDate);
     if (error) {
       Sentry.captureException(error, {
         tags: { area: "engagement", step: "workout-checkin-clear", userId: user.id },
