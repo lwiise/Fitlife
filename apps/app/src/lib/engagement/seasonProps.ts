@@ -18,6 +18,7 @@ import {
   collapseWorkoutMarks,
   dayHasCookedMark,
   isISODate,
+  plannedMealSlots,
   workoutMarkingWindow,
   type PlannedTotals,
   type RawSeasonMealRow,
@@ -164,20 +165,11 @@ export async function getFamilySeasonProps(
   // measures completion of the member's OWN plan). Meals from the meal plan;
   // the `sessions` key exists ONLY when the member is in the ready workout plan
   // — its presence is what switches that member to the 50/50 formula.
-  // DISTINCT SLOTS per day, not raw meal count. `meal_checkins` is keyed
-  // (day_index, slot, member), so a day carrying two snack-slot meals — which
-  // mealOrder.ts exists to bucket, and which «4-5 وجبات» plans produce routinely
-  // — can only ever yield ONE mark for that slot. Counting both in the
-  // denominator made 100% unreachable: a member on a 5-meal day who cooked every
-  // single planned dish as written scored 28/35 = 80% and her card printed a
-  // 7-meal deficit she never had, while a sibling on a 4-meal plan hit 100% for
-  // the same behaviour — so the «فائز هذا الأسبوع» crown turned on snack count
-  // rather than adherence. This mirrors plannedSlotSets below; meal identity is
-  // (day, slot) everywhere else in this layer.
+  // Denominator rule (distinct slots, not raw meals) lives in plannedMealSlots.
   const plannedMealsById = new Map(
     latestPlan.plan_data.members.map((pm) => [
       pm.member_id,
-      pm.days.reduce((n, d) => n + new Set(d.meals.map((m) => m.slot)).size, 0),
+      plannedMealSlots(pm.days),
     ]),
   );
   const plannedSessionsById = new Map<string, number>(

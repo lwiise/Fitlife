@@ -10,6 +10,7 @@ import {
   type SeasonMealMark,
   type SeasonMember,
   type SeasonWorkoutMark,
+  plannedMealSlots,
 } from "./seasonMath";
 
 const WEEK_START = "2026-07-17"; // Friday, matching a real plan anchor
@@ -771,5 +772,48 @@ describe("dayHasCookedMark", () => {
     expect(dayHasCookedMark(checkins, 1)).toBe(true);
     expect(dayHasCookedMark(checkins, 2)).toBe(false);
     expect(dayHasCookedMark(checkins, 3)).toBe(false);
+  });
+});
+
+/**
+ * The % denominator. A day can hold two snack-slot meals (mealOrder.ts exists
+ * to bucket morning vs evening snacks, and «4-5 وجبات» plans produce them
+ * routinely) but meal_checkins is keyed (day_index, slot, member) — so only ONE
+ * mark per slot is possible and counting both made 100% literally unreachable.
+ */
+describe("plannedMealSlots — the denominator a member can actually reach", () => {
+  const day = (...slots: string[]) => ({ meals: slots.map((slot) => ({ slot })) });
+
+  it("counts a two-snack day once for the snack slot", () => {
+    expect(plannedMealSlots([day("breakfast", "lunch", "dinner", "snack", "snack")])).toBe(4);
+  });
+
+  it("makes a perfect 5-meal week reach 100%, not 80%", () => {
+    const week = Array.from({ length: 7 }, () =>
+      day("breakfast", "lunch", "dinner", "snack", "snack"),
+    );
+    const planned = plannedMealSlots(week);
+    expect(planned).toBe(28); // not 35
+    // A member who marked every markable meal now scores a full week.
+    expect(Math.min(1, 28 / planned)).toBe(1);
+  });
+
+  it("does not change a plan with one meal per slot", () => {
+    const week = Array.from({ length: 7 }, () => day("breakfast", "lunch", "dinner"));
+    expect(plannedMealSlots(week)).toBe(21);
+  });
+
+  it("stops snack count from deciding the ranking", () => {
+    // Two members, same behaviour: every planned dish cooked as written.
+    const fourMealDay = day("breakfast", "lunch", "dinner", "snack");
+    const fiveMealDay = day("breakfast", "lunch", "dinner", "snack", "snack");
+    const a = plannedMealSlots(Array.from({ length: 7 }, () => fourMealDay));
+    const b = plannedMealSlots(Array.from({ length: 7 }, () => fiveMealDay));
+    expect(a).toBe(b);
+  });
+
+  it("handles empty days", () => {
+    expect(plannedMealSlots([{ meals: [] }, day("lunch")])).toBe(1);
+    expect(plannedMealSlots([])).toBe(0);
   });
 });

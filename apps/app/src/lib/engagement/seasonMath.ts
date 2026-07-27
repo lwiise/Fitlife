@@ -92,6 +92,27 @@ export interface PlannedTotals {
   sessions?: number;
 }
 
+/**
+ * How many MEALS a member's planned week actually offers to be marked.
+ *
+ * Distinct slots per day, not raw meal count. `meal_checkins` is keyed
+ * (day_index, slot, member), so a day carrying two snack-slot meals — which
+ * mealOrder.ts exists to bucket, and which «4-5 وجبات» plans produce routinely
+ * — can only ever yield ONE mark for that slot. Counting both made 100%
+ * unreachable: a member on a 5-meal day who cooked every planned dish as
+ * written scored 28/35 = 80% and her card printed a 7-meal deficit she never
+ * had, while a sibling on a 4-meal plan hit 100% for the same behaviour — so
+ * the «فائز هذا الأسبوع» crown turned on snack count rather than adherence.
+ *
+ * Meal identity is (day, slot) everywhere else in this layer; this is the same
+ * rule, applied to the denominator.
+ */
+export function plannedMealSlots(
+  days: ReadonlyArray<{ meals: ReadonlyArray<{ slot: string }> }>,
+): number {
+  return days.reduce((n, d) => n + new Set(d.meals.map((m) => m.slot)).size, 0);
+}
+
 export interface RankedMember extends SeasonMember {
   /** Marks that happened: distinct meals marked + distinct sessions done. */
   score: number;
