@@ -37,13 +37,6 @@ export default function MarketingHome() {
       <Header />
       <main id="main" className="flex flex-1 flex-col">
         <Hero />
-        {/* The landing places the consent ask itself (ConsentSlot skips `/`):
-            Header is `fixed inset-x-0 top-0` and transparent over the hero, so a
-            block at the top of the document would sit under the logo and the
-            header CTA — the same occlusion the fix removes, at the other end of
-            the screen. Below the hero it is in the page's own flow, reached
-            within the first scroll and covering nothing. */}
-        <CookieConsent />
         <SocialProofStrip />
         <Problem />
         <HowItWorks />
@@ -56,7 +49,12 @@ export default function MarketingHome() {
         <FAQ />
         <WhatsAppCTA />
         <FinalCTA />
-      </main>
+            {/* Last in the page's own flow: its header is `fixed top-0` and
+          transparent over the hero, so the top of the document is covered — and
+          anywhere above the fold the ask would shift the page under a finger
+          when it mounts. */}
+      <CookieConsent />
+</main>
       <Footer />
     </>
   );

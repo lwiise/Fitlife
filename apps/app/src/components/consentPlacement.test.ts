@@ -73,10 +73,15 @@ describe("consent ask placement", () => {
     expect(consentCode).not.toMatch(/pointer-events/);
   });
 
-  it("is mounted above {children}, so it is in flow at the top of the document", () => {
+  it("is mounted AFTER {children}, so nothing above it can shift when it mounts", () => {
+    // Position is load-bearing, not cosmetic. In flow at the TOP of <body> the
+    // ask pushed the whole page down when it mounted at hydration, moving a
+    // control out from under a finger already descending on it — the same
+    // mis-tap the `fixed bottom-0` bar caused, spread over every control instead
+    // of the bottom band. Last in the document, nothing above it can move.
     const slot = layoutSource.indexOf("<ConsentSlot />");
     expect(slot).toBeGreaterThan(-1);
-    expect(slot).toBeLessThan(layoutSource.indexOf("{children}"));
+    expect(slot).toBeGreaterThan(layoutSource.indexOf("{children}"));
   });
 
   it("asks only where the user is not mid-task and nothing can cover it", () => {
@@ -85,7 +90,7 @@ describe("consent ask placement", () => {
     expect(shouldRenderConsentInAppSlot("/dashboard")).toBe(true);
     expect(shouldRenderConsentInAppSlot("/dashboard/")).toBe(true);
 
-    // The landing page places it below its own hero — its header is
+    // The landing page places it at the end of its own flow — its header is
     // `fixed top-0` and transparent, so the top of the document is covered.
     expect(shouldRenderConsentInAppSlot("/")).toBe(false);
     expect(shouldRenderConsentInAppSlot("//")).toBe(false);

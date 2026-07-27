@@ -39,14 +39,17 @@ export default function RootLayout({
       <body className="antialiased">
         <SentryUserSync />
         <AnalyticsProvider />
-        {/* First block of the document and IN FLOW, deliberately not a bar at
-            the end of the body: as `fixed bottom-0` this covered the bottom band
-            of the viewport at every scroll offset, which is where every primary
-            CTA in this app lives. App-wide, not marketing-only — a deep-link
-            signup never sees `/`, and under opt-in consent that would mean never
-            measured. */}
-        <ConsentSlot />
         {children}
+        {/* LAST in the document, deliberately. As `fixed bottom-0` this covered
+            the bottom band of the viewport at every scroll offset — where every
+            primary CTA in this app lives. Moving it into flow fixed that, but at
+            the TOP of <body> it then pushed the whole page down when it mounted
+            at hydration, relocating a control out from under a finger already
+            descending on it: the same mis-tap, just spread over every control
+            instead of the bottom band. Nothing above the last element can move.
+            App-wide, not marketing-only — a deep-link signup never sees `/`, and
+            under opt-in consent that would mean never measured. */}
+        <ConsentSlot />
         <VersionWatcher />
         <BuildStamp />
       </body>

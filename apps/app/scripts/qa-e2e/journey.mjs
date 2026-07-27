@@ -829,7 +829,16 @@ try {
           memberPointer += 1;
         }
         const queued = composedQueue[memberPointer];
-        if (queued && queued.kind !== seen.kind) {
+        // A MALE owner's spouse is genuinely indistinguishable on screen: the
+        // builder passes role={isMale ? "other_adult" : "dad"} and MemberWizard
+        // only titles «إضافة الزوج» for role="dad", so she renders as
+        // «إضافة فرد بالغ» — byte-identical to a second adult. The screen cannot
+        // resolve it, so the queue wins for exactly that pair, and it is not
+        // drift. Everything else still trusts the screen, because position-only
+        // tracking is what silently put a husband's 175cm/82kg into a
+        // seven-year-old's form.
+        const spouseAsAdult = queued?.kind === "husband" && seen.kind === "adult";
+        if (queued && queued.kind !== seen.kind && !spouseAsAdult) {
           log(`    ⚠ MEMBER POINTER: screen says ${sig}, composed queue says ${queued.kind}#${queued.index} — trusting the screen`);
           journal.push({
             screen,
@@ -837,7 +846,7 @@ try {
             memberPointerDrift: { screen: sig, queue: `${queued.kind}#${queued.index}`, pointer: memberPointer },
           });
         }
-        currentMember = seen;
+        currentMember = spouseAsAdult ? { ...queued, via: `${seen.via} (male owner's spouse)` } : seen;
       } else if (before.inputs.some((i) => /^m-|^hk-/.test(i.id ?? ""))) {
         // A member form is plainly on screen but its header matched nothing we
         // know. Fall back to the old position heuristic — and SAY SO. Letting the
