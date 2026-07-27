@@ -14,6 +14,7 @@ import FAQ from "@/marketing/components/sections/FAQ";
 import WhatsAppCTA from "@/marketing/components/sections/WhatsAppCTA";
 import FinalCTA from "@/marketing/components/sections/FinalCTA";
 import Footer from "@/marketing/components/sections/Footer";
+import { CookieConsent } from "@/components/CookieConsent";
 
 // The marketing homepage is public + indexable (overrides the root layout's
 // app-wide robots: noindex).
@@ -36,6 +37,13 @@ export default function MarketingHome() {
       <Header />
       <main id="main" className="flex flex-1 flex-col">
         <Hero />
+        {/* The landing places the consent ask itself (ConsentSlot skips `/`):
+            Header is `fixed inset-x-0 top-0` and transparent over the hero, so a
+            block at the top of the document would sit under the logo and the
+            header CTA — the same occlusion the fix removes, at the other end of
+            the screen. Below the hero it is in the page's own flow, reached
+            within the first scroll and covering nothing. */}
+        <CookieConsent />
         <SocialProofStrip />
         <Problem />
         <HowItWorks />

@@ -1,75 +1,63 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   getAnalyticsConsent,
   setAnalyticsConsent,
   track,
 } from "@/lib/analytics";
+import { CONSENT_ASK_CLASS, CONSENT_ASK_LABEL } from "./consentPlacement";
 
 /**
- * Analytics consent banner — mounted APP-WIDE from the root layout.
+ * Analytics consent ask — IN the page, never OVER it.
  *
- * Two things changed when the authenticated funnel was instrumented:
+ * This is the THIRD build of this component, and the two before it are the
+ * reason it now looks this plain. None of them may come back:
  *
- * 1. It moved out of app/(marketing)/layout.tsx. A user who signs up from a
- *    deep link never sees the landing page, so under opt-in consent they could
- *    never be measured at all.
- * 2. It is no longer a Radix Sheet. That is a modal — overlay, focus trap and
- *    `pointer-events: none` on the body — which is survivable on a landing page
- *    but would freeze the onboarding wizard 1.5s after load until answered.
- *    This is a plain non-modal bar: it never steals focus and never blocks a
- *    tap behind it.
+ * 1. A Radix Sheet. That is a modal — overlay, focus trap and
+ *    `pointer-events: none` on the body — survivable on a landing page, but it
+ *    froze the onboarding wizard 1.5s after load until answered.
+ * 2. A `fixed inset-x-0 bottom-0 z-50` bar. Non-modal, so nothing froze — but a
+ *    viewport-anchored bar still COVERS the bottom ~170px of the viewport at
+ *    EVERY scroll offset, and in this app that band is where the primary control
+ *    always sits: «التالي» on every wizard step, the check-in chips on /plan,
+ *    the pricing CTAs on `/`. Production QA at 420×900 reported «التالي» as
+ *    visible, enabled and stable while every click failed with
+ *    "<section aria-label='إعدادات القياس والخصوصية'> intercepts pointer events".
+ * 3. Reserving the bar's height via `document.body.style.paddingBottom`, bolted
+ *    onto (2). It lengthens the DOCUMENT, so it only guarantees clearance at
+ *    MAXIMUM scroll — not where the user is standing mid-form.
  *
- * The choice now actually gates tracking (see lib/analytics). Undecided means
- * NOT tracked.
+ * (2) and (3) together say the geometry was never the problem: any bar of height
+ * h covers h pixels of viewport, and Arabic copy that wraps plus 44px tap
+ * targets (CLAUDE.md) cannot get below ~90px anyway. So the positioning MODEL
+ * changed instead — the ask takes REAL layout space and carries no positioning
+ * classes at all (see consentPlacement.ts). Whoever owns the slot decides where
+ * it sits: ConsentSlot for the app, the landing page for `/`. An element in
+ * normal flow cannot cover a control, at any scroll offset, on any page,
+ * including pages nobody has written yet; the worst a wrong slot can now do is
+ * look odd.
+ *
+ * Still non-modal: no focus trap, nothing inert, no `pointer-events` games. And
+ * no animation — a slide-in would be a moving target for a finger already on its
+ * way to a CTA, which is the same mis-tap this change exists to remove (so there
+ * is nothing left for prefers-reduced-motion to gate).
+ *
+ * Consent stays opt-in — lib/analytics refuses to init until "accepted" — so
+ * ignoring this forever simply means never measured, and /settings
+ * («القياس والتحسين») can flip the choice at any time afterwards.
  */
 export function CookieConsent() {
   const [open, setOpen] = useState(false);
-  const [shown, setShown] = useState(false);
-  const barRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (getAnalyticsConsent() !== "unset") return;
-
-    const timer = window.setTimeout(() => {
-      setOpen(true);
-      // Second frame so the enter transition has a start state to animate from.
-      requestAnimationFrame(() => setShown(true));
-    }, 1500);
-    return () => window.clearTimeout(timer);
+    // Decided at mount, NOT on the old 1.5s timer. The delay was harmless for an
+    // overlay and is not for a block in flow: content shifting down 1.5s after
+    // paint moves a CTA out from under a finger already descending on it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only localStorage read; [] deps, no render loop
+    if (getAnalyticsConsent() === "unset") setOpen(true);
   }, []);
-
-  /**
-   * Reserve the bar's height at the bottom of the page while it is up.
-   *
-   * Being non-modal is not enough on its own: a `fixed bottom-0` bar still
-   * COVERS whatever sits at the bottom of the page, and in this app that is the
-   * primary CTA — «التالي» on every onboarding wizard step. Production QA caught
-   * the click being swallowed on the mom wizard, which is the highest-drop-off
-   * screen in the funnel; a user could still dismiss the bar first, but having
-   * to is not acceptable there.
-   *
-   * Measured rather than hardcoded because the copy wraps to a different height
-   * on narrow screens.
-   */
-  useEffect(() => {
-    if (!open) return;
-    const el = barRef.current;
-    if (!el) return;
-    const prev = document.body.style.paddingBottom;
-    const apply = () => {
-      document.body.style.paddingBottom = `${el.offsetHeight}px`;
-    };
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      document.body.style.paddingBottom = prev;
-    };
-  }, [open]);
 
   if (!open) return null;
 
@@ -89,14 +77,8 @@ export function CookieConsent() {
   };
 
   return (
-    <section
-      ref={barRef}
-      aria-label="إعدادات القياس والخصوصية"
-      className={`fixed inset-x-0 bottom-0 z-50 p-3 transition-transform duration-300 ease-out motion-reduce:transition-none ${
-        shown ? "translate-y-0" : "translate-y-full"
-      }`}
-    >
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 rounded-2xl border border-ink/10 bg-surface p-4 shadow-lg sm:flex-row sm:items-center">
+    <section aria-label={CONSENT_ASK_LABEL} className={CONSENT_ASK_CLASS}>
+      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
         <p className="flex-1 text-sm leading-relaxed text-ink">
           نستخدم أدوات قياس مجهولة الهوية لنعرف أين يتعثّر الاستخدام ونحسّنه. لا
           نقيس بياناتك الصحية، ولا يبدأ القياس قبل موافقتك.
