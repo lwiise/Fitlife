@@ -11,6 +11,7 @@ import {
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
 import {
+  collapseMealAbsences,
   collapseMealMarks,
   collapseWorkoutMarks,
   isISODate,
@@ -160,8 +161,9 @@ export default async function PlanPage({
     // mints a new plan row for the same week, and a plan-id read rendered
     // every earlier mark as unmarked while the board still counted it.
     // collapseMealMarks dedupes the multi-version fan-in (last write wins) and
-    // re-derives day_index from local_date. Verdicts/absences stay plan-id
-    // keyed (per-plan opinions / planning facts). select("*") on purpose:
+    // re-derives day_index from local_date. ABSENCES are read the same way
+    // (see collapseMealAbsences); verdicts stay plan-id keyed — meal_verdicts
+    // has no local_date column, so that one needs a migration first. select("*") on purpose:
     // member_id is a 00019 column — naming it would fail the whole read on a
     // pre-apply prod, while * degrades to rows without it (house tolerance
     // pattern). meal_verdicts is a 00017 table; a missing table degrades to [].
@@ -192,11 +194,23 @@ export default async function PlanPage({
         supabase.from("meal_verdicts").select("*").eq("meal_plan_id", latest.id).limit(400),
         (async (): Promise<{ data: unknown[] | null }> => {
           try {
-            return await (supabase as unknown as SupabaseClient)
+            // CALENDAR-keyed, exactly like the check-in read above. Every
+            // dispatch mints a new meal_plans row and only archives the old
+            // one, so a plan-id read went empty mid-week and stranded the
+            // absences on the superseded plan — reverting the batch to its
+            // unscaled size and letting an excluded member's personal mark
+            // light the shared chip. Falls back to the plan-id read when the
+            // week anchor is unusable, matching the check-in query.
+            const base = (supabase as unknown as SupabaseClient)
               .from("meal_absences")
-              .select("*")
-              .eq("meal_plan_id", latest.id)
-              .limit(400);
+              .select("*");
+            return await (anchor
+              ? base
+                  .eq("user_id", profile.id)
+                  .gte("local_date", anchor)
+                  .lte("local_date", addDaysISO(anchor, 6))
+              : base.eq("meal_plan_id", latest.id)
+            ).limit(400);
           } catch {
             return { data: null };
           }
@@ -226,11 +240,18 @@ export default async function PlanPage({
           member_id: (r.member_id ?? null) as string | null,
           verdict: r.verdict as string,
         })),
-        absences: ((absenceRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-          day_index: r.day_index as number,
-          slot: r.slot as string,
-          member_id: (r.member_id ?? "") as string,
-        })),
+        // Same collapse the check-ins get: dedupe the fan-in from several
+        // same-week plan versions and re-derive day_index from local_date
+        // against the current week anchor.
+        absences: collapseMealAbsences(
+          ((absenceRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            local_date: (r.local_date ?? null) as string | null,
+            day_index: r.day_index as number,
+            slot: r.slot as string,
+            member_id: (r.member_id ?? "") as string,
+          })),
+          anchor ?? undefined,
+        ),
       };
     })(),
     // Deferred members the tier can't cover → don't auto-drain or show
