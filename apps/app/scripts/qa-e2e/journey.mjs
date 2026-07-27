@@ -341,7 +341,14 @@ async function clickAdvance(page) {
     if (HOUSEHOLD && /تخطّي|تخطي/.source === pattern.source) continue;
     const hit = candidates.find((c) => pattern.test(c.text));
     if (hit) {
-      await hit.b.click();
+      // A click that cannot land must not kill the run: report it as "did not
+      // move" and let the escalation + 3-strike abort handle it, the same as a
+      // button that simply refused. A bare throw here loses every screen after.
+      try {
+        await hit.b.click({ timeout: 15_000 });
+      } catch {
+        return `${hit.text} (CLICK BLOCKED)`;
+      }
       return hit.text;
     }
   }
@@ -427,6 +434,24 @@ async function handleWorkoutDays(page) {
 
 const browser = await chromium.launch({ executablePath: CHROME });
 const ctx = await browser.newContext({ locale: "ar-SA", viewport: { width: 420, height: 900 } });
+// Answer the analytics consent bar BEFORE the first paint, so it never mounts.
+//
+// It is `fixed bottom-0`, so it covers the bottom of the VIEWPORT at any scroll
+// position — the body-padding mitigation in CookieConsent only clears it at max
+// scroll. On any wizard step taller than the viewport (the ~28-chip health
+// screen) «التالي» lands under it and Playwright reports the button as visible
+// and stable but pointer-intercepted, which killed whole runs.
+//
+// "declined" rather than "accepted": bot traffic must not land in PostHog.
+// NOTE: this makes the driver blind to that overlap by construction — the
+// consent bar itself needs its own targeted test, not this one.
+await ctx.addInitScript(() => {
+  try {
+    localStorage.setItem("fitlife_cookie_consent", "declined");
+  } catch {
+    /* private mode — the bar will mount and the run may hit the overlap */
+  }
+});
 const page = await ctx.newPage();
 const consoleErrors = [];
 const failedRequests = [];
