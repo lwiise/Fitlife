@@ -13,6 +13,7 @@ import {
   homeAllowedIds,
   isGymGearExercise,
   pickSubstitute,
+  isInjuryContraindicated,
 } from "./equipment";
 import { MemberWorkoutSchema, type MemberWorkout, type WorkoutProfile } from "./schema";
 
@@ -332,5 +333,80 @@ describe("enforceWorkoutProfileFit — both", () => {
       expect(ex.home_variant_id).not.toBeNull();
       expect(homeAllowedIds(profile()).has(ex.home_variant_id!)).toBe(true);
     }
+  });
+});
+
+/**
+ * Declared injuries reach the MODEL as a mandatory exclusion clause
+ * («إصابات معلنة (استبعاد وبدائل إلزامية)»). They must also bind the
+ * DETERMINISTIC repair, which ships on the final attempt instead of a re-roll —
+ * otherwise code installs the exact movement the questionnaire was asked in
+ * order to avoid.
+ */
+describe("injuries bind the deterministic repair, not just the prompt", () => {
+  const HOME_BODYWEIGHT = homeAllowedIds({ equipment: [] });
+
+  it("never substitutes a knee-injured trainee INTO a squat or lunge", () => {
+    // leg_press is illegal at home; its substitutes are goblet_squat/squat —
+    // both squat-pattern, both ruled out by a knee injury.
+    const sub = pickSubstitute("leg_press", HOME_BODYWEIGHT, false, ["knee"]);
+    expect(sub).toBeNull();
+    // Without the injury the same call still resolves, so this is the injury
+    // doing the work rather than the table being empty.
+    expect(pickSubstitute("leg_press", HOME_BODYWEIGHT, false, [])).not.toBeNull();
+  });
+
+  it("never substitutes a back-injured trainee INTO a hinge", () => {
+    for (const id of ["barbell_deadlift", "leg_curl"]) {
+      const sub = pickSubstitute(id, HOME_BODYWEIGHT, false, ["back"]);
+      if (sub) {
+        expect(isInjuryContraindicated(sub, ["back"])).toBe(false);
+      }
+    }
+  });
+
+  it("never substitutes a shoulder-injured trainee INTO a push or pull", () => {
+    for (const id of ["chest_press_machine", "lat_pulldown", "seated_cable_row"]) {
+      const sub = pickSubstitute(id, HOME_BODYWEIGHT, false, ["shoulder"]);
+      if (sub) expect(isInjuryContraindicated(sub, ["shoulder"])).toBe(false);
+    }
+  });
+
+  it("holds for EVERY catalog id and every single injury", () => {
+    for (const inj of ["knee", "back", "shoulder"]) {
+      for (const ex of EXERCISE_CATALOG) {
+        const sub = pickSubstitute(ex.id, HOME_BODYWEIGHT, false, [inj]);
+        if (sub === null) continue; // dropping the id is the safe outcome
+        expect(
+          isInjuryContraindicated(sub, [inj]),
+          `${ex.id} -> ${sub} is contraindicated for ${inj}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("leaves an uninjured trainee's substitutions exactly as they were", () => {
+    for (const ex of EXERCISE_CATALOG) {
+      expect(pickSubstitute(ex.id, HOME_BODYWEIGHT, false, [])).toBe(
+        pickSubstitute(ex.id, HOME_BODYWEIGHT, false, undefined),
+      );
+    }
+  });
+
+  it("treats 'other' as unknown rather than guessing an exclusion", () => {
+    // We do not know what «أخرى» means; the model handles it via injury_notes.
+    for (const ex of EXERCISE_CATALOG) {
+      expect(isInjuryContraindicated(ex.id, ["other"])).toBe(false);
+    }
+  });
+
+  it("maps each injury to the patterns it rules out", () => {
+    expect(isInjuryContraindicated("squat", ["knee"])).toBe(true);
+    expect(isInjuryContraindicated("lunge", ["knee"])).toBe(true);
+    expect(isInjuryContraindicated("romanian_deadlift", ["back"])).toBe(true);
+    expect(isInjuryContraindicated("pushup", ["shoulder"])).toBe(true);
+    // and does not over-reach
+    expect(isInjuryContraindicated("pushup", ["knee"])).toBe(false);
+    expect(isInjuryContraindicated("plank", ["knee", "back", "shoulder"])).toBe(false);
   });
 });

@@ -254,8 +254,21 @@ export function MemberWizard({
 
   const [name, setName] = useState(initial?.name ?? "");
   const [birthYear, setBirthYear] = useState(initial?.birth_year?.toString() ?? "");
+  // Unanswered for the two types that ASK (adult and child both carry a "sex"
+  // step). It used to default to "female" for everything that was not a
+  // non-dad adult, which pre-answered the child step: a mother adding three
+  // sons saw أنثى already selected, tapped «التالي» three times, and all three
+  // landed as sex='female' role='daughter' — after which the plan and the tabs
+  // called her sons البنت, updateMemberPersonal re-derived the wrong role on
+  // every later edit, and correcting it forced a full regeneration (sex is part
+  // of the row memberEditIsSubstantive diffs). The `sex ? goNext() : setError`
+  // guard on that step only works if the field starts empty.
+  //
+  // pregnant/lactating KEEP "female": those flows have no sex step at all, so
+  // there would be no way to answer it.
   const [sex, setSex] = useState<string>(
-    initial?.sex ?? (role === "dad" ? "male" : type === "adult" ? "" : "female"),
+    initial?.sex ??
+      (role === "dad" ? "male" : type === "adult" || type === "child" ? "" : "female"),
   );
   const [heightCm, setHeightCm] = useState(initial?.height_cm?.toString() ?? "");
   const [weightKg, setWeightKg] = useState(initial?.weight_kg?.toString() ?? "");
@@ -403,7 +416,9 @@ export function MemberWizard({
   const resetForNext = () => {
     setName("");
     setBirthYear("");
-    setSex(role === "dad" ? "male" : type === "adult" ? "" : "female");
+    setSex(
+      role === "dad" ? "male" : type === "adult" || type === "child" ? "" : "female",
+    );
     setHeightCm("");
     setWeightKg("");
     setActivity("");

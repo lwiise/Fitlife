@@ -142,6 +142,11 @@ function fitFlagsFor(trainee: WorkoutTrainee): ProfileFitFlags {
   return {
     pregnant,
     recentPostpartum: p.months_postpartum != null && p.months_postpartum <= 3,
+    // The injuries the trainee declared in onboarding. They already reach the
+    // model as a mandatory exclusion clause; passing them here stops the
+    // DETERMINISTIC repair — which ships on the final attempt instead of a
+    // re-roll — from installing the very movement they rule out.
+    injuries: trainee.profile.injuries,
   };
 }
 
