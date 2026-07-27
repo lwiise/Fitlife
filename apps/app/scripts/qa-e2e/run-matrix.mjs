@@ -136,11 +136,20 @@ async function settle(creds, accounts) {
         pending.delete(key);
         continue;
       }
-      const meal = snap.gens.find((g) => (g.plan_kind ?? "meal") === "meal");
-      if (meal && isTerminal(meal)) {
+      // EVERY kind must settle, not just the meal. Settling on the meal alone
+      // stopped the watch while a workout run was still going, and verify()
+      // then ignored it — solo-athletic passed with a `started` workout row
+      // that actually completed two minutes later. A genuinely failed workout
+      // would have passed the same way.
+      const gens = snap.gens ?? [];
+      if (gens.length > 0 && gens.every(isTerminal)) {
         done.set(key, { ...acct, ...snap });
         pending.delete(key);
-        log(`settled ${key}: ${meal.status} (${Math.round((meal.duration_ms ?? 0) / 1000)}s, $${meal.cost_usd ?? "?"})`);
+        const parts = gens.map(
+          (g) =>
+            `${g.plan_kind ?? "meal"}:${g.status} ${Math.round((g.duration_ms ?? 0) / 1000)}s $${g.cost_usd ?? "?"}`,
+        );
+        log(`settled ${key}: ${parts.join(" | ")}`);
       }
     }
     if (pending.size === 0) break;
@@ -174,11 +183,17 @@ function verify(persona, snap) {
   }
   if (snap.signIn) return { verdict: "FAIL", notes: [`could not sign in: ${snap.signIn}`] };
 
-  const meal = (snap.gens ?? []).find((g) => (g.plan_kind ?? "meal") === "meal");
-  if (!meal) notes.push("no plan_generations row");
-  else {
-    notes.push(`generation: ${meal.status}${meal.error_message ? ` — ${meal.error_message}` : ""}`);
-    if (meal.status !== "completed") notes.push("NOT completed");
+  // Check every generation the account produced. Checking only the meal row is
+  // what let a non-terminal workout through as a pass.
+  const gens = snap.gens ?? [];
+  if (gens.length === 0) notes.push("no plan_generations row");
+  for (const g of gens) {
+    const kind = g.plan_kind ?? "meal";
+    notes.push(`${kind}: ${g.status}${g.error_message ? ` — ${g.error_message}` : ""}`);
+    if (g.status !== "completed") notes.push(`${kind} NOT completed`);
+  }
+  if (persona.scope === "workout" && !gens.some((g) => g.plan_kind === "workout")) {
+    notes.push("workout scope but NO workout generation was dispatched");
   }
 
   const pd = snap.plan?.plan_data;
@@ -206,7 +221,9 @@ function verify(persona, snap) {
     if (benef !== want) notes.push(`MEMBER COUNT MISMATCH: got ${benef}, expected ${want}`);
   }
 
-  const bad = notes.some((n) => /FAIL|BREACH|MISMATCH|EMPTY DAY|NOT completed|no plan/.test(n));
+  const bad = notes.some((n) =>
+    /FAIL|BREACH|MISMATCH|EMPTY DAY|NOT completed|no plan|NO workout/.test(n),
+  );
   return { verdict: bad ? "FAIL" : "PASS", notes };
 }
 

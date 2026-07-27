@@ -15,6 +15,7 @@ import { chromium } from "playwright-core";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { BASE, PASSWORD } from "./creds.mjs";
 import { getPersona } from "./personas.mjs";
+import { expandHousehold, memberFieldRules } from "./memberFields.mjs";
 
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
 const arg = (k) =>
@@ -60,6 +61,12 @@ const FORCED_OPTIONS = persona?.force ?? [];
 const CHIP_ANSWERS = persona?.chips ?? [{ match: /كبدة/, chips: ["كبدة"] }];
 // Members screen: toggles/steppers to apply before pressing the CTA.
 const HOUSEHOLD = persona?.household ?? null;
+// Flat sequence of members the wizard will ask about, in the app's own queue
+// order, so each one gets an age-appropriate birth year (children get DISTINCT
+// ages — that is the point of the multi-child personas).
+const MEMBER_QUEUE = expandHousehold(HOUSEHOLD);
+let memberPointer = -1;
+let lastMemberProgress = null;
 
 const journal = [];
 
@@ -97,7 +104,7 @@ async function screenState(page) {
 }
 
 /** Fill recognised + generic empty inputs. Returns a list of what it did. */
-async function fillInputs(page) {
+async function fillInputs(page, memberRules = null) {
   const acted = [];
   const inputs = page.locator("input:visible, textarea:visible");
   for (let i = 0; i < (await inputs.count()); i++) {
@@ -105,6 +112,27 @@ async function fillInputs(page) {
     const id = await el.getAttribute("id");
     const placeholder = (await el.getAttribute("placeholder")) ?? "";
     const current = await el.inputValue().catch(() => "");
+
+    // Family-member wizard: its ids are abbreviated (m-name, m-by, m-h, m-w) and
+    // match nothing in FIELD_VALUES, which holds the OWNER's answers. Without
+    // this the generic numeric fallback below wrote "2" into the birth year and
+    // never touched the name, so every household run died on «أكملي الاسم وسنة
+    // الميلاد» — the app refusing junk, which read as a product bug.
+    if (memberRules) {
+      const type = await el.getAttribute("type");
+      if (type === "checkbox" || type === "radio") continue;
+      if (current) continue;
+      const rule = memberRules.find(([re]) => re.test(id ?? ""));
+      if (rule) {
+        await el.fill(rule[1]);
+        acted.push(`${id}=${rule[1]}`);
+      } else if (type === "number") {
+        // Never invent a number here. A wrong one passes the form and fails
+        // server-side validation, where a harness gap looks like a product bug.
+        acted.push(`${id ?? "num"}=SKIPPED(unmapped)`);
+      }
+      continue;
+    }
 
     if (id && id in FIELD_VALUES) {
       const want = FIELD_VALUES[id];
@@ -496,7 +524,22 @@ try {
     // text fields and tries to advance; we start making selections and ticking
     // consent boxes only once the step actually refuses to move. That keeps the
     // profile honest AND tells us which groups are genuinely required.
-    const filled = await fillInputs(page);
+    // Which member is the wizard asking about? Every member restarts at step 1,
+    // so a progress reset to "1" on the members path means the next one in the
+    // queue. The queue order mirrors OnboardingFamilyBuilder.start(). This has to
+    // be right: an adult's birth year fails a child's form.
+    if (path.startsWith("/onboarding/members") && before.progress === "1") {
+      if (lastMemberProgress !== "1") memberPointer += 1;
+    }
+    if (path.startsWith("/onboarding/members")) lastMemberProgress = before.progress;
+
+    const currentMember = path.startsWith("/onboarding/members")
+      ? MEMBER_QUEUE[memberPointer]
+      : null;
+    const filled = await fillInputs(
+      page,
+      currentMember ? memberFieldRules(currentMember) : null,
+    );
     const forced = await forceOptions(page);
     if (HOUSEHOLD && path.startsWith("/onboarding/members")) {
       forced.push(...(await applyHousehold(page, HOUSEHOLD)));
