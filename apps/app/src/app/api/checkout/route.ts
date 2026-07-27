@@ -95,17 +95,13 @@ export async function POST(request: Request) {
     );
   }
   const variantId = getVariantId(parsed.tier, parsed.cadence);
-  // Report only what is actually knowable here: whether this pair resolved to an
-  // env override or to the built-in id. The store's mode is Lemonsqueezy-side
-  // state that this process cannot see.
-  //
-  // This used to log "using TEST-MODE variant id … to take real payments"
-  // whenever the overrides were unset — which was backwards. The built-ins are
-  // LIVE, so the message reassured whoever read the log at the exact moment a
-  // real card was charged.
+  // Report only what is knowable here: whether this pair resolved to an env
+  // override or to the built-in id. The store's MODE is Lemonsqueezy-side state
+  // this process cannot see — an earlier version of this line asserted a mode in
+  // each direction and was wrong once in each, so it no longer guesses.
   if (!usingLiveVariantIds()) {
     console.warn(
-      `[checkout] ${parsed.tier}/${parsed.cadence}: no ${variantEnvVar(parsed.tier, parsed.cadence)} set, using built-in variant id ${variantId} — the built-ins are LIVE and charge real cards`,
+      `[checkout] ${parsed.tier}/${parsed.cadence}: no ${variantEnvVar(parsed.tier, parsed.cadence)} set, using built-in variant id ${variantId} — verify the store mode before assuming this cannot charge`,
     );
   }
 
