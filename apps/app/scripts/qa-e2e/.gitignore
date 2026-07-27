@@ -8,6 +8,8 @@ matrix-accounts.json
 matrix-accounts.jsonl
 matrix-results*.json
 cleanup-report.json
+# Snapshot of a real account's family members (names, ages, measurements).
+household-snapshot-*.json
 
 # Diagnostic dumps of a real account's plan_data.
 plan-dump.json
