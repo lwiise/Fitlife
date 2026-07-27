@@ -78,7 +78,7 @@ export function TrialBanner({
     ? [
         { done: checklist.planReady, href: "/plan", label: g("أنشئي خطة بيتك", "أنشئ خطة بيتك") },
         { done: checklist.advisorTried, href: "/chat", label: g("اسألي المستشارة سؤالك الأول", "اسأل المستشارة سؤالك الأول") },
-        { done: checklist.weightLogged, href: "/journey", label: g("سجّلي وزنك الأول — لكِ وحدك", "سجّل وزنك الأول — لك وحدك") },
+        { done: checklist.weightLogged, href: "/journey", label: g("سجّلي وزنك الأول", "سجّل وزنك الأول") },
       ]
     : null;
   const showChecklist = steps !== null && steps.some((s) => !s.done);
