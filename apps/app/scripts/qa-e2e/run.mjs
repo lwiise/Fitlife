@@ -156,7 +156,7 @@ async function triggerGeneration(page) {
   // click handler, and the click is silently swallowed. Wait for the network to
   // settle AND for the fiber to exist before clicking.
   await page.goto(`${BASE}/pricing?from=onboarding`, { waitUntil: "networkidle" });
-  const btn = page.getByRole("button", { name: /أكملي بخطتك/ });
+  const btn = page.getByRole("button", { name: /أكمل(ي)? بخطتك/ });
   if ((await btn.count()) === 0) {
     throw new Error("free-path button «أكملي بخطتك» not rendered on /pricing?from=onboarding");
   }

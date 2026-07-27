@@ -42,7 +42,7 @@ REQUIRED patterns:
 - NO letter-spacing on Arabic text
 
 ## Tone (Arabic Copy)
-- Address the woman of the house: "أنتِ"
+- Address the woman of the house: "أنتِ" — this is the DEFAULT voice, not the only one. Owner-directed copy on authenticated surfaces inflects for the answered الجنس via `genderPick(ownerSex)` (`apps/app/src/lib/copy/gender.ts`): pass `profiles.sex` for "you" copy, a member's sex for text about that member. Feminine is the fallback for null (question unanswered, legacy profile, logged-out visitor), so marketing/pre-signup copy stays feminine. NEVER dual-write ("اختاري/اختر") — pick one form per string pair.
 - Warm but confident, NEVER saccharine
 - NO exclamation marks in body copy
 - Specific over generic

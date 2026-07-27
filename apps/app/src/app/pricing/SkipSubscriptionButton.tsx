@@ -5,20 +5,26 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { generateSoloAndContinue } from "@/app/onboarding/actions";
 import { capture } from "@/lib/analytics";
+import { genderPick } from "@/lib/copy/gender";
 
 /**
  * Post-onboarding "continue with just my plan" escape from the subscription screen.
  * Generates the primary user's plan only (the trial tier caps to one person) and
- * sends her to /plan. She can subscribe later to unlock the rest of the family.
+ * sends them to /plan. They can subscribe later to unlock the rest of the family.
  *
  * The action used to redirect unconditionally, so a refused generation (medical
- * gate, inactive subscription, dispatch failure) landed her on an empty plan page
+ * gate, inactive subscription, dispatch failure) landed them on an empty plan page
  * with nothing to explain it. It now returns the reason and we stay put and show it.
  */
-export function SkipSubscriptionButton() {
+export function SkipSubscriptionButton({
+  ownerSex,
+}: {
+  ownerSex?: string | null;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const g = genderPick(ownerSex);
 
   const run = () => {
     setError(null);
@@ -64,7 +70,10 @@ export function SkipSubscriptionButton() {
             aria-hidden="true"
           />
         )}
-        أكملي بخطتك أنتِ فقط الآن — مجاناً
+        {g(
+          "أكملي بخطتك أنتِ فقط الآن — مجاناً",
+          "أكمل بخطتك أنتَ فقط الآن — مجاناً",
+        )}
       </button>
       {error ? (
         <p
@@ -75,7 +84,10 @@ export function SkipSubscriptionButton() {
         </p>
       ) : (
         <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
-          تقدرين تشتركين لاحقاً ونجهّز خطط باقي أفراد العائلة.
+          {g(
+            "تقدرين تشتركين لاحقاً ونجهّز خطط باقي أفراد العائلة.",
+            "تقدر تشترك لاحقاً ونجهّز خطط باقي أفراد العائلة.",
+          )}
         </p>
       )}
     </div>

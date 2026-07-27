@@ -5,19 +5,23 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { Tier, Cadence } from "@fitlife/config";
 import { capture, captureBeacon } from "@/lib/analytics";
+import { genderPick } from "@/lib/copy/gender";
 
 export function CheckoutButton({
   tier,
   cadence,
   tierName,
+  ownerSex,
 }: {
   tier: Tier;
   cadence: Cadence;
   tierName: string;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const g = genderPick(ownerSex);
 
   function handleClick() {
     setErrorMessage(null);
@@ -53,10 +57,18 @@ export function CheckoutButton({
         }
 
         capture("checkout_failed", { tier, cadence, status: res.status });
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
+        setErrorMessage(
+          body.error ??
+            g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"),
+        );
       } catch {
         capture("checkout_failed", { tier, cadence, status: "network" });
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        setErrorMessage(
+          g(
+            "حدث خطأ في الاتصال. حاولي مرة ثانية",
+            "حدث خطأ في الاتصال. حاول مرة ثانية",
+          ),
+        );
       }
     });
   }
@@ -78,7 +90,7 @@ export function CheckoutButton({
             جاري التحضير...
           </>
         ) : (
-          `اختاري ${tierName}`
+          g(`اختاري ${tierName}`, `اختر ${tierName}`)
         )}
       </button>
       {errorMessage && (

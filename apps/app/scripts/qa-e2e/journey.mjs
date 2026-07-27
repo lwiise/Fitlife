@@ -468,7 +468,7 @@ try {
         break;
       }
       pricingClicked = true;
-      const free = page.getByRole("button", { name: /أكملي بخطتك/ });
+      const free = page.getByRole("button", { name: /أكمل(ي)? بخطتك/ });
       if ((await free.count()) === 0) {
         log(`✗ /pricing rendered without the free-path button — stopping`);
         journal.push({ screen, path, heading: before.heading, error: "no free-path button" });
