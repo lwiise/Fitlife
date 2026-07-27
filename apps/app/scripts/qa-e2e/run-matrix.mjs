@@ -8,13 +8,14 @@
 //                 retry wave and before the final token/cost write)
 //   3. VERIFY   — per-account checks: day completeness, calorie floor, members stored
 //
-// The email ledger is written the moment an account is created, BEFORE anything
-// can fail, so a crash never orphans a real production account. Cleanup reads it.
+// The email ledger is APPENDED the moment an account is created, BEFORE anything
+// can fail, so neither a crash nor a re-run can orphan a live production account.
+// (It used to be keyed by persona and overwritten — see recordAccount.)
 //
 //   node run-matrix.mjs --only=solo-loss,fam-2 [--concurrency=3] [--settle-min=25]
 
 import { spawn } from "node:child_process";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync, appendFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 import { PERSONAS } from "./personas.mjs";
@@ -27,7 +28,7 @@ const arg = (k) => {
 const ONLY = arg("only")?.split(",").map((s) => s.trim()).filter(Boolean) ?? null;
 const CONCURRENCY = Number(arg("concurrency") ?? 3);
 const SETTLE_MIN = Number(arg("settle-min") ?? 25);
-const LEDGER = "matrix-accounts.json";
+const LEDGER = "matrix-accounts.jsonl";
 const RESULTS = "matrix-results.json";
 
 const selected = ONLY ? PERSONAS.filter((p) => ONLY.includes(p.key)) : PERSONAS;
@@ -40,19 +41,41 @@ function emailFor(key) {
   return `fitlife.qa+${key}-${Math.random().toString(36).slice(2, 9)}@gmail.com`;
 }
 
-// ─── Ledger — written before any work, so cleanup can always find accounts ──
-function loadLedger() {
-  if (!existsSync(LEDGER)) return {};
-  try {
-    return JSON.parse(readFileSync(LEDGER, "utf8"));
-  } catch {
-    return {};
-  }
-}
+// ─── Ledger — append-only, written before any work ──────────────────────────
+//
+// APPEND, never overwrite. The first version keyed a JSON object by persona, so
+// re-running a persona replaced its email and silently orphaned the previous
+// LIVE production account: three household rounds left 12 accounts that existed
+// on prod but appeared in no ledger. They were only recoverable because the
+// result files happened to have been backed up.
+//
+// JSONL so every account ever created is one line, and a partially-written file
+// still parses line-by-line.
 function recordAccount(key, email) {
-  const led = loadLedger();
-  led[key] = { email, password: PASSWORD, created_at: new Date().toISOString() };
-  writeFileSync(LEDGER, JSON.stringify(led, null, 2));
+  appendFileSync(
+    LEDGER,
+    JSON.stringify({ key, email, password: PASSWORD, created_at: new Date().toISOString() }) + "\n",
+  );
+}
+
+/** Every account ever recorded, newest last, de-duplicated by email. */
+export function readLedger() {
+  if (!existsSync(LEDGER)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const line of readFileSync(LEDGER, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line);
+      if (!seen.has(row.email)) {
+        seen.add(row.email);
+        out.push(row);
+      }
+    } catch {
+      /* skip a torn line rather than lose the whole ledger */
+    }
+  }
+  return out;
 }
 
 // ─── Phase 1 — journeys ─────────────────────────────────────────────────────
@@ -279,4 +302,4 @@ for (const a of accounts) {
 writeFileSync(RESULTS, JSON.stringify({ ranAt: new Date().toISOString(), totalCostUsd: spend, report }, null, 2));
 log(`\nMEASURED SPEND: $${spend.toFixed(4)} across ${report.length} accounts`);
 log(`pass ${report.filter((r) => r.verdict === "PASS").length} / fail ${report.filter((r) => r.verdict === "FAIL").length}`);
-log(`results → ${RESULTS}, accounts → ${LEDGER}`);
+log(`results → ${RESULTS}, accounts → ${LEDGER} (${readLedger().length} total ever created)`);
