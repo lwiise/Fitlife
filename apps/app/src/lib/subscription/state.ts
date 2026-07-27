@@ -25,6 +25,10 @@ export interface SubscriptionRow {
   trial_ends_at: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
+  // LemonSqueezy's paid-through date on a cancelled/paused subscription. Read
+  // because a cancellation often arrives with renews_at null and ends_at set,
+  // and isSubscriptionActive needs a date to justify the remaining access.
+  ends_at: string | null;
   cancel_at_period_end: boolean;
   lemonsqueezy_subscription_id: string | null;
   lemonsqueezy_customer_id: string | null;
@@ -49,7 +53,7 @@ export async function getCurrentSubscriptionFresh(
   const { data, error } = await supabase
     .from("subscriptions")
     .select(
-      "id, user_id, tier, status, cadence, trial_started_at, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, lemonsqueezy_subscription_id, lemonsqueezy_customer_id, lemonsqueezy_variant_id, created_at, updated_at",
+      "id, user_id, tier, status, cadence, trial_started_at, trial_ends_at, current_period_start, current_period_end, ends_at, cancel_at_period_end, lemonsqueezy_subscription_id, lemonsqueezy_customer_id, lemonsqueezy_variant_id, created_at, updated_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -93,7 +97,20 @@ export function isTrialExpired(sub: SubscriptionRow): boolean {
  *     cancel-at-period-end case where the row stays 'active' until the
  *     paid-through date and then transitions to 'expired' via the webhook
  *     or a stale-period check)
+ *   - status === 'cancelled' AND the paid-through date is still in the future.
+ *     Cancelled means "will not renew", NOT "access ends now" — that is what
+ *     'expired' is for, and subscription_expired sets it. Our own cancel route
+ *     never writes this status (it keeps the row 'active' and only flags
+ *     cancel_at_period_end), so before this branch existed the two cancellation
+ *     paths disagreed: cancelling through the LemonSqueezy portal arrived as
+ *     subscription_updated with status='cancelled' and killed access instantly,
+ *     while the subscription page went on promising «الخدمة تستمر حتى نهاية
+ *     فترتك الحالية». A customer three days into a paid month lost plan
+ *     generation and the advisor while still being told, on screen, that they
+ *     had 27 days left.
  *   - status === 'trialing' AND trial_ends_at is in the future
+ *
+ * 'paused' is deliberately NOT here: billing has stopped, so access should too.
  */
 export function isSubscriptionActive(sub: SubscriptionRow): boolean {
   if (sub.status === "active") {
@@ -101,6 +118,13 @@ export function isSubscriptionActive(sub: SubscriptionRow): boolean {
     // Webhooks fill this; only legacy/seed rows may have it null — treat as active.
     if (!sub.current_period_end) return true;
     return new Date(sub.current_period_end).getTime() > Date.now();
+  }
+  if (sub.status === "cancelled") {
+    // Unlike 'active', a missing date is NOT treated as open-ended access — a
+    // cancelled row with no paid-through date has nothing to justify it.
+    const paidThrough = sub.current_period_end ?? sub.ends_at;
+    if (!paidThrough) return false;
+    return new Date(paidThrough).getTime() > Date.now();
   }
   if (sub.status === "trialing") return !isTrialExpired(sub);
   return false;
@@ -126,11 +150,19 @@ export function isPastDue(sub: SubscriptionRow): boolean {
  * checkout would orphan it. Internal trials never carry an LS id, so trial
  * users still check out normally; cancelled/expired/lapsed rows fall through
  * (starting a fresh subscription is the correct recovery there).
+ *
+ * 'cancelled' is excluded EXPLICITLY rather than by falling out of
+ * isSubscriptionActive, which now grants access through the paid-through date.
+ * Those are two different questions: she may still USE what she paid for, and
+ * she may still RE-SUBSCRIBE. Deriving the second from the first would strand
+ * her — no checkout button, and no un-cancel flow to reach either. The
+ * cancelled LS subscription will not renew, so a fresh one cannot double-bill.
  */
 export function hasLiveLemonsqueezySubscription(
   sub: SubscriptionRow | null,
 ): boolean {
   if (!sub?.lemonsqueezy_subscription_id) return false;
+  if (sub.status === "cancelled") return false;
   return isSubscriptionActive(sub) || isPastDue(sub);
 }
 

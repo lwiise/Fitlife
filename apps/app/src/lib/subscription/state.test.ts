@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   hasLiveLemonsqueezySubscription,
+  isSubscriptionActive,
   type SubscriptionRow,
 } from "./state";
 
@@ -25,6 +26,7 @@ function makeSub(overrides: Partial<SubscriptionRow>): SubscriptionRow {
     trial_ends_at: null,
     current_period_start: PAST,
     current_period_end: FUTURE,
+    ends_at: null,
     cancel_at_period_end: false,
     lemonsqueezy_subscription_id: "ls-123",
     lemonsqueezy_customer_id: "cus-123",
@@ -71,5 +73,70 @@ describe("hasLiveLemonsqueezySubscription", () => {
   it("allows an 'active' row whose paid period has lapsed", () => {
     const sub = makeSub({ current_period_end: PAST });
     expect(hasLiveLemonsqueezySubscription(sub)).toBe(false);
+  });
+
+  // isSubscriptionActive now grants access through the paid-through date on a
+  // cancelled row. Re-subscribing is a DIFFERENT question and must stay open —
+  // deriving this predicate from that one would leave her with no checkout
+  // button and no un-cancel flow, i.e. stranded.
+  it("still allows re-subscribing while a cancelled sub is inside its paid period", () => {
+    const sub = makeSub({ status: "cancelled", current_period_end: FUTURE });
+    expect(isSubscriptionActive(sub)).toBe(true);
+    expect(hasLiveLemonsqueezySubscription(sub)).toBe(false);
+  });
+});
+
+/**
+ * Cancelled means "will not renew", not "access ends now" — 'expired' is what
+ * ends access, and subscription_expired sets it.
+ *
+ * The app's own cancel route never writes status='cancelled': it keeps the row
+ * 'active' and flags cancel_at_period_end. Cancelling through the LemonSqueezy
+ * customer portal instead arrives as subscription_updated with status
+ * 'cancelled'. Before this, those two paths disagreed — the portal one revoked
+ * plan generation and the advisor instantly while the subscription page still
+ * promised «الخدمة تستمر حتى نهاية فترتك الحالية».
+ */
+describe("isSubscriptionActive — a cancelled subscription keeps what it paid for", () => {
+  it("grants access while the paid period is in the future", () => {
+    expect(
+      isSubscriptionActive(makeSub({ status: "cancelled", current_period_end: FUTURE })),
+    ).toBe(true);
+  });
+
+  it("revokes access once the paid period has passed", () => {
+    expect(
+      isSubscriptionActive(makeSub({ status: "cancelled", current_period_end: PAST })),
+    ).toBe(false);
+  });
+
+  it("falls back to ends_at when LemonSqueezy sent no renews_at", () => {
+    const sub = makeSub({
+      status: "cancelled",
+      current_period_end: null,
+      ends_at: FUTURE,
+    });
+    expect(isSubscriptionActive(sub)).toBe(true);
+  });
+
+  it("denies a cancelled row with NO paid-through date at all", () => {
+    // Deliberately unlike 'active', where a null period end means "legacy row,
+    // treat as active". A cancellation with no date has nothing to justify it.
+    const sub = makeSub({
+      status: "cancelled",
+      current_period_end: null,
+      ends_at: null,
+    });
+    expect(isSubscriptionActive(sub)).toBe(false);
+  });
+
+  it("leaves the terminal states terminal", () => {
+    expect(
+      isSubscriptionActive(makeSub({ status: "expired", current_period_end: FUTURE })),
+    ).toBe(false);
+    // Paused: billing has stopped, so access stops with it.
+    expect(
+      isSubscriptionActive(makeSub({ status: "paused", current_period_end: FUTURE })),
+    ).toBe(false);
   });
 });
