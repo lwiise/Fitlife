@@ -901,14 +901,22 @@ try {
         break;
       }
     }
-    const chosen = stuck >= 1 ? await chooseOptions(page) : [];
+    // The picker is composed DELIBERATELY by applyHousehold and then verified, so
+    // nothing generic may touch it afterwards. chooseOptions selects
+    // `button[aria-pressed], button[aria-checked]` grouped by parentElement, and
+    // the two CheckRows («زوج», «خدامة تطبخ للعائلة») are siblings in one div —
+    // i.e. ONE group. On a stuck retry it would pick one and silently change the
+    // household AFTER verifyHousehold said it was correct, which is the exact
+    // class of failure this whole guard exists to end.
+    const onPicker = HOUSEHOLD && /من مع.*في المنزل/.test(before.heading);
+    const chosen = stuck >= 1 && !onPicker ? await chooseOptions(page) : [];
     // The weekday picker needs N selections, so it runs after the generic pass
     // (which supplies focus area / day count / session length) rather than
     // instead of it.
     if (stuck >= 1 && path.startsWith("/onboarding/workout")) {
       chosen.push(...(await handleWorkoutDays(page)));
     }
-    const ticked = stuck >= 2 ? await checkBoxes(page) : [];
+    const ticked = stuck >= 2 && !onPicker ? await checkBoxes(page) : [];
     await page.waitForTimeout(200);
     const clicked = path.startsWith("/onboarding/plan-scope")
       ? await handlePlanScope(page)
