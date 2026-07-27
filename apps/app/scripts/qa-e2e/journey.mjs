@@ -67,6 +67,9 @@ const HOUSEHOLD = persona?.household ?? null;
 const MEMBER_QUEUE = expandHousehold(HOUSEHOLD);
 let memberPointer = -1;
 let lastMemberProgress = null;
+// The household is composed exactly once per run — see the call site for why a
+// second pass over the picker corrupts the run.
+let householdApplied = false;
 
 const journal = [];
 
@@ -257,6 +260,11 @@ async function forceOptions(page) {
  * Members screen: apply the persona's household before pressing the CTA.
  * Toggles are switch-like buttons; steppers are +/- pairs inside the row, so
  * the "+" is located relative to the row's label rather than by index.
+ *
+ * NOT idempotent, by construction: a toggle already on is left alone (the
+ * aria-pressed check), but a stepper is pressed row.count times with no read of
+ * the value it already holds — so a second pass ADDS that many again. The
+ * caller, not this function, is responsible for running it once.
  */
 async function applyHousehold(page, household) {
   const acted = [];
@@ -541,7 +549,16 @@ try {
       currentMember ? memberFieldRules(currentMember) : null,
     );
     const forced = await forceOptions(page);
-    if (HOUSEHOLD && path.startsWith("/onboarding/members")) {
+    // The path is NOT enough to identify the picker: /onboarding/members serves
+    // both «من معكِ في المنزل؟» (the toggles/steppers) and every per-member
+    // detail step («الطول والوزن», «الاسم وسنة الميلاد», …). applyHousehold is
+    // label-based, so on a re-render of the picker — a stuck retry, a re-mount —
+    // it presses each "+" row.count times AGAIN. Nothing fails at that moment;
+    // the household silently grows and the run only breaks screens later, as a
+    // wizard queue and a stored beneficiary count nobody asked for. So: match
+    // the picker heading (the app genders it, معكِ / معكَ) and compose once.
+    if (HOUSEHOLD && !householdApplied && /من مع.*في المنزل/.test(before.heading)) {
+      householdApplied = true;
       forced.push(...(await applyHousehold(page, HOUSEHOLD)));
     }
     const chosen = stuck >= 1 ? await chooseOptions(page) : [];
