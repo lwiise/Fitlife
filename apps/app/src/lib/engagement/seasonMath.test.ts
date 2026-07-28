@@ -10,6 +10,8 @@ import {
   type SeasonMealMark,
   type SeasonMember,
   type SeasonWorkoutMark,
+  plannedMealSlots,
+  collapseMealAbsences,
 } from "./seasonMath";
 
 const WEEK_START = "2026-07-17"; // Friday, matching a real plan anchor
@@ -771,5 +773,136 @@ describe("dayHasCookedMark", () => {
     expect(dayHasCookedMark(checkins, 1)).toBe(true);
     expect(dayHasCookedMark(checkins, 2)).toBe(false);
     expect(dayHasCookedMark(checkins, 3)).toBe(false);
+  });
+});
+
+/**
+ * The % denominator. A day can hold two snack-slot meals (mealOrder.ts exists
+ * to bucket morning vs evening snacks, and «4-5 وجبات» plans produce them
+ * routinely) but meal_checkins is keyed (day_index, slot, member) — so only ONE
+ * mark per slot is possible and counting both made 100% literally unreachable.
+ */
+describe("plannedMealSlots — the denominator a member can actually reach", () => {
+  const day = (...slots: string[]) => ({ meals: slots.map((slot) => ({ slot })) });
+
+  it("counts a two-snack day once for the snack slot", () => {
+    expect(plannedMealSlots([day("breakfast", "lunch", "dinner", "snack", "snack")])).toBe(4);
+  });
+
+  it("makes a perfect 5-meal week reach 100%, not 80%", () => {
+    const week = Array.from({ length: 7 }, () =>
+      day("breakfast", "lunch", "dinner", "snack", "snack"),
+    );
+    const planned = plannedMealSlots(week);
+    expect(planned).toBe(28); // not 35
+    // A member who marked every markable meal now scores a full week.
+    expect(Math.min(1, 28 / planned)).toBe(1);
+  });
+
+  it("does not change a plan with one meal per slot", () => {
+    const week = Array.from({ length: 7 }, () => day("breakfast", "lunch", "dinner"));
+    expect(plannedMealSlots(week)).toBe(21);
+  });
+
+  it("stops snack count from deciding the ranking", () => {
+    // Two members, same behaviour: every planned dish cooked as written.
+    const fourMealDay = day("breakfast", "lunch", "dinner", "snack");
+    const fiveMealDay = day("breakfast", "lunch", "dinner", "snack", "snack");
+    const a = plannedMealSlots(Array.from({ length: 7 }, () => fourMealDay));
+    const b = plannedMealSlots(Array.from({ length: 7 }, () => fiveMealDay));
+    expect(a).toBe(b);
+  });
+
+  it("handles empty days", () => {
+    expect(plannedMealSlots([{ meals: [] }, day("lunch")])).toBe(1);
+    expect(plannedMealSlots([])).toBe(0);
+  });
+});
+
+/**
+ * Absences must be read the same way check-ins are — by calendar week, not by
+ * plan id. Every generation dispatch mints a new meal_plans row (a member add,
+ * an edit, a regenerate, and the drain all do), and the superseded plan is only
+ * ARCHIVED, never deleted — so a plan-id read went empty mid-week and stranded
+ * the rows on the old plan forever.
+ */
+describe("collapseMealAbsences — exclusions survive a mid-week plan re-mint", () => {
+  const WEEK = "2026-07-26"; // day_index 0
+
+  it("re-derives day_index from the meal's date against the week anchor", () => {
+    const out = collapseMealAbsences(
+      [{ local_date: "2026-07-30", day_index: 99, slot: "dinner", member_id: "d1" }],
+      WEEK,
+    );
+    expect(out).toEqual([{ day_index: 4, slot: "dinner", member_id: "d1" }]);
+  });
+
+  it("keeps ONE entry when the same exclusion exists on two plan versions", () => {
+    // Plan A's row and plan B's row for the same meal — the exact fan-in a
+    // calendar read produces after a re-mint.
+    const out = collapseMealAbsences(
+      [
+        { local_date: "2026-07-30", day_index: 4, slot: "dinner", member_id: "d1" },
+        { local_date: "2026-07-30", day_index: 4, slot: "dinner", member_id: "d1" },
+      ],
+      WEEK,
+    );
+    expect(out).toHaveLength(1);
+  });
+
+  it("keeps separate members and separate slots apart", () => {
+    const out = collapseMealAbsences(
+      [
+        { local_date: "2026-07-30", day_index: 4, slot: "dinner", member_id: "d1" },
+        { local_date: "2026-07-30", day_index: 4, slot: "dinner", member_id: "d2" },
+        { local_date: "2026-07-30", day_index: 4, slot: "lunch", member_id: "d1" },
+      ],
+      WEEK,
+    );
+    expect(out).toHaveLength(3);
+  });
+
+  it("drops rows outside the plan week rather than mis-placing them", () => {
+    const out = collapseMealAbsences(
+      [
+        { local_date: "2026-07-25", day_index: 0, slot: "dinner", member_id: "d1" },
+        { local_date: "2026-08-05", day_index: 3, slot: "dinner", member_id: "d1" },
+      ],
+      WEEK,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("keeps FUTURE days — an absence is a planning fact, not adherence", () => {
+    // «she travels Thursday», recorded on Sunday.
+    const out = collapseMealAbsences(
+      [{ local_date: "2026-08-01", day_index: 6, slot: "dinner", member_id: "d1" }],
+      WEEK,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.day_index).toBe(6);
+  });
+
+  it("falls back to the stored day_index when there is no anchor or date", () => {
+    expect(
+      collapseMealAbsences([
+        { local_date: null, day_index: 2, slot: "lunch", member_id: "d1" },
+      ]),
+    ).toEqual([{ day_index: 2, slot: "lunch", member_id: "d1" }]);
+    expect(
+      collapseMealAbsences(
+        [{ local_date: null, day_index: 2, slot: "lunch", member_id: "d1" }],
+        "not-a-date",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("ignores rows with no member and out-of-range fallback days", () => {
+    expect(
+      collapseMealAbsences([
+        { local_date: null, day_index: 2, slot: "lunch", member_id: "" },
+        { local_date: null, day_index: 9, slot: "lunch", member_id: "d1" },
+      ]),
+    ).toEqual([]);
   });
 });

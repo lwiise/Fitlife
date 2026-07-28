@@ -5,6 +5,8 @@ import {
   isGoalCelebrationEligibleMember,
   isWeighInEligibleMember,
   isWeighInEligibleMom,
+  isGoalCelebrationEligibleOwner,
+  isInNoLossFramingState,
 } from "./eligibility";
 
 const YEAR = 2026;
@@ -97,5 +99,82 @@ describe("isWeighInEligibleMom", () => {
     expect(isWeighInEligibleMom(undefined, YEAR)).toBe(true);
     expect(isWeighInEligibleMom(YEAR - 17, YEAR)).toBe(false);
     expect(isWeighInEligibleMom(YEAR - 18, YEAR)).toBe(true);
+  });
+});
+
+/**
+ * Pregnancy and lactation are not weight-change goals. The rule has to hold on
+ * BOTH sides of «تحقّق الهدف» — the account owner and every family member —
+ * and it had drifted: the member branch excluded both states while the owner
+ * branch tested only `is_pregnant`, so a nursing mother who had set a
+ * pre-pregnancy target was congratulated on the card her children read.
+ */
+describe("no-loss-framing states are never celebrated on the shared card", () => {
+  const ADULT_YEAR = YEAR - 34;
+
+  it("excludes a LACTATING owner — the case that was live", () => {
+    expect(
+      isGoalCelebrationEligibleOwner(
+        { member_type: "lactating", is_pregnant: false, birth_year: ADULT_YEAR },
+        YEAR,
+      ),
+    ).toBe(false);
+  });
+
+  it("excludes a pregnant owner by either signal", () => {
+    expect(
+      isGoalCelebrationEligibleOwner(
+        { member_type: "pregnant", is_pregnant: false, birth_year: ADULT_YEAR },
+        YEAR,
+      ),
+    ).toBe(false);
+    expect(
+      isGoalCelebrationEligibleOwner(
+        { member_type: "adult", is_pregnant: true, birth_year: ADULT_YEAR },
+        YEAR,
+      ),
+    ).toBe(false);
+  });
+
+  it("still celebrates an ordinary adult owner", () => {
+    expect(
+      isGoalCelebrationEligibleOwner(
+        { member_type: "adult", is_pregnant: false, birth_year: ADULT_YEAR },
+        YEAR,
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses a minor owner, as the weigh-in gate already did", () => {
+    expect(
+      isGoalCelebrationEligibleOwner(
+        { member_type: "adult", is_pregnant: false, birth_year: YEAR - 15 },
+        YEAR,
+      ),
+    ).toBe(false);
+  });
+
+  it("treats the owner and an identical family member the same way", () => {
+    for (const t of ["pregnant", "lactating"]) {
+      expect(
+        isGoalCelebrationEligibleOwner(
+          { member_type: t, is_pregnant: false, birth_year: ADULT_YEAR },
+          YEAR,
+        ),
+      ).toBe(
+        isGoalCelebrationEligibleMember(
+          { member_type: t, role: "mom", birth_year: ADULT_YEAR },
+          YEAR,
+        ),
+      );
+    }
+  });
+
+  it("flags the states directly", () => {
+    expect(isInNoLossFramingState({ member_type: "lactating" })).toBe(true);
+    expect(isInNoLossFramingState({ member_type: "pregnant" })).toBe(true);
+    expect(isInNoLossFramingState({ member_type: "adult", is_pregnant: true })).toBe(true);
+    expect(isInNoLossFramingState({ member_type: "adult", is_pregnant: false })).toBe(false);
+    expect(isInNoLossFramingState({ member_type: null })).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ import {
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
 import {
   isGoalCelebrationEligibleMember,
-  isWeighInEligibleMom,
+  isGoalCelebrationEligibleOwner,
 } from "./eligibility";
 import { hasReachedWeightGoal } from "./goalMilestone";
 import {
@@ -18,6 +18,7 @@ import {
   collapseWorkoutMarks,
   dayHasCookedMark,
   isISODate,
+  plannedMealSlots,
   workoutMarkingWindow,
   type PlannedTotals,
   type RawSeasonMealRow,
@@ -164,10 +165,11 @@ export async function getFamilySeasonProps(
   // measures completion of the member's OWN plan). Meals from the meal plan;
   // the `sessions` key exists ONLY when the member is in the ready workout plan
   // — its presence is what switches that member to the 50/50 formula.
+  // Denominator rule (distinct slots, not raw meals) lives in plannedMealSlots.
   const plannedMealsById = new Map(
     latestPlan.plan_data.members.map((pm) => [
       pm.member_id,
-      pm.days.reduce((n, d) => n + d.meals.length, 0),
+      plannedMealSlots(pm.days),
     ]),
   );
   const plannedSessionsById = new Map<string, number>(
@@ -306,9 +308,16 @@ export async function getFamilySeasonProps(
     arr.push(Number(r.weight_kg));
     seriesByMember.set(r.member_id, arr);
   }
+  // One predicate per side, both built on isInNoLossFramingState, so the owner
+  // and member rules cannot drift apart again — they already had: this branch
+  // checked only is_pregnant, so a LACTATING owner was celebrated while an
+  // identical family member was skipped.
   if (
-    !profile.is_pregnant &&
-    isWeighInEligibleMom(profile.birth_year ?? null) &&
+    isGoalCelebrationEligibleOwner({
+      member_type: profile.member_type ?? null,
+      is_pregnant: profile.is_pregnant,
+      birth_year: profile.birth_year ?? null,
+    }) &&
     hasReachedWeightGoal(seriesByMember.get("mom") ?? [], profile.target_weight_kg)
   ) {
     goalReached.push({ id: "mom", name: momName });
@@ -316,8 +325,8 @@ export async function getFamilySeasonProps(
   for (const m of familyMembers) {
     // ADULTS ONLY on this SHARED surface — children keep private records but a
     // child's weight goal is never celebrated on the family «موسم بيتنا» card.
+    // The pregnant/lactating exclusion now lives inside the predicate.
     if (!isGoalCelebrationEligibleMember(m)) continue;
-    if (m.member_type === "pregnant" || m.member_type === "lactating") continue;
     if (hasReachedWeightGoal(seriesByMember.get(m.id) ?? [], m.target_weight_kg)) {
       goalReached.push({ id: m.id, name: m.name });
     }

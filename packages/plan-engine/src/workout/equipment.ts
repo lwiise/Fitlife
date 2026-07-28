@@ -173,12 +173,53 @@ export const GYM_UPGRADE: Readonly<Record<string, string>> = {
   triceps_extension: "triceps_pushdown",
 };
 
-/** First substitute for `originalId` legal under `allowed` (and pregnancy-safe
- * when required). Falls back to the original's pattern staples. */
+/**
+ * Movement patterns a declared injury rules out.
+ *
+ * The trainee's injuries already reach the MODEL as a mandatory clause
+ * («إصابات معلنة (استبعاد وبدائل إلزامية)») — but the deterministic repair below
+ * ran without them, so on the final attempt, where a repair ships instead of a
+ * re-roll, code could install the exact movement the questionnaire collected in
+ * order to avoid. A knee injury could be handed a loaded deep-knee-flexion squat
+ * as the substitute for leg_press; a back injury could be "upgraded" from
+ * glute_bridge to a barbell across the hips; a shoulder injury from wall_pushup
+ * to a chest press machine.
+ *
+ * Pattern-level, not id-level, so a catalog addition is covered the day it lands
+ * rather than the day someone remembers to extend a denylist. "other" is
+ * deliberately empty: we do not know what it means, and guessing an exclusion is
+ * worse than leaving the model's own handling of injury_notes in charge.
+ */
+export const INJURY_FORBIDDEN_PATTERNS: Readonly<
+  Record<string, readonly ExercisePattern[]>
+> = {
+  knee: ["squat", "lunge"],
+  back: ["hinge", "squat"],
+  shoulder: ["push", "pull"],
+  other: [],
+};
+
+/** True when `id` targets a pattern one of the declared injuries rules out. */
+export function isInjuryContraindicated(
+  id: string,
+  injuries: readonly string[] | undefined,
+): boolean {
+  if (!injuries || injuries.length === 0) return false;
+  const ex = EXERCISE_BY_ID.get(id);
+  if (!ex) return false;
+  return injuries.some((inj) =>
+    (INJURY_FORBIDDEN_PATTERNS[inj] ?? []).includes(ex.pattern),
+  );
+}
+
+/** First substitute for `originalId` legal under `allowed` (pregnancy-safe when
+ * required, and never a movement a declared injury rules out). Falls back to the
+ * original's pattern staples. */
 export function pickSubstitute(
   originalId: string,
   allowed: ReadonlySet<string>,
   requirePregnancySafe: boolean,
+  injuries?: readonly string[],
 ): string | null {
   const original = EXERCISE_BY_ID.get(originalId);
   const candidates = [
@@ -190,6 +231,7 @@ export function pickSubstitute(
     const ex = EXERCISE_BY_ID.get(id);
     if (!ex) continue;
     if (requirePregnancySafe && !ex.pregnancy_safe) continue;
+    if (isInjuryContraindicated(id, injuries)) continue;
     return id;
   }
   return null;
@@ -201,6 +243,9 @@ export interface ProfileFitFlags {
   pregnant: boolean;
   /** 0-3 months postpartum: same waiver as pregnancy. */
   recentPostpartum: boolean;
+  /** Declared injuries. Repairs must not install a movement these rule out —
+   * the questionnaire collected them precisely so the program would avoid it. */
+  injuries?: readonly string[];
 }
 
 export interface ProfileFitResult {
@@ -273,7 +318,7 @@ export function enforceWorkoutProfileFit(
       // 1) The exercise itself must be legal for the location/tools.
       if (ex.exercise_id && !allowed.has(ex.exercise_id)) {
         violations.push(`disallowed:${ex.exercise_id}`);
-        const sub = pickSubstitute(ex.exercise_id, allowed, safeOnly);
+        const sub = pickSubstitute(ex.exercise_id, allowed, safeOnly, flags.injuries);
         if (sub) {
           replacements.push({ from: ex.exercise_id, to: sub, kind: "substitute" });
           ex = asCatalogExercise(ex, sub);
@@ -302,7 +347,7 @@ export function enforceWorkoutProfileFit(
         violations.push(
           ex.home_variant_id ? `variant_disallowed:${ex.home_variant_id}` : `variant_missing:${cat.id}`,
         );
-        const sub = pickSubstitute(cat.id, homeAllowed, safeOnly);
+        const sub = pickSubstitute(cat.id, homeAllowed, safeOnly, flags.injuries);
         if (sub) {
           const subCat = EXERCISE_BY_ID.get(sub)!;
           replacements.push({ from: ex.home_variant_id ?? cat.id, to: sub, kind: "variant" });
@@ -343,13 +388,17 @@ export function enforceWorkoutProfileFit(
           if (gymGear / strength >= GYM_GEAR_SHARE_FLOOR) return ex;
           const target = ex.exercise_id ? GYM_UPGRADE[ex.exercise_id] : undefined;
           if (!ex.exercise_id || !target) return ex;
+          // Never "upgrade" INTO a contraindicated movement. A back injury must
+          // not be handed a barbell hip thrust because the gym-gear floor was
+          // short — the floor is a programming preference, the injury is not.
+          if (isInjuryContraindicated(target, flags.injuries)) return ex;
           replacements.push({ from: ex.exercise_id, to: target, kind: "upgrade" });
           gymGear += 1;
           let next = asCatalogExercise(ex, target);
           // The upgrade is gym-only by construction — a «كلاهما» program
           // keeps a legal home variant for it.
           if (homeAllowed && !homeAllowed.has(target)) {
-            const sub = pickSubstitute(target, homeAllowed, safeOnly);
+            const sub = pickSubstitute(target, homeAllowed, safeOnly, flags.injuries);
             const subCat = sub ? EXERCISE_BY_ID.get(sub) : undefined;
             next = {
               ...next,

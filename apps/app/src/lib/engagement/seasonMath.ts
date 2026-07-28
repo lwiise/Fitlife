@@ -92,6 +92,27 @@ export interface PlannedTotals {
   sessions?: number;
 }
 
+/**
+ * How many MEALS a member's planned week actually offers to be marked.
+ *
+ * Distinct slots per day, not raw meal count. `meal_checkins` is keyed
+ * (day_index, slot, member), so a day carrying two snack-slot meals — which
+ * mealOrder.ts exists to bucket, and which «4-5 وجبات» plans produce routinely
+ * — can only ever yield ONE mark for that slot. Counting both made 100%
+ * unreachable: a member on a 5-meal day who cooked every planned dish as
+ * written scored 28/35 = 80% and her card printed a 7-meal deficit she never
+ * had, while a sibling on a 4-meal plan hit 100% for the same behaviour — so
+ * the «فائز هذا الأسبوع» crown turned on snack count rather than adherence.
+ *
+ * Meal identity is (day, slot) everywhere else in this layer; this is the same
+ * rule, applied to the denominator.
+ */
+export function plannedMealSlots(
+  days: ReadonlyArray<{ meals: ReadonlyArray<{ slot: string }> }>,
+): number {
+  return days.reduce((n, d) => n + new Set(d.meals.map((m) => m.slot)).size, 0);
+}
+
 export interface RankedMember extends SeasonMember {
   /** Marks that happened: distinct meals marked + distinct sessions done. */
   score: number;
@@ -237,6 +258,65 @@ export function collapseMealMarks(
  * Collapse the calendar-keyed workout_checkins fan-in to one mark per
  * (member, date) — same last-write-wins rule across workout plan re-mints.
  */
+/** A raw meal_absences row from the calendar-keyed read (00021). */
+export interface RawMealAbsenceRow {
+  local_date?: string | null;
+  day_index: number;
+  slot: string;
+  member_id: string;
+}
+
+/** One member excluded from one meal occurrence. */
+export interface MealAbsence {
+  day_index: number;
+  slot: string;
+  member_id: string;
+}
+
+/**
+ * Collapse calendar-keyed meal_absences to one entry per (day, slot, member).
+ *
+ * The read has to be calendar-keyed for the same reason meal_checkins' is:
+ * EVERY generation dispatch mints a new meal_plans row (createPlanRows is
+ * unconditional — a member add, an edit, a regenerate, and the drain all do
+ * it), and the superseded plan is only ARCHIVED, never deleted. A plan-id-keyed
+ * read therefore returned [] the moment a new plan appeared mid-week, stranding
+ * the absence rows on the old plan forever. The visible damage was worse than
+ * losing the adjustment: the batch quietly reverted to its unscaled size (she
+ * cooks for one more person than she planned for), and because check-ins ARE
+ * calendar-read, the excluded member's PERSONAL «تجاوزتها» stopped being
+ * recognised as an absentee's row and lit the whole household's shared chip —
+ * exactly the leak the out-of-meal rule exists to prevent.
+ *
+ * Rows may repeat across same-week plan versions; presence is presence, so any
+ * match counts. day_index is re-derived from local_date against the plan week
+ * anchor (uniform across versions), falling back to the stored index when there
+ * is no date — same rule as collapseMealMarks.
+ */
+export function collapseMealAbsences(
+  rows: RawMealAbsenceRow[],
+  weekStartDate?: string,
+): MealAbsence[] {
+  const weekStart =
+    weekStartDate && ISO_DATE_RE.test(weekStartDate) ? weekStartDate : undefined;
+  const seen = new Map<string, MealAbsence>();
+  for (const r of rows) {
+    let dayIndex: number | null = null;
+    if (weekStart && r.local_date && ISO_DATE_RE.test(r.local_date)) {
+      const diff = daysFromStart(weekStart, r.local_date);
+      if (diff >= 0 && diff <= 6) dayIndex = diff;
+    } else if (Number.isInteger(r.day_index) && r.day_index >= 0 && r.day_index <= 6) {
+      dayIndex = r.day_index;
+    }
+    if (dayIndex === null || !r.member_id) continue;
+    const key = `${dayIndex}|${r.slot}|${r.member_id}`;
+    if (!seen.has(key)) {
+      seen.set(key, { day_index: dayIndex, slot: r.slot, member_id: r.member_id });
+    }
+  }
+  return [...seen.values()];
+}
+
 export function collapseWorkoutMarks(
   rows: RawSeasonWorkoutRow[],
 ): SeasonWorkoutMark[] {

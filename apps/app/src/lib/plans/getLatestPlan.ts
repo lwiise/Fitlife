@@ -1,12 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { MealPlanSchema, planHasContent, type MealPlan } from "@fitlife/plan-engine";
+import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
 
-// A 'generating' plan (or a 'ready' shell still flagged generating) whose
-// updated_at is older than this is treated as crashed/stale — the background
-// function's hard budget is ~15 min, so past that nothing is still writing.
-export const STALE_GENERATION_MIN = 15;
+import { resolveStaleness, STALE_GENERATION_MIN } from "./staleness";
+
+export { STALE_GENERATION_MIN };
 
 export interface LatestPlanSummary {
   id: string;
@@ -77,46 +76,27 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
   // Dead-man's switch: if the background function was hard-killed at its 15-min
   // budget, its catch never ran, so the row sits in 'generating' (or in a
   // 'ready' shell still flagged generating, or a 'ready' shell with no meals at
-  // all) forever and the viewer shows a perpetual loader. Reclassify a stale
-  // in-flight row as failed so the UI's failed/retry branch fires. (Read-time
-  // only — the DB row is left as-is.) Staleness is measured off updated_at: an
-  // actively-progressing shell rewrites plan_data every day, so it stays fresh;
-  // only a dead one goes stale.
-  const updatedMs = Date.parse(row.updated_at);
-  const ageMin = Number.isNaN(updatedMs)
-    ? Infinity
-    : (Date.now() - updatedMs) / 60_000;
-  // A 'ready' shell that never filled in any meals (worker died after the flip,
-  // or every day failed) is empty — treat it as in-flight so the same staleness
-  // gate can reclassify it once nothing is writing.
-  const planEmpty =
-    finalStatus === "ready" &&
-    (!validatedPlanData || !planHasContent(validatedPlanData));
-  const stillInFlight =
-    finalStatus === "generating" ||
-    (finalStatus === "ready" && validatedPlanData?.generating === true) ||
-    planEmpty;
-  let errorMessage = row.error_message ?? null;
-  if (stillInFlight && ageMin >= STALE_GENERATION_MIN) {
-    console.warn("[getLatestPlan] stale in-flight plan; surfacing as failed", {
-      planId: row.id,
-      ageMin: Math.round(ageMin),
-    });
-    finalStatus = "failed";
-    validatedPlanData = null;
-    errorMessage =
-      errorMessage ?? "تعذّر إكمال إنشاء الخطة. يرجى المحاولة مرة أخرى.";
-  }
+  // all) forever and the viewer shows a perpetual loader. (Read-time only — the
+  // DB row is left as-is.) Staleness is measured off updated_at: an actively-
+  // progressing shell rewrites plan_data every day, so it stays fresh; only a
+  // dead one goes stale. The rule — and, crucially, that a partial week is KEPT
+  // rather than discarded — lives in resolveStaleness so it can be tested.
+  const resolved = resolveStaleness({
+    status: finalStatus,
+    planData: validatedPlanData,
+    updatedAt: row.updated_at,
+    errorMessage: row.error_message ?? null,
+  });
 
   return {
     id: row.id,
-    status: finalStatus,
-    plan_data: validatedPlanData,
-    week_start_date: validatedPlanData?.week_start_date ?? null,
-    member_count: validatedPlanData?.members.length ?? 0,
-    member_ids: validatedPlanData?.members.map((m) => m.member_id) ?? [],
-    in_progress: validatedPlanData?.generating === true,
-    error_message: errorMessage,
+    status: resolved.status,
+    plan_data: resolved.planData,
+    week_start_date: resolved.planData?.week_start_date ?? null,
+    member_count: resolved.planData?.members.length ?? 0,
+    member_ids: resolved.planData?.members.map((m) => m.member_id) ?? [],
+    in_progress: resolved.inProgress,
+    error_message: resolved.errorMessage,
     updated_at: row.updated_at,
   };
 }

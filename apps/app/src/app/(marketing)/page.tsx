@@ -14,6 +14,7 @@ import FAQ from "@/marketing/components/sections/FAQ";
 import WhatsAppCTA from "@/marketing/components/sections/WhatsAppCTA";
 import FinalCTA from "@/marketing/components/sections/FinalCTA";
 import Footer from "@/marketing/components/sections/Footer";
+import { CookieConsent } from "@/components/CookieConsent";
 
 // The marketing homepage is public + indexable (overrides the root layout's
 // app-wide robots: noindex).
@@ -48,7 +49,12 @@ export default function MarketingHome() {
         <FAQ />
         <WhatsAppCTA />
         <FinalCTA />
-      </main>
+            {/* Last in the page's own flow: its header is `fixed top-0` and
+          transparent over the hero, so the top of the document is covered — and
+          anywhere above the fold the ask would shift the page under a finger
+          when it mounts. */}
+      <CookieConsent />
+</main>
       <Footer />
     </>
   );

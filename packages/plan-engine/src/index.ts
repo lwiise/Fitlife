@@ -46,6 +46,18 @@ export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic
 export type { StreamResult } from "./anthropic";
 
 export {
+  planRunBudgetMs,
+  dayLoopDeadline,
+  remainingMs,
+  canFit,
+  DEFAULT_PLAN_RUN_BUDGET_MS,
+  FINALIZE_RESERVE_MS,
+  TRANSLATION_RESERVE_MS,
+  DAY_CALL_ESTIMATE_MS,
+  MIN_VIABLE_CALL_MS,
+} from "./budget";
+
+export {
   canonicalRecipeKey,
   CANONICAL_KEY_VERSION,
 } from "./canonicalRecipeKey";

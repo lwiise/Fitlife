@@ -12,6 +12,15 @@ import {
   dayConcurrency,
   MEMBER_GEN_MAX_ATTEMPTS,
 } from "./constants";
+import {
+  canFit,
+  remainingMs,
+  dayLoopDeadline,
+  planRunBudgetMs,
+  FINALIZE_RESERVE_MS,
+  DAY_CALL_ESTIMATE_MS,
+  MIN_VIABLE_CALL_MS,
+} from "./budget";
 import { z } from "zod";
 import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 import { applyCalorieFloor, type CalorieFloorSubject } from "./calorieFloor";
@@ -291,6 +300,16 @@ export function summarizeDayErrors(errors: string[]): string {
 // A single day re-rolls this many times on a transient CONTENT failure before
 // giving up (separate from MAX_RETRIES, which governs API-transient retries).
 const CONTENT_MAX_RETRIES = 2;
+
+/**
+ * Why a day carries no meals when the run ran out of budget rather than failing.
+ * Distinct wording on purpose: it lands in `plan_generations.error_message` via
+ * missingDaysCause, and "deferred, no model call made" is a very different
+ * operational signal from a model or API failure — one means the household is
+ * bigger than one invocation, the other means something is broken.
+ */
+export const BUDGET_DEFERRED_CAUSE =
+  "deferred: run budget spent before this day started (no model call made)";
 
 /**
  * A one-off bad model RESPONSE that a fresh re-roll typically fixes: malformed
@@ -1176,6 +1195,20 @@ export async function generateMealPlan(params: {
     snapshot: MealPlan,
     info: { readyDays: number; totalDays: number },
   ) => Promise<void> | void;
+  // Absolute epoch ms by which the day loop must be finished. Past it, remaining
+  // days are DEFERRED (they land in missingDays and the caller's drain refills
+  // them) rather than started and hard-killed mid-flight by the function budget.
+  // Omitted → unbounded, exactly the pre-deadline behavior.
+  deadlineMs?: number;
+  // Called with RUNNING cumulative usage after every model call. Exists so a run
+  // that throws — or is trimmed — can still be costed: the totals used to live
+  // only in locals and died with the exception, so every failed generation wrote
+  // cost_usd NULL and the admin cost view counted it as $0.
+  onUsage?: (usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+  }) => void;
 }): Promise<{
   plan: MealPlan;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
@@ -1195,6 +1228,8 @@ export async function generateMealPlan(params: {
     regenScope,
     suppressTargetedMember,
     onProgress,
+    deadlineMs,
+    onUsage,
   } = params;
   let totalIn = 0;
   let totalOut = 0;
@@ -1202,6 +1237,20 @@ export async function generateMealPlan(params: {
   // different per-token prices, so cost is summed per call from each phase's
   // actual model rather than re-priced once at the end with a single model.
   let totalCost = 0;
+  // Publish the running totals so a throw or a budget trim is still costed.
+  // Never let a reporting callback break a generation.
+  const publishUsage = () => {
+    if (!onUsage) return;
+    try {
+      onUsage({
+        input_tokens: totalIn,
+        output_tokens: totalOut,
+        cost_usd: totalCost,
+      });
+    } catch (e) {
+      console.warn("[plan-generate] onUsage threw (ignored)", e);
+    }
+  };
 
   // The week is anchored to the generation day (carried over on incremental
   // member changes). Day names are computed from this anchor, not the model.
@@ -1494,6 +1543,7 @@ export async function generateMealPlan(params: {
     totalIn += sk.tokensIn;
     totalOut += sk.tokensOut;
     totalCost += computeCostUsd(sk.tokensIn, sk.tokensOut, SKELETON_MODEL);
+    publishUsage();
     // A truncated skeleton (stop_reason=max_tokens) yields invalid JSON and kills
     // the whole generation. Retry ONCE at double the cap (clamped to the model
     // ceiling) before giving up — counts the wasted first attempt's tokens toward
@@ -1507,6 +1557,7 @@ export async function generateMealPlan(params: {
       totalIn += sk.tokensIn;
       totalOut += sk.tokensOut;
       totalCost += computeCostUsd(sk.tokensIn, sk.tokensOut, SKELETON_MODEL);
+      publishUsage();
       if (sk.stopReason === "max_tokens")
         throw new PlanValidationError(
           `Skeleton hit max_tokens (${retryMax})`,
@@ -1809,6 +1860,22 @@ export async function generateMealPlan(params: {
     hasTranslation,
   );
   const generateDay = async (dayIndex: number): Promise<void> => {
+    // Budget gate. A day started with no room to finish is worse than a day not
+    // started: it spends tokens, produces nothing, and the hard kill that lands
+    // mid-stream takes the whole run's terminal write with it. Deferring instead
+    // lands the day in `missingDays`, which the caller's drain refills in a
+    // fresh invocation with a fresh budget.
+    if (!canFit(deadlineMs, DAY_CALL_ESTIMATE_MS)) {
+      console.warn(
+        "[plan-generate] deferring day (run budget spent)",
+        dayIndex,
+        `remaining=${Math.round(remainingMs(deadlineMs) / 1000)}s`,
+      );
+      dayErrors.push(BUDGET_DEFERRED_CAUSE);
+      failedDays.add(dayIndex);
+      emit();
+      return;
+    }
     const dayMemberIds = new Set(
       membersToGenerate
         .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
@@ -1827,9 +1894,19 @@ export async function generateMealPlan(params: {
       dayNameByIndex.get(dayIndex),
     );
     let prompt = basePrompt; // band re-rolls append a corrective block
-    // Size this day's cap + timeout to the members actually missing it.
+    // Size this day's cap + timeout to the members actually missing it, then
+    // clamp the timeout to what's actually left: the per-call bound is a
+    // worst-case abort (up to 10 min) and on its own would happily overrun the
+    // function budget it was only ever assumed to fit inside.
     let dayCap = dayMaxTokens(dayMemberIds.size, hasTranslation);
-    const dayTimeout = bigCallTimeoutMs(dayMemberIds.size, hasTranslation);
+    // Recomputed per attempt, not once per day: a re-roll starts later than the
+    // first call did, so a fixed bound would hand the last attempt a budget the
+    // run no longer has.
+    const callTimeout = () =>
+      Math.min(
+        bigCallTimeoutMs(dayMemberIds.size, hasTranslation),
+        remainingMs(deadlineMs),
+      );
     let apiAttempt = 0; // 429/529/5xx/overload/stream/timeout retries (honor Retry-After)
     let contentAttempt = 0; // re-rolls for a one-off malformed/invalid model response
     let bandAttempt = 0; // re-rolls (with corrective note) for out-of-band day calories/protein
@@ -1843,11 +1920,12 @@ export async function generateMealPlan(params: {
           maxTokens: dayCap,
           systemStatic: STATIC_SYSTEM,
           systemPrompt: prompt,
-          timeoutMs: dayTimeout,
+          timeoutMs: callTimeout(),
         });
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
         totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
+        publishUsage();
         if (res.stopReason === "max_tokens") {
           // Truncated. Re-rolling at the same cap will truncate again — retry once
           // at a doubled cap (mirrors the skeleton retry) before failing the day.
@@ -1892,7 +1970,15 @@ export async function generateMealPlan(params: {
             if (!bestOffBand || totalDev < bestOffBand.totalDev) {
               bestOffBand = { slice, totalDev };
             }
-            if (bandAttempt < CONTENT_MAX_RETRIES) {
+            // A band re-roll is a whole extra day call. Only spend one if the
+            // run can still afford it — otherwise take the closest attempt we
+            // already have (that fallback is what `bestOffBand` is for) and
+            // leave the budget to days that have no answer at all. Chasing a
+            // few percent of calorie drift is not worth losing a day over.
+            if (
+              bandAttempt < CONTENT_MAX_RETRIES &&
+              canFit(deadlineMs, retryWaitMs(bandAttempt + 1) + DAY_CALL_ESTIMATE_MS)
+            ) {
               bandAttempt++;
               prompt = `${basePrompt}\n\n${buildDayCorrectiveNote(calorieDevs, proteinDevs)}`;
               await sleep(retryWaitMs(bandAttempt));
@@ -2110,21 +2196,30 @@ export async function generateMealPlan(params: {
         return;
       } catch (err) {
         // (1) API-transient (rate limit / overload / timeout): retry honoring Retry-After.
+        // The wait itself can be up to 60s, so the budget has to cover the sleep
+        // AND the call after it — a retry we can't see through is dead time that
+        // costs a later day its chance to run.
         if (isRetryable(err) && apiAttempt < MAX_RETRIES) {
-          apiAttempt++;
           const ra =
             err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
-          await sleep(retryWaitMs(apiAttempt, ra));
-          continue;
+          const wait = retryWaitMs(apiAttempt + 1, ra);
+          if (canFit(deadlineMs, wait + MIN_VIABLE_CALL_MS)) {
+            apiAttempt++;
+            await sleep(wait);
+            continue;
+          }
         }
         // (2) Transient CONTENT failure (malformed JSON / schema mismatch): re-roll a
         // couple times — a fresh roll usually parses (what the manual "regenerate"
         // button does). Excludes max_tokens (doubled-cap retry above) and logic
         // errors like a resync TypeError (deterministic → fail fast so they surface).
         if (isTransientContentError(err) && contentAttempt < CONTENT_MAX_RETRIES) {
-          contentAttempt++;
-          await sleep(retryWaitMs(contentAttempt));
-          continue;
+          const wait = retryWaitMs(contentAttempt + 1);
+          if (canFit(deadlineMs, wait + MIN_VIABLE_CALL_MS)) {
+            contentAttempt++;
+            await sleep(wait);
+            continue;
+          }
         }
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[plan-generate] day failed (omitting)", dayIndex, msg);
@@ -2146,10 +2241,21 @@ export async function generateMealPlan(params: {
   // to a single extra wave; anything still failing falls through to the drain
   // exactly as before. Skipped when nothing failed, or when EVERY day failed
   // (that run throws below — a second wave wouldn't change the outcome).
+  // Budget-deferred days are NOT flaky model misses — re-running them inside the
+  // same invocation is the one thing guaranteed not to help, since the budget
+  // that stopped them is now smaller still. Only genuinely failed days qualify,
+  // and only while a wave still fits.
   if (failedDays.size > 0 && done.size > 0) {
     const retryDays = daysToGenerate.filter((di) => failedDays.has(di));
-    failedDays.clear();
-    await mapWithConcurrency(retryDays, dayLoopConcurrency, generateDay);
+    if (canFit(deadlineMs, DAY_CALL_ESTIMATE_MS)) {
+      failedDays.clear();
+      await mapWithConcurrency(retryDays, dayLoopConcurrency, generateDay);
+    } else {
+      console.warn(
+        "[plan-generate] skipping second-chance wave (run budget spent)",
+        { days: retryDays.length },
+      );
+    }
   }
 
   await progressTail;
@@ -2343,6 +2449,15 @@ export async function runMealPlanGeneration(params: {
     suppressTargetedMember,
   } = params;
   const startMs = Date.now();
+  // The whole invocation shares one wall-clock box (Netlify's background budget).
+  // Give the day loop a deadline inside it so the run ENDS ITSELF with a partial
+  // week instead of being hard-killed mid-day — a kill skips both the catch and
+  // the success path, leaving the row 'started' and the spend unrecorded forever.
+  const deadlineMs = dayLoopDeadline(startMs, !!context.housekeeper_locale);
+  // The outer bound: everything except the final DB writes must be done by here.
+  const hardDeadlineMs = startMs + planRunBudgetMs() - FINALIZE_RESERVE_MS;
+  // Running usage, mirrored out of the engine so a throw is still costed.
+  let accrued = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
   let plan: MealPlan;
   let usage: { input_tokens: number; output_tokens: number; cost_usd: number };
@@ -2358,6 +2473,10 @@ export async function runMealPlanGeneration(params: {
       regenerateMemberId,
       regenScope,
       suppressTargetedMember,
+      deadlineMs,
+      onUsage: (u) => {
+        accrued = u;
+      },
       // Persist progressively; flip "ready" on the first emit (the shell) so the
       // plan opens showing all days loading and they fill in 1→7.
       onProgress: async (snapshot) => {
@@ -2382,6 +2501,12 @@ export async function runMealPlanGeneration(params: {
         duration_ms: durationMs,
         error_message: errorMessage,
         completed_at: new Date().toISOString(),
+        // Tokens were spent before the throw — the run failed, the bill did not.
+        // Omitting these is why every failed generation used to read $0 in the
+        // admin cost view, biased hardest against the largest households.
+        tokens_in: accrued.input_tokens,
+        tokens_out: accrued.output_tokens,
+        cost_usd: accrued.cost_usd,
       })
       .eq("meal_plan_id", mealPlanId);
 
@@ -2441,7 +2566,18 @@ export async function runMealPlanGeneration(params: {
       familyMemberIds,
       maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
     });
-    if (endLocale && needsTranslate && !stillGenerating) {
+    // Budget gate. `hasPendingGeneration` already defers translation while any
+    // day is unfilled — which covers a budget-trimmed run — but a run that
+    // filled every day right up to its deadline could still start a multi-call
+    // translation with nothing left. Skipping is free: the pass is non-fatal,
+    // the maid view falls back to Arabic, and her next visit re-triggers it.
+    const roomToTranslate = canFit(hardDeadlineMs, MIN_VIABLE_CALL_MS);
+    if (!roomToTranslate && endLocale && needsTranslate && !stillGenerating) {
+      console.warn(
+        "[runMealPlanGeneration] skipping housekeeper translation (run budget spent)",
+      );
+    }
+    if (endLocale && needsTranslate && !stillGenerating && roomToTranslate) {
       const { plan: translated, usage: tUsage } = await translateMealPlan({
         anthropicApiKey,
         plan,

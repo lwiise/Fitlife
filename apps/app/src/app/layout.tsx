@@ -5,7 +5,7 @@ import { SentryUserSync } from "./SentryUserSync";
 import { AnalyticsProvider } from "./AnalyticsProvider";
 import { VersionWatcher } from "@/components/VersionWatcher";
 import { BuildStamp } from "@/components/BuildStamp";
-import { CookieConsent } from "@/components/CookieConsent";
+import { ConsentSlot } from "./ConsentSlot";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -40,11 +40,18 @@ export default function RootLayout({
         <SentryUserSync />
         <AnalyticsProvider />
         {children}
+        {/* LAST in the document, deliberately. As `fixed bottom-0` this covered
+            the bottom band of the viewport at every scroll offset — where every
+            primary CTA in this app lives. Moving it into flow fixed that, but at
+            the TOP of <body> it then pushed the whole page down when it mounted
+            at hydration, relocating a control out from under a finger already
+            descending on it: the same mis-tap, just spread over every control
+            instead of the bottom band. Nothing above the last element can move.
+            App-wide, not marketing-only — a deep-link signup never sees `/`, and
+            under opt-in consent that would mean never measured. */}
+        <ConsentSlot />
         <VersionWatcher />
         <BuildStamp />
-        {/* App-wide, not marketing-only: a deep-link signup never sees `/`, and
-            under opt-in consent that would mean never measured. */}
-        <CookieConsent />
       </body>
     </html>
   );

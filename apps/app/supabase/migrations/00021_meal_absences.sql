@@ -23,7 +23,15 @@
 --     family_members.id); RLS stays on user_id only (house rule).
 --   * Absence never implies anything was or wasn't EATEN — it only redirects
 --     the batch math. No consumption surveillance, no shame states.
---   * Rows die with their plan (CASCADE): a regenerated week starts clean.
+--   * Rows CASCADE with their plan row, but note that generating a new plan
+--     does NOT delete the old one — it is set status='archived' and kept for
+--     /plan/history. So the cascade only fires on account erasure, and these
+--     rows OUTLIVE the plan they were written against. Reads must therefore be
+--     CALENDAR-keyed (user + local_date week), like meal_checkins: the earlier
+--     plan-id read went empty the moment a mid-week dispatch minted a new plan
+--     and silently reverted the batch scaling. (Corrected 07/2026 — the
+--     original note here claimed "a regenerated week starts clean", which
+--     described a cleanup that never runs.)
 --
 -- Style per 00005/00017/00019/00020: idempotent (IF NOT EXISTS + guarded
 -- drops), additive, enum-like text validated in Zod (no DB CHECK beyond the

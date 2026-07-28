@@ -5,7 +5,11 @@ results.json
 # Same rule, matrix runner: the ledger is a list of LIVE production accounts
 # with their password, and the results carry emails plus plan_data.
 matrix-accounts.json
-matrix-results.json
+matrix-accounts.jsonl
+matrix-results*.json
+cleanup-report.json
+# Snapshot of a real account's family members (names, ages, measurements).
+household-snapshot-*.json
 
 # Diagnostic dumps of a real account's plan_data.
 plan-dump.json
@@ -15,3 +19,7 @@ probe-dump.json
 # they show personal data and account state.
 shots/
 *.png
+
+# Runner logs. They carry account emails once the verify phase writes its
+# summary, and they are pure run artifacts either way.
+*.log

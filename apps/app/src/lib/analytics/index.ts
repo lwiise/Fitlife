@@ -60,6 +60,18 @@ export function setAnalyticsConsent(granted: boolean) {
     // Non-fatal: the in-memory decision below still applies for this session.
   }
   if (granted) {
+    // Re-accepting after a decline must actually resume capture. initPostHog()
+    // alone cannot: it early-returns once `loadStarted` is set, so if the SDK had
+    // already loaded and been opted out, accept → decline → accept left the user
+    // looking at "measurement on" while PostHog stayed opted out until a full
+    // reload. Harmless while the only way to answer was a one-shot banner;
+    // reachable now that /settings can change the choice mid-session.
+    pending = pending ?? [];
+    try {
+      client?.opt_in_capturing();
+    } catch {
+      // never break the UX
+    }
     initPostHog();
     return;
   }

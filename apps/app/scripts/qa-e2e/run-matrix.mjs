@@ -8,13 +8,14 @@
 //                 retry wave and before the final token/cost write)
 //   3. VERIFY   — per-account checks: day completeness, calorie floor, members stored
 //
-// The email ledger is written the moment an account is created, BEFORE anything
-// can fail, so a crash never orphans a real production account. Cleanup reads it.
+// The email ledger is APPENDED the moment an account is created, BEFORE anything
+// can fail, so neither a crash nor a re-run can orphan a live production account.
+// (It used to be keyed by persona and overwritten — see recordAccount.)
 //
 //   node run-matrix.mjs --only=solo-loss,fam-2 [--concurrency=3] [--settle-min=25]
 
 import { spawn } from "node:child_process";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync, appendFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 import { PERSONAS } from "./personas.mjs";
@@ -27,7 +28,7 @@ const arg = (k) => {
 const ONLY = arg("only")?.split(",").map((s) => s.trim()).filter(Boolean) ?? null;
 const CONCURRENCY = Number(arg("concurrency") ?? 3);
 const SETTLE_MIN = Number(arg("settle-min") ?? 25);
-const LEDGER = "matrix-accounts.json";
+const LEDGER = "matrix-accounts.jsonl";
 const RESULTS = "matrix-results.json";
 
 const selected = ONLY ? PERSONAS.filter((p) => ONLY.includes(p.key)) : PERSONAS;
@@ -40,19 +41,41 @@ function emailFor(key) {
   return `fitlife.qa+${key}-${Math.random().toString(36).slice(2, 9)}@gmail.com`;
 }
 
-// ─── Ledger — written before any work, so cleanup can always find accounts ──
-function loadLedger() {
-  if (!existsSync(LEDGER)) return {};
-  try {
-    return JSON.parse(readFileSync(LEDGER, "utf8"));
-  } catch {
-    return {};
-  }
-}
+// ─── Ledger — append-only, written before any work ──────────────────────────
+//
+// APPEND, never overwrite. The first version keyed a JSON object by persona, so
+// re-running a persona replaced its email and silently orphaned the previous
+// LIVE production account: three household rounds left 12 accounts that existed
+// on prod but appeared in no ledger. They were only recoverable because the
+// result files happened to have been backed up.
+//
+// JSONL so every account ever created is one line, and a partially-written file
+// still parses line-by-line.
 function recordAccount(key, email) {
-  const led = loadLedger();
-  led[key] = { email, password: PASSWORD, created_at: new Date().toISOString() };
-  writeFileSync(LEDGER, JSON.stringify(led, null, 2));
+  appendFileSync(
+    LEDGER,
+    JSON.stringify({ key, email, password: PASSWORD, created_at: new Date().toISOString() }) + "\n",
+  );
+}
+
+/** Every account ever recorded, newest last, de-duplicated by email. */
+export function readLedger() {
+  if (!existsSync(LEDGER)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const line of readFileSync(LEDGER, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line);
+      if (!seen.has(row.email)) {
+        seen.add(row.email);
+        out.push(row);
+      }
+    } catch {
+      /* skip a torn line rather than lose the whole ledger */
+    }
+  }
+  return out;
 }
 
 // ─── Phase 1 — journeys ─────────────────────────────────────────────────────
@@ -136,11 +159,20 @@ async function settle(creds, accounts) {
         pending.delete(key);
         continue;
       }
-      const meal = snap.gens.find((g) => (g.plan_kind ?? "meal") === "meal");
-      if (meal && isTerminal(meal)) {
+      // EVERY kind must settle, not just the meal. Settling on the meal alone
+      // stopped the watch while a workout run was still going, and verify()
+      // then ignored it — solo-athletic passed with a `started` workout row
+      // that actually completed two minutes later. A genuinely failed workout
+      // would have passed the same way.
+      const gens = snap.gens ?? [];
+      if (gens.length > 0 && gens.every(isTerminal)) {
         done.set(key, { ...acct, ...snap });
         pending.delete(key);
-        log(`settled ${key}: ${meal.status} (${Math.round((meal.duration_ms ?? 0) / 1000)}s, $${meal.cost_usd ?? "?"})`);
+        const parts = gens.map(
+          (g) =>
+            `${g.plan_kind ?? "meal"}:${g.status} ${Math.round((g.duration_ms ?? 0) / 1000)}s $${g.cost_usd ?? "?"}`,
+        );
+        log(`settled ${key}: ${parts.join(" | ")}`);
       }
     }
     if (pending.size === 0) break;
@@ -174,11 +206,17 @@ function verify(persona, snap) {
   }
   if (snap.signIn) return { verdict: "FAIL", notes: [`could not sign in: ${snap.signIn}`] };
 
-  const meal = (snap.gens ?? []).find((g) => (g.plan_kind ?? "meal") === "meal");
-  if (!meal) notes.push("no plan_generations row");
-  else {
-    notes.push(`generation: ${meal.status}${meal.error_message ? ` — ${meal.error_message}` : ""}`);
-    if (meal.status !== "completed") notes.push("NOT completed");
+  // Check every generation the account produced. Checking only the meal row is
+  // what let a non-terminal workout through as a pass.
+  const gens = snap.gens ?? [];
+  if (gens.length === 0) notes.push("no plan_generations row");
+  for (const g of gens) {
+    const kind = g.plan_kind ?? "meal";
+    notes.push(`${kind}: ${g.status}${g.error_message ? ` — ${g.error_message}` : ""}`);
+    if (g.status !== "completed") notes.push(`${kind} NOT completed`);
+  }
+  if (persona.scope === "workout" && !gens.some((g) => g.plan_kind === "workout")) {
+    notes.push("workout scope but NO workout generation was dispatched");
   }
 
   const pd = snap.plan?.plan_data;
@@ -206,7 +244,9 @@ function verify(persona, snap) {
     if (benef !== want) notes.push(`MEMBER COUNT MISMATCH: got ${benef}, expected ${want}`);
   }
 
-  const bad = notes.some((n) => /FAIL|BREACH|MISMATCH|EMPTY DAY|NOT completed|no plan/.test(n));
+  const bad = notes.some((n) =>
+    /FAIL|BREACH|MISMATCH|EMPTY DAY|NOT completed|no plan|NO workout/.test(n),
+  );
   return { verdict: bad ? "FAIL" : "PASS", notes };
 }
 
@@ -262,4 +302,4 @@ for (const a of accounts) {
 writeFileSync(RESULTS, JSON.stringify({ ranAt: new Date().toISOString(), totalCostUsd: spend, report }, null, 2));
 log(`\nMEASURED SPEND: $${spend.toFixed(4)} across ${report.length} accounts`);
 log(`pass ${report.filter((r) => r.verdict === "PASS").length} / fail ${report.filter((r) => r.verdict === "FAIL").length}`);
-log(`results → ${RESULTS}, accounts → ${LEDGER}`);
+log(`results → ${RESULTS}, accounts → ${LEDGER} (${readLedger().length} total ever created)`);

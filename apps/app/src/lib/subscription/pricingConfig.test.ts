@@ -20,11 +20,11 @@ afterEach(() => {
 });
 
 describe("variant id override", () => {
-  // The shipped ids are LIVE and charge real cards (verified 2026-07-26). The
-  // env overrides let one (tier, cadence) pair be pointed elsewhere — e.g. at a
-  // genuine test-mode variant — without a code change. usingLiveVariantIds()
-  // reports whether all eight overrides are set; it does NOT detect the store's
-  // mode, which is Lemonsqueezy-side state this process cannot see.
+  // The shipped ids were verified TEST MODE on 2026-07-27 (the hosted checkout's
+  // order and variant objects both report test_mode: true). The env overrides
+  // point a (tier, cadence) pair at a different variant without a code change.
+  // usingLiveVariantIds() reports whether all eight overrides are SET — never
+  // the store's mode, which is Lemonsqueezy-side state this process cannot see.
   it("falls back to the built-in ids when nothing is configured", () => {
     expect(getVariantId("family", "monthly")).toBe(
       PRICING_TIERS.family.lemonsqueezy_variant_id_monthly,
