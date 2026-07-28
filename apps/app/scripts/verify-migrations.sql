@@ -126,5 +126,13 @@ select * from (values
   ('00022 workout_checkins.intensity (adaptation feedback)',
     (select case when exists (select 1 from information_schema.columns
       where table_schema='public' and table_name='workout_checkins' and column_name='intensity')
+      then 'APPLIED' else 'MISSING' end)),
+  -- Until this is APPLIED every «استراحة» pause writes a value the CHECK
+  -- rejects: LemonSqueezy stops billing, our row stays 'active', and the
+  -- household keeps full access for free with no resume button.
+  ('00023 subscriptions.status allows ''paused''',
+    (select case when exists (select 1 from pg_constraint
+      where conname='subscriptions_status_check'
+      and pg_get_constraintdef(oid) like '%paused%')
       then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);
