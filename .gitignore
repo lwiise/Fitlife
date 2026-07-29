@@ -57,3 +57,7 @@ next-env.d.ts
 # If committed they become submodule gitlinks with no .gitmodules url and break the
 # Netlify build's submodule checkout.
 .claude/worktrees/
+
+# Local design references (cloned repos browsed for layout ideas, never imported).
+# Same gitlink hazard as worktrees if committed.
+_reference/
