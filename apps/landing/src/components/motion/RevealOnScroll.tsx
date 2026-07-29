@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
+import type * as React from "react";
 import type { ReactNode } from "react";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -38,8 +39,26 @@ export function RevealOnScroll({
   const reduce = useReducedMotion();
 
   if (reduce) {
-    const Native = as;
-    return <Native className={className}>{children}</Native>;
+    // The server always renders the motion branch (reduce is null there), so
+    // the DOM arrives with the hidden state inline (opacity:0). This branch
+    // hydrates onto that same host tag, and React does NOT patch attribute
+    // mismatches during hydration in production — a style prop alone leaves
+    // reduced-motion users with permanently invisible sections. The ref
+    // callback runs after mount and clears the stale style imperatively.
+    const Native = as as React.ElementType;
+    return (
+      <Native
+        className={className}
+        ref={(el: HTMLElement | null) => {
+          if (el) {
+            el.style.opacity = "1";
+            el.style.transform = "none";
+          }
+        }}
+      >
+        {children}
+      </Native>
+    );
   }
 
   const M = tags[as];
