@@ -20,6 +20,9 @@ export function ShimmerButton({
     <a
       className={cn(
         "group relative z-0 inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-full border border-white/10 bg-brand-purple-900 px-8 py-3.5 text-base font-bold whitespace-nowrap text-white transition-transform select-none active:translate-y-px motion-reduce:transition-none",
+        // Two-layer focus indicator: the purple outline reads on the light
+        // hero surface, the white ring reads on the purple FinalCTA panel.
+        "focus-visible:ring-4 focus-visible:ring-white/90",
         className,
       )}
       {...props}

@@ -17,8 +17,10 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         // Sales page: white button that reads on the purple-900 closing strip.
+        // Its focus ring must be light too — the default ring (purple-500)
+        // vanishes against the purple background this variant lives on.
         inverse:
-          "bg-brand-surface-elevated text-brand-purple-900 hover:bg-brand-surface-elevated/90",
+          "bg-brand-surface-elevated text-brand-purple-900 hover:bg-brand-surface-elevated/90 focus-visible:border-white focus-visible:ring-white/60",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

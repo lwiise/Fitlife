@@ -17,7 +17,7 @@ export function Header() {
   return (
     <header
       className={cn(
-        "fixed inset-x-0 top-0 z-50 transition-all duration-300 ease-out motion-reduce:transition-none",
+        "fixed start-0 end-0 top-0 z-50 transition-all duration-300 ease-out motion-reduce:transition-none",
         scrolled
           ? "bg-brand-surface/90 py-2 shadow-md backdrop-blur-md"
           : "bg-transparent py-4",
@@ -27,7 +27,7 @@ export function Header() {
         {/* Checklist: replace the text mark with the real logo asset. */}
         <a
           href="#"
-          className="rounded-md px-1 text-xl font-extrabold text-brand-purple-900"
+          className="inline-flex min-h-11 items-center rounded-md px-1 text-xl font-extrabold text-brand-purple-900"
           aria-label="فت لايف — العودة إلى الأعلى"
         >
           Fit Life

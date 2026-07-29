@@ -78,7 +78,7 @@ export function Footer() {
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-white/85 transition-colors hover:text-white"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-white/85 transition-colors hover:text-white focus-visible:outline-white"
         >
           <WhatsAppIcon className="text-whatsapp size-5" />
           واتساب
@@ -90,7 +90,7 @@ export function Footer() {
               <a
                 href={social.href}
                 aria-label={social.label}
-                className="inline-flex size-11 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                className="inline-flex size-11 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white"
               >
                 <social.icon className="size-5" />
               </a>

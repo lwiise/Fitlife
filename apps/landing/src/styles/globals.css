@@ -99,8 +99,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
-  --font-heading: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --font-sans: var(--font-tajawal), system-ui, sans-serif;
+  --font-heading: var(--font-tajawal), system-ui, sans-serif;
 
   --color-brand-purple-50: var(--brand-purple-50);
   --color-brand-purple-100: var(--brand-purple-100);
@@ -193,8 +193,12 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      /* Delays must go too: with `backwards` fill, a zeroed duration alone
+         still holds staggered hero items invisible until their delay lapses. */
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
       scroll-behavior: auto !important;
     }
   }
@@ -214,15 +218,8 @@
   letter-spacing: normal;
 }
 
-@utility text-h1 {
-  font-size: clamp(2rem, 1.65rem + 1.5vw, 3rem);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: normal;
-}
-
 @utility text-h2 {
-  font-size: clamp(1.5rem, 1.24rem + 1.13vw, 2.25rem);
+  font-size: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem);
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: normal;
@@ -250,13 +247,14 @@
 }
 
 /* Hero atmosphere — two low-chroma radials (purple bloom over the start-side
-   headline, a faint warm cream near the price) on the brand surface. Pure CSS,
-   no images, cheap on mobile. Percent positions are physical; the page is
-   RTL-only so they are tuned for dir="rtl" directly. */
+   headline, a faint warm cream behind the price tag) on the brand surface.
+   Pure CSS, no images, cheap on mobile. Requested by the offer spec
+   ("subtle purple gradient/spotlight"); percent positions are physical and
+   tuned for this RTL-only page (start side = right). */
 @utility bg-hero-spotlight {
   background:
     radial-gradient(56% 44% at 86% -4%, oklch(0.935 0.05 295) 0%, transparent 72%),
-    radial-gradient(42% 36% at 6% 24%, oklch(0.96 0.025 84) 0%, transparent 65%),
+    radial-gradient(44% 36% at 76% 64%, oklch(0.96 0.025 84) 0%, transparent 65%),
     var(--color-brand-surface);
 }
 

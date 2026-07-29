@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
-import { DirProvider } from "@/components/providers/direction-provider";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -44,9 +43,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ar" dir="rtl" className={tajawal.variable}>
-      <body className="antialiased">
-        <DirProvider>{children}</DirProvider>
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

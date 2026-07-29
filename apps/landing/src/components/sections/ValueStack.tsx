@@ -72,9 +72,9 @@ export function ValueStack() {
           وش راح يوصلك بالضبط؟
         </h2>
 
-        <div className="mt-10 grid gap-5 md:grid-cols-2">
+        <ul className="mt-10 grid gap-5 md:grid-cols-2">
           {PAID_ITEMS.map((item, i) => (
-            <RevealOnScroll key={item.title} as="article" delayIndex={i}>
+            <RevealOnScroll key={item.title} as="li" delayIndex={i}>
               <Card className="h-full gap-4">
                 <div className="flex items-start justify-between gap-3">
                   <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-xl bg-brand-purple-100 text-brand-purple-700">
@@ -86,14 +86,14 @@ export function ValueStack() {
                 </div>
                 <div>
                   <h3 className="text-h3 text-brand-ink">{item.title}</h3>
-                  <p className="mt-2 leading-relaxed text-brand-ink-muted">
+                  <p className="mt-2 leading-[1.7] text-brand-ink-muted">
                     {item.description}
                   </p>
                 </div>
               </Card>
             </RevealOnScroll>
           ))}
-        </div>
+        </ul>
 
         {/* Free gifts — deliberately breaks the card-grid rhythm. */}
         <RevealOnScroll className="mt-8">
@@ -113,7 +113,7 @@ export function ValueStack() {
                       مجاناً
                     </Badge>
                   </div>
-                  <p className="text-sm leading-relaxed text-brand-ink-muted">
+                  <p className="text-sm leading-[1.7] text-brand-ink-muted">
                     {item.description}
                   </p>
                 </li>
@@ -126,14 +126,18 @@ export function ValueStack() {
       {/* Closing strip — full-bleed purple ledger. */}
       <div className="bg-noise bg-brand-purple-900">
         <div className="container-page flex flex-col items-start gap-6 py-12 md:flex-row md:items-center md:justify-between md:py-14">
-          <p className="max-w-2xl text-lg leading-relaxed text-white md:text-xl">
+          <p className="max-w-2xl text-lg leading-[1.7] text-white md:text-xl">
             المجموع لو اشتريتيها منفصلة:{" "}
             <s className="font-bold text-white/60">
-              أكثر من <span className="tabular-nums">1,550</span> ر.س
+              أكثر من{" "}
+              <span className="tabular-nums">
+                {CONFIG.originalValue.toLocaleString("en-US")}
+              </span>{" "}
+              ر.س
             </s>{" "}
             — سعرها اليوم ضمن الباقة:{" "}
             <strong className="text-gold-500 text-3xl font-extrabold whitespace-nowrap md:text-4xl">
-              <span className="tabular-nums">888</span> ر.س
+              <span className="tabular-nums">{CONFIG.bundlePrice}</span> ر.س
             </strong>{" "}
             فقط بعملية شراء واحدة.
           </p>

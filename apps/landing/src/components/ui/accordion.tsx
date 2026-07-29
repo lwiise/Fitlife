@@ -49,10 +49,12 @@ function AccordionTrigger({
       >
         {children}
         <ChevronDownIcon
+          aria-hidden
           data-slot="accordion-trigger-icon"
           className="pointer-events-none shrink-0 group-aria-expanded/accordion-trigger:hidden"
         />
         <ChevronUpIcon
+          aria-hidden
           data-slot="accordion-trigger-icon"
           className="pointer-events-none hidden shrink-0 group-aria-expanded/accordion-trigger:inline"
         />

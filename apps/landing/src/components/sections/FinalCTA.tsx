@@ -17,7 +17,7 @@ export function FinalCTA() {
                 <span className="text-gold-500 tabular-nums">660</span> ر.س…
                 ويوفّر عليك شهور من التخبط.
               </h2>
-              <p className="mt-4 text-lg leading-relaxed text-white/85">
+              <p className="mt-4 text-lg leading-[1.7] text-white/85">
                 باقة كاملة، متابعة حقيقية، ونتيجة تشوفينها.
               </p>
               <div className="mt-8">
@@ -25,7 +25,9 @@ export function FinalCTA() {
                   href={CONFIG.sallaCheckoutUrl}
                   className="w-full px-10 text-lg sm:w-auto"
                 >
-                  ابدئي الآن — <span className="tabular-nums">888</span> ر.س
+                  ابدئي الآن —{" "}
+                  <span className="tabular-nums">{CONFIG.bundlePrice}</span>{" "}
+                  ر.س
                 </ShimmerButton>
               </div>
             </div>

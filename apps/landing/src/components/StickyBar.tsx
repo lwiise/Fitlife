@@ -33,17 +33,22 @@ export function StickyBar() {
       aria-hidden={!show}
       inert={!show}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 border-t border-border bg-brand-surface-elevated/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(26,16,35,0.08)] backdrop-blur transition-transform duration-300 ease-out will-change-transform md:hidden motion-reduce:transition-none",
+        "fixed start-0 end-0 bottom-0 z-50 border-t border-border bg-brand-surface-elevated/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(26,16,35,0.08)] backdrop-blur transition-transform duration-300 ease-out will-change-transform md:hidden motion-reduce:transition-none",
         show ? "translate-y-0" : "pointer-events-none translate-y-full",
       )}
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <p className="flex flex-col">
           <s className="text-xs text-brand-ink-muted">
-            <span className="tabular-nums">1,550</span> ر.س
+            <span className="sr-only">السعر الأصلي </span>
+            <span className="tabular-nums">
+              {CONFIG.originalValue.toLocaleString("en-US")}
+            </span>{" "}
+            ر.س
           </s>
           <span className="text-gold-700 text-xl leading-tight font-extrabold">
-            <span className="tabular-nums">888</span>{" "}
+            <span className="sr-only">سعر الباقة </span>
+            <span className="tabular-nums">{CONFIG.bundlePrice}</span>{" "}
             <span className="text-sm font-bold">ر.س</span>
           </span>
         </p>

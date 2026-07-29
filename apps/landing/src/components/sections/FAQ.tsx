@@ -1,3 +1,4 @@
+import { DirProvider } from "@/components/providers/direction-provider";
 import {
   Accordion,
   AccordionContent,
@@ -29,25 +30,29 @@ const FAQ_ITEMS = [
 
 export function FAQ() {
   return (
-    <section aria-labelledby="faq-title" className="bg-brand-surface-elevated">
+    <section aria-labelledby="faq-title" className="bg-brand-purple-50">
       <div className="container-page py-16 md:py-24">
         <div className="mx-auto max-w-3xl">
           <h2 id="faq-title" className="text-h2 text-brand-purple-900">
             الأسئلة الشائعة
           </h2>
 
-          <Accordion type="single" collapsible className="mt-8">
-            {FAQ_ITEMS.map((item, i) => (
-              <AccordionItem key={item.question} value={`faq-${i}`}>
-                <AccordionTrigger className="min-h-14 items-center py-4 text-base font-bold text-brand-ink hover:no-underline">
-                  {item.question}
-                </AccordionTrigger>
-                <AccordionContent className="pb-5 text-base leading-relaxed text-brand-ink-muted">
-                  {item.answer}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          {/* Radix reads direction from context, not the html dir attribute —
+              the provider scopes RTL to the one Radix consumer on the page. */}
+          <DirProvider>
+            <Accordion type="single" collapsible className="mt-8">
+              {FAQ_ITEMS.map((item, i) => (
+                <AccordionItem key={item.question} value={`faq-${i}`}>
+                  <AccordionTrigger className="min-h-14 items-center py-4 text-base font-bold text-brand-ink hover:no-underline">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-5 text-base leading-[1.7] text-brand-ink-muted">
+                    {item.answer}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </DirProvider>
         </div>
       </div>
     </section>

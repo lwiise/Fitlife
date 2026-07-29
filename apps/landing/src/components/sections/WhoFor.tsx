@@ -25,7 +25,7 @@ export function WhoFor() {
                   aria-hidden
                   className="mt-0.5 size-6 shrink-0 text-brand-purple-600"
                 />
-                <p className="leading-relaxed font-medium text-brand-ink">
+                <p className="leading-[1.7] font-medium text-brand-ink">
                   {text}
                 </p>
               </div>
