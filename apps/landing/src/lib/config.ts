@@ -15,3 +15,7 @@ export const whatsappUrl = buildWhatsappUrl(
   CONFIG.whatsappNumber,
   CONFIG.whatsappMessage,
 );
+
+// Sentinel id on the hero CTA — StickyBar's IntersectionObserver hides the
+// mobile bottom bar while this element is in view.
+export const HERO_CTA_ID = "hero-cta";
