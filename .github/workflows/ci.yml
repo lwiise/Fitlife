@@ -50,3 +50,6 @@ jobs:
           NEXT_PUBLIC_APP_URL: https://app.example.com
           NEXT_PUBLIC_WEB_URL: https://web.example.com
           NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Q0ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldC0xMjM0NQ==
+      # Standalone bundle-offer landing page (apps/landing) — no env needed.
+      - name: Build landing
+        run: pnpm build:landing
