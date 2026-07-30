@@ -1,7 +1,5 @@
 import Image from "next/image";
 
-import portrait from "@/../public/final-cta-woman.webp";
-
 /**
  * The closing section's portrait — the result the copy promises, shown rather
  * than illustrated.
@@ -13,20 +11,26 @@ import portrait from "@/../public/final-cta-woman.webp";
  * deliberate object instead — the same paper-and-edge language the ValueStack
  * gifts panel uses.
  *
+ * The `src` is a plain path, NOT a static import. A static import needs the
+ * `*.webp` module declaration that `next-env.d.ts` pulls in, and that file is
+ * generated and gitignored — so `tsc --noEmit` passes locally (where a previous
+ * build left one behind) and fails in CI, which type-checks before it builds.
+ * The card carries the photo's own backdrop colour so the image resolves onto a
+ * matching tone instead of flashing.
+ *
  * 4:5 matches the source exactly, so nothing is cropped or letterboxed. The
  * section sits well below the fold, so this stays lazy (next/image's default)
  * and never competes with the hero for the LCP.
  */
 export function FinalCTAPortrait() {
   return (
-    <div className="edge-gold relative mx-auto w-full max-w-[19rem] overflow-hidden rounded-3xl ring-1 ring-white/12 lg:max-w-md">
+    <div className="edge-gold relative mx-auto w-full max-w-[19rem] overflow-hidden rounded-3xl bg-[#3e2b2c] ring-1 ring-white/12 lg:max-w-md">
       <Image
-        src={portrait}
+        src="/final-cta-woman.webp"
         alt="امرأة بملابس رياضية بعد تمرينها، تنظر أمامها بثقة وابتسامة هادئة"
         width={1122}
         height={1402}
         sizes="(min-width: 1024px) 28rem, 19rem"
-        placeholder="blur"
         className="h-auto w-full"
       />
       {/* Grounds the photograph in the section: its backdrop is warmer than the
