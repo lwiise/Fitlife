@@ -61,3 +61,6 @@ next-env.d.ts
 # Local design references (cloned repos browsed for layout ideas, never imported).
 # Same gitlink hazard as worktrees if committed.
 _reference/
+
+# Generated Lottie QA sheets (rebuild with apps/landing/scripts/deal-seal-lottie/qa.mjs).
+apps/*/scripts/**/qa-out/

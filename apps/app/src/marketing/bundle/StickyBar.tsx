@@ -54,7 +54,7 @@ export function StickyBar() {
         </p>
         <a
           href={`#${CHECKOUT_ANCHOR_ID}`}
-          className="inline-flex min-h-12 items-center justify-center rounded-xl bg-brand-purple-900 px-6 text-base font-bold text-white transition-colors duration-200 hover:bg-brand-purple-700"
+          className="lift inline-flex min-h-12 items-center justify-center rounded-xl bg-brand-purple-900 px-6 text-base font-bold text-white transition-colors duration-200 hover:bg-brand-purple-700"
         >
           احجزي الآن
         </a>

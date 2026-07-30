@@ -42,17 +42,29 @@ variable to the production URL so OG/canonical metadata resolve correctly.
 
 ## Structure
 
-- `src/app/` — layout (Tajawal font, `lang="ar" dir="rtl"`, Arabic metadata/OG)
-  and the single `/` page composing the eight sections.
+- `src/app/` — layout (Tajawal font, `lang="ar" dir="rtl"`, Arabic metadata/OG,
+  `<RevealBootstrap />`) and the single `/` page composing the eight sections.
 - `src/components/sections/` — Header, Hero, ValueStack, WhoFor, Steps, FAQ,
   FinalCTA, Footer. Copy is verbatim from the offer spec — don't rewrite it.
 - `src/components/ui/` — shadcn-style primitives (button, card, badge,
-  separator, accordion) + Magic-UI-style number-ticker and shimmer-button,
-  all RTL-ready with logical Tailwind classes only.
+  separator, accordion) + Magic-UI-style number-ticker and shimmer-button and
+  the gold `section-eyebrow`, all RTL-ready with logical Tailwind classes only.
+- `src/components/motion/Reveal.tsx` — the scroll-reveal system. `Reveal` is a
+  server component that only stamps `data-reveal` + a stagger class;
+  `RevealBootstrap` is the single inline script that arms it. Sections ship
+  VISIBLE and are hidden only once the script confirms it can animate them, so
+  no-JS (or a JS error) can never leave the page blank.
 - `src/components/StickyBar.tsx` — mobile-only bottom bar, hidden while the
   hero CTA is in view.
+- `src/components/DealSealLottie.tsx` + `public/lottie/deal-seal.json` — the
+  finale's «ختم الصفقة» animation. The JSON is GENERATED, never hand-edited:
+  `node scripts/deal-seal-lottie/generate.mjs` writes it into this app AND the
+  app's copy, and `src/lib/dealSealAnimation.test.ts` fails if they drift.
+  `node scripts/deal-seal-lottie/qa.mjs` renders a screenshot sheet of the loop.
 - `src/styles/globals.css` — Tailwind v4 CSS-first tokens: Fit Life brand
   palette plus a two-shade offer gold (`gold-500` for numerals on purple and
-  badge fills, `gold-700` for gold text on light surfaces — both AA).
+  badge fills, `gold-700` for gold text on light surfaces — both AA), and the
+  motion tokens (`--ease-settle` + `--dur-fast/base/slow` + `--reveal-stagger`)
+  every transition on the page reads from.
 - `src/lib/config.ts` — the one place prices, Salla URL, and WhatsApp
   contact live.

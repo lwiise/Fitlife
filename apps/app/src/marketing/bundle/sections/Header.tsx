@@ -21,7 +21,7 @@ export function Header() {
       className={cn(
         "fixed start-0 end-0 top-0 z-50 transition-all duration-300 ease-out motion-reduce:transition-none",
         scrolled
-          ? "bg-brand-surface/90 py-2 shadow-md backdrop-blur-md"
+          ? "bg-brand-surface/85 py-2 shadow-[0_1px_0_rgba(26,16,35,0.07),0_10px_30px_-22px_rgba(26,16,35,0.9)] backdrop-blur-xl"
           : "bg-transparent py-4",
       )}
     >
@@ -42,9 +42,9 @@ export function Header() {
         <a
           href={`#${CHECKOUT_ANCHOR_ID}`}
           className={cn(
-            "inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-bold transition-colors duration-300",
+            "lift inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-bold transition-colors duration-300",
             scrolled
-              ? "bg-brand-purple-900 text-white hover:bg-brand-purple-700"
+              ? "bg-brand-purple-900 text-white hover:bg-brand-purple-700 hover:shadow-[0_12px_26px_-14px_rgba(78,36,144,0.95)]"
               : "border border-gold-500/50 text-gold-500 hover:bg-gold-500/10 focus-visible:outline-white",
           )}
         >

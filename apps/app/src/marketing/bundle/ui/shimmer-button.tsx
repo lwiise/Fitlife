@@ -19,7 +19,11 @@ export function ShimmerButton({
   return (
     <a
       className={cn(
-        "group relative z-0 inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-full border border-white/10 bg-brand-purple-900 px-8 py-3.5 text-base font-bold whitespace-nowrap text-white transition-transform select-none active:translate-y-px motion-reduce:transition-none",
+        // `lift` carries the hover/press transform and its timing from the
+        // page's motion tokens, so this button moves like every other control.
+        "lift group relative z-0 inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-full border border-white/10 bg-brand-purple-900 px-8 py-3.5 text-base font-bold whitespace-nowrap text-white select-none",
+        // Resting contact shadow warms into a gold bloom on hover.
+        "shadow-[0_12px_30px_-14px_rgba(0,0,0,0.9)] hover:shadow-[0_20px_44px_-16px_rgba(212,160,23,0.6)]",
         // Two-layer focus indicator: the purple outline reads on the light
         // hero surface, the white ring reads on the purple FinalCTA panel.
         "focus-visible:ring-4 focus-visible:ring-white/90",
