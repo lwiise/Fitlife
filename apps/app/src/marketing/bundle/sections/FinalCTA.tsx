@@ -1,4 +1,4 @@
-import { DealSealLottie } from "@/marketing/bundle/DealSealLottie";
+import { FitWomanLottie } from "@/marketing/bundle/FitWomanLottie";
 import { Reveal } from "@/marketing/bundle/Reveal";
 import { CheckoutButton } from "@/marketing/bundle/ui/checkout-button";
 import { CHECKOUT_ANCHOR_ID, CONFIG } from "@/marketing/bundle/config";
@@ -39,7 +39,7 @@ export function FinalCTA() {
         </Reveal>
 
         <Reveal variant="fade" delayIndex={2} className="mt-14 lg:mt-0">
-          <DealSealLottie />
+          <FitWomanLottie />
         </Reveal>
       </div>
     </section>

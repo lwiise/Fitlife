@@ -64,3 +64,4 @@ _reference/
 
 # Generated Lottie QA sheets (rebuild with apps/landing/scripts/deal-seal-lottie/qa.mjs).
 apps/*/scripts/**/qa-out/
+apps/*/qa-out/

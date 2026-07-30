@@ -12,19 +12,21 @@ function subscribeReducedMotion(onChange: () => void) {
 }
 
 /**
- * «ختم الصفقة» — the closing section's animation.
+ * «جاهزة» — the closing section's animation: a woman in modest activewear
+ * rising onto her toes and opening her arms, which is the result the section's
+ * copy promises rather than a picture of the product.
  *
- * Nothing is fetched until the section is within a screen of the viewport:
- * the player (lottie-web's light SVG build) and the ~20 KB JSON both arrive
- * through one lazy `import()` / `fetch()` pair, so the page's initial load is
- * unchanged. The box holds its aspect ratio from the first paint, so a slow or
+ * Nothing is fetched until the section is within a screen of the viewport: the
+ * player (lottie-web's light SVG build) and the ~27 KB JSON both arrive through
+ * one lazy `import()` / `fetch()` pair, so the page's initial load is
+ * unchanged. The box holds its 4:5 ratio from the first paint, so a slow or
  * failed load costs no layout shift — and on this section's night field an
  * empty box is simply invisible.
  *
- * Reduced motion gets the finished frame rather than the loop: the seal is
- * already stamped, which is the whole point of the illustration.
+ * Reduced motion gets the peak of the movement held still: arms open, feet
+ * light. The pose carries the whole idea, so nothing is lost by not moving.
  */
-export function DealSealLottie() {
+export function FitWomanLottie() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   const reduced = useSyncExternalStore(
@@ -66,9 +68,9 @@ export function DealSealLottie() {
       try {
         const [player, res] = await Promise.all([
           import("lottie-web/build/player/lottie_light"),
-          fetch("/lottie/deal-seal.json"),
+          fetch("/lottie/fit-woman.json"),
         ]);
-        if (!res.ok) throw new Error(`deal-seal: ${res.status}`);
+        if (!res.ok) throw new Error(`fit-woman: ${res.status}`);
         const data = (await res.json()) as unknown;
         if (cancelled) return;
         anim = player.default.loadAnimation({
@@ -79,8 +81,8 @@ export function DealSealLottie() {
           animationData: data,
         });
         if (reduced) {
-          // The stamped frame — the story's end state, held still.
-          anim.goToAndStop(Math.round(anim.totalFrames * 0.72), true);
+          // The peak of the celebration, held.
+          anim.goToAndStop(Math.round(anim.totalFrames * 0.44), true);
         }
       } catch {
         // Decorative: a failure leaves the reserved box empty and the section
@@ -99,8 +101,8 @@ export function DealSealLottie() {
     <div
       ref={containerRef}
       role="img"
-      aria-label="رسم متحرك: فاتورة الباقة تكتمل سطراً بسطر ثم يُختم عليها بختم ذهبي"
-      className="mx-auto aspect-square w-full max-w-sm lg:max-w-xl"
+      aria-label="رسم متحرك: امرأة بملابس رياضية محتشمة ترفع يديها فرحاً بعد تمرينها"
+      className="mx-auto aspect-[4/5] w-full max-w-[17rem] lg:max-w-md"
     />
   );
 }
