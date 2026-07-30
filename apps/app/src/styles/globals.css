@@ -24,6 +24,42 @@
 
   --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Bundle-offer page (/landing) tokens ─────────────────────────────────
+     Offer golds — numerals and price accents ONLY, never body text.
+     gold-500 passes AA large-text on purple-900 (≈4.5:1) and as a badge FILL
+     under ink text (≈7.8:1); it FAILS on the light surface (≈2:1), where any
+     gold text must use gold-700 (≈5.2:1 on #EBEFF2). */
+  --color-gold-500: #d4a017;
+  --color-gold-700: #7a5e0d;
+  --color-whatsapp: #25d366;
+
+  /* Shimmer button (Magic UI pattern) — keyframes live inside @theme so
+     Tailwind v4 emits them together with the --animate-* utilities. */
+  --animate-shimmer-slide: shimmer-slide 3s ease-in-out infinite alternate;
+  --animate-spin-around: spin-around 6s infinite linear;
+
+  @keyframes shimmer-slide {
+    to {
+      transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+    0% {
+      transform: translateZ(0) rotate(0);
+    }
+    15%,
+    35% {
+      transform: translateZ(0) rotate(90deg);
+    }
+    65%,
+    85% {
+      transform: translateZ(0) rotate(270deg);
+    }
+    100% {
+      transform: translateZ(0) rotate(360deg);
+    }
+  }
 }
 
 /* ─── Landing (marketing) tokens, merged from apps/web ─────────────────────
@@ -174,8 +210,12 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      /* Delays must go too: with `backwards` fill, a zeroed duration alone
+         still holds staggered hero items invisible until their delay lapses. */
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
       scroll-behavior: auto !important;
     }
   }
@@ -372,6 +412,17 @@
   animation: pulse-ring 3s ease-out infinite;
 }
 
+/* Bundle-offer (/landing) hero atmosphere — two low-chroma radials (purple
+   bloom over the start-side headline, a faint warm cream behind the price
+   tag) on the brand surface. Percent positions are physical and tuned for
+   this RTL-only page (start side = right). */
+@utility bg-hero-spotlight {
+  background:
+    radial-gradient(56% 44% at 86% -4%, oklch(0.935 0.05 295) 0%, transparent 72%),
+    radial-gradient(44% 36% at 76% 64%, oklch(0.96 0.025 84) 0%, transparent 65%),
+    var(--color-brand-surface);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-spotlight {
     animation: none;
@@ -379,6 +430,12 @@
     transform: translate(-50%, -40%) scale(1);
   }
   .animate-pulse-ring {
+    animation: none;
+  }
+  /* The 0.01ms rule leaves infinite animations technically "running" — stop
+     the /landing shimmer layers outright so the CTA reads as a calm button. */
+  .animate-shimmer-slide,
+  .animate-spin-around {
     animation: none;
   }
 }
