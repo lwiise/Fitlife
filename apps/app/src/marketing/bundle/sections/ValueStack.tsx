@@ -2,7 +2,7 @@ import { Flame, Gauge, Route } from "lucide-react";
 
 import { RevealOnScroll } from "@/marketing/components/motion/RevealOnScroll";
 import { Badge } from "@/marketing/bundle/ui/badge";
-import { CONFIG } from "@/marketing/bundle/config";
+import { CHECKOUT_ANCHOR_ID, CONFIG } from "@/marketing/bundle/config";
 
 const PAID_ITEMS = [
   {
@@ -147,7 +147,7 @@ export function ValueStack() {
           </p>
           {/* Inverse CTA — light focus ring because it sits on purple-900. */}
           <a
-            href={CONFIG.sallaCheckoutUrl}
+            href={`#${CHECKOUT_ANCHOR_ID}`}
             className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-xl bg-brand-surface-elevated px-7 text-base font-bold text-brand-purple-900 transition-colors hover:bg-brand-surface-elevated/90 focus-visible:outline-white"
           >
             احجزي باقتك الآن
