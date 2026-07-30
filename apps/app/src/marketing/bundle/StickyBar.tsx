@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { CONFIG, HERO_CTA_ID } from "@/marketing/bundle/config";
+import { CHECKOUT_ANCHOR_ID, CONFIG, HERO_CTA_ID } from "@/marketing/bundle/config";
 import { cn } from "@/marketing/lib/utils";
 
 // Mobile-only bottom purchase bar. Hidden while the hero CTA is in view (the
@@ -53,7 +53,7 @@ export function StickyBar() {
           </span>
         </p>
         <a
-          href={CONFIG.sallaCheckoutUrl}
+          href={`#${CHECKOUT_ANCHOR_ID}`}
           className="inline-flex min-h-12 items-center justify-center rounded-xl bg-brand-purple-900 px-6 text-base font-bold text-white transition-colors duration-200 hover:bg-brand-purple-700"
         >
           احجزي الآن
