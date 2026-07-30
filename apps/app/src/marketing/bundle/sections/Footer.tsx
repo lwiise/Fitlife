@@ -20,7 +20,7 @@ export function Footer() {
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-white/85 transition-colors hover:text-white focus-visible:outline-white"
+          className="link-underline inline-flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-white/85 transition-colors hover:text-white focus-visible:outline-white"
         >
           <WhatsAppIcon className="text-whatsapp size-5" />
           واتساب

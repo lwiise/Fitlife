@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
 import "@/styles/checkout.css";
+import { RevealBootstrap } from "@/components/motion/Reveal";
 import { DirProvider } from "@/components/providers/direction-provider";
 import { SALLA } from "@/lib/config";
 
@@ -48,6 +49,9 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={tajawal.variable}>
       <body className="antialiased">
+        {/* First thing in the body: arms the scroll-reveal system before the
+            sections are parsed, so nothing is ever painted and then hidden. */}
+        <RevealBootstrap />
         {/* Radix reads direction from context, not the html dir attribute —
             load-bearing for the FAQ accordion (mirrored from the bundle
             sections, which get this from the /landing route layout). */}
