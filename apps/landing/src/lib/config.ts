@@ -26,17 +26,20 @@ export const CONFIG = {
 // The store and product ids below are both confirmed good — the ids were never
 // the problem, the embedding context was.
 //
-// So checkout goes to the store's own product page, which is verified live
-// (HTTP 200, «باقة التحوّل الشاملة», 888 ر.س, digital, in stock). Percent-
-// encoded because the slug segment is Arabic and is REQUIRED — the short
-// /p<id> form 410s.
+// So checkout goes straight to Salla's fast-payment link for the product
+// (owner directive 07/2026). It 302s into a fresh checkout session — verified
+// live: the redirect lands on «إتمام الطلب» at 888 ر.س. That is one step
+// closer to paying than the product page it replaced, which required the
+// shopper to press "buy" again before anything happened.
+//
+// Note this URL is NOT the product page: the product page needs the Arabic
+// slug segment percent-encoded (its short /p<id> form 410s), whereas the
+// payment path takes the bare product id and mints the session itself.
 export const SALLA = {
   storeId: "1502078372",
   productId: "1893963313",
   storeUsername: "fit-life-2026",
-  // https://salla.sa/fit-life-2026/باقة-التحوّل-الشاملة/p1893963313
-  productUrl:
-    "https://salla.sa/fit-life-2026/%D8%A8%D8%A7%D9%82%D8%A9-%D8%A7%D9%84%D8%AA%D8%AD%D9%88%D9%91%D9%84-%D8%A7%D9%84%D8%B4%D8%A7%D9%85%D9%84%D8%A9/p1893963313",
+  productUrl: "https://salla.sa/fit-life-2026/payment/p1893963313",
 } as const;
 
 export function buildWhatsappUrl(number: string, message: string): string {
