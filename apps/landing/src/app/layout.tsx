@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
+import { DirProvider } from "@/components/providers/direction-provider";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -43,7 +44,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ar" dir="rtl" className={tajawal.variable}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {/* Radix reads direction from context, not the html dir attribute —
+            load-bearing for the FAQ accordion (mirrored from the bundle
+            sections, which get this from the /landing route layout). */}
+        <DirProvider>{children}</DirProvider>
+      </body>
     </html>
   );
 }

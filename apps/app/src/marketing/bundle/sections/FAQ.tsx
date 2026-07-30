@@ -30,20 +30,35 @@ const FAQ_ITEMS = [
 export function FAQ() {
   return (
     <section aria-labelledby="faq-title" className="bg-brand-purple-50">
-      <div className="container-page py-16 md:py-24">
+      <div className="container-page py-20 md:py-28">
         <div className="mx-auto max-w-3xl">
-          <h2 id="faq-title" className="text-h2 text-brand-purple-900">
+          <p
+            aria-hidden
+            className="text-gold-700 flex items-center gap-3 text-sm font-extrabold tabular-nums"
+          >
+            04
+            <span className="bg-gold-700/40 h-px w-10" />
+          </p>
+          <h2
+            id="faq-title"
+            className="text-offer-h2 mt-3 text-brand-purple-900"
+          >
             الأسئلة الشائعة
           </h2>
 
-          {/* Radix direction comes from the /landing layout's DirProvider. */}
-          <Accordion type="single" collapsible className="mt-8">
+          {/* Radix direction comes from the /landing layout's DirProvider.
+              Open items get a gold start-edge bar and gentle indent. */}
+          <Accordion type="single" collapsible className="mt-10">
             {FAQ_ITEMS.map((item, i) => (
-              <AccordionItem key={item.question} value={`faq-${i}`}>
-                <AccordionTrigger className="min-h-14 items-center py-4 text-base font-bold text-brand-ink hover:no-underline">
+              <AccordionItem
+                key={item.question}
+                value={`faq-${i}`}
+                className="before:bg-gold-500 relative transition-[padding] duration-300 before:absolute before:inset-y-4 before:start-0 before:w-1 before:rounded-full before:opacity-0 before:transition-opacity data-[state=open]:ps-5 data-[state=open]:before:opacity-100 motion-reduce:transition-none"
+              >
+                <AccordionTrigger className="min-h-14 items-center py-5 text-lg font-bold text-brand-ink hover:no-underline">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent className="pb-5 text-base leading-[1.7] text-brand-ink-muted">
+                <AccordionContent className="pb-6 text-base leading-[1.7] text-brand-ink-muted">
                   {item.answer}
                 </AccordionContent>
               </AccordionItem>

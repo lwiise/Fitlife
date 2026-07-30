@@ -258,6 +258,43 @@
     var(--color-brand-surface);
 }
 
+/* Night surface — the dark royal-aubergine field the hero and finale share.
+   A warm purple bloom rises behind the start-side headline; a faint gold glow
+   sits low on the end side under the receipt. RTL-only page: physical
+   percents are tuned for start = right. */
+@utility bg-hero-night {
+  background:
+    radial-gradient(70% 55% at 82% -8%, oklch(0.34 0.14 295) 0%, transparent 70%),
+    radial-gradient(46% 38% at 12% 78%, oklch(0.32 0.09 84 / 0.5) 0%, transparent 65%),
+    var(--brand-purple-950);
+}
+
+/* Offer display type — larger than the base scale for real section hierarchy. */
+@utility text-offer-display {
+  font-size: clamp(2.75rem, 2rem + 3.2vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: normal;
+}
+
+@utility text-offer-h2 {
+  font-size: clamp(2rem, 1.6rem + 1.8vw, 3rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: normal;
+}
+
+/* Receipt barcode — pure CSS stripes, no image asset. */
+@utility bg-barcode {
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0 2px,
+    transparent 2px 5px,
+    currentColor 5px 6px,
+    transparent 6px 10px
+  );
+}
+
 @utility bg-noise {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
   background-repeat: repeat;
