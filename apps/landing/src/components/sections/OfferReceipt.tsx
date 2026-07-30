@@ -1,3 +1,4 @@
+import { Logo } from "@/components/Logo";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { CONFIG } from "@/lib/config";
 
@@ -37,10 +38,9 @@ export function OfferReceipt() {
         className="absolute inset-0 translate-y-3 -translate-x-3 rotate-[3.5deg] rounded-2xl bg-brand-purple-700/50"
       />
       <div className="bg-noise relative -rotate-2 rounded-2xl bg-[#faf6ec] p-6 text-brand-ink shadow-[0_24px_60px_-12px_rgba(10,4,20,0.55)]">
-        <header className="flex items-baseline justify-between gap-3 border-b border-dashed border-brand-ink/20 pb-4">
-          <p className="text-lg font-extrabold text-brand-purple-900">
-            Fit Life
-          </p>
+        <header className="flex items-center justify-between gap-3 border-b border-dashed border-brand-ink/20 pb-4">
+          {/* Cream paper is a light surface, so the purple wordmark ships as-is. */}
+          <Logo className="h-10 w-auto" />
           <p className="text-sm font-bold text-brand-ink-muted">
             باقة التحوّل الشاملة
           </p>

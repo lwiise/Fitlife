@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMotionValueEvent, useScroll } from "motion/react";
 
+import { Logo } from "@/marketing/components/Logo";
 import { CHECKOUT_ANCHOR_ID } from "@/marketing/bundle/config";
 import { cn } from "@/marketing/lib/utils";
 
@@ -26,18 +27,26 @@ export function Header() {
       )}
     >
       <div className="container-page flex items-center justify-between gap-4">
-        {/* Checklist: replace the text mark with the real logo asset. */}
         <a
           href="#"
           className={cn(
-            "inline-flex min-h-11 items-center rounded-md px-1 text-xl font-extrabold transition-colors duration-300",
-            scrolled
-              ? "text-brand-purple-900"
-              : "text-white focus-visible:outline-white",
+            "inline-flex min-h-11 items-center rounded-md px-1",
+            !scrolled && "focus-visible:outline-white",
           )}
           aria-label="فت لايف — العودة إلى الأعلى"
         >
-          Fit Life
+          {/* The wordmark is deep purple (built for light backgrounds), so it
+              inverts to white while the header sits over the night hero and
+              returns to brand purple once the solid bar takes over. */}
+          <Logo
+            priority
+            className={cn(
+              // Square-ish stacked lockup (mark over wordmark) — it needs more
+              // height than a horizontal wordmark to stay legible.
+              "h-12 w-auto transition-[filter] duration-300 motion-reduce:transition-none",
+              !scrolled && "brightness-0 invert",
+            )}
+          />
         </a>
         <a
           href={`#${CHECKOUT_ANCHOR_ID}`}
