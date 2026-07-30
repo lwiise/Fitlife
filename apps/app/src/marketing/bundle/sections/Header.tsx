@@ -6,6 +6,8 @@ import { useMotionValueEvent, useScroll } from "motion/react";
 import { CONFIG } from "@/marketing/bundle/config";
 import { cn } from "@/marketing/lib/utils";
 
+// Adaptive chrome: transparent light-on-dark over the night hero, then a
+// solid surface bar with purple type once the page scrolls.
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
@@ -27,14 +29,24 @@ export function Header() {
         {/* Checklist: replace the text mark with the real logo asset. */}
         <a
           href="#"
-          className="inline-flex min-h-11 items-center rounded-md px-1 text-xl font-extrabold text-brand-purple-900"
+          className={cn(
+            "inline-flex min-h-11 items-center rounded-md px-1 text-xl font-extrabold transition-colors duration-300",
+            scrolled
+              ? "text-brand-purple-900"
+              : "text-white focus-visible:outline-white",
+          )}
           aria-label="فت لايف — العودة إلى الأعلى"
         >
           Fit Life
         </a>
         <a
           href={CONFIG.sallaCheckoutUrl}
-          className="inline-flex min-h-11 items-center rounded-xl bg-brand-purple-900 px-5 text-sm font-bold text-white transition-colors duration-200 hover:bg-brand-purple-700"
+          className={cn(
+            "inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-bold transition-colors duration-300",
+            scrolled
+              ? "bg-brand-purple-900 text-white hover:bg-brand-purple-700"
+              : "border border-gold-500/50 text-gold-500 hover:bg-gold-500/10 focus-visible:outline-white",
+          )}
         >
           احجزي الباقة
         </a>

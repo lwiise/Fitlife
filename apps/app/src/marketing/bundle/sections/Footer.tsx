@@ -67,8 +67,9 @@ const SOCIAL_LINKS = [
 
 export function Footer() {
   return (
+    // Continues the finale's night surface; the hairline separates the two.
     // Extra bottom padding on mobile keeps content clear of the sticky bar.
-    <footer className="bg-brand-purple-950 pb-28 text-white md:pb-10">
+    <footer className="border-t border-white/10 bg-brand-purple-950 pb-28 text-white md:pb-10">
       <div className="container-page flex flex-col items-start gap-6 pt-10 md:flex-row md:items-center md:justify-between">
         <p className="text-lg font-extrabold">
           Fit Life <span className="font-normal text-white/60">© 2026</span>
