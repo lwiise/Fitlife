@@ -13,9 +13,12 @@ const STEPS: { text: string; whatsappCta?: boolean }[] = [
   },
 ];
 
-// Three cards threaded onto one rail: the hairline draws across as the section
-// arrives and each card's gold node sits on it, so the steps read as a single
-// route rather than three loose tiles.
+// Three cards, each carrying a gold-ringed index that straddles its top edge.
+//
+// There used to be a hairline rail drawn across the section with every node
+// sitting on it, so the steps read as one route rather than three tiles. It was
+// removed by owner request; the numbering — the ghost figure inside each card
+// and the ringed index on its edge — is what carries the sequence now.
 export function Steps() {
   return (
     <section aria-labelledby="steps-title">
@@ -30,15 +33,10 @@ export function Steps() {
           </h2>
         </Reveal>
 
-        <div className="relative mt-20 md:mt-24">
-          {/* The rail. Runs behind the cards and shows through the gutters;
-              each card's node sits on it in the page's own surface colour, so
-              the line reads as threaded rather than crossed out. */}
-          <span
-            aria-hidden
-            className="rule-grow absolute inset-x-0 top-0 hidden h-px bg-brand-ink/15 md:block"
-          />
-
+        {/* No `relative` here any more — the rail was the only thing that
+            positioned against this box. The nodes below anchor to their own
+            <li>, which carries its own `relative`. */}
+        <div className="mt-20 md:mt-24">
           <ol className="grid gap-10 md:grid-cols-3 md:gap-8">
             {STEPS.map((step, i) => (
               <Reveal key={step.text} as="li" delayIndex={i} className="relative">
@@ -67,7 +65,13 @@ export function Steps() {
                   </div>
                 </div>
 
-                {/* Node on the rail — a gold-ringed index in the page surface. */}
+                {/* The step index, straddling the card's top edge.
+                    `bg-brand-surface` is the PAGE ground (#ebeff2), not the
+                    card's (#ffffff) — it was opaque so the rail appeared to
+                    thread behind the node rather than strike through it. With
+                    the rail gone the fill still earns its place: it keeps the
+                    disc reading as punched out of the page and sitting in front
+                    of the card, which is what the half-overlap is for. */}
                 <span
                   aria-hidden
                   className="absolute top-0 start-7 -translate-y-1/2 md:start-8"
