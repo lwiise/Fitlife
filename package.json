@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "turbo run dev",
     "dev:app": "turbo run dev --filter=@fitlife/app",
+    "dev:landing": "turbo run dev --filter=@fitlife/landing",
     "build": "turbo run build",
     "build:app": "turbo run build --filter=@fitlife/app",
+    "build:landing": "turbo run build --filter=@fitlife/landing",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "type-check": "turbo run type-check",
