@@ -1,4 +1,4 @@
-import { FitWomanLottie } from "@/components/FitWomanLottie";
+import { FinalCTAPortrait } from "@/components/FinalCTAPortrait";
 import { Reveal } from "@/components/motion/Reveal";
 import { CheckoutButton } from "@/components/ui/checkout-button";
 import { CHECKOUT_ANCHOR_ID, CONFIG } from "@/lib/config";
@@ -39,7 +39,7 @@ export function FinalCTA() {
         </Reveal>
 
         <Reveal variant="fade" delayIndex={2} className="mt-14 lg:mt-0">
-          <FitWomanLottie />
+          <FinalCTAPortrait />
         </Reveal>
       </div>
     </section>

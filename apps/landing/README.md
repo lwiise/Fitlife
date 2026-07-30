@@ -70,17 +70,14 @@ product page and it becomes a direct checkout link instead.
   no-JS (or a JS error) can never leave the page blank.
 - `src/components/StickyBar.tsx` — mobile-only bottom bar, hidden while the
   hero CTA is in view.
-- `src/components/FitWomanLottie.tsx` + `public/lottie/fit-woman.json` — the
-  finale's «جاهزة» animation: a woman in modest activewear rising onto her toes
-  and opening her arms. The JSON is GENERATED, never hand-edited:
-  `node scripts/fit-woman-lottie/generate.mjs` writes it into this app AND the
-  app's copy, and `src/lib/fitWomanAnimation.test.ts` fails if they drift or if
-  the loop stops closing on the pose it opened with. The generator poses the
-  arms and SOLVES the legs (two-link IK), so her feet stay planted when she
-  dips. Three dev views: `--report` prints where she lands in composition units
-  (framing by screenshot is guesswork), `scripts/fit-woman-lottie/qa.mjs`
-  renders a sheet of the whole loop, and `frame.mjs [phase]` renders one pose
-  full size.
+- `src/components/FinalCTAPortrait.tsx` + `public/final-cta-woman.webp` — the
+  closing section's photograph. It is FRAMED (rounded card, hairline ring, gold
+  top edge) rather than dropped in loose: the photo's own backdrop is a warm
+  plum a step lighter than this section's night field, so a bare rectangle
+  reads as a mismatched patch. 4:5 matches the source exactly, and
+  `src/lib/finalCtaPortrait.test.ts` fails if the two copies drift, if a
+  re-crop breaks that ratio, or if someone commits the unoptimised original
+  (the source PNG was 1.77 MB; the WebP is 57 KB).
 - `src/styles/globals.css` — Tailwind v4 CSS-first tokens: Fit Life brand
   palette plus a two-shade offer gold (`gold-500` for numerals on purple and
   badge fills, `gold-700` for gold text on light surfaces — both AA), and the
