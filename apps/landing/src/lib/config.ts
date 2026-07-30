@@ -51,14 +51,6 @@ export const whatsappUrl = buildWhatsappUrl(
   CONFIG.whatsappMessage,
 );
 
-// Order-enquiry hand-off — a different message from the post-purchase invoice
-// one, so a shopper who wants to ask before buying isn't told to send a
-// receipt she doesn't have yet.
-export const whatsappOrderUrl = buildWhatsappUrl(
-  CONFIG.whatsappNumber,
-  "مرحباً، أبغى أطلب باقة التحوّل الشاملة",
-);
-
 // Sentinel id on the HERO SECTION — StickyBar's IntersectionObserver hides
 // the mobile bottom bar while any part of the hero (which ends in the CTA)
 // is in view, and slides it in once the visitor scrolls past.
