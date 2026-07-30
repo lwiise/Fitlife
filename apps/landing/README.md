@@ -70,11 +70,17 @@ product page and it becomes a direct checkout link instead.
   no-JS (or a JS error) can never leave the page blank.
 - `src/components/StickyBar.tsx` — mobile-only bottom bar, hidden while the
   hero CTA is in view.
-- `src/components/DealSealLottie.tsx` + `public/lottie/deal-seal.json` — the
-  finale's «ختم الصفقة» animation. The JSON is GENERATED, never hand-edited:
-  `node scripts/deal-seal-lottie/generate.mjs` writes it into this app AND the
-  app's copy, and `src/lib/dealSealAnimation.test.ts` fails if they drift.
-  `node scripts/deal-seal-lottie/qa.mjs` renders a screenshot sheet of the loop.
+- `src/components/FitWomanLottie.tsx` + `public/lottie/fit-woman.json` — the
+  finale's «جاهزة» animation: a woman in modest activewear rising onto her toes
+  and opening her arms. The JSON is GENERATED, never hand-edited:
+  `node scripts/fit-woman-lottie/generate.mjs` writes it into this app AND the
+  app's copy, and `src/lib/fitWomanAnimation.test.ts` fails if they drift or if
+  the loop stops closing on the pose it opened with. The generator poses the
+  arms and SOLVES the legs (two-link IK), so her feet stay planted when she
+  dips. Three dev views: `--report` prints where she lands in composition units
+  (framing by screenshot is guesswork), `scripts/fit-woman-lottie/qa.mjs`
+  renders a sheet of the whole loop, and `frame.mjs [phase]` renders one pose
+  full size.
 - `src/styles/globals.css` — Tailwind v4 CSS-first tokens: Fit Life brand
   palette plus a two-shade offer gold (`gold-500` for numerals on purple and
   badge fills, `gold-700` for gold text on light surfaces — both AA), and the
