@@ -24,12 +24,26 @@ repo → set Root Directory to `apps/landing`** — the pnpm workspace and
 Next.js are auto-detected. Set the `NEXT_PUBLIC_SITE_URL` environment
 variable to the production URL so OG/canonical metadata resolve correctly.
 
+## Checkout
+
+Purchases go through **Salla's fast-checkout widget** (store `1502078372`,
+product `1893963313`, configured in `src/lib/config.ts`). It opens Salla's
+hosted payment modal over the page — Apple Pay, mada, Visa/MasterCard, Tabby
+and Tamara — so the shopper never leaves the offer.
+
+The widget is a third-party custom element, and a custom element whose script
+fails to load renders *nothing*. So each purchase point ships a fallback
+button in the same slot, and CSS (`.salla-slot`, `:not(:defined)`) shows it
+exactly when the widget can't render — the buy button can never be dead.
+The fallback currently opens WhatsApp; set `SALLA.productUrl` to the store's
+product page and it becomes a direct checkout link instead.
+
 ## Replace before launch (checklist)
 
-- [ ] **Salla checkout URL** — `sallaCheckoutUrl` in `src/lib/config.ts`
-      (currently `REPLACE_WITH_SALLA_PRODUCT_URL`; every CTA points at it).
 - [ ] **Production domain** — set `NEXT_PUBLIC_SITE_URL` env var (or edit the
       `metadataBase` fallback in `src/app/layout.tsx`).
+- [ ] *(optional)* **`SALLA.productUrl`** in `src/lib/config.ts` — upgrades the
+      no-JS fallback from a WhatsApp hand-off to a real checkout link.
 - [ ] **Logo** — the header renders a text mark (`Header.tsx`) and the favicon
       is a placeholder (`src/app/icon.svg`); swap in the real assets.
 - [ ] **Social links** — the three footer icons point at `#`
@@ -66,5 +80,5 @@ variable to the production URL so OG/canonical metadata resolve correctly.
   badge fills, `gold-700` for gold text on light surfaces — both AA), and the
   motion tokens (`--ease-settle` + `--dur-fast/base/slow` + `--reveal-stagger`)
   every transition on the page reads from.
-- `src/lib/config.ts` — the one place prices, Salla URL, and WhatsApp
-  contact live.
+- `src/lib/config.ts` — the one place prices, Salla store/product ids, and
+  WhatsApp contact live.

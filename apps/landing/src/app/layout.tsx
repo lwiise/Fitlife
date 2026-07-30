@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
+import "@/styles/checkout.css";
 import { RevealBootstrap } from "@/components/motion/Reveal";
 import { DirProvider } from "@/components/providers/direction-provider";
+import { SALLA } from "@/lib/config";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -53,6 +56,15 @@ export default function RootLayout({
             load-bearing for the FAQ accordion (mirrored from the bundle
             sections, which get this from the /landing route layout). */}
         <DirProvider>{children}</DirProvider>
+        {/* Salla fast-checkout. lazyOnload keeps it off the LCP path — the
+            purchase buttons render from the page's own CSS fallback until it
+            upgrades, so nothing is ever blank while this loads. */}
+        <Script
+          id="salla-fast-checkout"
+          src={SALLA.widgetSrc}
+          type="module"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );

@@ -3,7 +3,7 @@ import { Flame, Gauge, Route } from "lucide-react";
 import { Reveal, REVEAL_DELAY } from "@/components/motion/Reveal";
 import { Badge } from "@/components/ui/badge";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
-import { CONFIG } from "@/lib/config";
+import { CHECKOUT_ANCHOR_ID, CONFIG } from "@/lib/config";
 
 const PAID_ITEMS = [
   {
@@ -162,7 +162,7 @@ export function ValueStack() {
           </p>
           {/* Inverse CTA — light focus ring because it sits on purple-900. */}
           <a
-            href={CONFIG.sallaCheckoutUrl}
+            href={`#${CHECKOUT_ANCHOR_ID}`}
             className="lift inline-flex min-h-12 shrink-0 items-center justify-center rounded-xl bg-brand-surface-elevated px-7 text-base font-bold text-brand-purple-900 shadow-[0_10px_28px_-14px_rgba(0,0,0,0.85)] hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.95)] focus-visible:outline-white"
           >
             احجزي باقتك الآن

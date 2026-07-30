@@ -1,20 +1,22 @@
 import { DealSealLottie } from "@/components/DealSealLottie";
 import { Reveal } from "@/components/motion/Reveal";
-import { ShimmerButton } from "@/components/ui/shimmer-button";
-import { CONFIG } from "@/lib/config";
+import { CheckoutButton } from "@/components/ui/checkout-button";
+import { CHECKOUT_ANCHOR_ID, CONFIG } from "@/lib/config";
 
 // Full-bleed night finale — bookends the hero's dark field; the footer
-// continues it below so the page closes on one deep surface.
+// continues it below so the page closes on one deep surface. Carries the
+// #checkout anchor the secondary CTAs scroll to.
 //
 // Two columns: the argument on the start side, the animation on the end side
 // (RTL, so it reads text-right / illustration-left). DOM order is text first,
-// which is also the mobile order — the CTA stays above the fold-fold instead
-// of being pushed down by an illustration.
+// which is also the mobile order — the checkout widget stays above the
+// illustration instead of being pushed down by it.
 export function FinalCTA() {
   return (
     <section
+      id={CHECKOUT_ANCHOR_ID}
       aria-labelledby="final-cta-title"
-      className="bg-hero-night bg-noise overflow-hidden text-white"
+      className="bg-hero-night bg-noise scroll-mt-24 overflow-hidden text-white"
     >
       <div className="container-page section-shell lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16">
         <Reveal>
@@ -28,13 +30,10 @@ export function FinalCTA() {
               باقة كاملة، متابعة حقيقية، ونتيجة تشوفينها.
             </p>
             <div className="mt-11">
-              <ShimmerButton
-                href={CONFIG.sallaCheckoutUrl}
-                className="w-full px-12 py-4 text-lg sm:w-auto"
-              >
-                ابدئي الآن —{" "}
-                <span className="tabular-nums">{CONFIG.bundlePrice}</span> ر.س
-              </ShimmerButton>
+              <CheckoutButton
+                label={`ابدئي الآن — ${CONFIG.bundlePrice} ر.س`}
+                className="w-full sm:w-fit"
+              />
             </div>
           </div>
         </Reveal>

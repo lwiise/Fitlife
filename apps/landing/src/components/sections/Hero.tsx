@@ -1,17 +1,15 @@
 import { Hourglass } from "lucide-react";
 
 import { OfferReceipt } from "@/components/sections/OfferReceipt";
-import { ShimmerButton } from "@/components/ui/shimmer-button";
-import { CONFIG, HERO_CTA_ID } from "@/lib/config";
+import { CheckoutButton } from "@/components/ui/checkout-button";
+import { HERO_CTA_ID } from "@/lib/config";
 
 // SERVER component — the LCP surface, on the night field. The H1 paints
 // opaque on frame one; supporting rows stagger via CSS offer-rise. The only
 // client leaf is the receipt's price ticker.
 //
-// The CTA renders twice (desktop column / after the receipt on mobile) so
-// phones read badge → headline → receipt → action. The SECTION carries the
-// sticky-bar sentinel id: the bar stays hidden while any part of the hero
-// (which ends in the CTA) is on screen.
+// The SECTION carries the sticky-bar sentinel id: the bar stays hidden while
+// any part of the hero (which ends in the CTA) is on screen.
 export function Hero() {
   return (
     <section
@@ -20,8 +18,12 @@ export function Hero() {
       className="bg-hero-night bg-noise overflow-hidden text-white"
     >
       <div className="container-page pt-28 pb-20 md:pt-40 md:pb-28">
-        <div className="lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-20">
-          <div>
+        {/* One checkout widget, not one per breakpoint: DOM order is
+            text → receipt → CTA (the mobile reading order), and on lg the
+            receipt spans both rows in column 2 so the CTA sits under the
+            paragraph in column 1. */}
+        <div className="lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:gap-x-20">
+          <div className="lg:col-start-1 lg:row-start-1">
             <p className="offer-rise inline-flex min-h-8 items-center gap-2 rounded-full border border-gold-500/40 px-4 py-1.5 text-sm font-bold text-gold-500">
               <Hourglass aria-hidden className="size-4" />
               عرض لفترة محدودة
@@ -39,29 +41,15 @@ export function Hero() {
               بدل ما تشترين كل منتج لحاله، جمعنا لك الاستشارة والتمارين
               والتغذية والوصفات في عرض واحد بسعر أقل من نصف القيمة.
             </p>
-
-            <div className="offer-rise mt-10 hidden lg:block [animation-delay:270ms]">
-              <ShimmerButton
-                href={CONFIG.sallaCheckoutUrl}
-                className="px-12 py-4 text-lg"
-              >
-                احجزي باقتك الآن
-              </ShimmerButton>
-            </div>
           </div>
 
-          <div className="offer-rise mt-14 lg:mt-0 [animation-delay:180ms]">
+          <div className="offer-rise mt-14 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:self-center [animation-delay:180ms]">
             <OfferReceipt />
           </div>
-        </div>
 
-        <div className="offer-rise mt-16 lg:hidden [animation-delay:360ms]">
-          <ShimmerButton
-            href={CONFIG.sallaCheckoutUrl}
-            className="w-full px-10 py-4 text-lg"
-          >
-            احجزي باقتك الآن
-          </ShimmerButton>
+          <div className="offer-rise mt-16 lg:col-start-1 lg:row-start-2 lg:mt-10 [animation-delay:360ms]">
+            <CheckoutButton label="احجزي باقتك الآن" className="w-full lg:w-fit" />
+          </div>
         </div>
       </div>
     </section>
