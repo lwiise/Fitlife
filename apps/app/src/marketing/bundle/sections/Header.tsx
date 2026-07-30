@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMotionValueEvent, useScroll } from "motion/react";
 
-import { CONFIG } from "@/marketing/bundle/config";
+import { CHECKOUT_ANCHOR_ID } from "@/marketing/bundle/config";
 import { cn } from "@/marketing/lib/utils";
 
 // Adaptive chrome: transparent light-on-dark over the night hero, then a
@@ -40,7 +40,7 @@ export function Header() {
           Fit Life
         </a>
         <a
-          href={CONFIG.sallaCheckoutUrl}
+          href={`#${CHECKOUT_ANCHOR_ID}`}
           className={cn(
             "inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-bold transition-colors duration-300",
             scrolled
