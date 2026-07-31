@@ -13,6 +13,7 @@ import {
   WORKER_ACK_LIMIT_MS,
   ageMsFrom,
   generationHasStalled,
+  workerAckedFromPlanData,
 } from "./generationTiming";
 
 /**
@@ -163,5 +164,42 @@ describe("worker ACK verdict", () => {
     const clientBrokenPollAt = WORKER_ACK_LIMIT_MS + SERVER_VERDICT_MARGIN_MS;
     expect(clientBrokenPollAt).toBeGreaterThan(WORKER_ACK_LIMIT_MS);
     expect(clientBrokenPollAt).toBeLessThan(GENERATION_SILENCE_LIMIT_MS);
+  });
+});
+
+/**
+ * The read path and the dispatch lock must agree on whether a run is alive.
+ * When they didn't, the plan failed at 90 seconds saying «حاولي مرة ثانية» while
+ * the lock answered every retry with 409 «خطتك قيد التجهيز الآن» for the next
+ * fourteen minutes — an error whose only instruction the app itself refused.
+ */
+describe("workerAckedFromPlanData", () => {
+  it("treats the empty object createPlanRows inserts as no ACK", () => {
+    expect(workerAckedFromPlanData({})).toBe(false);
+  });
+
+  it("counts the worker's ACK stamp as proof it ran", () => {
+    expect(workerAckedFromPlanData({ worker_ack_at: "2026-07-31T22:00:00Z" })).toBe(true);
+  });
+
+  it("counts a real snapshot as proof it ran", () => {
+    expect(workerAckedFromPlanData({ week_start_date: "2026-08-02", members: [] })).toBe(
+      true,
+    );
+  });
+
+  it("fails toward patience on anything unreadable", () => {
+    // Never condemn a live run on a degraded read.
+    expect(workerAckedFromPlanData(null)).toBe(true);
+    expect(workerAckedFromPlanData(undefined)).toBe(true);
+    expect(workerAckedFromPlanData("garbage")).toBe(true);
+    expect(workerAckedFromPlanData([])).toBe(true);
+    expect(workerAckedFromPlanData(42)).toBe(true);
+  });
+
+  it("lets the lock release before the user is told to retry", () => {
+    // The ordering that removes the dead end: whatever the read path condemns at
+    // WORKER_ACK_LIMIT_MS, the dispatch guard can sweep at the same instant.
+    expect(WORKER_ACK_LIMIT_MS).toBeLessThan(STALE_GENERATION_MIN * 60_000);
   });
 });

@@ -23,6 +23,10 @@ import type { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEngagementDigest } from "@/lib/engagement/digest";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
+import {
+  WORKER_ACK_LIMIT_MS,
+  workerAckedFromPlanData,
+} from "@/lib/plans/generationTiming";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import {
   canGenerateNewPlan,
@@ -162,20 +166,50 @@ export async function triggerPlanGeneration(params: {
   // or the 15-minute stale window elapsed.
   const { data: liveGens } = await supabase
     .from("plan_generations")
-    .select("id, started_at")
+    .select("id, started_at, meal_plan_id")
     .eq("user_id", userId)
     .eq("status", "started")
     .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
-    .returns<{ id: string; started_at: string }[]>();
+    .returns<{ id: string; started_at: string; meal_plan_id: string | null }[]>();
   const live = liveGens?.[0];
   if (live) {
     const startedMs = Date.parse(live.started_at);
-    const ageMin = Number.isNaN(startedMs)
-      ? Infinity
-      : (Date.now() - startedMs) / 60_000;
-    if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
+    const ageMs = Number.isNaN(startedMs) ? Infinity : Date.now() - startedMs;
+    const ageMin = ageMs / 60_000;
+
+    // A run the worker never acknowledged is already known dead, and holding its
+    // lock for the full stale window strands the user in a contradiction: the
+    // plan surfaces «لم تبدأ عملية إنشاء الخطة. حاولي مرة ثانية» after
+    // WORKER_ACK_LIMIT_MS, and then every retry for the next fourteen minutes
+    // comes back 409 «خطتك قيد التجهيز الآن» — an error whose only instruction
+    // the app itself refuses. Both ends read workerAckedFromPlanData, so the
+    // read path and the lock cannot disagree about whether a run is alive.
+    let deadWithoutAck = false;
+    if (ageMs >= WORKER_ACK_LIMIT_MS && ageMin < STALE_GENERATION_MIN && live.meal_plan_id) {
+      const { data: planRow } = await supabase
+        .from("meal_plans")
+        .select("status, plan_data")
+        .eq("id", live.meal_plan_id)
+        .maybeSingle();
+      // Only a still-'generating' row with nothing written qualifies. A 'ready'
+      // shell filling in day by day is alive and must keep its lock.
+      deadWithoutAck =
+        !!planRow &&
+        planRow.status === "generating" &&
+        !workerAckedFromPlanData(planRow.plan_data);
+      if (deadWithoutAck) {
+        console.warn("[triggerPlanGeneration] releasing lock for a run that never started", {
+          userId,
+          generationId: live.id,
+        });
+      }
+    }
+
+    if (ageMin < STALE_GENERATION_MIN && !deadWithoutAck) {
+      return { ok: false, kind: "busy" };
+    }
     // Stale 'started' (the bg worker was hard-killed at its budget and its catch
     // never ran) → reclassify so the guard can't deadlock 'busy' forever.
     //
@@ -187,7 +221,9 @@ export async function triggerPlanGeneration(params: {
       .from("plan_generations")
       .update({
         status: "failed",
-        error_message: "stale generation reclassified",
+        error_message: deadWithoutAck
+          ? "run never started (no worker ACK)"
+          : "stale generation reclassified",
         completed_at: new Date().toISOString(),
       })
       .eq("id", live.id);

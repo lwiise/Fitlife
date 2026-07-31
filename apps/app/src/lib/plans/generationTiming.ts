@@ -104,3 +104,26 @@ export function ageMsFrom(iso: string | null | undefined, now: number): number {
 export function generationHasStalled(lastWriteAtMs: number, now: number): boolean {
   return now - lastWriteAtMs >= GENERATION_SILENCE_LIMIT_MS;
 }
+
+/**
+ * Did the background worker ever touch this plan row?
+ *
+ * "Nothing ever wrote" is exactly "plan_data is still the empty object that
+ * createPlanRows inserted". Any key at all — the worker's `worker_ack_at`, or a
+ * real day snapshot — means the worker reached the database. Anything
+ * unreadable counts as ACKed, so a degraded read is only ever too patient and
+ * can never falsely condemn a live run.
+ *
+ * THE one definition, because two consumers must agree or the product
+ * contradicts itself: `getLatestPlan` uses it to decide when to surface «لم تبدأ
+ * عملية إنشاء الخطة», and `triggerPlanGeneration`'s busy guard uses it to decide
+ * when a held lock may be swept. When those disagreed, the plan failed at 90
+ * seconds telling the user to retry while the lock refused every retry for the
+ * remaining fourteen — an error whose only instruction was one the app rejected.
+ */
+export function workerAckedFromPlanData(planData: unknown): boolean {
+  if (!planData || typeof planData !== "object" || Array.isArray(planData)) {
+    return true;
+  }
+  return Object.keys(planData as Record<string, unknown>).length > 0;
+}

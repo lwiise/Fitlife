@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
 
 import { resolveStaleness, STALE_GENERATION_MIN } from "./staleness";
+import { workerAckedFromPlanData } from "./generationTiming";
 
 export { STALE_GENERATION_MIN };
 
@@ -100,11 +101,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
   // real snapshot — means the worker reached the DB. Anything unreadable counts
   // as ACKed, so a degraded read can only ever be too patient, never falsely
   // fail a live run.
-  const planDataObj =
-    row.plan_data && typeof row.plan_data === "object" && !Array.isArray(row.plan_data)
-      ? (row.plan_data as Record<string, unknown>)
-      : null;
-  const workerAcked = planDataObj === null || Object.keys(planDataObj).length > 0;
+  const workerAcked = workerAckedFromPlanData(row.plan_data);
 
   const resolved = resolveStaleness({
     status: finalStatus,
