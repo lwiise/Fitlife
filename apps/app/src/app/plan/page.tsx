@@ -7,6 +7,10 @@ import {
 } from "@/lib/supabase/queries";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import {
+  getCurrentSubscription,
+  hasLiveLemonsqueezySubscription,
+} from "@/lib/subscription/state";
+import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "@/lib/engagement/eligibility";
@@ -268,6 +272,16 @@ export default async function PlanPage({
   const verdicts = mealMarks?.verdicts;
   const absences = mealMarks?.absences;
   const pendingBlocked = familyChangeAccess ? !familyChangeAccess.allowed : false;
+  // Where the banner's CTA should go, and which verb it should use. A user who
+  // ALREADY pays cannot check out again — /api/checkout 409s them with «غيّري
+  // الباقة من صفحة الاشتراك» — so «اشتركي» + /pricing was a dead end for the
+  // very people the banner is aimed at (an over-limit household is by
+  // definition one that already has a subscription). Past-due users are in the
+  // same position: they need the billing page, not a second checkout.
+  const blockedSub =
+    pendingBlocked && profile ? await getCurrentSubscription(profile.id) : null;
+  const blockedIsSubscriber = hasLiveLemonsqueezySubscription(blockedSub);
+  const blockedHref = blockedIsSubscriber ? "/subscription" : "/pricing";
   // Order by add order so the banner shows the member being prepared NOW vs the
   // rest still queued (the drain generates them one at a time, in this order).
   const addOrder = Array.isArray(profile?.member_addition_order)
@@ -507,15 +521,25 @@ export default async function PlanPage({
               />
               <div className="flex-1">
                 <p className="text-brand-ink text-sm font-medium leading-relaxed">
-                  جهّزنا خطتك. خطط {queuedNames} متاحة مع الاشتراك —{" "}
-                  {genderPick(profile?.sex)("اشتركي", "اشترك")} ونجهّزها دفعة
-                  واحدة مع وجبات العائلة المنسقة.
+                  {blockedIsSubscriber
+                    ? `جهّزنا خطتك. خطط ${queuedNames} تحتاج باقة أكبر — ${genderPick(
+                        profile?.sex,
+                      )(
+                        "رقّي باقتك",
+                        "رقّ باقتك",
+                      )} ونجهّزها دفعة واحدة مع وجبات العائلة المنسقة.`
+                    : `جهّزنا خطتك. خطط ${queuedNames} متاحة مع الاشتراك — ${genderPick(
+                        profile?.sex,
+                      )(
+                        "اشتركي",
+                        "اشترك",
+                      )} ونجهّزها دفعة واحدة مع وجبات العائلة المنسقة.`}
                 </p>
                 <a
-                  href="/pricing"
+                  href={blockedHref}
                   className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
                 >
-                  عرض الباقات
+                  {blockedIsSubscriber ? "ترقية الباقة" : "عرض الباقات"}
                 </a>
               </div>
             </div>

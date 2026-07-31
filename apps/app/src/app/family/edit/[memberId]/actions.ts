@@ -213,8 +213,18 @@ export async function updateMemberHealth(
     });
   }
 
+  // Pregnancy and lactation calories are maintenance (TDEE) plus a stage
+  // addition, so they need an activity factor exactly like an adult — and their
+  // wizards collect one. buildMemberRow (the CREATE path) stores these three
+  // columns for all three adult-like types via its own `isAdultLike`; this EDIT
+  // path keyed them off `isAdult` alone and wrote null otherwise, so opening
+  // and saving a pregnant or lactating member's health screen silently erased
+  // the activity answers her wizard had collected and left activity_level
+  // stale. describeMember then omits the activity clause entirely and the model
+  // guesses the multiplier — the exact regression the create path was fixed for.
+  const isAdultLike = isAdult || isPreg || isLact;
   const derivedActivity =
-    isAdult && data.day_nature && data.exercise_days
+    isAdultLike && data.day_nature && data.exercise_days
       ? activityLevelFrom(data.day_nature, data.exercise_days)
       : data.activity_level;
 
@@ -223,9 +233,10 @@ export async function updateMemberHealth(
     .from("family_members")
     .update({
       activity_level: derivedActivity,
-      day_nature: isAdult ? (data.day_nature ?? null) : null,
-      exercise_days: isAdult ? (data.exercise_days ?? null) : null,
-      exercise_type: isAdult ? (data.exercise_type ?? null) : null,
+      // Adult-like (adult | pregnant | lactating), matching buildMemberRow.
+      day_nature: isAdultLike ? (data.day_nature ?? null) : null,
+      exercise_days: isAdultLike ? (data.exercise_days ?? null) : null,
+      exercise_type: isAdultLike ? (data.exercise_type ?? null) : null,
       target_weight_kg: isAdult ? (data.target_weight_kg ?? null) : null,
       sleep_hours: isAdult ? (data.sleep_hours ?? null) : null,
       water_liters: isChild ? null : (data.water_liters ?? null),

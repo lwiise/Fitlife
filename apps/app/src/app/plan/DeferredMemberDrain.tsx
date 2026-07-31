@@ -30,8 +30,18 @@ export function DeferredMemberDrain({ generating = false }: { generating?: boole
       dispatched = true;
       void drainDeferredMembers()
         .then((res) => {
-          // Nothing pending / gate not met: allow the next tick to re-check.
-          if (active && !res.fired && !res.busy) dispatched = false;
+          // Nothing pending / gate not met / a run is already in flight: allow
+          // the next tick to re-check.
+          //
+          // 'busy' USED to latch this permanently — `dispatched` stayed true and
+          // every later tick short-circuited on the guard above, so the members
+          // were stranded until a full page reload. The effect only re-runs when
+          // `generating` changes, and `generating` is the MEAL plan's
+          // in_progress: a live workout run makes the dispatch report busy while
+          // that flag is false, so nothing ever cleared the latch. 'busy' is
+          // precisely the case worth retrying — the next tick is when the run
+          // it collided with has had time to finish.
+          if (active && !res.fired) dispatched = false;
         })
         .catch(() => {
           if (active) dispatched = false;

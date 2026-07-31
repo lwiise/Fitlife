@@ -5,9 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { capture, captureBeacon } from "@/lib/analytics";
 import { isValidTier, isValidCadence } from "@/lib/tierIntent";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 import { Loader2, Mail } from "lucide-react";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
 
 function arabicAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -26,16 +27,38 @@ function arabicAuthError(message: string): string {
   return "حصل خطأ — يمكنك المحاولة مرة ثانية.";
 }
 
+/**
+ * Stable codes written by /auth/callback. It used to put the raw English
+ * Supabase message into `?error=`, and the login page never read the parameter
+ * at all — so the single most common failure (opening the confirmation email on
+ * a different device than signup, which leaves the PKCE verifier behind) showed
+ * the user a blank form with no explanation.
+ */
+function arabicCallbackError(code: string): string | null {
+  switch (code) {
+    case "missing_code":
+      return "الرابط غير مكتمل. اطلبي رابطاً جديداً وحاولي مرة ثانية.";
+    case "link_invalid":
+      return "انتهت صلاحية الرابط أو استُخدم من جهاز آخر. افتحي الرابط على نفس الجهاز الذي سجّلتِ منه، أو اطلبي رابطاً جديداً.";
+    default:
+      return null;
+  }
+}
+
 export function LoginForm() {
   const searchParams = useSearchParams();
   // Intent carried from the landing page (tier CTA) takes the user into
   // onboarding with the tier preselected; otherwise honor redirect_to.
   const tier = searchParams.get("tier");
   const cadence = searchParams.get("cadence");
+  // redirect_to is attacker-supplied (the proxy writes it, but nothing stops a
+  // hand-crafted link). Unvalidated it made this an open redirect off the
+  // credential page — see safeRedirectPath. The admin panel already validated
+  // its own `next`; this is the same rule.
   const nextPath =
     isValidTier(tier) && isValidCadence(cadence)
       ? `/onboarding?tier=${tier}&cadence=${cadence}`
-      : searchParams.get("redirect_to") || "/dashboard";
+      : safeRedirectPath(searchParams.get("redirect_to"));
   // Validated before it becomes an event property — `tier` is raw query input,
   // and an unbounded string would shred the funnel breakdown.
   const intentTier = isValidTier(tier) ? tier : null;
@@ -47,9 +70,13 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<
-    "idle" | "submitting" | "confirm-sent" | "error"
+    "idle" | "submitting" | "confirm-sent" | "reset-sent" | "error"
   >("idle");
-  const [errorMessage, setErrorMessage] = useState("");
+  // Seeded from /auth/callback's ?error= so a failed email link explains itself
+  // instead of dropping the user on a blank form.
+  const [errorMessage, setErrorMessage] = useState(
+    () => arabicCallbackError(searchParams.get("error") ?? "") ?? "",
+  );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -57,6 +84,25 @@ export function LoginForm() {
     setErrorMessage("");
 
     const supabase = createClient();
+
+    // Password recovery. Auth is email+password only, and there was no reset
+    // path at all — a forgotten password meant permanent lockout of a paid
+    // account holding meal plans, family and body-log history, with the only
+    // operator tools being deactivate or delete.
+    if (mode === "reset") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      });
+      if (error) {
+        setStatus("error");
+        setErrorMessage(arabicAuthError(error.message));
+        return;
+      }
+      // Deliberately the same answer whether or not the address has an account:
+      // a differing response here tells an attacker which emails are registered.
+      setStatus("reset-sent");
+      return;
+    }
 
     if (mode === "signup") {
       const callbackUrl = `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(nextPath)}`;
@@ -139,6 +185,40 @@ export function LoginForm() {
     );
   }
 
+  if (status === "reset-sent") {
+    return (
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-emerald/10 mb-4">
+          <Mail className="size-7 text-brand-emerald" aria-hidden="true" />
+        </div>
+        <h1 className="font-bold text-lg text-brand-ink mb-2">
+          رابط استعادة كلمة المرور في إيميلك
+        </h1>
+        <p className="text-brand-ink-muted text-sm leading-relaxed">
+          إذا كان
+          <br />
+          <span className="font-semibold text-brand-ink">{email}</span>
+          <br />
+          مسجّلاً عندنا، وصلكِ رابط لتعيين كلمة مرور جديدة.
+        </p>
+        <p className="mt-4 text-brand-ink-muted/60 text-xs leading-relaxed">
+          افتحي الرابط على نفس الجهاز. إن لم تصل الرسالة، فقد تكون في مجلد السبام.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("idle");
+            setMode("signin");
+            setPassword("");
+          }}
+          className="mt-6 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
+        >
+          العودة لتسجيل الدخول
+        </button>
+      </div>
+    );
+  }
+
   const submitting = status === "submitting";
 
   return (
@@ -147,12 +227,18 @@ export function LoginForm() {
         {/* h1, not h2: this is the page's title and /auth/login had no h1 at
             all. Same classes, so nothing moves visually. */}
         <h1 className="font-bold text-2xl text-brand-ink leading-tight">
-          {mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب"}
+          {mode === "reset"
+            ? "استعادة كلمة المرور"
+            : mode === "signin"
+              ? "تسجيل الدخول"
+              : "إنشاء حساب"}
         </h1>
         <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
-          {mode === "signin"
-            ? "الإيميل وكلمة المرور لتسجيل الدخول."
-            : "حساب جديد بإيميل وكلمة مرور."}
+          {mode === "reset"
+            ? "اكتبي إيميلك ونرسل لكِ رابطاً لتعيين كلمة مرور جديدة."
+            : mode === "signin"
+              ? "الإيميل وكلمة المرور لتسجيل الدخول."
+              : "حساب جديد بإيميل وكلمة مرور."}
         </p>
       </div>
 
@@ -178,6 +264,7 @@ export function LoginForm() {
           />
         </div>
 
+        {mode !== "reset" && (
         <div>
           <label
             htmlFor="password"
@@ -203,7 +290,22 @@ export function LoginForm() {
               8 أحرف على الأقل.
             </p>
           )}
+          {mode === "signin" && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode("reset");
+                setStatus("idle");
+                setErrorMessage("");
+                setPassword("");
+              }}
+              className="mt-2 inline-flex items-center min-h-11 text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
+            >
+              نسيت كلمة المرور؟
+            </button>
+          )}
         </div>
+        )}
 
         {status === "error" && errorMessage && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3">
@@ -213,14 +315,20 @@ export function LoginForm() {
 
         <button
           type="submit"
-          disabled={submitting || !email || !password}
+          disabled={submitting || !email || (mode !== "reset" && !password)}
           className="w-full flex items-center justify-center gap-2 bg-brand-ink hover:bg-brand-purple-900 disabled:bg-brand-ink/40 text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg disabled:cursor-not-allowed disabled:shadow-none"
         >
           {submitting ? (
             <>
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-              {mode === "signin" ? "جاري الدخول..." : "جاري الإنشاء..."}
+              {mode === "reset"
+                ? "جاري الإرسال..."
+                : mode === "signin"
+                  ? "جاري الدخول..."
+                  : "جاري الإنشاء..."}
             </>
+          ) : mode === "reset" ? (
+            "إرسال رابط الاستعادة"
           ) : mode === "signin" ? (
             "دخول"
           ) : (
@@ -230,7 +338,11 @@ export function LoginForm() {
       </form>
 
       <p className="text-center mt-6 text-brand-ink-muted text-sm">
-        {mode === "signin" ? "ما عندك حساب؟ " : "عندك حساب؟ "}
+        {mode === "reset"
+          ? "تذكرتِ كلمة المرور؟ "
+          : mode === "signin"
+            ? "ما عندك حساب؟ "
+            : "عندك حساب؟ "}
         <button
           type="button"
           onClick={() => {

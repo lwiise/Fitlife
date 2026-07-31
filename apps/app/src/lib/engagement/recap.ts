@@ -58,7 +58,8 @@ export function computeWeeklyRecap(input: {
   checkins: RecapCheckinRow[];
   verdicts: RecapVerdictRow[];
   /** Mom's recent weigh-ins, newest first. */
-  weights: Array<{ recorded_on: string; weight_kg: number | null }>;
+  /** `numeric` from Postgres: may arrive as a string. Coerced, not trusted. */
+  weights: Array<{ recorded_on: string; weight_kg: number | string | null }>;
 }): WeeklyRecap {
   const { plan, checkins, verdicts, weights } = input;
   const weekStart = plan.week_start_date;
@@ -106,9 +107,18 @@ export function computeWeeklyRecap(input: {
   }
   const top = [...lovedByKey.values()].sort((a, b) => b.loved - a.loved)[0];
 
+  // Coerce, don't type-guard. weight_kg is a Postgres `numeric`, which arrives
+  // as a STRING often enough that seasonProps.ts wraps it in Number() and
+  // memberEdit.ts carries the comment "Postgres hands numerics back as strings
+  // sometimes". This filtered on `typeof v === "number"`, so whenever that
+  // happened every value was discarded and weight_delta_kg was silently null —
+  // the recap's weight line never rendered. The fetcher's cast declares
+  // `number | null` on data it never converts, so the types agreed while the
+  // runtime did not, and recap.test.ts passes numbers straight into this
+  // function and so could never catch it.
   const weightVals = weights
-    .map((w) => w.weight_kg)
-    .filter((v): v is number => typeof v === "number");
+    .map((w) => (w.weight_kg == null ? null : Number(w.weight_kg)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
   const weight_delta_kg =
     weightVals.length >= 2 ? Number((weightVals[0]! - weightVals[1]!).toFixed(1)) : null;
 
@@ -187,7 +197,7 @@ export async function fetchWeeklyRecap(
     verdicts: (verdicts.data ?? []) as RecapVerdictRow[],
     weights: (weights.data ?? []) as Array<{
       recorded_on: string;
-      weight_kg: number | null;
+      weight_kg: number | string | null;
     }>,
   });
 }

@@ -1,0 +1,44 @@
+/**
+ * The one definition of "is this redirect target safe to navigate to".
+ *
+ * Post-auth navigation targets arrive in the URL (`redirect_to`, `next`), so
+ * they are attacker-supplied. An unvalidated one turns the login page into an
+ * open redirect: a link to our real domain, with our real login form, that
+ * lands the user on someone else's site *after* a successful sign-in — which
+ * is the setup that makes a follow-up "your session expired, sign in again"
+ * page credible. The `javascript:` form is worse still, since
+ * `location.assign()` of one runs in our origin with the session cookie
+ * present.
+ *
+ * Only same-origin ABSOLUTE PATHS are allowed:
+ *   "/plan"           ok
+ *   "/plan?x=1#y"     ok
+ *   "//evil.com"      rejected — protocol-relative, a different host
+ *   "/\\evil.com"     rejected — browsers normalise the backslash to "/"
+ *   "https://…"       rejected — absolute URL
+ *   "javascript:…"    rejected — not a path
+ *
+ * The admin panel already did this for its own `next` parameter; this is the
+ * same rule, extracted so the customer-facing paths cannot drift from it.
+ */
+
+/**
+ * C0 controls plus DEL. Written as escapes on purpose: the literal characters
+ * are invisible in an editor and in review, which is not what you want guarding
+ * a redirect. They are rejected because they can be used to smuggle a scheme
+ * past a naive prefix check.
+ */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+export function safeRedirectPath(
+  raw: string | null | undefined,
+  fallback = "/dashboard",
+): string {
+  if (!raw) return fallback;
+  const value = raw.trim();
+  if (!value.startsWith("/")) return fallback;
+  // "//host" and "/\host" both leave our origin once the browser normalises them.
+  if (value.startsWith("//") || value.startsWith("/\\")) return fallback;
+  if (CONTROL_CHARS.test(value)) return fallback;
+  return value;
+}

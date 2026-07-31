@@ -56,7 +56,15 @@ export async function eraseUserAccount(userId: string): Promise<void> {
   const lsId = (sub as { lemonsqueezy_subscription_id: string | null } | null)
     ?.lemonsqueezy_subscription_id;
   const lsStatus = (sub as { status: string } | null)?.status;
-  if (lsId && (lsStatus === "active" || lsStatus === "past_due")) {
+  // Cancel on any status that can still BILL. 'paused' was missing and matters
+  // most: a LemonSqueezy pause AUTO-RESUMES at resumes_at (our own pause sets
+  // that 30 days out), so a customer who paused and then deleted their account
+  // was charged again a month later, with no account left to cancel from and
+  // their data already erased. 'trialing' is included for the same reason — a
+  // trial that converts bills a deleted customer. 'cancelled' and 'expired' are
+  // correctly skipped: they cannot bill again.
+  const BILLABLE_STATUSES = ["active", "past_due", "paused", "trialing"];
+  if (lsId && lsStatus != null && BILLABLE_STATUSES.includes(lsStatus)) {
     try {
       await cancelLemonsqueezySubscription(lsId);
     } catch (e) {

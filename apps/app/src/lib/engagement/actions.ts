@@ -198,19 +198,10 @@ export async function closeDay(rawInput: CloseDayInput) {
       { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
   if (checkinError) {
-    const { error: legacyError } = await db
-      .from("meal_checkins")
-      .upsert(checkinRowsInput, { onConflict: "meal_plan_id,day_index,slot" });
-    if (legacyError) {
-      Sentry.captureException(checkinError, {
-        tags: { area: "engagement", step: "checkin-upsert", userId: user.id },
-      });
-      return { ok: false as const, error: "تعذر حفظ يومك، يرجى المحاولة مرة أخرى" };
-    }
-    Sentry.captureMessage(
-      "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
-      { level: "warning", tags: { area: "engagement", step: "checkin-upsert" } },
-    );
+    Sentry.captureException(checkinError, {
+      tags: { area: "engagement", step: "checkin-upsert", userId: user.id },
+    });
+    return { ok: false as const, error: "تعذر حفظ يومك، يرجى المحاولة مرة أخرى" };
   }
 
   if (input.verdicts.length > 0) {
@@ -582,7 +573,7 @@ export async function setMealVerdict(rawInput: SetMealVerdictInput) {
  * also cascade off it). CLEARING is the exception: it sweeps the member's own
  * row AND the fallback (clearMealMarks) — a row left behind would just hand
  * the chip back with an older status. On a
- * pre-00019 prod the write degrades to the legacy household-level shape
+ * 00019 is applied, so the write always carries member_id
  * (marking keeps working; per-person separation waits for the migration).
  */
 export async function setMealCheckin(rawInput: SetMealCheckinInput) {
@@ -671,21 +662,10 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
       { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
     if (upsertError) {
-      // Pre-00019 prod: degrade to the legacy household-level write so the
-      // mark still saves, and flag ops to apply the migration.
-      const { error: legacyError } = await supabase
-        .from("meal_checkins")
-        .upsert(row, { onConflict: "meal_plan_id,day_index,slot" });
-      if (legacyError) {
-        Sentry.captureException(upsertError, {
-          tags: { area: "engagement", step: "checkin-inline", userId: user.id },
-        });
-        return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
-      }
-      Sentry.captureMessage(
-        "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
-        { level: "warning", tags: { area: "engagement", step: "checkin-inline" } },
-      );
+      Sentry.captureException(upsertError, {
+        tags: { area: "engagement", step: "checkin-inline", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
     }
     // A whole-house row for this meal, if any, is deliberately left in place:
     // it keeps answering for members without their own row, and deleting it
@@ -710,7 +690,7 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
  * Same calendar rules as setMealCheckin: server-derived date, any elapsed day
  * of the plan week, never a future day. status null un-answers the dish for
  * everyone: every sharer's row plus the whole-house fallback that would
- * otherwise re-light the chip (clearMealMarks). On a pre-00019 prod the write
+ * otherwise re-light the chip (clearMealMarks). The write
  * degrades to the legacy household-level shape.
  */
 export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) {
@@ -822,20 +802,10 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
       { onConflict: "meal_plan_id,day_index,slot,member_id" },
     );
     if (upsertError) {
-      // Pre-00019 prod: one legacy household-level row so the mark still saves.
-      const { error: legacyError } = await supabase
-        .from("meal_checkins")
-        .upsert(base, { onConflict: "meal_plan_id,day_index,slot" });
-      if (legacyError) {
-        Sentry.captureException(upsertError, {
-          tags: { area: "engagement", step: "shared-checkin", userId: user.id },
-        });
-        return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
-      }
-      Sentry.captureMessage(
-        "meal_checkins write fell back to pre-00019 shape — apply migration 00019",
-        { level: "warning", tags: { area: "engagement", step: "shared-checkin" } },
-      );
+      Sentry.captureException(upsertError, {
+        tags: { area: "engagement", step: "shared-checkin", userId: user.id },
+      });
+      return { ok: false as const, error: "تعذر حفظ التسجيل، يرجى المحاولة مرة أخرى" };
     }
   }
 

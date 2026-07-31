@@ -1096,3 +1096,55 @@ describe("collapseMealAbsences — exclusions survive a mid-week plan re-mint", 
     ).toEqual([]);
   });
 });
+
+describe("orphaned rows from a removed member never reach the family surfaces", () => {
+  // member_id carries no foreign key (it also holds the "mom"/"household"
+  // sentinels), so deleting a family_members row leaves their marks behind. The
+  // per-member scoring loop filters the roster; the family counters did not, so
+  // the ring/strip counted meals for someone no longer in the household while
+  // nobody's score moved — the family total and the sum of its members could
+  // not reconcile.
+  it("a departed member's meal marks do not fill the family ring", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ day_index: 0, slot: "lunch", member_id: "mom" }),
+        // "ghost" is not in the roster — a member who was removed mid-week.
+        mark({ day_index: 1, slot: "dinner", member_id: "ghost" }),
+      ],
+      weekStartDate: WEEK_START,
+    });
+
+    expect(stats.followedMeals).toBe(1);
+    expect(stats.activeDays).toBe(1);
+  });
+
+  it("a departed member's sessions do not inflate the displayed session count", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [],
+      workoutCheckins: [
+        workout({ member_id: "mom", local_date: "2026-07-18" }),
+        workout({ member_id: "ghost", local_date: "2026-07-19", day_index: 2 }),
+      ],
+      weekStartDate: WEEK_START,
+    });
+
+    // sessionsDone is rendered beside a ring filled from workoutActs; the two
+    // must never disagree on the same card.
+    expect(stats.workoutActs).toBe(1);
+    expect(stats.sessionsDone).toBe(stats.workoutActs);
+  });
+
+  it("the 'household' whole-kitchen attestation still counts", () => {
+    // It names no member by design — it is the kitchen's answer for the whole
+    // house, and the family surfaces are exactly what it is meant to light.
+    const stats = computeSeasonStats({
+      members,
+      checkins: [mark({ day_index: 2, slot: "dinner", member_id: "household" })],
+      weekStartDate: WEEK_START,
+    });
+
+    expect(stats.followedMeals).toBe(1);
+  });
+});

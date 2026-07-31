@@ -20,6 +20,7 @@ import {
   type LocaleCode,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEngagementDigest } from "@/lib/engagement/digest";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
@@ -29,7 +30,11 @@ import {
   canRegenerateMemberPlan,
   type AccessResult,
 } from "@/lib/subscription/access";
-import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
+import {
+  env,
+  getAnthropicKey,
+  getInternalFunctionSecret,
+} from "@/lib/env";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -114,15 +119,22 @@ export async function triggerPlanGeneration(params: {
     : regenerateMemberId
       ? await canRegenerateMemberPlan(userId, regenerateMemberId)
       : await canGenerateNewPlan(userId);
-  // On a full-family run, exceeding the tier's people limit doesn't block: we
+  // Exceeding the tier's people limit CAPS the run rather than blocking it: we
   // generate up to the limit (mom + as many members as fit) and defer the rest,
-  // which the dashboard then nudges to upgrade for. Single-member runs (add/edit)
-  // and other denials (inactive/past_due/trial) still block.
-  const isFullRun = !onlyMemberId && !regenerateMemberId && !regenerateSharedGroup;
+  // which the dashboard then nudges to upgrade for. Other denials
+  // (inactive/past_due/trial/count_unavailable) still block.
+  //
+  // This now applies to single-member runs too, not just full ones. Adds and
+  // downgrades are refused at the boundary, so a household can no longer be
+  // pushed over the line — but accounts that crossed it BEFORE that guard
+  // existed are still out there, and denying single-member runs left them
+  // unable to generate anything at all: not a new member, not an edit, not even
+  // a plain regenerate for mom. The account was stuck until a member was
+  // deleted or the tier upgraded. Capping degrades instead: the members who fit
+  // keep working while the paywall does its job.
   let capMaxPeople: number | null = null;
   if (!access.allowed) {
     if (
-      isFullRun &&
       access.reason === "person_count_exceeded" &&
       access.details?.max_people != null
     ) {
@@ -132,18 +144,28 @@ export async function triggerPlanGeneration(params: {
     }
   }
 
-  // Don't start a new generation while one is still running. A second run can't
-  // carry the in-progress plan over (its members aren't complete yet), so it
-  // would restart every member from scratch — and two background functions would
-  // race. We CAN'T key this off meal_plans.status: the shell flips to 'ready' on
-  // the first emit and stays 'ready' for the whole run. The durable signal is the
-  // plan_generations 'started' row, created at dispatch (createPlanRows) and
-  // cleared only at terminal completion — the shell flip can't fake it.
+  // Don't start a new MEAL generation while one is still running. A second run
+  // can't carry the in-progress plan over (its members aren't complete yet), so
+  // it would restart every member from scratch — and two background functions
+  // would race. We CAN'T key this off meal_plans.status: the shell flips to
+  // 'ready' on the first emit and stays 'ready' for the whole run. The durable
+  // signal is the plan_generations 'started' row, created at dispatch
+  // (createPlanRows) and cleared only at terminal completion.
+  //
+  // Scoped to plan_kind='meal'. Migration 00014 deliberately replaced 00012's
+  // one-run-per-user lock with a per-(user, plan_kind) one so that a meal run
+  // and a workout run may coexist — triggerWorkoutGeneration below honoured
+  // that, this guard did not. Unscoped, a live workout run (which waits up to
+  // 8 minutes for meals by design, then generates) reported 'busy' for every
+  // meal dispatch: "new plan" did nothing, add-member silently deferred the
+  // member, and the housekeeper translation was skipped, until the run finished
+  // or the 15-minute stale window elapsed.
   const { data: liveGens } = await supabase
     .from("plan_generations")
     .select("id, started_at")
     .eq("user_id", userId)
     .eq("status", "started")
+    .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
     .returns<{ id: string; started_at: string }[]>();
@@ -156,7 +178,12 @@ export async function triggerPlanGeneration(params: {
     if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
     // Stale 'started' (the bg worker was hard-killed at its budget and its catch
     // never ran) → reclassify so the guard can't deadlock 'busy' forever.
-    await supabase
+    //
+    // Service-role: plan_generations is an AUDIT table and 00024 removes the
+    // user's UPDATE policy (it let a user reset their own quota, clear the
+    // in-flight lock, and rewrite the cost columns the admin dashboards read).
+    // Every legitimate UPDATE is a server-side bookkeeping write like this one.
+    await createAdminClient()
       .from("plan_generations")
       .update({
         status: "failed",
@@ -268,6 +295,14 @@ export async function triggerPlanGeneration(params: {
     const keep = new Set(
       beneficiaries.slice(0, Math.max(0, capMaxPeople - 1)).map((m) => m.id),
     );
+    // A run TARGETING a member the cap excludes has nothing to do — generating
+    // the untargeted rest would silently report success while that member's
+    // plan never appeared. Refusing is the honest answer, and it is the one the
+    // caller already maps to the upgrade screen. Runs targeting a covered
+    // member (or mom) still proceed.
+    if (targetMemberId && targetMemberId !== "mom" && !keep.has(targetMemberId)) {
+      return { ok: false, kind: "access", access: access as Extract<AccessResult, { allowed: false }> };
+    }
     context.family_members = context.family_members.filter(
       (m) => m.role === "housekeeper" || keep.has(m.id),
     );
@@ -290,10 +325,15 @@ export async function triggerPlanGeneration(params: {
   }
 
   // Development: no serverless timeout — run generation inline.
+  //
+  // Service-role client, matching what the PRODUCTION background function
+  // already uses. The generation closes its own plan_generations audit row, and
+  // 00024 removed the user's UPDATE policy on that table — with the user client
+  // the dev-inline run would silently leave every audit row open.
   if (process.env.NODE_ENV === "development") {
     try {
       await runMealPlanGeneration({
-        supabase,
+        supabase: createAdminClient() as unknown as ServerClient,
         anthropicApiKey: getAnthropicKey(),
         mealPlanId,
         context,
@@ -338,7 +378,7 @@ export async function triggerPlanGeneration(params: {
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFunctionSecret(),
         },
         body: JSON.stringify({
           userId,
@@ -418,12 +458,15 @@ export async function triggerPlanTranslation(params: {
   // runMealPlanGeneration / the background fn), so a no-op here is safe: the maid
   // page keeps polling and the freshly-generated plan lands already translated.
   // Same durable signal as triggerPlanGeneration: a live plan_generations
-  // 'started' row. Unlike that guard we do NOT reclassify a stale row here.
+  // 'started' row, scoped to plan_kind='meal' for the same reason (a workout
+  // run writes nothing to plan_data, so it must not block a translation).
+  // Unlike that guard we do NOT reclassify a stale row here.
   const { data: liveGens } = await supabase
     .from("plan_generations")
     .select("id, started_at")
     .eq("user_id", userId)
     .eq("status", "started")
+    .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
     .returns<{ id: string; started_at: string }[]>();
@@ -508,7 +551,7 @@ export async function triggerPlanTranslation(params: {
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFunctionSecret(),
         },
         // Don't ship the whole plan in the body (same payload-limit reasoning as
         // generation above) — the bg fn re-reads plan_data by mealPlanId.
@@ -564,7 +607,8 @@ export async function triggerWorkoutGeneration(params: {
       ? Infinity
       : (Date.now() - startedMs) / 60_000;
     if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
-    await supabase
+    // Service-role for the same reason as the meal reclassifier above (00024).
+    await createAdminClient()
       .from("plan_generations")
       .update({
         status: "failed",
@@ -602,11 +646,12 @@ export async function triggerWorkoutGeneration(params: {
 
   const weekStartDate = riyadhTodayISO();
 
-  // Development: no serverless timeout — run inline.
+  // Development: no serverless timeout — run inline. Service-role for the same
+  // reason as the meal path above (00024 audit-table lockdown).
   if (process.env.NODE_ENV === "development") {
     try {
       await runWorkoutPlanGeneration({
-        supabase,
+        supabase: createAdminClient() as unknown as ServerClient,
         anthropicApiKey: getAnthropicKey(),
         workoutPlanId,
         context,
@@ -634,7 +679,7 @@ export async function triggerWorkoutGeneration(params: {
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFunctionSecret(),
         },
         body: JSON.stringify({ mode: "workout", userId, workoutPlanId, weekStartDate }),
       },
@@ -661,7 +706,8 @@ export async function triggerWorkoutGeneration(params: {
       .from("workout_plans")
       .update({ status: "failed", error_message: "dispatch failed" })
       .eq("id", workoutPlanId);
-    await supabase
+    // Service-role: audit-row bookkeeping (00024 removed the user UPDATE policy).
+    await createAdminClient()
       .from("plan_generations")
       .update({
         status: "failed",

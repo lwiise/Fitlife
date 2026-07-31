@@ -110,8 +110,13 @@ export default async function PricingPage({
 
         {fromOnboarding && <SkipSubscriptionButton ownerSex={ownerSex} />}
 
+        {/* Follows the toggle. This line was unconditional, so a visitor on the
+            MONTHLY toggle was told billing is annual and charged once —
+            a wrong disclosure of the charge on the page where they pay. */}
         <p className="text-center mt-10 text-brand-ink-muted text-xs leading-relaxed">
-          الأسعار بالريال السعودي. الفوترة سنوية تُحتسب مرة واحدة.
+          {cadence === "annual"
+            ? "الأسعار بالريال السعودي. الفوترة سنوية تُحتسب مرة واحدة."
+            : "الأسعار بالريال السعودي. الفوترة شهرية، تتجدد كل شهر."}
         </p>
       </div>
 

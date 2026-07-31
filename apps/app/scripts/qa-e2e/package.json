@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Standalone end-to-end signup + plan-generation harness. Deliberately NOT a pnpm workspace package (pnpm-workspace.yaml globs only apps/* and packages/*) — install it with plain npm inside this folder so it never touches the app lockfile.",
   "scripts": {
-    "e2e": "node run.mjs"
+    "e2e": "node run.mjs",
+    "smoke": "node audit-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

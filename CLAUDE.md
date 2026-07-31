@@ -86,7 +86,7 @@ Before building ANY section, you must:
 
 **PAYMENT IS CURRENTLY OFF IN PRODUCTION (07/2026, owner directive — temporary, pre-launch testing)**: `NEXT_PUBLIC_FREE_ACCESS_MODE = "1"` is set in `apps/app/netlify.toml` `[build.environment]`, so every paid capability is open to everyone: no subscription needed (expired trials included), unlimited household members, unlimited plan generations, advisor chat open, no post-onboarding bounce to /pricing, and no trial countdown banner. Every gate reads the ONE predicate `isFreeAccessMode()` (`apps/app/src/lib/subscription/freeAccess.ts`) — grep it for the complete list. **To take payments again: delete that one line from netlify.toml and redeploy.** Nothing else was loosened, so there is no second thing to remember. The LemonSqueezy checkout + webhooks are deliberately untouched and stay testable while the mode is on, as is the advisor's 30-messages/day cap (cost protection, not a paywall). Cost note: the weekly generation limits are a spend guard, and every generation is a paid Anthropic call — unlimited generations means unlimited AI spend while this is on. A «وضع الاختبار» badge renders on every page so the mode cannot be silently forgotten. Guarded by `freeAccess.test.ts`, whose most important assertion is that the mode is OFF for any value other than exactly `"1"`.
 
-**Auth method**: Switched from magic-link (passwordless) to email + password. Supabase auth via signInWithPassword and signUp. Forms include both email and password inputs.
+**Auth method**: Switched from magic-link (passwordless) to email + password. Supabase auth via signInWithPassword and signUp. Forms include both email and password inputs. **Password recovery exists as of the 07/2026 audit** — «نسيت كلمة المرور» on the login form → `resetPasswordForEmail` → `/auth/callback?type=recovery` → `/auth/update-password`. Before that there was NO reset path at all, so a forgotten password was permanent lockout of a paid account and the only operator tools were deactivate or delete. `/auth/update-password` is reached WITH a live recovery session, so proxy.ts exempts it from the "signed-in users get bounced off /auth/*" redirect, alongside `/auth/callback` and `/auth/logout`. Requires the Supabase recovery email template to be configured.
 
 **Site architecture**: Merged from two Netlify sites to one unified site.
 - Single production site: fitlife-app-mvp.netlify.app
@@ -100,11 +100,15 @@ Before building ANY section, you must:
 
 **Database migration baseline**: Production Supabase has migrations 00001 through 00007 applied (verified 06/09/2026 — 00007 `meal_mode` column confirmed present via a read-only REST probe of `family_members`). Migration 00005 added per-member fields (member_type, sex, allergies, dislikes, trimester, school_meal_handling, picky_eater) and family-wide preferences (cuisine, dietary_restrictions, cooking_methods, meal_out_frequency). Migration 00006 added `chat_messages`; 00007 added `family_members.meal_mode` ('shared' default / 'independent'). Migrations are applied MANUALLY (no CI/Netlify runner) — when adding a migration, apply it to prod yourself. Migrations 00008–00011 (admin_users, profiles.meal_mode, admin audit log), 00012 (superseded by 00014's composite index; see below), 00013 (Coach Sara questionnaire columns: target_weight_kg, day_nature/exercise_days/exercise_type, water_cups, sleep_hours, medications/supplements/nausea_foods jsonb, notes, family_members.feeding_mode, plus the optional deep-dive columns + profiles.deep_dive_completed_at — all nullable/additive, code works before it's applied but new answers won't persist) and 00014 (workout_plans table + workout_profile jsonb + plan_generations.plan_kind/workout_plan_id; REPLACES 00012's lock with UNIQUE (user_id, plan_kind) WHERE status='started' so one meal run and one workout run may coexist — apply BEFORE relying on workout generation) are NOT yet verified against prod — verify/apply before relying on the admin panel, the mom health-save (`profiles.meal_mode`), the generation race fix, or the new questionnaire fields.
 
+**Migration state: everything through 00024 is applied to prod (00023 + 00024 applied by the owner 07/31/2026; 00001–00022 verified 07/26/2026).** 00023 widens the `subscriptions.status` CHECK to accept `'paused'` (00004 had dropped it, so every «استراحة» pause wrote a value the DB rejected). 00024 is the engineering-audit migration — see the audit section at the end of this file. Re-run `apps/app/scripts/verify-migrations.sql` after any new migration; it now also asserts a CLASS GUARD that every RLS table the app deletes from has a DELETE policy, because that omission has shipped twice (meal_checkins, fixed in 00019; meal_verdicts, fixed in 00024).
+
+**Historical note (superseded):** the paragraph below was the 07/26 verification and is kept for its per-column evidence. Its closing claim that "the engagement code's pre-apply fallbacks are dormant" is now literally true for the ones that remain — the three `onConflict: "meal_plan_id,day_index,slot"` write fallbacks were DELETED in the audit, since 00019 drops that constraint and they could therefore only ever fail.
+
 **Migration state VERIFIED AGAINST PROD 07/26/2026 — everything through 00022 is applied.** This supersedes the per-feature "NOT YET APPLIED"/"not yet verified" warnings still written into the sections below (00013, 00014, 00017, 00018, 00019, 00020, 00021, 00022); they are historical notes from when each was authored, not current state. Confirmed by a read-only column probe under a real user's JWT — `meal_checkins.member_id` (00019), `body_logs.photo_path` (00018), `workout_checkins.member_id` (00020) and `.intensity` (00022), `meal_absences.member_id` (00021), `meal_verdicts.canonical_key` (00017), `workout_plans.status` + `profiles.workout_profile` (00014), `profiles.deep_dive_completed_at` (00013), `profiles.meal_mode` (00009–00011) all present — plus an end-to-end UI check on prod: tapping «طبختها كما هي» wrote a `meal_checkins` row (`member_id: "mom"`, `local_date` stamped), the «كيف كانت؟» verdict control appeared only after it, `meal_verdicts` persisted, and un-tapping deleted the check-in while the verdict survived (the documented contract). The engagement code's pre-apply fallbacks are therefore dormant, not load-bearing. Re-verify with `node apps/app/scripts/qa-e2e/probe.mjs` + `engagement.mjs` after any new migration.
 
 **Engagement layer spine (07/2026, Sprint 1)**: Migration 00017 adds the product's first event tables — `meal_checkins` (`local_date` stamped at write time as the universal calendar key, `slot` is extensible TEXT with no CHECK so Ramadan slots later are config not migration), `member_exceptions` (sparse, dish-directed kinds only — child consumption tracking is unrepresentable), `meal_verdicts` (keyed by server-minted `canonical_key` from `canonicalRecipeKey()` in plan-engine — meals have no UUIDs and regen re-words names), `body_logs` (dated weight/waist series; ADULTS ONLY enforced in app code by birth_year, never children). House RLS pattern + updated_at triggers. NOT YET APPLIED to prod — apply manually after 00016, re-run scripts/verify-migrations.sql (now covers 00016–00019), then `pnpm --filter @fitlife/app db:types` to regenerate types (until then, engagement code types rows via `apps/app/src/lib/engagement/types.ts` and untyped client casts — see the export route). /api/account/export includes the four tables (tolerant of pre-apply prod); delete is covered by CASCADE. Design contract in product/engagement-layer-brainstorm.md: unanswered = unknown (never fabricate adherence), rewards attach to rituals/verdicts never adherence counts, no shame states.
 
-**Per-person check-in status (07/2026, owner directive)**: Migration 00019 (apply after 00018) adds `meal_checkins.member_id` ("mom" | family_members.id, same convention as meal_verdicts), swaps the unique key to (meal_plan_id, day_index, slot, member_id), and adds the previously-MISSING DELETE policy (00017 shipped without one, so every "clear my mark" tap was a silent RLS no-op) — on a shared meal each participant has a separate status (the MealCard tracking section renders one chip row PER PARTICIPANT; the header badge shows the viewed member's own status). Whole-house rows (`'household'` sentinel: legacy pre-00019 data, stale-tab writes via the zod default, and ختام اليوم `closeDay` — whole-kitchen attestation, no UI yet) are a read-time FALLBACK for members without their own row and are NEVER deleted by a per-member set (member_exceptions cascade off them; the digest needs the attestation) — but CLEARING sweeps the fallback too (fix 07/2026): un-tapping a chip means the meal carries no mark, and a surviving household row simply re-lit it with whatever the kitchen last attested (usually a legacy «تجاوزتها», which read as "un-clicking marked it skipped"). Both clear paths go through `clearMealMarks` in `engagement/actions.ts`, keyed by (user, `local_date`, slot, member) — the SAME key /plan reads by, so an older same-week plan version's row can't hand the chip back either (the page reads check-ins calendar-wide across plan versions while the old delete was scoped to meal_plan_id + day_index). `engagement/checkinMap.ts` is the one client-side definition of that read/clear pair (`resolveCheckin` / `checkinClearKeys`), used by PlanViewer's optimistic map so the tap and the server agree. Pre-00019 prod: reads degrade via `select("*")`, writes fall back to the legacy household shape = old whole-house semantics (Sentry warning fires — apply the migration). `computeEngagementDigest` collapses per-person rows by (local_date, slot) BEFORE the signal floor and all counts, so everything stays MEAL-true (a family of five skipping one dinner is one skip, never five, and household size can't buy the digest into existence — both digest fetchers select local_date); admin `checkins7d` counts distinct meals for the same reason; recap day-cells were already per-date. Statuses are about the dish serving, never amounts — the no-consumption-surveillance stance is unchanged.
+**Per-person check-in status (07/2026, owner directive)**: Migration 00019 (apply after 00018) adds `meal_checkins.member_id` ("mom" | family_members.id, same convention as meal_verdicts), swaps the unique key to (meal_plan_id, day_index, slot, member_id), and adds the previously-MISSING DELETE policy (00017 shipped without one, so every "clear my mark" tap was a silent RLS no-op) — on a shared meal each participant has a separate status (the MealCard tracking section renders one chip row PER PARTICIPANT; the header badge shows the viewed member's own status). Whole-house rows (`'household'` sentinel: legacy pre-00019 data, stale-tab writes via the zod default, and ختام اليوم `closeDay` — whole-kitchen attestation, no UI yet) are a read-time FALLBACK for members without their own row and are NEVER deleted by a per-member set (member_exceptions cascade off them; the digest needs the attestation) — but CLEARING sweeps the fallback too (fix 07/2026): un-tapping a chip means the meal carries no mark, and a surviving household row simply re-lit it with whatever the kitchen last attested (usually a legacy «تجاوزتها», which read as "un-clicking marked it skipped"). Both clear paths go through `clearMealMarks` in `engagement/actions.ts`, keyed by (user, `local_date`, slot, member) — the SAME key /plan reads by, so an older same-week plan version's row can't hand the chip back either (the page reads check-ins calendar-wide across plan versions while the old delete was scoped to meal_plan_id + day_index). `engagement/checkinMap.ts` is the one client-side definition of that read/clear pair (`resolveCheckin` / `checkinClearKeys`), used by PlanViewer's optimistic map so the tap and the server agree. Pre-00019 prod: reads degrade via `select("*")`. The WRITE fallback that once degraded to the legacy household shape is GONE (audit 07/2026) — it targeted the 3-column unique key that 00019 itself drops, so with 00019 applied it could only ever fail; a transient upsert error took the slow path to a second, misleading error. `computeEngagementDigest` collapses per-person rows by (local_date, slot) BEFORE the signal floor and all counts, so everything stays MEAL-true (a family of five skipping one dinner is one skip, never five, and household size can't buy the digest into existence — both digest fetchers select local_date); admin `checkins7d` counts distinct meals for the same reason; recap day-cells were already per-date. Statuses are about the dish serving, never amounts — the no-consumption-surveillance stance is unchanged.
 
 **Engagement UI surfaces + workout check-ins (07/2026)**: The first customer-facing engagement surfaces shipped on /plan (all interactive-Arabic-view only — never history/housekeeper/PDF): (1) `«سارة عدّلت خطتك»` card (`SaraChangesCard`) renders `plan_data.week_changes` (data already emitted by the engine; no query change); (2) inline dish verdicts «كيف كانت؟» (نحبّها/عادية/لا تكرّريها) via `setMealVerdict` — the first customer write surface for `meal_verdicts` (closeDay still has no UI), shown under a meal only once the viewed member marked it cooked, per-person keyed (plan, member, day, slot); (3) `«موسم بيتنا»` family season (`FamilySeasonCard`). **Design history:** first shipped cooperative (no ranking) per the engagement research; then the **owner reviewed and DIRECTED a competitive ranked leaderboard (07/2026)** — the original brief in `product/family-engagement-research-and-plan.md` §0. Now renders a per-member LEADERBOARD: a shared top card (meal-true family total ring + pride line + most-consistent member + a 7-day meal strip with per-day star ratings) above ranked adult cards — a celebrated gold **#1 «فائز هذا الأسبوع»** with a crown, and purple rank cards (#2…) each with a weekly participation %. Ranking metric = meal marks + verdicts + workout marks; % = acts/`WEEKLY_TARGET`(10). **Counted meal statuses (owner directive 07/2026): ONLY «طبختها كما هي» (`status: "cooked"`).** «بدّلتها» (swapped) and «تجاوزتها» (skipped) score NOTHING on any number of the card — family ring, 7-day strip/stars, `activeDays`/«أتممتم موسمكم», the «اليوم» panel's `alreadyLit`, and every member's score/% all read the same single filter (`isCookedAsIs` in `seasonMath.ts`, one place so the surfaces can't fork). This supersedes the earlier "a meal that happened = cooked OR swapped" rule. Scoped to the leaderboard only — the weekly recap, `computeEngagementDigest` (Sara's adaptation), and the /plan chips still read every status, so honest logging is unchanged. Workout marks keep counting done + moved (a moved session was still trained). The cooperative guardrails (no last place, no per-person numbers) are intentionally superseded here by owner direction; the research recommendation remains on file. **Roster (owner directive 07/2026): the WHOLE household — mom + adults + CHILDREN — via the server's `seasonMembers` (mom + every non-housekeeper family member), NOT `journeyMembers`. Children rank exactly like adults and may take the #1 «فائز» spot; the earlier no-sibling-comparison stance is superseded alongside the cooperative guardrails. The housekeeper is never in the roster; weight/goal celebration (`goalReached`) + the private `«رحلتك الخاصة»` journey stay adults-only via `engagement/eligibility.ts` (a separate feature).** Hidden for solo/housekeeper/history. Migration **00020** (apply after 00019) adds `workout_checkins` (per-member; `day_index` WEEKDAY-anchored 0=Sunday unlike meal_checkins; `local_date` stamped server-side; DELETE policy day-one; done/moved/skipped validated in Zod). `WorkoutViewer` gained inline session marking (`setWorkoutCheckin`, whole-current-week window derived from the session's weekday with a 48h floor — see the marking-window directive below) and now takes `planId`+`checkins`; the season reads meal check-ins/verdicts + workout check-ins. 00020 NOT YET APPLIED to prod — apply after 00019, re-run scripts/verify-migrations.sql (now covers 00020), then `pnpm --filter @fitlife/app db:types`; until regenerated, page.tsx/export read `workout_checkins` via an untyped cast (pre-apply tolerant = []). /api/account/export includes `workout_checkins`; delete is CASCADE.
 
@@ -280,6 +284,12 @@ Both the legacy `ls_*` columns (+ `billing_interval`) and the 00004 `lemonsqueez
 `trial_started_at`, `cancel_at_period_end`) columns coexist. Current code reads/writes the
 `lemonsqueezy_*` + `cadence` set; the `ls_*` + `billing_interval` columns are legacy.
 
+**00024 added `unique (user_id)`** — there is now exactly ONE row per user. The read path had
+always assumed it (`order created_at desc limit 1`) while the webhook wrote to every row a user
+held, so the two disagreed the moment a second row existed. **`last_event_at`** (also 00024)
+holds `attributes.updated_at` of the most recent LemonSqueezy webhook applied; events at or
+before it are ignored as replays / out-of-order delivery.
+
 | column_name | data_type | nullable |
 | --- | --- | --- |
 | id | uuid | no |
@@ -304,3 +314,106 @@ Both the legacy `ls_*` columns (+ `billing_interval`) and the 00004 `lemonsqueez
 | lemonsqueezy_subscription_id | text | yes |
 | lemonsqueezy_customer_id | text | yes |
 | lemonsqueezy_variant_id | text | yes |
+| last_event_at | timestamp with time zone | yes |
+
+---
+
+## Engineering audit + fixes (07/31/2026)
+
+A read-only audit of the whole codebase (auth, family, payments, generation, engagement,
+DB contract, UX paths) produced 53 confirmed findings; the fixes shipped in six commits on
+`claude/fitlife-engineering-audit-e4yq9j`. Full report with per-finding evidence lives in the
+session's plan file. **Migration 00024 carries the DB half and is applied.** The recurring
+patterns are worth knowing before touching any of this code again.
+
+**The three root causes.** (1) RLS policy sets missing the verb the app actually uses — a
+DELETE with no policy affects zero rows and returns NO error, so the action reports success
+and the row survives; this shipped twice. (2) THE SAME RULE IMPLEMENTED TWICE with one copy
+drifted — the per-kind generation lock, the two variant resolvers, `isAdult` vs `isAdultLike`,
+the two family builders. (3) State written BEFORE it was validated, so the account could
+reach a place the product had no exit from.
+
+**Generation lock is PER KIND.** `plan_generations` queries MUST filter `plan_kind`. 00014
+replaced the one-run-per-user lock with `(user_id, plan_kind)` so a meal run and a workout run
+may coexist; the meal-side busy guard and `triggerPlanTranslation` did not honour it, so a
+live workout run (which waits up to 8 min for meals BY DESIGN) made every meal dispatch report
+`busy` — "new plan" did nothing, add-member silently deferred, translation skipped. Same for
+the stale reclassifiers, which could otherwise flip a live workout's audit row to `failed`.
+
+**`plan_generations` is an AUDIT table.** 00024 dropped the user UPDATE policy (the browser
+could reset its own weekly quota, clear the in-flight lock, and rewrite the `cost_usd` columns
+the admin dashboards aggregate). INSERT stays — `createPlanRows` opens the row with the user's
+client. **Every UPDATE must use the service-role client**, including the dev-inline generation
+path, which now passes `createAdminClient()` exactly as the prod background function always did.
+
+**Tier limits are enforced AT THE BOUNDARY (owner directive 07/2026).** `addFamilyMember`
+checks the person count BEFORE the insert and returns `upgrade_required` without writing;
+`/api/subscription/change` refuses a downgrade that would strand members, before calling
+LemonSqueezy. `countBeneficiaries` returns `null` on a query error and callers FAIL CLOSED
+(`count_unavailable`) — it used to return 1, which for a limit check is the best case, not
+the worst, so any DB blip silently removed the limit. **But the generation gate still CAPS
+rather than denies**, now for single-member runs too: accounts that crossed the line before
+the boundary check existed are still out there, and denying them left the whole family unable
+to generate anything. A run targeting a capped-out member is refused; everything else degrades.
+
+**Upgrade CTAs must resolve their destination.** An over-limit household by definition already
+pays, and `/api/checkout` 409s an existing subscriber — so `/pricing` was a dead end for
+exactly the people who saw the paywall. Both the wizard and the /plan blocked-members banner
+now route to `/subscription` when `hasLiveLemonsqueezySubscription(sub)`, and drop the
+«اشتركي» wording for someone who is already subscribed.
+
+**Webhook: variant over custom_data, and ordering is not free.** `custom_data` is frozen at
+the original checkout, but `/api/subscription/change` swaps the variant on the EXISTING
+subscription and cannot rewrite it — so renewal invoices were stamping the OLD tier back and
+silently downgrading a customer one billing cycle after they upgraded. Tier/cadence now come
+from `variant_id` via `getTierCadenceByVariantId`, with `custom_data` only as fallback.
+`deriveCadence` is DELETED (it resolved variants by different rules and would have returned
+null once live ids were set). Delivery is at-least-once and unordered, so `last_event_at`
+(00024) records `attributes.updated_at` of the last applied event and older ones are ignored.
+`payment_success` may claim the row ONLY when it holds no subscription id — unlike
+`subscription_created` it also fires for renewals.
+
+**Reconciliation joins on IDENTITY, not email.** Checkout deliberately does not prefill the
+email, so the address on the LemonSqueezy side is whatever the customer typed — matching on it
+missed exactly the people the self-heal exists for, and let an account whose email matched
+someone else's checkout inherit that subscription (including the id `/cancel`, `/pause` and
+`/change` act on). Now: stored `lemonsqueezy_customer_id` first; the cold-start email path
+requires the subscription's own `custom_data.user_id` to name this user.
+
+**Family surfaces must ROSTER-FILTER.** `member_id` is TEXT with no FK (it carries the `"mom"`
+and `"household"` sentinels), so removing a member orphans their rows. The per-member scoring
+filtered the roster and the family counters did not, so the ring/strip counted meals for
+someone no longer in the household while nobody's score moved — the family total could not
+reconcile with the sum of its members. Both filter now (keeping `'household'`, which names no
+member by design), and `removeFamilyMember` purges the member's `meal_checkins`,
+`meal_verdicts`, `workout_checkins`, `meal_absences`, `body_logs` and their entry in
+`member_addition_order`.
+
+**Postgres `numeric` may arrive as a STRING.** Coerce with `Number()`, never type-guard with
+`typeof v === "number"` — the weekly recap's weight line was permanently null because of it,
+and its unit test passed numbers straight into the pure function so it could never catch it.
+`seasonProps.ts` and `memberEdit.ts` already did this correctly.
+
+**Redirect targets from the URL are attacker-supplied.** `safeRedirectPath`
+(`apps/app/src/lib/safeRedirect.ts`) is the ONE definition — same-origin absolute paths only.
+`redirect_to` went unvalidated into `window.location.assign()`, making the login page an open
+redirect *after* a successful sign-in. Used by LoginForm and `/auth/callback`.
+
+**`onboarding_completed_at` is a GATE, not a flag.** `syncFamilyPlanAfterSubscribe` and
+`drainDeferredMembers` both return immediately when it is null. Its write errors are now read
+and the redirect refused on failure — discarding them meant a customer could pay and never
+get a plan generated, with nothing surfaced anywhere.
+
+**Ops.** Set `INTERNAL_FUNCTION_SECRET` in Netlify — the app→background-function bearer secret
+was the Supabase SERVICE-ROLE KEY, sent as a header to a URL built from a `NEXT_PUBLIC_` var.
+It falls back to the service-role key while unset, so setting it is what stops the fallback.
+`NEXT_PUBLIC_FREE_ACCESS_MODE` makes `getTierLimit` return null for everyone, so the whole
+tier-limit cluster above is bypassed and untestable while it is on.
+
+**Known remaining (audited, not fixed).** Housekeeper identity is keyed off `role` in ~40
+places and `member_type` in 5 — `familyMemberInputSchema` now rejects `role: "housekeeper"`
+(that was a tier-limit bypass), but the dual key itself stands; a DB CHECK enforcing
+`(role = 'housekeeper') = (member_type = 'housekeeper')` would close it. Plus three
+low-severity leads not independently verified: feminine-only copy for a male owner through the
+member wizards, the claim that member edits auto-regenerate via `memberEdit.ts` being
+UI-reachable, and housekeeper-language sold as `family`-tier-only while reachable on every tier.

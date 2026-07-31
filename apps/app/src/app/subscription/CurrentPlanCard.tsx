@@ -24,6 +24,11 @@ const STATUS_BADGE: Record<
   active: { label: "نشط", classes: "bg-brand-emerald/10 text-brand-emerald" },
   trialing: { label: "تجريبي", classes: "bg-brand-yellow/20 text-brand-ink" },
   past_due: { label: "متأخر الدفع", classes: "bg-red-100 text-red-700" },
+  // «استراحة» — a deliberate, self-resuming pause, not an ending. Without this
+  // key the lookup fell through to `expired` and badged a paused subscription
+  // «منتهي», on the same page that renders the PausedNotice and the «عدتُ
+  // مبكراً» resume button. (Unreachable until 00023 lets the status exist.)
+  paused: { label: "استراحة", classes: "bg-brand-yellow/20 text-brand-ink" },
   cancelled: { label: "ملغى", classes: "bg-brand-ink/10 text-brand-ink-muted" },
   expired: { label: "منتهي", classes: "bg-brand-ink/10 text-brand-ink-muted" },
 };
