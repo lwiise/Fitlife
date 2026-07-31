@@ -1,0 +1,31 @@
+{
+  "name": "@fitlife/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end suite: family-of-three signup, sandbox payment, and output verification",
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:ui": "playwright test --ui",
+    "e2e:install": "playwright install chromium",
+    "cleanup": "tsx src/cleanupOrphans.ts",
+    "test": "vitest run",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf reports .e2e-state node_modules",
+    "sample-report": "tsx scripts/render-sample-report.ts"
+  },
+  "dependencies": {
+    "@fitlife/config": "workspace:*",
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@fitlife/tsconfig": "workspace:*",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.0.0",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
+  }
+}

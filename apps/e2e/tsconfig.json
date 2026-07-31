@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@fitlife/tsconfig/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "verbatimModuleSyntax": false,
+    "baseUrl": ".",
+    /**
+     * Map the workspace package to its SOURCE rather than letting it resolve
+     * through the node_modules symlink.
+     *
+     * @fitlife/config is published as raw TypeScript (`main: ./src/index.ts`).
+     * Playwright transpiles the TS it loads but skips anything under
+     * node_modules, so the symlinked resolution fails at runtime with
+     * "does not provide an export named 'PRICING_TIERS'". Pointing at the real
+     * path keeps the suite reading prices and variant ids from the app's single
+     * source of truth instead of a retyped copy.
+     */
+    "paths": {
+      "@fitlife/config": ["../../packages/config/src/index.ts"]
+    }
+  },
+  "include": ["src", "tests", "*.ts"],
+  "exclude": ["node_modules", "reports"]
+}
