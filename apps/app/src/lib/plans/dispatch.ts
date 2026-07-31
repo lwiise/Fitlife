@@ -33,6 +33,16 @@ import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
+/**
+ * Ceiling on the call that ENQUEUES a background function — not on the
+ * generation itself, which owns its own 15-minute budget inside the worker.
+ * Netlify replies 202 before the handler runs, so this hop is sub-second in
+ * practice; anything approaching this bound means the reply is lost, and
+ * waiting longer only burns the caller's serverless budget. Callers treat a
+ * timeout as "probably enqueued" (see the dispatch catch blocks).
+ */
+const DISPATCH_ENQUEUE_TIMEOUT_MS = 8_000;
+
 export type DispatchResult =
   | { ok: true; mealPlanId: string; status: "ready" | "generating" }
   | { ok: false; kind: "access"; access: Extract<AccessResult, { allowed: false }> }
@@ -319,6 +329,13 @@ export async function triggerPlanGeneration(params: {
       `${env.NEXT_PUBLIC_APP_URL}/.netlify/functions/generate-plan-background`,
       {
         method: "POST",
+        // Netlify answers a background function with 202 BEFORE the handler
+        // runs, so this call is an enqueue and comes back in well under a
+        // second. Unbounded, it was the one await in a server action that could
+        // outlive the serverless wall — and a request killed mid-response
+        // leaves the caller's UI waiting on a reply that never comes. See
+        // DISPATCH_ENQUEUE_TIMEOUT_MS for why a timeout is not a failure.
+        signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
@@ -355,6 +372,16 @@ export async function triggerPlanGeneration(params: {
     Sentry.captureException(err, {
       tags: { area: "plan-generation", step: "dispatch-bg", userId },
     });
+    // A TIMEOUT is not a refusal. The 202 arrives before the worker starts, so
+    // a lost response cannot tell us whether the run was enqueued — and marking
+    // the plan 'failed' under a run that is in fact generating would overwrite a
+    // good plan with an error screen. Report it as generating and let the
+    // existing STALE_GENERATION_MIN reclassifier settle it: if nothing ever
+    // wrote, the next dispatch clears the stale row instead of deadlocking on
+    // 'busy'. Every other dispatch error keeps the old fail-fast behaviour.
+    if (err instanceof Error && err.name === "TimeoutError") {
+      return { ok: true, mealPlanId, status: "generating" };
+    }
     const errorMessage =
       err instanceof Error ? err.message : "failed to start generation";
     await supabase
@@ -478,6 +505,7 @@ export async function triggerPlanTranslation(params: {
       `${env.NEXT_PUBLIC_APP_URL}/.netlify/functions/generate-plan-background`,
       {
         method: "POST",
+        signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
@@ -603,6 +631,7 @@ export async function triggerWorkoutGeneration(params: {
       `${env.NEXT_PUBLIC_APP_URL}/.netlify/functions/generate-plan-background`,
       {
         method: "POST",
+        signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getSupabaseServiceRoleKey(),
@@ -622,6 +651,12 @@ export async function triggerWorkoutGeneration(params: {
     Sentry.captureException(err, {
       tags: { area: "workout-generation", step: "dispatch", userId },
     });
+    // Same reasoning as the meal dispatch: a lost 202 cannot distinguish
+    // "never enqueued" from "running", and this companion must never fail the
+    // meal flow it rides along with. The stale reclassifier above is the backstop.
+    if (err instanceof Error && err.name === "TimeoutError") {
+      return { ok: true, workoutPlanId, status: "started" };
+    }
     await supabase
       .from("workout_plans")
       .update({ status: "failed", error_message: "dispatch failed" })
