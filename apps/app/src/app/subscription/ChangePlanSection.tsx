@@ -30,16 +30,10 @@ export function ChangePlanSection({
   const [pendingTier, setPendingTier] = useState<Tier | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // TEMPORARY (pre-launch diagnosis): /api/subscription/change returns a
-  // `debug` string on failure so the cause is visible on-page without
-  // Netlify log access. Remove together with the route's `debug` field
-  // once payments work.
-  const [debugDetail, setDebugDetail] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   function choose(tier: Tier) {
     setError(null);
-    setDebugDetail(null);
     setPendingTier(tier);
     startTransition(async () => {
       try {
@@ -52,7 +46,6 @@ export function ChangePlanSection({
           checkout_url?: string;
           updated?: boolean;
           error?: string;
-          debug?: string;
         };
         if (res.ok && body.checkout_url) {
           window.location.assign(body.checkout_url);
@@ -64,7 +57,6 @@ export function ChangePlanSection({
           return;
         }
         setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
-        if (body.debug) setDebugDetail(body.debug);
       } catch {
         setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
       } finally {
@@ -121,14 +113,6 @@ export function ChangePlanSection({
       {error && (
         <div role="alert" className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
           <p className="text-red-700 text-sm leading-relaxed">{error}</p>
-          {debugDetail && (
-            <p
-              dir="ltr"
-              className="mt-1 text-brand-ink-muted text-[11px] leading-relaxed break-all text-start"
-            >
-              {debugDetail}
-            </p>
-          )}
         </div>
       )}
 

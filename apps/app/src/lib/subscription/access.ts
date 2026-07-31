@@ -7,6 +7,7 @@ import {
   getTierLimit,
   isSubscriptionActive,
 } from "./state";
+import { isFreeAccessMode } from "./freeAccess";
 
 export type AccessReason =
   | "trial_expired"
@@ -63,6 +64,13 @@ async function countBeneficiaries(userId: string): Promise<number> {
 async function checkSubscriptionAndPersonCount(
   userId: string,
 ): Promise<AccessResult> {
+  // TEMPORARY testing mode — see lib/subscription/freeAccess.ts.
+  // Checked BEFORE the row is fetched, not just inside isSubscriptionActive():
+  // an account with no subscriptions row at all (trigger never ran, row deleted
+  // mid-test) would otherwise still be refused here, which is exactly the sort
+  // of dead end this mode exists to remove.
+  if (isFreeAccessMode()) return { allowed: true };
+
   const sub = await getCurrentSubscription(userId);
   if (!sub) {
     return { allowed: false, reason: "subscription_inactive" };
@@ -100,6 +108,11 @@ async function checkSubscriptionAndPersonCount(
 export async function canGenerateNewPlan(userId: string): Promise<AccessResult> {
   const base = await checkSubscriptionAndPersonCount(userId);
   if (!base.allowed) return base;
+
+  // TEMPORARY testing mode: the weekly 3-plan pool would stop a testing session
+  // after three generations. NOTE this also removes a spend guard — every
+  // generation is a paid Anthropic call.
+  if (isFreeAccessMode()) return { allowed: true };
 
   const canRateLimit = await canGeneratePlan(userId);
   if (!canRateLimit) {
@@ -143,6 +156,10 @@ export async function canRegenerateMemberPlan(
   const base = await checkSubscriptionAndPersonCount(userId);
   if (!base.allowed) return base;
 
+  // TEMPORARY testing mode: same reasoning as the account-wide pool above —
+  // 3 regenerations per member per week is too few to iterate on one member.
+  if (isFreeAccessMode()) return { allowed: true };
+
   const used = await countMemberRegensThisWeek(userId, memberId);
   if (used >= MEMBER_REGEN_WEEKLY_LIMIT) {
     return {
@@ -176,6 +193,11 @@ export async function canViewExistingPlans(userId: string): Promise<boolean> {
  * route. Returns the same shape as the other gates so the UI can reuse messaging.
  */
 export async function hasAdvisorAccess(userId: string): Promise<AccessResult> {
+  // TEMPORARY testing mode: unlocks ACCESS to the advisor. The route's own
+  // 30-messages-per-day cap is deliberately left in place — that is abuse and
+  // cost protection, not a paywall.
+  if (isFreeAccessMode()) return { allowed: true };
+
   const sub = await getCurrentSubscription(userId);
   if (!sub) return { allowed: false, reason: "subscription_inactive" };
   if (!isSubscriptionActive(sub)) {

@@ -30,6 +30,7 @@ import {
   type MemberType,
 } from "@/app/onboarding/actions";
 import { genderPick } from "@/lib/copy/gender";
+import { capture } from "@/lib/analytics";
 
 const GOALS: { value: UserGoal; label: string }[] = [
   { value: "lose_weight", label: "خسارة الدهون" },
@@ -57,6 +58,11 @@ const FEEDING: { value: string; label: string }[] = [
   { value: "mixed", label: "مختلطة" },
   { value: "formula", label: "صناعية" },
 ];
+
+/** Member types planned on BMR/TDEE, so the activity factor is asked and
+ * stored for all of them. Children are planned by portions and keep their own
+ * 3-level scale instead. */
+const ADULT_LIKE = new Set<MemberType>(["adult", "pregnant", "lactating"]);
 
 const PREGNANT_CONDITIONS = [
   { slug: "gestational_diabetes", label_ar: "سكري الحمل" },
@@ -248,8 +254,21 @@ export function MemberWizard({
 
   const [name, setName] = useState(initial?.name ?? "");
   const [birthYear, setBirthYear] = useState(initial?.birth_year?.toString() ?? "");
+  // Unanswered for the two types that ASK (adult and child both carry a "sex"
+  // step). It used to default to "female" for everything that was not a
+  // non-dad adult, which pre-answered the child step: a mother adding three
+  // sons saw أنثى already selected, tapped «التالي» three times, and all three
+  // landed as sex='female' role='daughter' — after which the plan and the tabs
+  // called her sons البنت, updateMemberPersonal re-derived the wrong role on
+  // every later edit, and correcting it forced a full regeneration (sex is part
+  // of the row memberEditIsSubstantive diffs). The `sex ? goNext() : setError`
+  // guard on that step only works if the field starts empty.
+  //
+  // pregnant/lactating KEEP "female": those flows have no sex step at all, so
+  // there would be no way to answer it.
   const [sex, setSex] = useState<string>(
-    initial?.sex ?? (role === "dad" ? "male" : type === "adult" ? "" : "female"),
+    initial?.sex ??
+      (role === "dad" ? "male" : type === "adult" || type === "child" ? "" : "female"),
   );
   const [heightCm, setHeightCm] = useState(initial?.height_cm?.toString() ?? "");
   const [weightKg, setWeightKg] = useState(initial?.weight_kg?.toString() ?? "");
@@ -305,13 +324,18 @@ export function MemberWizard({
       case "child":
         return ["identity", "sex", "physical", "childActivity", "school", "picky", "allergies", "mealMode", "chronic"];
       case "pregnant":
-        // Safe subset: meds/supplements + water; no exercise/target/sleep. Nausea
-        // foods go to their OWN column (temporary aversions, not allergens).
-        return ["identity", "physical", "trimester", "highRisk", "pregConditions", "allergies", "nausea", "medsSupps", "water", "mealMode"];
+        // Safe subset: meds/supplements + water; no weight target or sleep.
+        // The activity step IS included — pregnancy calories are maintenance
+        // (TDEE) plus a trimester addition, and TDEE needs an activity factor.
+        // Without it activity_level saved as null and the model had to guess
+        // the multiplier for the two people it matters most for. Nausea foods
+        // go to their OWN column (temporary aversions, not allergens).
+        return ["identity", "physical", "exercise", "trimester", "highRisk", "pregConditions", "allergies", "nausea", "medsSupps", "water", "mealMode"];
       case "lactating":
-        // The old free-text supplements step (which corrupted medical_conditions)
-        // is replaced by the structured medsSupps step.
-        return ["identity", "physical", "monthsPP", "feeding", "lactConditions", "allergies", "medsSupps", "water", "mealMode"];
+        // Same reasoning for lactation (maintenance + 200-300). The old
+        // free-text supplements step (which corrupted medical_conditions) is
+        // replaced by the structured medsSupps step.
+        return ["identity", "physical", "exercise", "monthsPP", "feeding", "lactConditions", "allergies", "medsSupps", "water", "mealMode"];
     }
   }, [type, role]);
 
@@ -348,16 +372,16 @@ export function MemberWizard({
     sex: sex || null,
     height_cm: heightCm ? Number(heightCm) : null,
     weight_kg: weightKg ? Number(weightKg) : null,
-    // Adults: the server re-derives from the raw answers; children keep their
-    // 3-level scale. Sent for display parity only.
+    // Adults AND pregnant/lactating members: the server re-derives from the raw
+    // answers; children keep their 3-level scale. Sent for display parity only.
     activity_level:
-      type === "adult" && dayNature && exerciseDays
+      ADULT_LIKE.has(type) && dayNature && exerciseDays
         ? activityLevelFrom(dayNature, exerciseDays)
         : activity || null,
-    day_nature: type === "adult" ? (dayNature ?? undefined) : undefined,
-    exercise_days: type === "adult" ? (exerciseDays ?? undefined) : undefined,
+    day_nature: ADULT_LIKE.has(type) ? (dayNature ?? undefined) : undefined,
+    exercise_days: ADULT_LIKE.has(type) ? (exerciseDays ?? undefined) : undefined,
     exercise_type:
-      type === "adult" && exerciseDays && exerciseDays !== "none"
+      ADULT_LIKE.has(type) && exerciseDays && exerciseDays !== "none"
         ? exerciseType
         : null,
     target_weight_kg:
@@ -392,7 +416,9 @@ export function MemberWizard({
   const resetForNext = () => {
     setName("");
     setBirthYear("");
-    setSex(role === "dad" ? "male" : type === "adult" ? "" : "female");
+    setSex(
+      role === "dad" ? "male" : type === "adult" || type === "child" ? "" : "female",
+    );
     setHeightCm("");
     setWeightKg("");
     setActivity("");
@@ -441,6 +467,14 @@ export function MemberWizard({
       if (!result.ok) {
         // Member is saved, but their tier can't cover the new headcount → upgrade.
         if ("upgrade_required" in result) {
+          // On the state transition, not the `upgrade &&` render below — that
+          // re-fires on every re-render while the screen is up and would turn
+          // one paywall hit into a dozen.
+          capture("tier_cap_hit", {
+            source: "member_wizard",
+            current: result.current,
+            max: result.max,
+          });
           setUpgrade({ current: result.current, max: result.max });
           return;
         }
@@ -528,7 +562,7 @@ export function MemberWizard({
             </a>
             <a
               href="/family"
-              className="mt-3 inline-block text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4"
+              className="mt-3 inline-flex items-center min-h-11 px-3 rounded-lg text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
               رجوع للعائلة
             </a>

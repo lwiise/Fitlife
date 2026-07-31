@@ -8,6 +8,7 @@ import { BackToDashboard } from "@/components/BackToDashboard";
 import { AccountInfoCard } from "./AccountInfoCard";
 import { DataSection } from "./DataSection";
 import { LegalSection } from "./LegalSection";
+import { PrivacyChoiceCard } from "./PrivacyChoiceCard";
 import { genderPick } from "@/lib/copy/gender";
 import { SupportSection } from "./SupportSection";
 
@@ -102,6 +103,8 @@ export default async function SettingsPage() {
         <DataSection userEmail={user.email ?? ""} ownerSex={ownerSex} />
 
         <LegalSection />
+
+        <PrivacyChoiceCard ownerSex={ownerSex} />
 
         <SupportSection />
       </div>

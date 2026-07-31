@@ -371,7 +371,7 @@ export default async function DashboardPage() {
             </div>
             <a
               href="/onboarding"
-              className="inline-flex items-center gap-2 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-5 py-2.5 rounded-full mt-2 transition-colors"
+              className="inline-flex items-center gap-2 min-h-11 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-5 py-2.5 rounded-full mt-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900"
             >
               {g("ابدئي الآن", "ابدأ الآن")}
             </a>

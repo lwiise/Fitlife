@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getTodaysPlanView } from "@/lib/plans/getTodaysPlanView";
 import { genderPick } from "@/lib/copy/gender";
+import { collapseMealAbsences, isISODate } from "@/lib/engagement/seasonMath";
+import { addDaysISO } from "@/lib/plans/dayMapping";
 import { TodayHeader } from "./TodayHeader";
 import { TodaysMealsClient } from "./TodaysMealsClient";
 import { EmptyPlanCTA } from "./EmptyPlanCTA";
@@ -103,7 +105,7 @@ export async function TodaysMeals({
             <EmptyPlanCTA isOnboarded={isOnboarded} variant="failed" ownerSex={ownerSex} />
             <Link
               href="/settings"
-              className="text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors"
+              className="inline-flex items-center min-h-11 px-3 rounded-lg text-brand-ink-muted hover:text-brand-ink text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
               {g("تواصلي معنا", "تواصل معنا")}
             </Link>
@@ -120,16 +122,30 @@ export async function TodaysMeals({
   let absences: Array<{ day_index: number; slot: string; member_id: string }> = [];
   try {
     const supabase = await createClient();
-    const { data } = await (supabase as unknown as SupabaseClient)
+    // CALENDAR-keyed, like /plan: every dispatch mints a new meal_plans row and
+    // only archives the old one, so a plan-id read went empty mid-week and this
+    // card silently showed the UNSCALED batch — the opposite of the adjustment
+    // she made. Falls back to the plan id when the week anchor is unusable.
+    const base = (supabase as unknown as SupabaseClient)
       .from("meal_absences")
-      .select("day_index, slot, member_id")
-      .eq("meal_plan_id", view.planId)
-      .limit(400);
-    absences = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      day_index: r.day_index as number,
-      slot: r.slot as string,
-      member_id: (r.member_id ?? "") as string,
-    }));
+      .select("local_date, day_index, slot, member_id");
+    const anchor = isISODate(view.weekStartDate) ? view.weekStartDate : null;
+    const { data } = await (anchor
+      ? base
+          .eq("user_id", userId)
+          .gte("local_date", anchor)
+          .lte("local_date", addDaysISO(anchor, 6))
+      : base.eq("meal_plan_id", view.planId)
+    ).limit(400);
+    absences = collapseMealAbsences(
+      ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        local_date: (r.local_date ?? null) as string | null,
+        day_index: r.day_index as number,
+        slot: r.slot as string,
+        member_id: (r.member_id ?? "") as string,
+      })),
+      anchor ?? undefined,
+    );
   } catch {
     // Absence adjustment is an enrichment — today's meals render regardless.
   }

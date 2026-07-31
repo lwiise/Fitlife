@@ -45,7 +45,7 @@ export function WorkoutOptInBanner({ ownerSex }: { ownerSex?: string | null }) {
         type="button"
         onClick={dismiss}
         aria-label="إخفاء"
-        className="flex-shrink-0 inline-flex items-center justify-center size-8 rounded-full hover:bg-brand-purple-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+        className="flex-shrink-0 inline-flex items-center justify-center size-11 rounded-full hover:bg-brand-purple-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
       >
         <X className="size-4 text-brand-ink-muted" aria-hidden="true" />
       </button>

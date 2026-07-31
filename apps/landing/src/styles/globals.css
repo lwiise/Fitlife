@@ -1,0 +1,506 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Vendored ui components carry `dark:` classes; bind them to a `.dark` class
+   (never applied here) so they stay inert instead of following the OS scheme. */
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Brand tokens (values mirrored from the Fit Life app; standalone copy) ── */
+@theme {
+  --color-brand-purple-900: #4e2490;
+  --color-brand-purple-700: #3d1c73;
+  --color-brand-lavender: #d9b0fc;
+  --color-brand-ink: #1a1023;
+  --color-brand-ink-muted: #666377;
+  --color-brand-surface: #ebeff2;
+  --color-brand-surface-elevated: #ffffff;
+
+  /* Offer golds — numerals and price accents ONLY, never body text.
+     gold-500 passes AA large-text on purple-900 (≈4.5:1) and as a badge FILL
+     under ink text (≈7.8:1); it FAILS on the light surface (≈2:1), where any
+     gold text must use gold-700 (≈5.2:1 on #EBEFF2). */
+  --color-gold-500: #d4a017;
+  --color-gold-700: #7a5e0d;
+
+  --color-whatsapp: #25d366;
+
+  --font-tajawal: "Tajawal", system-ui, sans-serif;
+
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Shimmer button (Magic UI pattern) — keyframes live inside @theme so
+     Tailwind v4 emits them together with the --animate-* utilities. */
+  --animate-shimmer-slide: shimmer-slide 3s ease-in-out infinite alternate;
+  --animate-spin-around: spin-around 6s infinite linear;
+
+  @keyframes shimmer-slide {
+    to {
+      transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+    0% {
+      transform: translateZ(0) rotate(0);
+    }
+    15%,
+    35% {
+      transform: translateZ(0) rotate(90deg);
+    }
+    65%,
+    85% {
+      transform: translateZ(0) rotate(270deg);
+    }
+    100% {
+      transform: translateZ(0) rotate(360deg);
+    }
+  }
+}
+
+/* ─── Purple ramp + shadcn semantic tokens ─────────────────────────────────── */
+:root {
+  /* OKLCH purple ramp (600 ≈ #4E2490, the brand primary). */
+  --brand-purple-50: oklch(0.971 0.014 295);
+  --brand-purple-100: oklch(0.94 0.03 295);
+  --brand-purple-200: oklch(0.885 0.06 295);
+  --brand-purple-300: oklch(0.8 0.1 295);
+  --brand-purple-400: oklch(0.66 0.15 295);
+  --brand-purple-500: oklch(0.52 0.175 295);
+  --brand-purple-600: oklch(0.385 0.165 295);
+  --brand-purple-800: oklch(0.28 0.115 295);
+  --brand-purple-950: oklch(0.175 0.06 295);
+
+  --surface: #ebeff2;
+  --surface-elevated: #ffffff;
+  --ink: #1a1023;
+  --ink-muted: oklch(0.196 0.04 308 / 0.72);
+
+  /* ── Motion tokens ────────────────────────────────────────────────────────
+     ONE curve (--ease-settle, in @theme above), three durations, one stagger
+     unit. Every transition and animation on this page reads from these — no
+     component hard-codes a timing, so the whole surface moves as one system. */
+  --dur-fast: 220ms; /* microinteractions: hover, press, tint */
+  --dur-base: 520ms; /* scroll reveals, entrance beats */
+  --dur-slow: 700ms; /* rules that draw across, long sweeps */
+  --reveal-stagger: 90ms; /* one step between grouped items */
+  --reveal-rise: 22px; /* how far a revealing element travels */
+
+  --radius: 0.625rem;
+
+  /* shadcn semantic tokens — used by the vendored ui components */
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-elevated);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--ink);
+  --primary: #4e2490;
+  --primary-foreground: oklch(0.985 0.004 295);
+  --secondary: var(--brand-purple-100);
+  --secondary-foreground: var(--color-brand-purple-700);
+  --muted: var(--brand-purple-50);
+  --muted-foreground: var(--ink-muted);
+  --accent: oklch(0.9 0.06 309);
+  --accent-foreground: var(--color-brand-purple-700);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.012 295);
+  --input: oklch(0.9 0.012 295);
+  --ring: var(--brand-purple-500);
+}
+
+@theme inline {
+  --font-sans: var(--font-tajawal), system-ui, sans-serif;
+  --font-heading: var(--font-tajawal), system-ui, sans-serif;
+
+  --color-brand-purple-50: var(--brand-purple-50);
+  --color-brand-purple-100: var(--brand-purple-100);
+  --color-brand-purple-200: var(--brand-purple-200);
+  --color-brand-purple-300: var(--brand-purple-300);
+  --color-brand-purple-400: var(--brand-purple-400);
+  --color-brand-purple-500: var(--brand-purple-500);
+  --color-brand-purple-600: var(--brand-purple-600);
+  --color-brand-purple-800: var(--brand-purple-800);
+  --color-brand-purple-950: var(--brand-purple-950);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+}
+
+@layer base {
+  html {
+    direction: rtl;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-tajawal);
+    color: var(--color-brand-ink);
+    background-color: var(--color-brand-surface);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Arabic reads poorly with tracking — neutralise by default. */
+  * {
+    letter-spacing: normal;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-brand-purple-900);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      /* Delays must go too: with `backwards` fill, a zeroed duration alone
+         still holds staggered hero items invisible until their delay lapses. */
+      animation-delay: 0s !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ─── Utilities ─────────────────────────────────────────────────────────── */
+@utility container-page {
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 0.5rem + 3vw, 2.5rem);
+}
+
+@utility text-display {
+  font-size: clamp(2.5rem, 1.8rem + 3vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: normal;
+}
+
+@utility text-h2 {
+  font-size: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+}
+
+@utility text-h3 {
+  font-size: clamp(1.25rem, 1.16rem + 0.38vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+
+/* Hero entrance — pure CSS so the headline paints with the first frame instead
+   of waiting for JS hydration (LCP). Stagger via `[animation-delay:...]`;
+   `backwards` keeps delayed items hidden until their turn. The global
+   reduced-motion rule above collapses it to the end state instantly. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+}
+@utility hero-rise {
+  animation: hero-rise 0.5s ease-out backwards;
+}
+
+/* Hero atmosphere — two low-chroma radials (purple bloom over the start-side
+   headline, a faint warm cream behind the price tag) on the brand surface.
+   Pure CSS, no images, cheap on mobile. Requested by the offer spec
+   ("subtle purple gradient/spotlight"); percent positions are physical and
+   tuned for this RTL-only page (start side = right). */
+@utility bg-hero-spotlight {
+  background:
+    radial-gradient(56% 44% at 86% -4%, oklch(0.935 0.05 295) 0%, transparent 72%),
+    radial-gradient(44% 36% at 76% 64%, oklch(0.96 0.025 84) 0%, transparent 65%),
+    var(--color-brand-surface);
+}
+
+/* Night surface — the dark royal-aubergine field the hero and finale share.
+   A warm purple bloom rises behind the start-side headline; a faint gold glow
+   sits low on the end side under the receipt. RTL-only page: physical
+   percents are tuned for start = right. */
+@utility bg-hero-night {
+  background:
+    radial-gradient(70% 55% at 82% -8%, oklch(0.34 0.14 295) 0%, transparent 70%),
+    radial-gradient(46% 38% at 12% 78%, oklch(0.32 0.09 84 / 0.5) 0%, transparent 65%),
+    var(--brand-purple-950);
+}
+
+/* Offer display type — larger than the base scale for real section hierarchy. */
+@utility text-offer-display {
+  font-size: clamp(2.75rem, 2rem + 3.2vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: normal;
+}
+
+@utility text-offer-h2 {
+  font-size: clamp(2rem, 1.6rem + 1.8vw, 3rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: normal;
+}
+
+/* Receipt barcode — pure CSS stripes, no image asset. */
+@utility bg-barcode {
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0 2px,
+    transparent 2px 5px,
+    currentColor 5px 6px,
+    transparent 6px 10px
+  );
+}
+
+@utility bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px;
+}
+
+/* The global 0.01ms rule leaves infinite animations technically "running" —
+   stop the shimmer layers outright so the CTA reads as a calm solid button. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer-slide,
+  .animate-spin-around {
+    animation: none;
+  }
+}
+
+/* ═══ Scroll reveals — VISIBLE BY DEFAULT ═══════════════════════════════════
+   This file only ever describes the RESTING state and the transition into it.
+   The "before" half — the rules that actually hide a section — is not here at
+   all: RevealBootstrap (components/motion/Reveal.tsx) injects it as a <style>
+   element at runtime, and only after confirming it has an IntersectionObserver
+   to finish the job with and that the visitor has not asked for reduced
+   motion. Keep the two in sync when adding a variant.
+
+   Two consequences, both deliberate:
+   · No JS, a JS error, or an observer that never fires all mean "everything is
+     simply on screen" — never a page of invisible sections.
+   · The arming rules live outside React's tree, so nothing here can collide
+     with hydration the way a class on <html> or <body> would.
+
+   Only transform and opacity move, so a reveal never touches layout. */
+[data-reveal][data-revealed] {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+  transition:
+    opacity var(--dur-base) var(--ease-settle) var(--reveal-delay, 0ms),
+    transform var(--dur-base) var(--ease-settle) var(--reveal-delay, 0ms);
+}
+
+/* Defensive: reduced motion turned on AFTER load leaves the injected sheet in
+   place, so beat it outright. !important is the point — the runtime <style>
+   is later in the cascade at equal specificity. */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Accents that ride their ancestor's reveal instead of observing separately.
+   Their "before" state is injected alongside the section rules above; here
+   they carry only the transition, so with no JS they render at rest. */
+
+/* A hairline that draws across from the start edge.
+   RTL-only page: `right` IS the start edge (same convention as the physical
+   percentages in bg-hero-night above). */
+@utility rule-grow {
+  transform-origin: right center;
+  transition: transform var(--dur-slow) var(--ease-settle)
+    var(--reveal-delay, 0ms);
+}
+
+/* A mark that settles into place (check discs, number seals). */
+@utility pop-in {
+  transition: transform var(--dur-base) var(--ease-settle)
+    var(--reveal-delay, 0ms);
+}
+
+/* ═══ Microinteractions ════════════════════════════════════════════════════
+   Transform + opacity (and small colour shifts) only — nothing that reflows.
+   Under prefers-reduced-motion the global 0.01ms rule collapses each of these
+   to an instant state change, which is the intended fallback: the affordance
+   still reads, it just doesn't travel. */
+
+/* Buttons and small controls: a 2px lift, pressed flat on :active. */
+@utility lift {
+  transition:
+    transform var(--dur-fast) var(--ease-settle),
+    box-shadow var(--dur-fast) var(--ease-settle);
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+/* Ledger rows: the whole row answers the pointer, not just the link inside. */
+@utility ledger-row {
+  transition: transform var(--dur-fast) var(--ease-settle);
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Cards: a deeper lift, slower shadow bloom. */
+@utility card-lift {
+  transition:
+    transform var(--dur-fast) var(--ease-settle),
+    box-shadow var(--dur-base) var(--ease-settle);
+
+  &:hover {
+    transform: translateY(-4px);
+  }
+}
+
+/* Underline that wipes in from the start edge — scaleX, never a border swap. */
+@utility link-underline {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: -0.18em;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right center; /* RTL-only page: start edge */
+    transition: transform var(--dur-fast) var(--ease-settle);
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    transform: scaleX(1);
+  }
+}
+
+/* ═══ Layout & surface utilities ═══════════════════════════════════════════ */
+
+/* One vertical rhythm for every section below the hero. */
+@utility section-shell {
+  padding-block: clamp(4.5rem, 3rem + 7vw, 9rem);
+}
+
+/* Dotted ledger leader — the receipt's own language, reused wherever a name
+   has to reach across to a figure. Geometry only; callers set the colour and
+   the hover opacity so a row can brighten its own leader. */
+@utility leader-dots {
+  flex: 1 1 1.5rem;
+  min-width: 1.5rem;
+  margin-inline: 0.75rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 2px dotted currentColor;
+}
+
+/* Paper that sits above the surface: a contact shadow plus one soft ambient
+   layer. Deliberately not a glass card — this page is paper and ink. */
+@utility panel-elevated {
+  background-color: var(--color-brand-surface-elevated);
+  box-shadow:
+    0 1px 2px rgba(26, 16, 35, 0.05),
+    0 14px 34px -14px rgba(26, 16, 35, 0.18);
+}
+
+@utility panel-elevated-hover {
+  box-shadow:
+    0 1px 2px rgba(26, 16, 35, 0.05),
+    0 26px 52px -18px rgba(26, 16, 35, 0.26);
+}
+
+/* A gold hairline along the top edge — the seal on a paper panel. */
+@utility edge-gold {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-gold-500),
+      transparent
+    );
+    opacity: 0.6;
+  }
+}
+
+/* Hero entrance for the offer page. Scoped to this page's own name so the
+   shared `hero-rise` (used by the SaaS marketing pages in the app copy) keeps
+   its timing. Pure CSS: the headline paints on frame one instead of waiting
+   for hydration. `backwards` holds delayed items until their turn, and the
+   global reduced-motion rule collapses it to the end state. */
+@keyframes offer-rise {
+  from {
+    opacity: 0;
+    translate: 0 18px;
+  }
+}
+@utility offer-rise {
+  animation: offer-rise var(--dur-base) var(--ease-settle) backwards;
+}

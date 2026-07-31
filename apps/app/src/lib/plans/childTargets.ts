@@ -1,18 +1,15 @@
-import { reconcileChildTargets, type MealPlan } from "@fitlife/plan-engine";
+import {
+  reconcileChildTargets,
+  isChildByBirthYear,
+  type MealPlan,
+} from "@fitlife/plan-engine";
 
 /**
- * Mirror of the engine's child rule (buildContext / generate `isChildById`):
- * member_type "child" OR under 18 by birth_year. Kept in lockstep so the read
- * path classifies members exactly as generation did.
+ * The engine's child rule (plan-engine/childRule), applied at READ time so the
+ * display path classifies people exactly as generation did — previously a
+ * hand-kept mirror of it.
  */
-function isChildMember(
-  memberType: string | null | undefined,
-  birthYear: number | null | undefined,
-): boolean {
-  if (memberType === "child") return true;
-  if (birthYear == null) return false;
-  return new Date().getFullYear() - birthYear < 18;
-}
+const isChildMember = isChildByBirthYear;
 
 /**
  * Present each CHILD member's calorie/macro figures as the average of their real

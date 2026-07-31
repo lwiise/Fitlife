@@ -1,4 +1,20 @@
 export { buildPlanContext, getBeneficiaries } from "./buildContext";
+
+export {
+  HIGH_RISK_MEDICAL_FLAGS,
+  ownerRequiresDoctorSignOff,
+  memberRequiresDoctorSignOff,
+  hasHighRiskCondition,
+  DOCTOR_SIGN_OFF_REQUIRED_AR,
+} from "./medicalGate";
+export type { OwnerMedicalFacts, MemberMedicalFacts } from "./medicalGate";
+
+export {
+  CHILD_AGE_CUTOFF,
+  isChildByAge,
+  isChildByBirthYear,
+} from "./childRule";
+
 export type {
   PlanPromptContext,
   PlanPromptContextMom,
@@ -28,6 +44,18 @@ export {
 
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";
+
+export {
+  planRunBudgetMs,
+  dayLoopDeadline,
+  remainingMs,
+  canFit,
+  DEFAULT_PLAN_RUN_BUDGET_MS,
+  FINALIZE_RESERVE_MS,
+  TRANSLATION_RESERVE_MS,
+  DAY_CALL_ESTIMATE_MS,
+  MIN_VIABLE_CALL_MS,
+} from "./budget";
 
 export {
   canonicalRecipeKey,

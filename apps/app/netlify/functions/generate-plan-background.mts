@@ -22,12 +22,27 @@ import {
 import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
 import { summarizeWorkoutFeedback } from "../../../../packages/plan-engine/src/workout/feedback";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
+import {
+  dayLoopDeadline,
+  planRunBudgetMs,
+  canFit,
+  FINALIZE_RESERVE_MS,
+  MIN_VIABLE_CALL_MS,
+} from "../../../../packages/plan-engine/src/budget";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
 import type {
   PlanPromptContext,
   PlanPromptContextMember,
 } from "../../../../packages/plan-engine/src/buildContext";
+import {
+  ownerRequiresDoctorSignOff,
+  memberRequiresDoctorSignOff,
+} from "../../../../packages/plan-engine/src/medicalGate";
+// Error reporting over plain fetch — @sentry/* cannot be bundled here for the
+// same reason @supabase/supabase-js cannot (see the note above). Without this
+// the function reported nothing at all: every failure died in the Netlify log.
+import { captureToSentry } from "../../../../packages/plan-engine/src/sentryReport";
 import { computeEngagementDigest } from "../../../../packages/plan-engine/src/engagementDigest";
 import type {
   EngagementCheckinRow,
@@ -258,35 +273,14 @@ async function buildContextViaFetch(
   if (!profile.onboarding_completed_at) throw new GateError("Onboarding incomplete");
 
   const medicalConditions = (profile.medical_conditions as string[] | null) ?? [];
-  const hasMedical =
-    !!profile.has_medical_conditions || medicalConditions.length > 0;
-  // Mirrors HIGH_RISK_MEDICAL_FLAGS in the engine's buildContext (kept inline so
-  // this bundle stays SDK-free). Most aren't captured by onboarding yet; OR'd
-  // with the broad gate so today's behavior is unchanged.
-  const HIGH_RISK_FLAGS = [
-    "unstable_diabetes",
-    "uncontrolled_hypertension",
-    "heart_disease",
-    "kidney_disease",
-    "liver_disease",
-    "unstable_thyroid",
-    "severe_food_allergy",
-    "acute_digestive",
-    "eating_disorder",
-    "post_surgical",
-    "bariatric_surgery",
-    "unexplained_symptoms",
-  ];
-  const hasHighRiskFlag = medicalConditions.some((c) =>
-    HIGH_RISK_FLAGS.includes(c),
-  );
-  const isHighRiskPregnancy =
-    !!profile.is_pregnant && !!profile.high_risk_pregnancy;
+  // Same rule as the app — imported, not mirrored. medicalGate.ts is pure and
+  // dependency-free, so the bundle stays SDK-free.
   if (
-    (hasMedical ||
-      profile.is_pregnant ||
-      hasHighRiskFlag ||
-      isHighRiskPregnancy) &&
+    ownerRequiresDoctorSignOff({
+      medical_conditions: medicalConditions,
+      has_medical_conditions: profile.has_medical_conditions as boolean | null,
+      is_pregnant: profile.is_pregnant as boolean | null,
+    }) &&
     !profile.consulted_doctor
   ) {
     throw new GateError("Medical consultation required");
@@ -302,12 +296,15 @@ async function buildContextViaFetch(
   const asStrings = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
-  // Per-member medical gate (mirrors the engine's buildContext).
+  // Per-member medical gate (same shared rule as the engine's buildContext).
   for (const m of family) {
-    const conds = asStrings(m.medical_conditions);
-    const memberHighRisk =
-      conds.some((c) => HIGH_RISK_FLAGS.includes(c)) || !!m.high_risk_pregnancy;
-    if (memberHighRisk && m.consulted_doctor !== true) {
+    if (
+      memberRequiresDoctorSignOff({
+        medical_conditions: asStrings(m.medical_conditions),
+        high_risk_pregnancy: m.high_risk_pregnancy as boolean | null,
+      }) &&
+      m.consulted_doctor !== true
+    ) {
       throw new GateError("Medical consultation required");
     }
   }
@@ -523,6 +520,13 @@ const handler = async (req: Request): Promise<Response> => {
       }
     } catch (guardErr) {
       console.error("[generate-plan-background] workout idempotency probe failed", guardErr);
+      // Warning, not error: the run proceeds. But a probe that keeps failing
+      // means duplicate-run protection is silently off.
+      await captureToSentry(guardErr, {
+        step: "workout-idempotency-probe",
+        userId,
+        level: "warning",
+      });
     }
 
     // Meals-first sequencing: while a meal generation is live for this user,
@@ -609,6 +613,7 @@ const handler = async (req: Request): Promise<Response> => {
     } catch (err) {
       // runWorkoutPlanGeneration already terminalized both rows on failure.
       console.error("[generate-plan-background] workout generation failed", err);
+      await captureToSentry(err, { step: "workout-generation", userId });
       return new Response("Workout generation failed", { status: 200 });
     }
   }
@@ -673,7 +678,9 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response("OK", { status: 200 });
     } catch (err) {
       console.error("[generate-plan-background] translate failed", err);
-      // Non-fatal: leave the plan as-is (maid view falls back to Arabic).
+      // Non-fatal for the run, but the housekeeper silently gets Arabic she may
+      // not read — worth an alert rather than a log line nobody opens.
+      await captureToSentry(err, { step: "translate", userId });
       return new Response("Translate failed", { status: 200 });
     }
   }
@@ -712,11 +719,31 @@ const handler = async (req: Request): Promise<Response> => {
     // The guard is best-effort: if the probe itself fails, proceed — the run
     // would rather risk a duplicate than drop a legitimate generation.
     console.error("[generate-plan-background] idempotency probe failed", guardErr);
+    await captureToSentry(guardErr, {
+      step: "meal-idempotency-probe",
+      userId,
+      mealPlanId,
+      level: "warning",
+    });
   }
 
   const startMs = Date.now();
+  // Netlify kills this function at its budget without running any catch, so the
+  // deadline has to be enforced from inside. Computed once from the invocation's
+  // own start; the housekeeper reserve is applied by dayLoopDeadline.
+  let deadlineMs = dayLoopDeadline(startMs, false);
+  // The outer bound: everything except the final DB writes must be done by here.
+  const hardDeadlineMs = startMs + planRunBudgetMs() - FINALIZE_RESERVE_MS;
+  // Running usage, mirrored out of the engine so a failed or trimmed run is
+  // still costed — the totals used to die with the exception, which is why
+  // failed generations read $0 in the admin cost view.
+  let accrued = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
   try {
     const context = await buildContextViaFetch(supabaseUrl, expected, userId);
+    // Re-derive now that the context (and so the housekeeper locale) is known:
+    // the end-of-run translation pass runs after the day loop and needs its own
+    // slice of the same box.
+    deadlineMs = dayLoopDeadline(startMs, !!context.housekeeper_locale);
     if (body.feedback) context.user_feedback = body.feedback;
 
     // «خطة تشبهك»: recent check-in/verdict digest, PostgREST flavor of
@@ -813,6 +840,17 @@ const handler = async (req: Request): Promise<Response> => {
       onlyMemberId: body.onlyMemberId,
       regenerateMemberId: body.regenerateMemberId,
       regenScope: body.regenScope,
+      // THE budget that matters: this function is the one Netlify hard-kills at
+      // 15 minutes. Measured in production, a 6-member household reached 6/7 days
+      // and a 4-member one 4/7 before the kill — which runs neither the success
+      // path nor the catch below, so the row stayed 'started' with a NULL cost
+      // and the customer's finished days were thrown away. With a deadline the
+      // run ends itself, hands back the days it has, and DeferredMemberDrain
+      // fills the rest in a fresh invocation with a fresh budget.
+      deadlineMs,
+      onUsage: (u) => {
+        accrued = u;
+      },
       // Shared-group regen rebuilds multiple members → don't pin the loader to one.
       suppressTargetedMember:
         !!body.regenerateSharedGroup && !!body.regenerateMemberId,
@@ -884,7 +922,19 @@ const handler = async (req: Request): Promise<Response> => {
         familyMemberIds,
         maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
       });
-      if (endLocale && needsTranslate && !stillGenerating) {
+      // Budget gate. `hasPendingGeneration` already defers translation while any
+      // day is unfilled, which covers a budget-trimmed run — but a run that
+      // filled every day right up to its deadline could still start a multi-call
+      // translation with nothing left, and be killed mid-pass. Skipping is free:
+      // the pass is non-fatal, the maid view falls back to Arabic, and her next
+      // visit re-triggers it.
+      const roomToTranslate = canFit(hardDeadlineMs, MIN_VIABLE_CALL_MS);
+      if (endLocale && needsTranslate && !stillGenerating && !roomToTranslate) {
+        console.warn(
+          "[generate-plan-background] skipping housekeeper translation (run budget spent)",
+        );
+      }
+      if (endLocale && needsTranslate && !stillGenerating && roomToTranslate) {
         const { plan: translated, usage: tUsage } = await translateMealPlan({
           anthropicApiKey: anthropicKey,
           plan,
@@ -959,6 +1009,9 @@ const handler = async (req: Request): Promise<Response> => {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const durationMs = Date.now() - startMs;
     console.error("[generate-plan-background] error", { userId, mealPlanId, errorMessage });
+    // The one that matters: a whole meal generation died. The DB row only ever
+    // kept the message, so the stack and the failing step were unrecoverable.
+    await captureToSentry(err, { step: "meal-generation", userId, mealPlanId });
     try {
       await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
         status: "failed",
@@ -974,6 +1027,13 @@ const handler = async (req: Request): Promise<Response> => {
           error_message: errorMessage,
           duration_ms: durationMs,
           completed_at: new Date().toISOString(),
+          // The run failed; the bill did not. Without these the admin cost view
+          // counts every failed generation as $0 — and the largest households
+          // are both the most expensive and the most likely to fail, so the
+          // undercount lands exactly where margin is thinnest.
+          tokens_in: accrued.input_tokens,
+          tokens_out: accrued.output_tokens,
+          cost_usd: accrued.cost_usd,
         },
       );
     } catch (updateErr) {

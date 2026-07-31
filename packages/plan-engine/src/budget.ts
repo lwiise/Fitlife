@@ -1,0 +1,103 @@
+/**
+ * A run-wide deadline for one generation invocation.
+ *
+ * Every per-call budget in the engine is sized to the WORK (see constants.ts:
+ * `bigCallTimeoutMs` allows 400s for one 6-member day call, `CONTENT_MAX_RETRIES`
+ * adds two more full calls per day, `MAX_RETRIES` adds five API retries with
+ * sleeps, and generate.ts runs a second-chance wave over failed days). None of
+ * them knew about the 15-minute ceiling the Netlify background function actually
+ * runs under, so a large household could legitimately spend 20 minutes of work
+ * inside a 15-minute box and be hard-killed mid-flight — no catch, no terminal
+ * row, no plan.
+ *
+ * Measured in production on a paid `family` account: a 6-member run reached 6/7
+ * days and a 4-member run 4/7 days, both killed, both recording $0.
+ *
+ * The fix is NOT to fit more work into one invocation. It is to stop cleanly
+ * while budget remains and hand back a partial week — `DeferredMemberDrain`
+ * (apps/app/src/app/plan/page.tsx) already re-dispatches for members with
+ * missing days, so a trimmed run self-completes across invocations and any
+ * household size works by construction.
+ */
+
+/** Netlify's background-function ceiling. */
+export const DEFAULT_PLAN_RUN_BUDGET_MS = 15 * 60_000;
+
+/**
+ * Room to write the final `meal_plans` + `plan_generations` rows after the day
+ * loop returns. Small, but it must never be zero: a run that spends its last
+ * millisecond generating still dies without a terminal row, which is the exact
+ * failure this module exists to prevent.
+ */
+export const FINALIZE_RESERVE_MS = 45_000;
+
+/**
+ * The housekeeper translation pass runs AFTER the day loop and is itself several
+ * sequential model calls over the whole week, so the day loop has to stop that
+ * much earlier or it eats the translation's budget and the maid gets an
+ * untranslated plan. Generous on purpose — translation is already non-fatal, so
+ * over-reserving costs at most a deferred day, while under-reserving costs the
+ * whole pass.
+ */
+export const TRANSLATION_RESERVE_MS = 180_000;
+
+/**
+ * Optional prod override (no deploy needed), matching the `PLAN_DAY_CONCURRENCY`
+ * shape in constants.ts. Read at call time, not module load, so tests can set it.
+ */
+export function planRunBudgetMs(): number {
+  const n = Number(process.env.PLAN_RUN_BUDGET_MS?.trim());
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_PLAN_RUN_BUDGET_MS;
+}
+
+/**
+ * Absolute epoch ms by which the DAY LOOP must be done. `startMs` is the
+ * invocation's own start, so a run that already spent time on the skeleton gets
+ * a correspondingly smaller day budget rather than a fresh one.
+ */
+export function dayLoopDeadline(startMs: number, hasTranslation: boolean): number {
+  return (
+    startMs +
+    planRunBudgetMs() -
+    FINALIZE_RESERVE_MS -
+    (hasTranslation ? TRANSLATION_RESERVE_MS : 0)
+  );
+}
+
+/** Milliseconds left before `deadlineMs`, floored at 0. Infinity when unset. */
+export function remainingMs(deadlineMs: number | undefined, now = Date.now()): number {
+  if (deadlineMs == null) return Number.POSITIVE_INFINITY;
+  return Math.max(0, deadlineMs - now);
+}
+
+/**
+ * Whether `estimateMs` more work fits before the deadline.
+ *
+ * With no deadline this is always true, which is what keeps every existing
+ * caller (and every existing test) behaving exactly as it did before.
+ */
+export function canFit(
+  deadlineMs: number | undefined,
+  estimateMs: number,
+  now = Date.now(),
+): boolean {
+  if (deadlineMs == null) return true;
+  return remainingMs(deadlineMs, now) >= estimateMs;
+}
+
+/**
+ * What we assume one more day call costs when deciding whether to start it.
+ *
+ * Deliberately NOT `bigCallTimeoutMs` — that is the worst-case abort bound (up
+ * to 10 min), and requiring it would defer days that would comfortably have
+ * finished. This is a typical large-day figure taken from the measured runs
+ * (days landed at 147s/167s/455s/516s for 4 members), so we start a day when a
+ * normal one fits and let the timeout clamp handle the tail.
+ */
+export const DAY_CALL_ESTIMATE_MS = 150_000;
+
+/**
+ * The floor under which starting anything is pointless. A call given less than
+ * this cannot produce a parseable day, so spending tokens on it is pure waste.
+ */
+export const MIN_VIABLE_CALL_MS = 45_000;

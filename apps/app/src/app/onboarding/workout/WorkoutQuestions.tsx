@@ -8,6 +8,7 @@ import type { WorkoutProfile } from "@fitlife/plan-engine";
 import { genderPick } from "@/lib/copy/gender";
 import type { WorkoutIneligibleReason } from "@/lib/plans/workoutEligibility";
 import { saveWorkoutProfiles, continueAfterWorkoutOptIn } from "./actions";
+import { capture } from "@/lib/analytics";
 
 export interface WorkoutPerson {
   target: "mom" | string;
@@ -312,9 +313,16 @@ export function WorkoutQuestions({
       });
       const saved = await saveWorkoutProfiles(entries);
       if (!saved.ok) {
+        capture("onboarding_phase_rejected", { phase: "workout" });
         setError(saved.error);
         return;
       }
+      // BEFORE the call: continueAfterWorkoutOptIn() ends in redirect(), so
+      // nothing after the await ever runs.
+      capture("onboarding_phase_completed", {
+        phase: "workout",
+        people: chosen.length,
+      });
       await continueAfterWorkoutOptIn();
     });
   };
@@ -329,6 +337,13 @@ export function WorkoutQuestions({
     }
     const problem = stepDef.validate(draft!, g);
     if (problem) return setError(problem);
+    capture("onboarding_step_advanced", {
+      phase: "workout",
+      step: stepDef.key,
+      index: stepIndex,
+      total: STEPS.length,
+      person_index: personIndex,
+    });
     if (stepIndex + 1 < STEPS.length) return goTo(personIndex, stepIndex + 1);
     if (personIndex + 1 < chosen.length) return goTo(personIndex + 1, 0);
     submitAll();

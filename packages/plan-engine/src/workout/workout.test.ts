@@ -14,6 +14,7 @@ import {
   buildWorkoutSkeletonPrompt,
   buildWorkoutMemberPrompt,
   workoutTrainees,
+  WORKOUT_METHODOLOGY,
 } from "./systemPrompt";
 import type { PlanPromptContext } from "../buildContext";
 
@@ -35,6 +36,7 @@ function makeContext(overrides?: {
   momPregnant?: boolean;
   momConditions?: string[];
   momAge?: number;
+  momSex?: "female" | "male";
 }): PlanPromptContext {
   const momWorkout =
     overrides?.momWorkout === null
@@ -44,7 +46,7 @@ function makeContext(overrides?: {
     mom: {
       id: "user-1",
       display_name: "أم محمد",
-      sex: "female",
+      sex: overrides?.momSex ?? "female",
       member_type: overrides?.momPregnant ? "pregnant" : "adult",
       age: overrides?.momAge ?? 35,
       height_cm: 165,
@@ -335,6 +337,69 @@ describe("workout prompts", () => {
     expect(prompt).toContain('member_id: "mom"');
     expect(prompt).toContain("علوي أ");
     expect(prompt).toContain("home_variant_ar");
+  });
+});
+
+// ─── Gender: the program follows the TRAINEE, never a female default ────────
+// A male account owner was getting a female-voiced program: the coach persona
+// declared a women-only specialty, the roster line called him «العميلة (الأم)»,
+// and nothing told the model whom it was addressing.
+describe("workout prompts — gendered by the trainee, not defaulted to female", () => {
+  const skeleton = {
+    members: [
+      {
+        member_id: "mom",
+        member_name_ar: "أبو محمد",
+        split_name_ar: "علوي/سفلي ×2",
+        sessions: [{ day_index: 0, session_name_ar: "علوي أ", main_patterns_ar: ["دفع"] }],
+      },
+    ],
+    safety_disclaimer_ar: "تنبيه",
+  };
+
+  it("labels a male owner as العميل, never العميلة", () => {
+    const prompt = buildWorkoutSkeletonPrompt(makeContext({ momSex: "male" }));
+    expect(prompt).toContain("العميل (رب الأسرة)");
+    expect(prompt).not.toContain("العميلة (الأم)");
+    expect(prompt).toContain("ذكر");
+  });
+
+  it("keeps the feminine label for a female owner", () => {
+    const prompt = buildWorkoutSkeletonPrompt(makeContext());
+    expect(prompt).toContain("العميلة (الأم)");
+    expect(prompt).not.toContain("العميل (رب الأسرة)");
+  });
+
+  it("orders masculine address for a male trainee's week", () => {
+    const prompt = buildWorkoutMemberPrompt(
+      makeContext({ momSex: "male" }),
+      skeleton,
+      "mom",
+    );
+    expect(prompt).toContain("صيغة الخطاب");
+    expect(prompt).toContain("**المذكر**");
+    expect(prompt).not.toContain("**المؤنث**");
+  });
+
+  it("orders feminine address for a female trainee's week", () => {
+    const prompt = buildWorkoutMemberPrompt(makeContext(), skeleton, "mom");
+    expect(prompt).toContain("**المؤنث**");
+    expect(prompt).not.toContain("**المذكر**");
+  });
+
+  it("bars pregnancy/postpartum content from a male program", () => {
+    const prompt = buildWorkoutMemberPrompt(
+      makeContext({ momSex: "male" }),
+      skeleton,
+      "mom",
+    );
+    expect(prompt).toContain("لا أي إشارة لحمل أو ما بعد ولادة");
+  });
+
+  it("the cached methodology no longer sells a women-only specialty", () => {
+    expect(WORKOUT_METHODOLOGY).not.toContain("المبتدئات");
+    expect(WORKOUT_METHODOLOGY).not.toContain("المتوسطات/المتقدمات");
+    expect(WORKOUT_METHODOLOGY).toContain("للرجال:");
   });
 });
 

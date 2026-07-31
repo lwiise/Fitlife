@@ -49,9 +49,16 @@ export function EmptyPlanCTA({
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
           busy?: boolean;
+          gate?: string;
         };
         // Already generating → that IS the goal; show the progress screen.
         if (res.status === 409 || body.busy) {
+          router.push("/plan");
+          return;
+        }
+        // Blocked pending the doctor confirmation → /plan hosts it. Printing
+        // the reason here would leave her with nothing to act on.
+        if (body.gate === "medical") {
           router.push("/plan");
           return;
         }

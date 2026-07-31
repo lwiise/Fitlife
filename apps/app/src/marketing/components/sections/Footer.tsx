@@ -18,17 +18,17 @@ const productLinks: FooterLink[] = [
   { href: "#", label: "التطبيق" },
 ];
 
+// Only routes that EXIST. /about, /contact, /careers and /refunds were all
+// 404s shipped in the footer of a paid product — /refunds especially, since the
+// page it promised was the one backing a refund guarantee. Cancellation and
+// refund terms live in /terms; re-add a dedicated page when one is written.
 const companyLinks: FooterLink[] = [
-  { href: "/about", label: "عن فت لايف" },
   { href: "#trust", label: "ساره الشيخ (الخبيرة)" },
-  { href: "/contact", label: "تواصل معنا" },
-  { href: "/careers", label: "وظائف" },
 ];
 
 const legalLinks: FooterLink[] = [
   { href: "/privacy", label: "سياسة الخصوصية" },
   { href: "/terms", label: "شروط الاستخدام" },
-  { href: "/refunds", label: "سياسة الاسترداد" },
 ];
 
 const socialLinks = [

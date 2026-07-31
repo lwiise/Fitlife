@@ -30,7 +30,15 @@ import {
 import type { step1Schema, step2Schema } from "../schema";
 import { Step1Identity } from "../steps/Step1Identity";
 import { Step2Physical } from "../steps/Step2Physical";
+import { ownerRequiresDoctorSignOff } from "@fitlife/plan-engine";
 import { saveMomProfile, saveProfileStep } from "../actions";
+import { capture } from "@/lib/analytics";
+import {
+  restoreActivityLevel,
+  restoreIdentity,
+  restorePhysical,
+  type SavedMomAnswers,
+} from "./restoreAnswers";
 import { genderPick } from "@/lib/copy/gender";
 import { CUISINES, COOKING } from "@/app/profile/labels";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
@@ -123,22 +131,34 @@ function PrimaryButton({
   );
 }
 
-export function MomWizard() {
+export function MomWizard({ saved }: { saved?: SavedMomAnswers } = {}) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
 
-  const [identity, setIdentity] = useState<Identity>();
-  const [physical, setPhysical] = useState<Physical>();
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(null);
+  const [identity, setIdentity] = useState<Identity | undefined>(() =>
+    restoreIdentity(saved),
+  );
+  const [physical, setPhysical] = useState<Physical | undefined>(() =>
+    restorePhysical(saved),
+  );
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(() =>
+    restoreActivityLevel(saved),
+  );
   const [userGoal, setUserGoal] = useState<UserGoal | "">("");
   const [pregStatus, setPregStatus] = useState<"none" | "pregnant" | "lactating" | "">("");
   const [pregMonth, setPregMonth] = useState<number | null>(null);
   const [highRisk, setHighRisk] = useState<boolean | null>(null);
   const [feedingMode, setFeedingMode] = useState<FeedingMode | null>(null);
   const [monthsPP, setMonthsPP] = useState<string>("");
+  // Postpartum WITHOUT lactation: a woman who formula-feeds selected «لست
+  // حاملاً ولا مرضعة» and the recovery rules (and the workout pelvic-floor
+  // rules) never fired, because months_postpartum was only stored for
+  // lactating owners. Asked separately now; it does NOT make her "lactating".
+  const [recentBirth, setRecentBirth] = useState<boolean | null>(null);
+  const [monthsSinceBirth, setMonthsSinceBirth] = useState<string>("");
   const [nauseaFoods, setNauseaFoods] = useState<string[]>([]);
   const [restrictions, setRestrictions] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
@@ -169,15 +189,23 @@ export function MomWizard() {
   const isMale = identity?.sex === "male";
   const g = genderPick(identity?.sex);
 
-  // The pregnancy clause is ignored for male owners — stale answers can
-  // linger if the user answered the pregnancy step then flipped sex back
-  // on the identity screen.
+  // The SAME rule the engine gates generation on (plan-engine/medicalGate) —
+  // any condition, or pregnancy at ANY risk level. It used to require a
+  // HIGH-RISK pregnancy, so a low-risk pregnant owner never saw this step,
+  // saved consulted_doctor=false, and was then blocked from every generation
+  // with no way to fix it. The pregnancy clause is ignored for male owners —
+  // stale answers can linger if the user answered the pregnancy step then
+  // flipped sex back on the identity screen.
   const doctorNeeded = useMemo(
     () =>
-      conditions.length > 0 ||
-      otherCondition.trim().length > 0 ||
-      (!isMale && pregStatus === "pregnant" && highRisk === true),
-    [conditions, otherCondition, pregStatus, highRisk, isMale],
+      ownerRequiresDoctorSignOff({
+        medical_conditions: [
+          ...conditions,
+          ...(otherCondition.trim() ? [otherCondition.trim()] : []),
+        ],
+        is_pregnant: !isMale && pregStatus === "pregnant",
+      }),
+    [conditions, otherCondition, pregStatus, isMale],
   );
 
   // Male owners skip the pregnancy/lactation step entirely.
@@ -190,6 +218,19 @@ export function MomWizard() {
 
   const goNext = () => {
     setError(null);
+    // Only report a real advance. The Math.min clamp makes goNext a no-op on
+    // the last step, and counting that would show a phantom step-N → step-N hop
+    // and blur the true drop-off shape. Computed out here rather than inside
+    // the updater: StrictMode double-invokes updaters, so an event fired in
+    // there would double-count in dev.
+    if (stepIndex < totalSteps - 1) {
+      capture("onboarding_step_advanced", {
+        phase: "mom",
+        step,
+        index: stepIndex,
+        total: totalSteps,
+      });
+    }
     setStepIndex((s) => Math.min(s + 1, totalSteps - 1));
   };
   const goBack = () => {
@@ -251,7 +292,14 @@ export function MomWizard() {
         trimester: pregMonth != null ? trimesterFromMonth(pregMonth) : undefined,
         high_risk_pregnancy: highRisk === true,
         feeding_mode: feedingMode ?? undefined,
-        months_postpartum: monthsPP ? Number(monthsPP) : undefined,
+        months_postpartum:
+          pregStatus === "lactating"
+            ? monthsPP
+              ? Number(monthsPP)
+              : undefined
+            : recentBirth === true && monthsSinceBirth
+              ? Number(monthsSinceBirth)
+              : undefined,
         dietary_restrictions: restrictions,
         allergies,
         liked_foods: likedFoods,
@@ -268,9 +316,11 @@ export function MomWizard() {
         consulted_doctor: consultedDoctor,
       });
       if (!result.ok) {
+        capture("onboarding_phase_rejected", { phase: "mom" });
         setError(result.error);
         return;
       }
+      capture("onboarding_phase_completed", { phase: "mom", steps: totalSteps });
       router.push("/onboarding/members");
     });
   };
@@ -328,12 +378,15 @@ export function MomWizard() {
                 onSubmit={(d) => {
                   setIdentity(d);
                   startTransition(async () => {
-                    await saveProfileStep({
+                    // A failed progressive save used to advance the wizard
+                    // anyway, so the answer was silently lost on refresh.
+                    const saved = await saveProfileStep({
                       sex: d.sex,
                       display_name: d.display_name,
                       birth_year: d.birth_year,
                       phone: d.phone ?? null,
                     });
+                    if (!saved.ok) return setError(saved.error);
                     goNext();
                   });
                 }}
@@ -348,13 +401,14 @@ export function MomWizard() {
                 onSubmit={(d) => {
                   setPhysical(d);
                   startTransition(async () => {
-                    await saveProfileStep({
+                    const saved = await saveProfileStep({
                       height_cm: d.height_cm,
                       weight_kg: d.weight_kg,
                       waist_cm: d.waist_cm,
                       hip_cm: d.hip_cm ?? null,
                       target_weight_kg: d.target_weight_kg ?? null,
                     });
+                    if (!saved.ok) return setError(saved.error);
                     goNext();
                   });
                 }}
@@ -425,7 +479,10 @@ export function MomWizard() {
                     // The goal itself persists at final submit — its Sara
                     // mapping needs the health answers from later steps.
                     startTransition(async () => {
-                      await saveProfileStep({ activity_level: activityLevel });
+                      const saved = await saveProfileStep({
+                        activity_level: activityLevel,
+                      });
+                      if (!saved.ok) return setError(saved.error);
                       goNext();
                     });
                   }}
@@ -543,11 +600,72 @@ export function MomWizard() {
                   </div>
                 )}
 
+                {pregStatus === "none" && (
+                  <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+                    <div>
+                      <p className="text-sm font-bold text-brand-ink mb-2">
+                        هل ولدتِ خلال آخر 12 شهراً؟
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <OptionButton
+                          active={recentBirth === false}
+                          onClick={() => {
+                            setRecentBirth(false);
+                            setMonthsSinceBirth("");
+                          }}
+                        >
+                          لا
+                        </OptionButton>
+                        <OptionButton
+                          active={recentBirth === true}
+                          onClick={() => setRecentBirth(true)}
+                        >
+                          نعم
+                        </OptionButton>
+                      </div>
+                      <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                        نراعي تعافي الجسم بعد الولادة حتى لو توقفتِ عن الرضاعة.
+                      </p>
+                    </div>
+                    {recentBirth === true && (
+                      <div>
+                        <label
+                          htmlFor="months-since-birth"
+                          className="block text-sm font-bold text-brand-ink mb-2"
+                        >
+                          كم شهراً مضى على الولادة؟
+                        </label>
+                        <input
+                          id="months-since-birth"
+                          type="number"
+                          inputMode="numeric"
+                          dir="ltr"
+                          min={0}
+                          max={12}
+                          value={monthsSinceBirth}
+                          onChange={(e) => setMonthsSinceBirth(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <PrimaryButton
                   onClick={() => {
                     if (!pregStatus) return setError(g("اختاري حالتك", "اختر حالتك"));
                     if (pregStatus === "pregnant" && (pregMonth == null || highRisk == null))
                       return setError(g("أكملي تفاصيل الحمل", "أكمل تفاصيل الحمل"));
+                    if (pregStatus === "none" && recentBirth === true) {
+                      const msb = Number(monthsSinceBirth);
+                      if (!monthsSinceBirth || Number.isNaN(msb) || msb < 0 || msb > 12)
+                        return setError(
+                          g(
+                            "اكتبي عدد الأشهر منذ الولادة بين 0 و12",
+                            "اكتب عدد الأشهر منذ الولادة بين 0 و12",
+                          ),
+                        );
+                    }
                     if (pregStatus === "lactating") {
                       const mpp = Number(monthsPP);
                       if (!feedingMode || !monthsPP || Number.isNaN(mpp) || mpp < 0 || mpp > 24)

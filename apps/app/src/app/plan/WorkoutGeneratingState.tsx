@@ -118,9 +118,9 @@ export function WorkoutGeneratingState({
   if (timedOut) {
     return (
       <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
-        <h2 className="font-extrabold text-xl text-brand-ink leading-tight">
+        <h1 className="font-extrabold text-xl text-brand-ink leading-tight">
           العملية تاخذ وقت أطول من المتوقع
-        </h2>
+        </h1>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
           {g(
             "حدّثي الصفحة عشان تشيكين إذا البرنامج جاهز، أو حاولي مرة ثانية بعد دقيقة.",
@@ -144,9 +144,9 @@ export function WorkoutGeneratingState({
         <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-lavender/40 mb-4">
           <UtensilsCrossed className="size-7 text-brand-purple-900" aria-hidden="true" />
         </div>
-        <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+        <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
           نجهّز وجباتك أولاً...
-        </h2>
+        </h1>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
           برنامج التمارين يبدأ فور اكتمال خطة الوجبات.{" "}
           {g(
@@ -180,9 +180,9 @@ export function WorkoutGeneratingState({
           aria-hidden="true"
         />
       </div>
-      <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
+      <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
         نحضّر برنامج التمارين...
-      </h2>
+      </h1>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {isLong
           ? g(

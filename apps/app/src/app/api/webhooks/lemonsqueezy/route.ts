@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLemonsqueezyWebhookSecret } from "@/lib/env";
+import { getTierCadenceByVariantId } from "@fitlife/config";
 import { mapLemonsqueezyStatus, deriveCadence } from "./mapping";
 
 export const runtime = "nodejs";
@@ -110,7 +111,49 @@ export async function POST(request: Request) {
   // checkout custom_data, present on all subscription events) and fall back to
   // the LS subscription id. This also lets a payment_success event activate the
   // subscription even if subscription_created was missed.
-  async function applyUpdate(update: Record<string, unknown>) {
+  //
+  // BUT a user_id match alone is too broad once a user has had more than one LS
+  // subscription. We hold ONE row per user, so a late or out-of-order event
+  // about a SUPERSEDED subscription would overwrite the current paid one: cancel
+  // A, re-subscribe as B, then three weeks later A reaches its original period
+  // end and subscription_expired for A — carrying the same custom_data.user_id —
+  // writes status='expired' over B. The customer is billed for B every month and
+  // has no access at all. The same clobbering applies to any duplicate or
+  // out-of-order payment_failed / cancelled event for a dead subscription.
+  //
+  // So: when the event names a subscription AND our row already names a
+  // DIFFERENT one, the event is about history. Ignore it. The user_id path stays
+  // for the case its comment protects — a row that has no LS id yet because
+  // subscription_created was missed.
+  //
+  // `takeover` is the exception, and it is what makes re-subscribing work:
+  // subscription_created and payment_success are precisely the events by which a
+  // NEW subscription claims the row, so they must be allowed to re-point it.
+  // Without that carve-out this guard would reject every second subscription a
+  // customer ever buys.
+  async function applyUpdate(
+    update: Record<string, unknown>,
+    opts?: { takeover?: boolean },
+  ) {
+    if (userId && lsSubscriptionId && !opts?.takeover) {
+      const { data: existing } = await admin
+        .from("subscriptions")
+        .select("lemonsqueezy_subscription_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .returns<{ lemonsqueezy_subscription_id: string | null }[]>();
+      const held = existing?.[0]?.lemonsqueezy_subscription_id ?? null;
+      if (held && held !== lsSubscriptionId) {
+        console.warn("[lemonsqueezy-webhook] ignoring event for a superseded subscription", {
+          eventName,
+          eventSubscription: lsSubscriptionId,
+          rowHolds: held,
+          userId,
+        });
+        return { error: null };
+      }
+    }
     const q = admin.from("subscriptions").update(update);
     return userId
       ? await q.eq("user_id", userId)
@@ -145,9 +188,8 @@ export async function POST(request: Request) {
         if (tier) update.tier = tier;
         if (cadence) update.cadence = cadence;
 
-        const { error } = await applyUpdate(
-          update,
-        );
+        // A new subscription is entitled to claim the row (see applyUpdate).
+        const { error } = await applyUpdate(update, { takeover: true });
         if (error) {
           console.error("[lemonsqueezy-webhook] activate failed", { eventName, error });
           return new NextResponse(null, { status: 500 });
@@ -167,10 +209,27 @@ export async function POST(request: Request) {
           cancel_at_period_end: !!attrs.cancelled,
         };
         if (attrs.renews_at) update.current_period_end = attrs.renews_at;
+        if (attrs.ends_at) update.ends_at = attrs.ends_at;
         if (mapped) update.status = mapped;
+        // Resolve TIER as well as cadence. This branch used to call
+        // deriveCadence, which reads the same variant id but returns only the
+        // billing period — so a plan change made outside our app (the
+        // LemonSqueezy customer portal, which subscription/page.tsx links to,
+        // or a merchant-side upgrade) moved the customer's cadence and price
+        // while leaving `tier` untouched. A family→starter downgrade kept
+        // getTierLimit at 6, so the household went on generating six members'
+        // plans — six times the AI cost — on a 1-person subscription, and the
+        // page displayed a price they were not being charged. The reverse
+        // blocked a paying premium customer at 6 people.
         if (attrs.variant_id != null) {
-          const dc = deriveCadence(attrs.variant_id);
-          if (dc) update.cadence = dc;
+          const resolved = getTierCadenceByVariantId(attrs.variant_id);
+          if (resolved) {
+            // All three together, or none: a partial write is what let tier and
+            // cadence disagree in the first place.
+            update.tier = resolved.tier;
+            update.cadence = resolved.cadence;
+            update.lemonsqueezy_variant_id = String(attrs.variant_id);
+          }
         }
 
         const { error } = await applyUpdate(

@@ -27,9 +27,10 @@ const bodySchema = z.object({
  * { updated: true }. Trial/new user (no LS subscription) → createCheckout,
  * returns { checkout_url } for the client to redirect to.
  *
- * TEMPORARY (pre-launch diagnosis): failure responses carry a `debug` string
- * (rendered by ChangePlanSection) naming which branch ran and what LS said —
- * the operator has no easy Netlify-log access. Remove once payments work.
+ * Failure responses return the Arabic message ONLY — the former `debug` string
+ * (rendered by ChangePlanSection) exposed which branch ran, the LemonSqueezy
+ * rejection and the variant ID to the subscriber. Each failure path already
+ * console.errors that detail, so removing it cost no diagnosability.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -70,7 +71,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "تعذّر تغيير الخطة. يرجى المحاولة بعد قليل",
-          debug: `update-path (LS sub ${sub.lemonsqueezy_subscription_id}, variant ${variantId}): ${errorDetail ?? "unknown"}`,
         },
         { status: 502 },
       );
@@ -100,13 +100,12 @@ export async function POST(request: Request) {
     storeId = getLemonsqueezyStoreId();
   } catch (err) {
     console.error(
-      "[subscription/change] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID)",
-      err,
+      "[subscription/change] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID):",
+      describeLsError(err),
     );
     return NextResponse.json(
       {
         error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-        debug: `config: ${describeLsError(err)}`,
       },
       { status: 500 },
     );
@@ -148,20 +147,19 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-          debug: `checkout-path LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
         },
         { status: 502 },
       );
     }
     return NextResponse.json({ checkout_url: checkoutUrl }, { status: 200 });
   } catch (err) {
+    console.error("[subscription/change] LS error:", describeLsError(err));
     Sentry.captureException(err, {
       tags: { area: "subscription-change-checkout", userId: user.id },
     });
     return NextResponse.json(
       {
         error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-        debug: `checkout-path exception: ${describeLsError(err)}`,
       },
       { status: 502 },
     );

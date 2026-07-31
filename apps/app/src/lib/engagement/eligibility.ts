@@ -54,6 +54,31 @@ export function isChildWeighInMember(
   return false;
 }
 
+/**
+ * Pregnancy and lactation are not weight-change goals, so hitting a stored
+ * target during either is not an achievement to announce — least of all on the
+ * card the whole household reads.
+ *
+ * Its own predicate because the rule has to hold for the OWNER and for family
+ * members, and those are two different row shapes evaluated in two different
+ * branches. They had already drifted: the member branch excluded both states,
+ * while the owner branch tested only `is_pregnant`, so a nursing mother who had
+ * set a pre-pregnancy target before giving birth got «تحقّق الهدف — مبارك» on
+ * «موسم بيتنا» the moment a /journey weigh-in touched it — a postpartum
+ * weight-loss celebration in front of her children, when an identical family
+ * member in the same state was correctly skipped.
+ */
+export function isInNoLossFramingState(m: {
+  member_type: string | null;
+  is_pregnant?: boolean | null;
+}): boolean {
+  return (
+    m.member_type === "pregnant" ||
+    m.member_type === "lactating" ||
+    m.is_pregnant === true
+  );
+}
+
 /** Eligible for the family-VISIBLE goal-milestone celebration on «موسم بيتنا»
  * («تحقّق الهدف»). Adults only — a child's weight is never celebrated on a
  * shared surface, and the housekeeper is never tracked. */
@@ -61,7 +86,25 @@ export function isGoalCelebrationEligibleMember(
   m: WeighInMemberFields,
   currentYear: number = new Date().getFullYear(),
 ): boolean {
-  return isWeighInEligibleMember(m) && !isChildWeighInMember(m, currentYear);
+  return (
+    isWeighInEligibleMember(m) &&
+    !isChildWeighInMember(m, currentYear) &&
+    !isInNoLossFramingState(m)
+  );
+}
+
+/**
+ * The ACCOUNT OWNER's version of the same gate. `profiles` carries both
+ * `member_type` and `is_pregnant`, and both must be honoured — the owner's
+ * pregnancy is recorded in the boolean while lactation lives in member_type.
+ */
+export function isGoalCelebrationEligibleOwner(
+  p: { member_type: string | null; is_pregnant?: boolean | null; birth_year: number | null },
+  currentYear: number = new Date().getFullYear(),
+): boolean {
+  return (
+    isWeighInEligibleMom(p.birth_year, currentYear) && !isInNoLossFramingState(p)
+  );
 }
 
 /** The account owner: 18+ when the birth year is known (matches the action's

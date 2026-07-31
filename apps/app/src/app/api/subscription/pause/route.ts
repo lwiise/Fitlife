@@ -76,10 +76,29 @@ export async function POST(request: Request) {
 
   // current_period_end doubles as the visible resume date while paused (the
   // subscription_updated webhook restores real billing dates on resume).
-  await admin
+  //
+  // The error is READ, not discarded. Billing has already stopped at this point,
+  // so a silently-failed write leaves the row 'active' with its pre-pause period
+  // end — full access, real AI spend, nothing being charged — while the caller
+  // is told the pause succeeded. That is exactly what happened for every pause
+  // before migration 00023, which had to widen the status CHECK to accept
+  // 'paused' at all. Surfacing it turns a silent revenue leak into a visible,
+  // retryable failure.
+  const { error: pauseWriteError } = await admin
     .from("subscriptions")
     .update({ status: "paused", ends_at: resumesAt, current_period_end: resumesAt })
     .eq("id", sub.id);
+
+  if (pauseWriteError) {
+    Sentry.captureException(new Error("Pause written to LS but not to our row"), {
+      tags: { area: "subscription-pause", userId: user.id },
+      extra: { message: pauseWriteError.message, code: pauseWriteError.code },
+    });
+    return NextResponse.json(
+      { error: "تعذّر إيقاف الاشتراك مؤقتاً. يرجى المحاولة بعد قليل" },
+      { status: 502 },
+    );
+  }
 
   return NextResponse.json({ paused: true, resumes_at: resumesAt });
 }

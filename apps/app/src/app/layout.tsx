@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "@/styles/globals.css";
 import { SentryUserSync } from "./SentryUserSync";
+import { AnalyticsProvider } from "./AnalyticsProvider";
 import { VersionWatcher } from "@/components/VersionWatcher";
 import { BuildStamp } from "@/components/BuildStamp";
+import { ConsentSlot } from "./ConsentSlot";
+import { FreeAccessBadge } from "@/components/FreeAccessBadge";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -36,9 +39,24 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" className={tajawal.variable}>
       <body className="antialiased">
         <SentryUserSync />
+        <AnalyticsProvider />
         {children}
+        {/* LAST in the document, deliberately. As `fixed bottom-0` this covered
+            the bottom band of the viewport at every scroll offset — where every
+            primary CTA in this app lives. Moving it into flow fixed that, but at
+            the TOP of <body> it then pushed the whole page down when it mounted
+            at hydration, relocating a control out from under a finger already
+            descending on it: the same mis-tap, just spread over every control
+            instead of the bottom band. Nothing above the last element can move.
+            App-wide, not marketing-only — a deep-link signup never sees `/`, and
+            under opt-in consent that would mean never measured. */}
+        <ConsentSlot />
         <VersionWatcher />
         <BuildStamp />
+        {/* Renders nothing unless the TEMPORARY free-access testing mode is on.
+            Last in the document and pointer-events-none, for the same reason as
+            the elements above: nothing here may move or intercept a CTA. */}
+        <FreeAccessBadge />
       </body>
     </html>
   );

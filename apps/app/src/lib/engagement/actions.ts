@@ -304,28 +304,31 @@ async function isOutOfMeal(
   db: SupabaseClient,
   {
     userId,
-    mealPlanId,
-    dayIndex,
+    localDate,
     slot,
     memberId,
   }: {
     userId: string;
-    mealPlanId: string;
-    dayIndex: number;
+    localDate: string;
     slot: string;
     memberId: string;
   },
 ): Promise<boolean> {
+  // Keyed by the MEAL'S DATE, not the plan id. Every dispatch mints a new
+  // meal_plans row and only archives the old one, so a plan-id lookup went
+  // false the moment a new plan appeared mid-week — and then an excluded
+  // member's PERSONAL mark was treated as the shared dish's status, lighting
+  // the chip for the whole household. Same key the /plan read uses, so client
+  // and server resolve the same roster.
   const { data, error } = await db
     .from("meal_absences")
     .select("member_id")
     .eq("user_id", userId)
-    .eq("meal_plan_id", mealPlanId)
-    .eq("day_index", dayIndex)
+    .eq("local_date", localDate)
     .eq("slot", slot)
     .eq("member_id", memberId)
-    .maybeSingle();
-  return !error && !!data;
+    .limit(1);
+  return !error && !!data && data.length > 0;
 }
 
 /** Weekday (0=Sunday, matches JS getDay) of a Riyadh-local YYYY-MM-DD date. */
@@ -388,13 +391,20 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
   const db = supabase as unknown as SupabaseClient;
 
   if (input.status === null) {
+    // Clear by the CALENDAR key, not the plan id — the same key the viewer and
+    // collapseWorkoutMarks read by. triggerWorkoutGeneration mints a new
+    // workout_plans row on every dispatch (an answer edit or a second adult
+    // opting in is enough), so a mark made against last dispatch's plan is still
+    // read, still scoring on «موسم بيتنا», and was un-clearable: the delete
+    // matched zero rows, returned ok, and the optimistic clear was undone by the
+    // next revalidate re-seeding the chip from the surviving row. Mirrors
+    // clearMealMarks, which is calendar-keyed for exactly this reason.
     const { error } = await db
       .from("workout_checkins")
       .delete()
       .eq("user_id", user.id)
-      .eq("workout_plan_id", input.workout_plan_id)
       .eq("member_id", input.member_id)
-      .eq("day_index", input.day_index);
+      .eq("local_date", localDate);
     if (error) {
       Sentry.captureException(error, {
         tags: { area: "engagement", step: "workout-checkin-clear", userId: user.id },
@@ -633,8 +643,7 @@ export async function setMealCheckin(rawInput: SetMealCheckinInput) {
     // shared is not theirs to retract.
     const outOfMeal = await isOutOfMeal(db, {
       userId: user.id,
-      mealPlanId: input.meal_plan_id,
-      dayIndex: input.day_index,
+      localDate,
       slot: input.slot,
       memberId,
     });
@@ -783,13 +792,15 @@ export async function setSharedMealCheckin(rawInput: SetSharedMealCheckinInput) 
     // missing) skips the filter; if the filter would empty the roster (data
     // says everyone absent), keep it — the status must land somewhere.
     let presentIds = effectiveIds;
+    // Calendar-keyed for the same reason as isOutOfMeal: a plan-id filter went
+    // empty after a mid-week re-mint and the fan-out then fabricated a mark for
+    // a member the mom had already excluded.
     const { data: absenceRows, error: absenceError } = await db
       .from("meal_absences")
       .select("member_id")
-      .eq("meal_plan_id", input.meal_plan_id)
-      .eq("day_index", input.day_index)
-      .eq("slot", input.slot)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("local_date", localDate)
+      .eq("slot", input.slot);
     if (!absenceError && absenceRows) {
       const absent = new Set(
         (absenceRows as Array<{ member_id: string }>).map((r) => r.member_id),
@@ -915,13 +926,17 @@ export async function setMealAbsence(rawInput: SetMealAbsenceInput) {
       return { ok: false as const, error: "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى" };
     }
   } else {
+    // Sweep EVERY plan version's row for this meal, not just the current
+    // plan's. A leftover row from a superseded plan is now visible to the
+    // calendar-keyed read, so a plan-scoped delete would let the exclusion
+    // re-appear the instant the page refreshed — the same failure clearMealMarks
+    // was rewritten to avoid.
     const { error: deleteError } = await db
       .from("meal_absences")
       .delete()
-      .eq("meal_plan_id", input.meal_plan_id)
-      .eq("day_index", input.day_index)
-      .eq("slot", input.slot)
       .eq("user_id", user.id)
+      .eq("local_date", localDate)
+      .eq("slot", input.slot)
       .eq("member_id", input.member_id);
     if (deleteError) {
       Sentry.captureException(deleteError, {

@@ -12,15 +12,21 @@ import {
   setupLemonsqueezy,
   describeLsError,
 } from "@/lib/lemonsqueezy/client";
-import { getVariantId } from "@fitlife/config";
+import {
+  getVariantId,
+  usingLiveVariantIds,
+  variantEnvVar,
+} from "@fitlife/config";
+import { genderPick } from "@/lib/copy/gender";
 
 export const runtime = "nodejs";
 
-// TEMPORARY (pre-launch diagnosis): failure responses carry a `debug` string
-// that the pricing page renders, because the operator has no easy access to
-// the Netlify function logs. Remove `debug` (and its rendering in
-// CheckoutButton) once checkout works. It never contains keys — only the
-// LemonSqueezy rejection reason.
+// Failure responses return the Arabic message ONLY. They used to also carry a
+// `debug` string that the pricing page rendered, which put LemonSqueezy
+// rejection reasons and internal variant IDs in front of paying customers.
+// Nothing was lost by removing it: every failure path already console.errors
+// the same detail (and reports to Sentry), so diagnosis lives in the logs where
+// it belongs rather than in the checkout UI.
 
 const bodySchema = z.object({
   tier: z.enum(["starter", "pro", "family", "premium"]),
@@ -65,8 +71,24 @@ export async function POST(request: Request) {
   // the newer one.
   const currentSub = await getCurrentSubscription(user.id);
   if (hasLiveLemonsqueezySubscription(currentSub)) {
+    // Owner-directed instruction ("غيّري الباقة") — inflect it for the answered
+    // الجنس. Looked up only on this branch: it is the one response body here
+    // that addresses the user, so the common path keeps its single query.
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("sex")
+      .eq("id", user.id)
+      .single();
+    const g = genderPick(
+      (ownerProfile as { sex?: string | null } | null)?.sex ?? null,
+    );
     return NextResponse.json(
-      { error: "عندك اشتراك نشط بالفعل — غيّري الباقة من صفحة الاشتراك" },
+      {
+        error: g(
+          "عندك اشتراك نشط بالفعل — غيّري الباقة من صفحة الاشتراك",
+          "عندك اشتراك نشط بالفعل — غيّر الباقة من صفحة الاشتراك",
+        ),
+      },
       { status: 409 },
     );
   }
@@ -79,18 +101,26 @@ export async function POST(request: Request) {
     storeId = getLemonsqueezyStoreId();
   } catch (err) {
     console.error(
-      "[checkout] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID)",
-      err,
+      "[checkout] LemonSqueezy env missing (LEMONSQUEEZY_API_KEY / LEMONSQUEEZY_STORE_ID):",
+      describeLsError(err),
     );
     return NextResponse.json(
       {
         error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-        debug: `config: ${describeLsError(err)}`,
       },
       { status: 500 },
     );
   }
   const variantId = getVariantId(parsed.tier, parsed.cadence);
+  // Report only what is knowable here: whether this pair resolved to an env
+  // override or to the built-in id. The store's MODE is Lemonsqueezy-side state
+  // this process cannot see — an earlier version of this line asserted a mode in
+  // each direction and was wrong once in each, so it no longer guesses.
+  if (!usingLiveVariantIds()) {
+    console.warn(
+      `[checkout] ${parsed.tier}/${parsed.cadence}: no ${variantEnvVar(parsed.tier, parsed.cadence)} set, using built-in variant id ${variantId} — verify the store mode before assuming this cannot charge`,
+    );
+  }
 
   // Return to the EXACT origin the user is browsing (the same-origin POST sends
   // an Origin header), so the post-payment redirect carries the session cookie.
@@ -139,7 +169,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-          debug: `LS ${response?.statusCode ?? "?"} (variant ${variantId}): ${describeLsError(response?.error)}`,
         },
         { status: 502 },
       );
@@ -147,7 +176,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ checkout_url: checkoutUrl }, { status: 200 });
   } catch (err) {
-    console.error("[checkout] LS error:", err);
+    console.error("[checkout] LS error:", describeLsError(err));
     Sentry.captureException(err, {
       tags: {
         area: "checkout-creation",
@@ -159,7 +188,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "حدث خطأ في تجهيز الدفع. يرجى المحاولة مرة أخرى",
-        debug: `exception: ${describeLsError(err)}`,
       },
       { status: 502 },
     );

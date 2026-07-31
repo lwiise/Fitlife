@@ -4,27 +4,31 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { Tier, Cadence } from "@fitlife/config";
+import { capture, captureBeacon } from "@/lib/analytics";
+import { genderPick } from "@/lib/copy/gender";
 
 export function CheckoutButton({
   tier,
   cadence,
   tierName,
+  ownerSex,
 }: {
   tier: Tier;
   cadence: Cadence;
   tierName: string;
+  ownerSex?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // TEMPORARY (pre-launch diagnosis): /api/checkout returns a `debug` string
-  // on failure so the cause is visible on-page without Netlify log access.
-  // Remove together with the `debug` field in the route once checkout works.
-  const [debugDetail, setDebugDetail] = useState<string | null>(null);
+  const g = genderPick(ownerSex);
 
   function handleClick() {
     setErrorMessage(null);
-    setDebugDetail(null);
+    // Mirrors the free-path pair: intent and outcome are different numbers.
+    // Without the clicked/failed bookends a misconfigured variant id fails
+    // every single checkout and the funnel just shows "nobody paid".
+    capture("checkout_clicked", { tier, cadence });
     startTransition(async () => {
       try {
         const res = await fetch("/api/checkout", {
@@ -41,18 +45,30 @@ export function CheckoutButton({
         const body = (await res.json().catch(() => ({}))) as {
           checkout_url?: string;
           error?: string;
-          debug?: string;
         };
 
         if (res.ok && body.checkout_url) {
+          // Beacon: the very next line hands the tab to Lemonsqueezy, so a
+          // queued event never ships. This is the last thing we can observe
+          // before the user leaves our domain.
+          await captureBeacon("checkout_initiated", { tier, cadence });
           window.location.assign(body.checkout_url);
           return;
         }
 
-        setErrorMessage(body.error ?? "حدث خطأ. حاولي مرة ثانية");
-        if (body.debug) setDebugDetail(body.debug);
+        capture("checkout_failed", { tier, cadence, status: res.status });
+        setErrorMessage(
+          body.error ??
+            g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"),
+        );
       } catch {
-        setErrorMessage("حدث خطأ في الاتصال. حاولي مرة ثانية");
+        capture("checkout_failed", { tier, cadence, status: "network" });
+        setErrorMessage(
+          g(
+            "حدث خطأ في الاتصال. حاولي مرة ثانية",
+            "حدث خطأ في الاتصال. حاول مرة ثانية",
+          ),
+        );
       }
     });
   }
@@ -74,7 +90,7 @@ export function CheckoutButton({
             جاري التحضير...
           </>
         ) : (
-          `اختاري ${tierName}`
+          g(`اختاري ${tierName}`, `اختر ${tierName}`)
         )}
       </button>
       {errorMessage && (
@@ -84,14 +100,6 @@ export function CheckoutButton({
           className="mt-2 text-red-600 text-xs leading-relaxed"
         >
           {errorMessage}
-        </p>
-      )}
-      {debugDetail && (
-        <p
-          dir="ltr"
-          className="mt-1 text-brand-ink-muted text-[11px] leading-relaxed break-all text-start"
-        >
-          {debugDetail}
         </p>
       )}
     </div>

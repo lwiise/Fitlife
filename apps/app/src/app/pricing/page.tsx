@@ -7,6 +7,8 @@ import { PreselectionScroll } from "./PreselectionScroll";
 import { SkipSubscriptionButton } from "./SkipSubscriptionButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
+import { createClient } from "@/lib/supabase/server";
+import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = {
   title: "الأسعار — فت لايف",
@@ -27,6 +29,25 @@ export default async function PricingPage({
   // plan we want the customer to keep.
   const cadence: Cadence = params.cadence === "monthly" ? "monthly" : "annual";
   const fromOnboarding = params.from === "onboarding";
+
+  // Owner-directed copy on this page ("اختاري باقتك") follows the answered
+  // الجنس question, like every other in-app surface. The page is not behind
+  // auth, so a logged-out visitor (or a profile from before the question
+  // existed) resolves to null → feminine, the documented default voice.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let ownerSex: string | null = null;
+  if (user) {
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("sex")
+      .eq("id", user.id)
+      .single();
+    ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  }
+  const g = genderPick(ownerSex);
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -49,18 +70,30 @@ export default async function PricingPage({
       <div className="container-app py-10 md:py-16">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <h1 className="font-extrabold text-3xl md:text-4xl text-brand-ink leading-tight">
-            اختاري الخطة المناسبة لعائلتك
+            {g("اختاري الخطة المناسبة لعائلتك", "اختر الخطة المناسبة لعائلتك")}
           </h1>
           <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
             {fromOnboarding
-              ? "اشتركي عشان نجهّز خطط كل أفراد العائلة بوجبات منسقة. أو أكملي بخطتك أنتِ فقط الآن."
-              : "ابدئي بفترة تجريبية مجانية لمدة 7 أيام. ألغي في أي وقت."}
+              ? g(
+                  "اشتركي عشان نجهّز خطط كل أفراد العائلة بوجبات منسقة. أو أكملي بخطتك أنتِ فقط الآن.",
+                  "اشترك عشان نجهّز خطط كل أفراد العائلة بوجبات منسقة. أو أكمل بخطتك أنتَ فقط الآن.",
+                )
+              : // NOT "start a 7-day free trial" — the trial is granted at
+                // SIGNUP (handle_new_user) and has usually already elapsed by
+                // the time a user reads this page. Checkout passes no trial to
+                // Lemonsqueezy, so choosing a tier here charges immediately;
+                // promising a trial at this point is a chargeback waiting to
+                // happen.
+                g(
+                  "اختاري باقتك وتبدأ اليوم. ألغي في أي وقت.",
+                  "اختر باقتك وتبدأ اليوم. ألغِ في أي وقت.",
+                )}
           </p>
         </div>
 
         <div className="flex justify-center mb-10">
           <Suspense fallback={<div className="h-12" />}>
-            <PricingToggle cadence={cadence} />
+            <PricingToggle cadence={cadence} ownerSex={ownerSex} />
           </Suspense>
         </div>
 
@@ -70,11 +103,12 @@ export default async function PricingPage({
               key={tierId}
               tier={PRICING_TIERS[tierId]}
               cadence={cadence}
+              ownerSex={ownerSex}
             />
           ))}
         </div>
 
-        {fromOnboarding && <SkipSubscriptionButton />}
+        {fromOnboarding && <SkipSubscriptionButton ownerSex={ownerSex} />}
 
         <p className="text-center mt-10 text-brand-ink-muted text-xs leading-relaxed">
           الأسعار بالريال السعودي. الفوترة سنوية تُحتسب مرة واحدة.

@@ -221,7 +221,9 @@ export function engagementText(digest: EngagementDigest | undefined): string {
   const vetoed = digest.vetoes.map((v) => `«${v.recipe_name_ar}»`).join("، ");
 
   const sections: string[] = [
-    `\n\n# ما حدث فعلياً في أسبوع العائلة الماضي (بيانات حقيقية من تسجيل العميلة)`,
+    // «تسجيل العائلة», not «العميلة» — the digest collapses check-ins from
+    // every member of the house, and the owner may be male.
+    `\n\n# ما حدث فعلياً في أسبوع العائلة الماضي (بيانات حقيقية من تسجيل العائلة)`,
   ];
   if (lines.length > 0) sections.push(lines.join("\n"));
   if (golden) {
@@ -235,7 +237,7 @@ export function engagementText(digest: EngagementDigest | undefined): string {
     );
   }
   sections.push(
-    `بناءً على ما سبق فقط، أضيفي في أعلى الـJSON مفتاح week_changes: حتى ${arabicCount(MAX_WEEK_CHANGES)} تغييرات ملموسة قمتِ بها في هذه الخطة، كل عنصر {change_ar, because_ar} — change_ar يصف التعديل بدفء وإيجاز، وbecause_ar يستشهد بحدث حقيقي من البيانات أعلاه (عدد أو طبق محدد). لا تخترعي ملاحظات ليست في البيانات؛ إن لم يكن هناك ما يستحق فأرجعي week_changes: []. صيغي التغيير كتحسين للعميلة، لا كنقد لها.`,
+    `بناءً على ما سبق فقط، أضيفي في أعلى الـJSON مفتاح week_changes: حتى ${arabicCount(MAX_WEEK_CHANGES)} تغييرات ملموسة قمتِ بها في هذه الخطة، كل عنصر {change_ar, because_ar} — change_ar يصف التعديل بدفء وإيجاز، وbecause_ar يستشهد بحدث حقيقي من البيانات أعلاه (عدد أو طبق محدد). لا تخترعي ملاحظات ليست في البيانات؛ إن لم يكن هناك ما يستحق فأرجعي week_changes: []. صيغي التغيير كتحسين للعائلة، لا كنقد لها.`,
   );
 
   return sections.join("\n\n");

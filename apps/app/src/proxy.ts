@@ -18,9 +18,13 @@ export async function proxy(request: NextRequest) {
   const isPublicAsset = pathname.startsWith("/_next") || pathname.includes(".");
   // The marketing landing page lives at "/" and is public to everyone.
   // Privacy + Terms must be readable WITHOUT a session (PDPL: users must be
-  // able to read them before signing up).
+  // able to read them before signing up). /landing is the standalone
+  // bundle-offer sales page — pure marketing, no session use.
   const isPublicRoute =
-    pathname === "/" || pathname === "/privacy" || pathname === "/terms";
+    pathname === "/" ||
+    pathname === "/landing" ||
+    pathname === "/privacy" ||
+    pathname === "/terms";
   // The admin login form must render for logged-out operators. NOT in
   // isPublicRoute: the page still needs the refreshed session so it can
   // bounce already-signed-in admins to /admin and show non-admins the denied

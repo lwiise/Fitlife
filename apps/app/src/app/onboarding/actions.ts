@@ -14,8 +14,16 @@ import {
   isSubscriptionActive,
   getTierLimit,
 } from "@/lib/subscription/state";
+import { isFreeAccessMode } from "@/lib/subscription/freeAccess";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
-import { planHasContent, MEMBER_GEN_MAX_ATTEMPTS, type MealPlan } from "@fitlife/plan-engine";
+import { memberEditIsSubstantive } from "@/lib/plans/memberEdit";
+import {
+  planHasContent,
+  MEMBER_GEN_MAX_ATTEMPTS,
+  ownerRequiresDoctorSignOff,
+  DOCTOR_SIGN_OFF_REQUIRED_AR,
+  type MealPlan,
+} from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import {
@@ -29,6 +37,7 @@ import {
   familyMemberInputSchema,
   familyWideInputSchema,
   profileStepSchema,
+  firstFieldErrorAr,
   VALIDATION_ERROR_AR,
 } from "./serverSchemas";
 import type { Database } from "@/lib/supabase/database.types";
@@ -80,7 +89,9 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
 
   // The update object goes straight into a profiles UPDATE — strict whitelist.
   const parsed = profileStepSchema.safeParse(updates);
-  if (!parsed.success) return { ok: false, error: VALIDATION_ERROR_AR };
+  if (!parsed.success) {
+    return { ok: false, error: firstFieldErrorAr(parsed.error) };
+  }
 
   const { error } = await supabase
     .from("profiles")
@@ -189,7 +200,9 @@ export async function completeOnboarding(
 
   revalidatePath("/dashboard");
 
-  if (isValidTier(tier) && isValidCadence(cadence)) {
+  // TEMPORARY testing mode: a tier carried in from a landing-page CTA would
+  // otherwise still send her to checkout for something already unlocked.
+  if (!isFreeAccessMode() && isValidTier(tier) && isValidCadence(cadence)) {
     redirect(`/pricing?tier=${tier}&cadence=${cadence}`);
   }
   redirect("/dashboard");
@@ -325,6 +338,19 @@ export async function saveMomProfile(
   if (other) conditions.push(other);
   const hasMedical = conditions.length > 0;
 
+  // Never persist a profile the engine will then refuse to plan for. The wizard
+  // requires the confirmation on its own doctor step; this is the server-side
+  // guarantee, using the SAME rule the generation gate uses.
+  if (
+    ownerRequiresDoctorSignOff({
+      medical_conditions: conditions,
+      is_pregnant: isPregnant,
+    }) &&
+    !input.consulted_doctor
+  ) {
+    return { ok: false, error: DOCTOR_SIGN_OFF_REQUIRED_AR };
+  }
+
   const primaryGoal = mapUserGoalToSara(input.user_goal, {
     hasMedical,
     isPregnantOrLactating: isPregnant || isLactating,
@@ -391,7 +417,12 @@ export async function saveMomProfile(
         : null,
       high_risk_pregnancy: isPregnant ? input.high_risk_pregnancy : false,
       feeding_mode: isLactating ? (input.feeding_mode ?? null) : null,
-      months_postpartum: isLactating ? (input.months_postpartum ?? null) : null,
+      // «Months since giving birth», not a lactation flag — a woman who
+      // formula-feeds still needs the postpartum recovery rules (and the
+      // workout pelvic-floor rules). member_type === "lactating" is what adds
+      // the lactation calories. Never set while pregnant, never for a male.
+      months_postpartum:
+        isMale || isPregnant ? null : (input.months_postpartum ?? null),
       consulted_doctor: input.consulted_doctor,
       mom_profile_completed_at: now,
     })
@@ -445,7 +476,13 @@ export async function finishOnboardingToSubscription(): Promise<void> {
   // lemonsqueezy_subscription_id — trial rows never do. Mirror the post-checkout
   // path: kick off the whole-family generation and land them on /plan.
   const sub = await getCurrentSubscription(user.id);
-  if (sub && isSubscriptionActive(sub) && sub.lemonsqueezy_subscription_id) {
+  // TEMPORARY testing mode treats the household as already covered: there is
+  // nothing to buy, so the pricing screen below would be a dead end between
+  // finishing the questions and seeing a plan.
+  const covered = isFreeAccessMode()
+    ? true
+    : Boolean(sub && isSubscriptionActive(sub) && sub.lemonsqueezy_subscription_id);
+  if (covered) {
     // Always land on /plan: it renders every state correctly (progress while
     // generating, the plan when ready, the retry UI on failure) — bouncing to
     // the dashboard on a declined sync left users staring at "no plan yet".
@@ -456,27 +493,44 @@ export async function finishOnboardingToSubscription(): Promise<void> {
   redirect("/pricing?from=onboarding");
 }
 
+export type SoloGenResult = { ok: true } | { ok: false; error: string };
+
 /**
  * "Continue with just my plan" from the post-onboarding subscription screen. Runs a
  * normal family generation; on the free trial's starter tier (max 1 person) it caps
  * to the primary user (mom) and defers the rest behind the subscription notice.
  * Subscribing later regenerates the whole family together (see the LemonSqueezy
  * webhook). Onboarding is already completed by finishOnboardingToSubscription.
+ *
+ * Returns the outcome instead of redirecting so the caller can show a real
+ * reason; navigation happens client-side on success.
  */
-export async function generateSoloAndContinue(): Promise<void> {
+export async function generateSoloAndContinue(): Promise<SoloGenResult> {
   const supabase = await createClient();
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error("Not authenticated");
+  if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
   // Full run → tier cap (trial starter = 1) yields a mom-only plan; any extra
   // members defer until a covering subscription unlocks the whole-family regen.
-  await runFamilyGeneration(supabase, user.id);
+  const gen = await runFamilyGeneration(supabase, user.id);
   // Combined generation: fire the workout companion too (no-op unless opted in).
   await maybeTriggerWorkoutGeneration(supabase, user.id);
-  redirect("/plan");
+
+  // The result used to be discarded and the user redirected to /plan
+  // regardless — a medical gate, an inactive subscription, or a dispatch
+  // failure all landed her on an empty page with no idea why. Report it
+  // instead; the caller navigates only on a real success.
+  // 'busy' IS a success from her side: a run is already in flight, and /plan
+  // renders its progress. 'upgrade' can't happen on a full run (the tier cap
+  // is applied instead of denying), but it is handled for completeness.
+  if (gen.ok || gen.kind === "busy") return { ok: true };
+  if (gen.kind === "upgrade") {
+    return { ok: false, error: "باقتك الحالية لا تكفي عدد أفراد العائلة" };
+  }
+  return { ok: false, error: gen.error };
 }
 
 /**
@@ -505,7 +559,13 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
   const sub = await getCurrentSubscription(user.id);
   // Only a PAID active subscription unlocks the family — trial rows (no LS id)
   // never auto-generate beyond the explicit mom-only path.
-  if (!sub || !isSubscriptionActive(sub) || !sub.lemonsqueezy_subscription_id) {
+  //
+  // TEMPORARY testing mode is the one exception: there is no LS id to hold,
+  // yet the whole household is meant to generate together. Without this the
+  // mode would unlock the member LIMIT but still leave everyone past the first
+  // person without a plan — the exact thing being tested.
+  const freeAccess = isFreeAccessMode();
+  if (!freeAccess && (!sub || !isSubscriptionActive(sub) || !sub.lemonsqueezy_subscription_id)) {
     return { triggered: false };
   }
 
@@ -528,7 +588,9 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
       isPaidActive: true,
       planMemberCount: latest?.member_count ?? 0,
       beneficiaryCount,
-      tierMaxPeople: getTierLimit(sub.tier),
+      // In free mode `sub` may be absent entirely; the limit is unlimited either
+      // way, so fall back to the same null rather than dereferencing it.
+      tierMaxPeople: sub ? getTierLimit(sub.tier) : null,
     })
   ) {
     return { triggered: false };
@@ -880,9 +942,17 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
   }
 
   const isAdult = input.member_type === "adult";
+  // Pregnancy and lactation calories are maintenance (TDEE) plus a stage
+  // addition, so they need an activity factor exactly like an adult does —
+  // these fields used to be adult-only, which left activity_level null for
+  // both and forced the model to guess the multiplier.
+  const isAdultLike =
+    isAdult ||
+    input.member_type === "pregnant" ||
+    input.member_type === "lactating";
   // Derive the canonical level from the concrete answers when available.
   const activityLevel =
-    isAdult && input.day_nature && input.exercise_days
+    isAdultLike && input.day_nature && input.exercise_days
       ? activityLevelFrom(input.day_nature, input.exercise_days)
       : (input.activity_level ?? null);
 
@@ -915,10 +985,12 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
     // the old lactating wizard folded them into medical_conditions via
     // other_condition (data corruption, fixed with the wizard in the same
     // release). Children get none of these.
+    // A weight target stays adult-only — pregnancy and lactation are not
+    // weight-change goals.
     target_weight_kg: isAdult ? (input.target_weight_kg ?? null) : null,
-    day_nature: isAdult ? (input.day_nature ?? null) : null,
-    exercise_days: isAdult ? (input.exercise_days ?? null) : null,
-    exercise_type: isAdult ? (input.exercise_type ?? null) : null,
+    day_nature: isAdultLike ? (input.day_nature ?? null) : null,
+    exercise_days: isAdultLike ? (input.exercise_days ?? null) : null,
+    exercise_type: isAdultLike ? (input.exercise_type ?? null) : null,
     sleep_hours: isAdult ? (input.sleep_hours ?? null) : null,
     water_liters: input.member_type === "child" ? null : (input.water_liters ?? null),
     medications: input.member_type === "child" ? [] : (input.medications ?? []),
@@ -941,8 +1013,9 @@ export async function addFamilyMember(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  if (!familyMemberInputSchema.safeParse(input).success) {
-    return { ok: false, error: VALIDATION_ERROR_AR };
+  const parsedMember = familyMemberInputSchema.safeParse(input);
+  if (!parsedMember.success) {
+    return { ok: false, error: firstFieldErrorAr(parsedMember.error) };
   }
 
   // Next display_order = current max + 1.
@@ -1192,8 +1265,9 @@ export async function updateFamilyMember(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  if (!familyMemberInputSchema.safeParse(input).success) {
-    return { ok: false, error: VALIDATION_ERROR_AR };
+  const parsedMember = familyMemberInputSchema.safeParse(input);
+  if (!parsedMember.success) {
+    return { ok: false, error: firstFieldErrorAr(parsedMember.error) };
   }
 
   const { data: beforeRow } = await supabase
@@ -1225,21 +1299,10 @@ export async function updateFamilyMember(
   revalidatePath("/dashboard");
 
   // Substantive change → regenerate; cosmetic (name only) → skip.
-  const substantive =
-    !before ||
-    before.birth_year !== input.birth_year ||
-    Number(before.weight_kg) !== Number(input.weight_kg ?? before.weight_kg) ||
-    before.primary_goal !== row.primary_goal ||
-    before.member_type !== row.member_type ||
-    before.meal_mode !== row.meal_mode ||
-    before.activity_level !== row.activity_level ||
-    Number(before.target_weight_kg ?? 0) !== Number(row.target_weight_kg ?? 0) ||
-    before.feeding_mode !== row.feeding_mode ||
-    JSON.stringify(before.medications ?? []) !== JSON.stringify(row.medications) ||
-    JSON.stringify(before.supplements ?? []) !== JSON.stringify(row.supplements) ||
-    JSON.stringify(before.nausea_foods ?? []) !== JSON.stringify(row.nausea_foods) ||
-    JSON.stringify(before.medical_conditions ?? []) !==
-      JSON.stringify(row.medical_conditions);
+  const substantive = memberEditIsSubstantive(
+    before as unknown as Record<string, unknown> | null,
+    row,
+  );
 
   if (!substantive) {
     return { ok: true, member_id: memberId, plan_generation_id: null };

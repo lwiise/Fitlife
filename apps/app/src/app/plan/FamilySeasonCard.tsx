@@ -27,7 +27,10 @@ import {
 //     cooked lights up with a star rating + a utensils mark; other days dashed).
 //     The third star is EARNED (owner directive 07/2026): three stars mean the
 //     day's meals were ALL cooked as written, so the rating is measured against
-//     each day's own planned slots (see starsForDay in seasonMath).
+//     each day's own planned dishes (see starsForDay in seasonMath).
+//     The meal total counts DISHES, not slots (owner directive 07/2026 —
+//     «present the real numbers»): one shared pot is one meal however many
+//     people eat it, while a member's own dish in the same slot is its own meal.
 //   • Leaderboard — every household member ranked by PLAN COMPLETION (owner
 //     directive 07/2026): meals-only members are measured purely on meals
 //     (each meal worth 100% / their planned meals); a member with a workout
@@ -239,7 +242,9 @@ export function FamilySeasonCard({
   workoutCheckins = [],
   goalReached = [],
   planned,
-  plannedMealSlotsPerDay,
+  plannedMealsPerDay,
+  dishKeys,
+  weeklyCapacity,
   weekStartDate,
   workoutWeekStart,
   workoutWeekEnd,
@@ -263,10 +268,17 @@ export function FamilySeasonCard({
   /** Per-member plan totals — the % denominators. `sessions` present only for
    * members in the ready workout plan (switches them to the 50/50 formula). */
   planned?: Record<string, PlannedTotals>;
-  /** Distinct meal slots planned per day of the week (by day_index, length 7) —
+  /** Distinct DISHES planned per day of the week (by day_index, length 7) —
    * the star denominators: a day shows three stars only when ALL of its meals
    * were cooked as written. Omitted → the legacy count-based rating. */
-  plannedMealSlotsPerDay?: number[];
+  plannedMealsPerDay?: number[];
+  /** `${day}|${slot}|${member}` → dish identity, so the family total counts real
+   * MEALS: one shared pot is one meal however many people eat it, and two
+   * different dishes in one slot are two. Omitted → legacy slot counting. */
+  dishKeys?: Record<string, string>;
+  /** The household's own full week (planned dishes + sessions) — the ring's
+   * capacity, so its fill reads as «كم أتممنا من أسبوعنا». */
+  weeklyCapacity?: number;
   /** Plan week start (YYYY-MM-DD) → real weekday initials on the strip. */
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
@@ -308,7 +320,9 @@ export function FamilySeasonCard({
     workoutWeekStart,
     workoutWeekEnd,
     planned,
-    plannedMealSlotsPerDay,
+    plannedMealsPerDay,
+    dishKeys,
+    weeklyCapacity,
   });
 
   // «اليوم» panel — fills the hero's second column with the next action (and
@@ -331,7 +345,7 @@ export function FamilySeasonCard({
       </p>
       <Link
         href="/plan"
-        className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-brand-ink hover:bg-brand-purple-900 px-4 py-2 min-h-10 text-xs font-extrabold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+        className="inline-flex items-center gap-1.5 mt-1 rounded-full bg-brand-ink hover:bg-brand-purple-900 px-4 py-2 min-h-11 text-xs font-extrabold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
       >
         إلى خطة اليوم
         <ChevronLeft className="size-3.5" aria-hidden="true" />
@@ -383,14 +397,18 @@ export function FamilySeasonCard({
                     <span className="text-xl sm:text-2xl font-extrabold text-brand-purple-900 leading-none">
                       <Figure n={followedMeals} />
                     </span>
-                    <span className="text-[10px] text-brand-ink-muted mt-0.5">وجبات معاً</span>
+                    <span className="text-[10px] text-brand-ink-muted mt-0.5">وجبات مطبوخة</span>
                   </div>
                 </div>
                 <div className="min-w-0 text-start">
+                  {/* The figure is every dish the house cooked as written — a
+                      shared pot counts once, a member's own dish counts too. So
+                      the sentence says «طبخ بيتكم», not «اجتمع … معاً»: the
+                      number is no longer only about shared meals. */}
                   <p className="text-sm sm:text-[17px] leading-snug text-brand-ink">
-                    هذا الأسبوع اجتمع بيتكم على{" "}
+                    هذا الأسبوع طبخ بيتكم{" "}
                     <Count n={followedMeals} one="وجبة واحدة" two="وجبتين" few="وجبات" many="وجبة" />{" "}
-                    معاً
+                    كما هي من الخطة
                     <span className="block text-brand-ink-muted text-[12.5px] mt-0.5">
                       أضاء <Count n={activeDays} one="يوماً واحداً" two="يومين" few="أيام" many="يوماً" />
                       {sessionsDone > 0 && (
@@ -420,7 +438,7 @@ export function FamilySeasonCard({
                 placeholder. Fixed compact height so the whole section fits a
                 laptop screen. */}
             <ul className="grid grid-cols-7 gap-1.5 sm:gap-2.5 mt-4 list-none p-0 m-0" aria-label="أيام الأسبوع">
-              {days.map(({ dayIndex: i, lit: cooked, stars, cookedSlots, plannedSlots, complete }) => {
+              {days.map(({ dayIndex: i, lit: cooked, stars, cookedMeals, plannedMeals, complete }) => {
                 const isToday = todayIndex === i;
                 const label = weekdayInitial(weekStartDate, i);
                 const dateNum = dayOfMonth(weekStartDate, i);
@@ -429,8 +447,8 @@ export function FamilySeasonCard({
                 // and a complete one read identically.
                 const cookedLabel = complete
                   ? "طُبخت وجبات اليوم كاملة"
-                  : plannedSlots > 0
-                    ? `طُبخ من الخطة: ${ar(cookedSlots)} من ${ar(plannedSlots)} وجبات`
+                  : plannedMeals > 0
+                    ? `طُبخ من الخطة: ${ar(cookedMeals)} من ${ar(plannedMeals)} وجبات`
                     : "طُبخ من الخطة";
                 return (
                   <li key={i} className="flex flex-col items-center gap-1.5">

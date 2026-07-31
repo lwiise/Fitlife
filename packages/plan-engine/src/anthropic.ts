@@ -195,10 +195,35 @@ export async function streamAnthropic(params: {
   }
 }
 
+/**
+ * Recover the JSON payload from a model reply.
+ *
+ * The fast path is a closed fence wrapping the WHOLE reply. That used to be the
+ * only path, and everything else fell through to JSON.parse — which cost a whole
+ * DAY of a plan each time it happened, because a SyntaxError is treated as a
+ * transient content failure: the day re-rolls twice, fails, and the
+ * second-chance wave re-rolls it twice more. Six full day-sized calls, then the
+ * day ships EMPTY in a paid plan with nothing surfaced in the UI.
+ *
+ * Two real production failures (2026-07-25/26), both with perfectly good JSON
+ * sitting inside the reply:
+ *   - an Arabic prose preamble before the object ("أولاً سأحسب…")
+ *   - a ```json fence that was opened and never closed
+ *
+ * So when the reply is not cleanly fenced, fall back to the outermost {…} span.
+ * Callers all expect a single JSON OBJECT (day slice, skeleton, translation), so
+ * brace-matching is the right bracket. If there is no plausible object the text
+ * is returned unchanged and the caller's parse fails exactly as it did before —
+ * this only ever widens what can be recovered.
+ */
 export function stripMarkdownFence(text: string): string {
-  const fence = text.match(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
+  const trimmed = text.trim();
+  const fence = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
   if (fence && fence[1]) return fence[1];
-  return text.trim();
+  const open = trimmed.indexOf("{");
+  const close = trimmed.lastIndexOf("}");
+  if (open !== -1 && close > open) return trimmed.slice(open, close + 1);
+  return trimmed;
 }
 
 export function computeCostUsd(

@@ -8,6 +8,7 @@ import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, Tr
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
+import { PartialWeekNotice } from "./PartialWeekNotice";
 import {
   setMealAbsence as setMealAbsenceAction,
   setMealCheckin as setMealCheckinAction,
@@ -113,10 +114,15 @@ export function PlanViewer({
   journeyMembers,
   planTypeToggle,
   ownerSex,
+  partialWeek = false,
 }: {
   plan: MealPlan;
   planId: string;
   generating?: boolean;
+  // The week came back short — a household too big for one invocation's budget,
+  // or a run that died. The drain refills it; this only announces that, so the
+  // missing days don't read as a broken plan. Interactive Arabic view only.
+  partialWeek?: boolean;
   // Last write to the plan row. If a day stays "preparing" while this stops
   // advancing, the background worker died — surface the retry box instead of
   // spinning until the 15-min server-side dead-man's switch.
@@ -789,11 +795,18 @@ export function PlanViewer({
             RTL it sits to the RIGHT of the CTA (owner directive). The workout
             viewer renders the same band with the toggle in the same slot. */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* This is the page's <h1>. /plan, /plan/housekeeper and
+              /plan/history/[planId] all render PlanViewer and had NO h1 at all
+              — the main screen of the product gave a screen reader nothing to
+              announce and no heading to navigate to. The week range is what
+              the page actually is, and it is already translated for all seven
+              locales, so this needs no new copy and changes nothing visually
+              (h1 carries the same classes the <p> did). */}
           <div>
             <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-            <p className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
+            <h1 className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
               {formatWeekRange(plan.week_start_date, locale)}
-            </p>
+            </h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {planTypeToggle}
@@ -1022,6 +1035,11 @@ export function PlanViewer({
           </div>
         </div>
       )}
+
+      {/* A short week, explained. Never on the housekeeper's translated view (it
+          is the mom's notice) nor while the loader is already saying the same
+          thing — `generating` means days ARE still arriving in this run. */}
+      {!translated && !readOnly && partialWeek && !generating && <PartialWeekNotice />}
 
       {/* Day tabs */}
       <div className="grid grid-cols-7 gap-1.5">

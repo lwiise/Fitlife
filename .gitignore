@@ -62,3 +62,10 @@ next-env.d.ts
 apps/e2e/.env.e2e
 apps/e2e/reports/
 apps/e2e/.e2e-state/
+# Local design references (cloned repos browsed for layout ideas, never imported).
+# Same gitlink hazard as worktrees if committed.
+_reference/
+
+# Generated Lottie QA sheets (rebuild with apps/landing/scripts/deal-seal-lottie/qa.mjs).
+apps/*/scripts/**/qa-out/
+apps/*/qa-out/
