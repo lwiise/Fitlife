@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { env } from "@/lib/env";
 import { getAdminContext } from "@/lib/admin/auth";
 import { adminDb } from "@/lib/admin/db";
 
@@ -39,7 +40,12 @@ export async function GET() {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? null;
+  // MUST be the normalised value from `env`, which is what dispatch.ts actually
+  // builds its URL from (env.ts strips trailing slashes). Reading the raw
+  // variable here reported a double slash that the real dispatch path never
+  // produces — a diagnostic that invents a bug is worse than no diagnostic.
+  const appUrl = env.NEXT_PUBLIC_APP_URL || null;
+  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? null;
   const internalSecret = process.env.INTERNAL_FUNCTION_SECRET?.trim() || null;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 
@@ -86,6 +92,9 @@ export async function GET() {
     // What the app will POST to, and with what.
     dispatchTargetUrl,
     appUrlSet: !!appUrl,
+    // The raw variable, for spotting a trailing slash or a stale origin. It is
+    // normalised before use, so a difference here is cosmetic, not the bug.
+    appUrlRaw: rawAppUrl,
     secretSource: internalSecret
       ? "INTERNAL_FUNCTION_SECRET"
       : serviceKey

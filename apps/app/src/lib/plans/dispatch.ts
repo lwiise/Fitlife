@@ -399,12 +399,18 @@ export async function triggerPlanGeneration(params: {
         }),
       },
     );
-    if (!res.ok && res.status !== 202) {
+    // A deployed `*-background` function ALWAYS answers 202 — Netlify enqueues
+    // it and replies before the handler runs. So any other status, 2xx included,
+    // means the POST was served by something that is not our worker (site
+    // routing, a redirect, an error page) and no generation was enqueued.
+    // Accepting any `res.ok` here would report that as success and leave the
+    // plan row generating forever with nobody working on it.
+    if (res.status !== 202) {
       // Include the status + a body snippet so a misconfig (e.g. missing
       // ANTHROPIC_API_KEY → 500 "Server misconfigured") is diagnosable.
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
       throw new Error(
-        `background fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`,
+        `background fn returned ${res.status} (expected 202)${snippet ? `: ${snippet}` : ""}`,
       );
     }
   } catch (err) {
@@ -572,9 +578,12 @@ export async function triggerPlanTranslation(params: {
         body: JSON.stringify({ mode: "translate", userId, mealPlanId, locale }),
       },
     );
-    if (!res.ok && res.status !== 202) {
+    // 202 exactly — see the note in triggerPlanGeneration.
+    if (res.status !== 202) {
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
-      throw new Error(`translate bg fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`);
+      throw new Error(
+        `translate bg fn returned ${res.status} (expected 202)${snippet ? `: ${snippet}` : ""}`,
+      );
     }
   } catch (err) {
     // Non-fatal: the maid view falls back to Arabic until a successful translate.
@@ -698,10 +707,11 @@ export async function triggerWorkoutGeneration(params: {
         body: JSON.stringify({ mode: "workout", userId, workoutPlanId, weekStartDate }),
       },
     );
-    if (!res.ok && res.status !== 202) {
+    // 202 exactly — see the note in triggerPlanGeneration.
+    if (res.status !== 202) {
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
       throw new Error(
-        `background fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`,
+        `background fn returned ${res.status} (expected 202)${snippet ? `: ${snippet}` : ""}`,
       );
     }
     return { ok: true, workoutPlanId, status: "started" };
