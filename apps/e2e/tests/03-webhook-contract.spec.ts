@@ -7,7 +7,15 @@
  * route — no module is stubbed.
  */
 
-import { expect, test, verifies, freshAccount, postWebhook } from "../src/fixtures.js";
+import {
+  BILLING_TAG,
+  expect,
+  freshAccount,
+  postWebhook,
+  requireWebhookSecret,
+  test,
+  verifies,
+} from "../src/fixtures.js";
 import { admin, waitFor } from "../src/supabase.js";
 import { PLAN_CADENCE, PLAN_TIER, PLAN_VARIANT_ID } from "../src/scenario.js";
 import {
@@ -34,7 +42,9 @@ async function subscriptionRow(userId: string) {
   };
 }
 
-test.describe("LemonSqueezy webhook contract", () => {
+// The whole file is the payment provider's contract, so the tag sits on the
+// describe rather than on each test.
+test.describe("LemonSqueezy webhook contract", { tag: BILLING_TAG }, () => {
   test("an unsigned request cannot grant paid access", async ({ request, cfg }) => {
     verifies(
       "A forged webhook with a wrong signature is rejected with 401 and does NOT activate " +
@@ -50,7 +60,7 @@ test.describe("LemonSqueezy webhook contract", () => {
       variantId: PLAN_VARIANT_ID,
     });
 
-    const forged = await postWebhook(request, payload, cfg.webhookSecret, {
+    const forged = await postWebhook(request, payload, requireWebhookSecret(cfg), {
       signature: "0".repeat(64),
     });
     expect(forged.status()).toBe(401);
@@ -80,8 +90,8 @@ test.describe("LemonSqueezy webhook contract", () => {
 
     // Signature computed over the honest body, tampered body transmitted.
     const { signWebhook } = await import("../src/lemonsqueezy.js");
-    const res = await postWebhook(request, tampered, cfg.webhookSecret, {
-      signature: signWebhook(honest, cfg.webhookSecret),
+    const res = await postWebhook(request, tampered, requireWebhookSecret(cfg), {
+      signature: signWebhook(honest, requireWebhookSecret(cfg)),
     });
     expect(res.status()).toBe(401);
 
@@ -105,14 +115,14 @@ test.describe("LemonSqueezy webhook contract", () => {
     };
 
     expect(
-      (await postWebhook(request, subscriptionCreatedPayload(base), cfg.webhookSecret)).status(),
+      (await postWebhook(request, subscriptionCreatedPayload(base), requireWebhookSecret(cfg))).status(),
     ).toBe(200);
     await waitFor("activation", async () =>
       (await subscriptionRow(account.userId)).status === "active" ? true : null,
     );
 
     expect(
-      (await postWebhook(request, paymentFailedPayload(base), cfg.webhookSecret)).status(),
+      (await postWebhook(request, paymentFailedPayload(base), requireWebhookSecret(cfg))).status(),
     ).toBe(200);
     expect((await subscriptionRow(account.userId)).status).toBe("past_due");
   });
@@ -134,7 +144,7 @@ test.describe("LemonSqueezy webhook contract", () => {
       renewsAt: isoInDays(21),
     };
 
-    await postWebhook(request, subscriptionCreatedPayload(base), cfg.webhookSecret);
+    await postWebhook(request, subscriptionCreatedPayload(base), requireWebhookSecret(cfg));
     await waitFor("activation", async () =>
       (await subscriptionRow(account.userId)).status === "active" ? true : null,
     );
@@ -142,7 +152,7 @@ test.describe("LemonSqueezy webhook contract", () => {
     const res = await postWebhook(
       request,
       lifecyclePayload("subscription_cancelled", { ...base, cancelled: true }),
-      cfg.webhookSecret,
+      requireWebhookSecret(cfg),
     );
     expect(res.status()).toBe(200);
 
@@ -167,12 +177,12 @@ test.describe("LemonSqueezy webhook contract", () => {
       variantId: PLAN_VARIANT_ID,
     };
 
-    await postWebhook(request, subscriptionCreatedPayload(base), cfg.webhookSecret);
+    await postWebhook(request, subscriptionCreatedPayload(base), requireWebhookSecret(cfg));
     await waitFor("activation", async () =>
       (await subscriptionRow(account.userId)).status === "active" ? true : null,
     );
 
-    await postWebhook(request, lifecyclePayload("subscription_expired", base), cfg.webhookSecret);
+    await postWebhook(request, lifecyclePayload("subscription_expired", base), requireWebhookSecret(cfg));
     expect((await subscriptionRow(account.userId)).status).toBe("expired");
   });
 
@@ -194,7 +204,7 @@ test.describe("LemonSqueezy webhook contract", () => {
         cadence: PLAN_CADENCE,
         variantId: PLAN_VARIANT_ID,
       }),
-      cfg.webhookSecret,
+      requireWebhookSecret(cfg),
     );
     expect(res.status()).toBe(200);
 

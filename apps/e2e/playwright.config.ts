@@ -15,6 +15,21 @@ const REPO_ROOT = path.resolve(here, "..", "..");
 const baseURL = (process.env.E2E_BASE_URL ?? "http://localhost:3001").replace(/\/+$/, "");
 const manageWebServer = process.env.E2E_MANAGE_WEBSERVER === "1";
 
+/**
+ * The payment phase is DEFERRED by default.
+ *
+ * Everything tagged `@billing` — creating a LemonSqueezy checkout session,
+ * delivering a payment webhook, asserting a paid subscription — is filtered out
+ * unless `E2E_INCLUDE_BILLING=1`. The tests are not deleted or commented out;
+ * they are simply not selected, so turning payment back on later is one
+ * environment variable and no code change.
+ *
+ * The point of the split: without it, the whole suite needs LemonSqueezy
+ * credentials before a single signup assertion can run. With it, a Supabase
+ * target is the only prerequisite for the other four fifths of the coverage.
+ */
+const includeBilling = process.env.E2E_INCLUDE_BILLING === "1";
+
 export default defineConfig({
   testDir: "./tests",
   outputDir: "./reports/artifacts",
@@ -40,6 +55,8 @@ export default defineConfig({
 
   timeout: 90_000,
   expect: { timeout: 15_000 },
+
+  ...(includeBilling ? {} : { grepInvert: /@billing/ }),
 
   reporter: [["list"], ["./src/reporter.ts"]],
 

@@ -7,7 +7,7 @@
 -->
 # Fit Life — Family-of-Three E2E Report
 
-**FAILED** — 25/27 passed, 1 failed, 0 flaky, 1 skipped (105.0s).
+**FAILED** — 11/12 passed, 1 failed, 0 flaky, 0 skipped (65.0s).
 
 ## Run context
 
@@ -18,62 +18,48 @@
 | Supabase host | `127.0.0.1:54321` |
 | Plan under test | family / monthly — 129 SAR |
 | LemonSqueezy variant | `1677653` |
-| Payment mode | LemonSqueezy TEST MODE (no card submitted; signed webhook activation) |
+| Payment mode | DEFERRED — @billing tests excluded from this run |
 | Hosted-checkout browser leg | disabled (default) |
 
 ## Warnings
 
-- No LEMONSQUEEZY_API_KEY configured — the price assertion against the LemonSqueezy API was skipped; the amount is still verified against packages/config pricing.
+- PAYMENT PHASE DEFERRED: every @billing test (checkout, payment webhook, paid subscription state) was excluded from this run. Coverage of the purchase flow is NOT represented below. Re-enable with E2E_INCLUDE_BILLING=1.
 
 ## Results
 
 | # | Result | Test | What it verifies | Time |
 | --- | --- | --- | --- | --- |
-| 1 | PASS | Family of three — signup, payment, verification › a new customer creates an account through the signup form | The public signup form creates a real Supabase auth user (email + password). | 6.4s |
-| 2 | PASS | Family of three — signup, payment, verification › signup seeds a 7-day starter trial | The handle_new_user trigger (migration 00004) seeds a trialing 'starter' subscription with a 7-day window. | 412ms |
-| 3 | PASS | Family of three — signup, payment, verification › the owner completes her own profile | The account owner (mom) is the first beneficiary and is stored on `profiles`, not on `family_members`. | 638ms |
-| 4 | PASS | Family of three — signup, payment, verification › the husband and the child are added, plus a housekeeper | Husband (role 'dad'), child (role 'son') and housekeeper are created with the correct member_type, language and meal_mode. | 1.2s |
-| 5 | PASS | Family of three — signup, payment, verification › the household counts as exactly three beneficiaries | Beneficiaries = mom + non-housekeeper members. The cook is on the plan but is not billed as a person. | 305ms |
-| 6 | PASS | Family of three — signup, payment, verification › a family of three is refused on the starter trial | Before paying, the tier gate blocks: the seeded trial is 'starter' (max 1) and the household is 3 → 403. | 902ms |
-| 7 | PASS | Family of three — signup, payment, verification › checkout mints a LemonSqueezy TEST-MODE session for the family plan | POST /api/checkout returns a hosted checkout URL for the family/monthly test-mode variant. | 2.2s |
-| 8 | PASS | Family of three — signup, payment, verification › a signed LemonSqueezy webhook activates the subscription | An HMAC-signed subscription_created webhook flips the row to active on the family tier. | 1.5s |
-| 9 | PASS | Family of three — signup, payment, verification › a payment_success invoice event keeps the subscription active | The renewal path: the real subscription id sits at attributes.subscription_id on invoice events. | 690ms |
-| 10 | PASS | Family of three — signup, payment, verification › the account shows an active «العائلة» monthly subscription | Payment state: status active, tier family, cadence monthly, family variant id, not cancelling. | 351ms |
-| 11 | PASS | Family of three — signup, payment, verification › the subscription status API agrees | /api/subscription/status reports the same active family/monthly state to the customer. | 588ms |
-| 12 | PASS | Family of three — signup, payment, verification › the amount billed is the family plan's price | Correct amount: the activated variant resolves to family/monthly at 129 SAR. | 274ms |
-| 13 | PASS | Family of three — signup, payment, verification › all three members appear on the family page | /family renders the husband, the child and the housekeeper, each by name. | 1.8s |
-| 14 | PASS | Checkout guards › an anonymous request cannot start a checkout | POST /api/checkout without a session returns 401. | 233ms |
-| 15 | PASS | Checkout guards › a malformed tier is rejected | The zod body schema rejects an unknown tier with 400. | 1.9s |
-| 16 | PASS | Checkout guards › an already-subscribed customer cannot start a second checkout | With a live subscription, /api/checkout returns 409 — preventing a duplicate, uncancellable charge. | 3.3s |
-| 17 | PASS | LemonSqueezy webhook contract › an unsigned request cannot grant paid access | A forged webhook is rejected with 401 and does NOT activate the subscription. | 2.1s |
-| 18 | PASS | LemonSqueezy webhook contract › a tampered body invalidates the signature | The HMAC covers the RAW body: a tier escalated after signing is rejected with 401. | 2.0s |
-| 19 | PASS | LemonSqueezy webhook contract › a failed renewal moves the family to past_due | subscription_payment_failed sets past_due — recoverable by updating the card. | 2.6s |
-| 20 | PASS | LemonSqueezy webhook contract › cancelling keeps access until the paid-through date | subscription_cancelled only flags cancel_at_period_end; the row stays active. | 2.6s |
-| 21 | PASS | LemonSqueezy webhook contract › expiry ends paid access | subscription_expired sets 'expired', which isSubscriptionActive() treats as no access. | 2.5s |
-| 22 | PASS | LemonSqueezy webhook contract › an unknown event is acknowledged without changing state | An unhandled but validly-signed event returns 200 and leaves the subscription untouched. | 1.8s |
-| 23 | PASS | Account integrity › one family cannot read another family's members | RLS isolation: a second account reads zero rows of the first account's family. | 3.9s |
-| 24 | PASS | Account integrity › one family cannot write into another family's household | RLS on INSERT: an account cannot create a member under a different user_id. | 3.4s |
-| 25 | PASS | Account integrity › the data export contains the household the customer built | PDPL portability: /api/account/export returns the profile and all three members, billing ids stripped. | 4.2s |
-| 26 | FAIL | Account integrity › the family plan covers three people and refuses a seventh | The «العائلة» tier's max_people is 6: three is covered, a seventh is refused. | 6.0s |
-| 27 | SKIP | Hosted checkout (opt-in) › a family pays with a test card and the subscription activates | Full sandbox payment on LemonSqueezy's hosted page with test card 4242 4242 4242 4242. | 0ms |
+| 1 | PASS | Family of three — signup and household › a new customer creates an account through the signup form | The public signup form creates a real Supabase auth user (email + password). | 6.4s |
+| 2 | PASS | Family of three — signup and household › signup seeds a 7-day starter trial | The handle_new_user trigger (migration 00004) seeds a trialing 'starter' subscription with a 7-day window. | 412ms |
+| 3 | PASS | Family of three — signup and household › the owner completes her own profile | The account owner (mom) is the first beneficiary and is stored on `profiles`, not on `family_members`. | 638ms |
+| 4 | PASS | Family of three — signup and household › the husband and the child are added, plus a housekeeper | Husband (role 'dad'), child (role 'son') and housekeeper are created with the correct member_type, language and meal_mode. | 1.2s |
+| 5 | PASS | Family of three — signup and household › the household counts as exactly three beneficiaries | Beneficiaries = mom + non-housekeeper members. The cook is on the plan but is not billed as a person. | 305ms |
+| 6 | PASS | Family of three — signup and household › a family of three is refused on the starter trial | Before paying, the tier gate blocks: the seeded trial is 'starter' (max 1) and the household is 3 → 403. | 902ms |
+| 7 | PASS | Family of three — signup and household › the household renders on the family page | /family shows the husband, the child and the housekeeper by name, independently of payment state. | 1.8s |
+| 8 | PASS | Checkout guards › an anonymous request cannot start a checkout | POST /api/checkout without a session returns 401. | 233ms |
+| 9 | PASS | Checkout guards › a malformed tier is rejected | The zod body schema rejects an unknown tier with 400, before the route touches LemonSqueezy. | 1.9s |
+| 10 | PASS | Account integrity › one family cannot read another family's members | RLS isolation: a second account reads zero rows of the first account's family. | 3.9s |
+| 11 | PASS | Account integrity › one family cannot write into another family's household | RLS on INSERT: an account cannot create a member under a different user_id. | 3.4s |
+| 12 | FAIL | Account integrity › the data export contains the household the customer built | PDPL portability: /api/account/export returns the profile and all three members, billing ids stripped. | 4.2s |
 
 ## Failures
 
-### Account integrity › the family plan covers three people and refuses a seventh
+### Account integrity › the data export contains the household the customer built
 
 - **File:** `tests/04-account-integrity.spec.ts`
-- **Verifies:** The «العائلة» tier's max_people is 6: three is covered, a seventh is refused.
-- **Steps reached:** activate the family plan → add four extra members
+- **Verifies:** PDPL portability: /api/account/export returns the profile and all three members, billing ids stripped.
+- **Steps reached:** build the household → sign in and request the export
 
 ```
-Error: expect(received).toContain(expected)
+Error: expect(received).toHaveLength(expected)
 
-Expected substring: "7"
-Received string:    "خطتك (العائلة) تسمح بـ 6 أشخاص فقط. عائلتك 6 أشخاص. ترقي للفاميلي"
+Expected length: 3
+Received length: 2
+Received array:  [{ name: 'خالد', role: 'dad' }, { name: 'سعود', role: 'son' }]
 
-    at tests/04-account-integrity.spec.ts:191:21
+    at tests/04-account-integrity.spec.ts:118:41
 ```
 
 ## Test data cleanup
 
-9/9 test account(s) hard-deleted.
+4/4 test account(s) hard-deleted.

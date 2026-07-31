@@ -59,10 +59,26 @@ export default async function globalSetup(): Promise<void> {
   // Fail fast with a useful message rather than letting every spec time out.
   await assertAppReachable(cfg.baseUrl, warnings);
 
-  if (!cfg.lemonsqueezyApiKey) {
+  // The report must never read as a full pass when a whole phase was filtered
+  // out — an excluded test leaves no trace in the results table on its own.
+  if (!cfg.includeBilling) {
+    warnings.push(
+      "PAYMENT PHASE DEFERRED: every @billing test (checkout, payment webhook, paid " +
+        "subscription state) was excluded from this run. Coverage of the purchase flow is " +
+        "NOT represented below. Re-enable with E2E_INCLUDE_BILLING=1.",
+    );
+  } else if (!cfg.lemonsqueezyApiKey) {
     warnings.push(
       "No LEMONSQUEEZY_API_KEY configured — the price assertion against the LemonSqueezy " +
         "API was skipped; the amount is still verified against packages/config pricing.",
+    );
+  }
+
+  if (cfg.includeBilling && !cfg.webhookSecret) {
+    throw new Error(
+      "E2E_INCLUDE_BILLING=1 but no webhook secret is set. The payment phase signs webhooks " +
+        "with E2E_LEMONSQUEEZY_WEBHOOK_SECRET (or the app's LEMONSQUEEZY_WEBHOOK_SECRET), and " +
+        "it must MATCH the secret the app under test is running with.",
     );
   }
 
@@ -73,7 +89,9 @@ export default async function globalSetup(): Promise<void> {
     cadence: PLAN_CADENCE,
     priceSar: PLAN_PRICE_SAR,
     variantId: PLAN_VARIANT_ID,
-    paymentMode: "LemonSqueezy TEST MODE (no card submitted; signed webhook activation)",
+    paymentMode: cfg.includeBilling
+      ? "LemonSqueezy TEST MODE (no card submitted; signed webhook activation)"
+      : "DEFERRED — @billing tests excluded from this run",
     liveCheckout: cfg.liveCheckout,
   };
 

@@ -47,8 +47,19 @@ export interface E2EConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
   supabaseServiceRoleKey: string;
-  /** Shared secret the app verifies webhook signatures with. */
-  webhookSecret: string;
+  /**
+   * Shared secret the app verifies webhook signatures with.
+   *
+   * Undefined is legitimate: the billing phase is deferred by default, and the
+   * rest of the suite needs no LemonSqueezy credentials at all. Reach for it via
+   * {@link requireWebhookSecret} so the failure is a clear message rather than a
+   * signature mismatch mid-scenario.
+   */
+  webhookSecret: string | undefined;
+  /**
+   * Whether the @billing phase runs. Deferred by default — see BILLING_TAG.
+   */
+  includeBilling: boolean;
   /** Optional: enables the real LemonSqueezy price assertion. */
   lemonsqueezyApiKey: string | undefined;
   /** Opt-in: also drive the hosted LemonSqueezy checkout page in a browser. */
@@ -96,11 +107,10 @@ export function getConfig(): E2EConfig {
       ["E2E_SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
       "Used to create confirmed test users and to hard-delete them afterwards.",
     ),
-    webhookSecret: require_(
-      ["E2E_LEMONSQUEEZY_WEBHOOK_SECRET", "LEMONSQUEEZY_WEBHOOK_SECRET"],
-      "Must match the app's LEMONSQUEEZY_WEBHOOK_SECRET, otherwise the app rejects " +
-        "the simulated payment webhook with 401 (which is itself asserted).",
-    ),
+    // Not required up front: without the billing phase the suite touches no
+    // LemonSqueezy surface, so a Supabase target is the only prerequisite.
+    webhookSecret: read("E2E_LEMONSQUEEZY_WEBHOOK_SECRET", "LEMONSQUEEZY_WEBHOOK_SECRET"),
+    includeBilling: read("E2E_INCLUDE_BILLING") === "1",
     lemonsqueezyApiKey: read("E2E_LEMONSQUEEZY_API_KEY", "LEMONSQUEEZY_API_KEY"),
     liveCheckout: read("E2E_LIVE_CHECKOUT") === "1",
     keepAccounts: read("E2E_KEEP_ACCOUNTS") === "1",
@@ -110,4 +120,34 @@ export function getConfig(): E2EConfig {
   };
 
   return cached;
+}
+
+/**
+ * Playwright tag marking every test that touches LemonSqueezy — creating a
+ * checkout session, delivering a payment webhook, or asserting a paid
+ * subscription's state.
+ *
+ * The phase is currently DEFERRED: the default run excludes this tag, so the
+ * suite proves signup, the family-of-three model, access gating on the trial and
+ * account integrity without needing any payment credentials. Re-enable the whole
+ * phase with `E2E_INCLUDE_BILLING=1` — nothing is deleted, only filtered out.
+ */
+export const BILLING_TAG = "@billing";
+
+/**
+ * The webhook secret, or a clear explanation of what is missing.
+ *
+ * Only the @billing phase calls this. It must match the secret the app under test
+ * runs with — a mismatch would otherwise surface as an unexplained 401 from a
+ * route whose job is to reject exactly that.
+ */
+export function requireWebhookSecret(cfg: E2EConfig): string {
+  if (!cfg.webhookSecret) {
+    throw new Error(
+      "The billing phase needs E2E_LEMONSQUEEZY_WEBHOOK_SECRET (or the app's " +
+        "LEMONSQUEEZY_WEBHOOK_SECRET) and it is not set. It must MATCH the secret the app " +
+        "under test is running with. Unset E2E_INCLUDE_BILLING to defer this phase again.",
+    );
+  }
+  return cfg.webhookSecret;
 }

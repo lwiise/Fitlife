@@ -5,7 +5,7 @@
  */
 
 import { test as base, expect, type APIRequestContext } from "@playwright/test";
-import { getConfig, type E2EConfig } from "./config.js";
+import { BILLING_TAG, getConfig, requireWebhookSecret, type E2EConfig } from "./config.js";
 import {
   createConfirmedAccount,
   newTestIdentity,
@@ -42,7 +42,7 @@ export async function freshAccount(slug: string): Promise<TestAccount> {
   return createConfirmedAccount(newTestIdentity(RUN_ID, slug), slug);
 }
 
-export { newTestIdentity };
+export { newTestIdentity, BILLING_TAG, requireWebhookSecret };
 
 /**
  * POST a webhook to the app exactly as LemonSqueezy would.
@@ -50,6 +50,10 @@ export { newTestIdentity };
  * The body is transmitted as the same raw string that was signed — re-serializing
  * an object here would change key order or spacing and the app's HMAC check would
  * (correctly) reject it.
+ *
+ * `secret` is passed in rather than read from config because it is only available
+ * during the @billing phase; callers resolve it via `requireWebhookSecret(cfg)`,
+ * which fails with an actionable message instead of a bare 401.
  */
 export async function postWebhook(
   request: APIRequestContext,

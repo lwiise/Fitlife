@@ -5,10 +5,24 @@
  * customer ending up with TWO live LemonSqueezy subscriptions, where the second
  * keeps billing while our single row points at the newer one — an orphaned charge
  * the UI cannot cancel.
+ *
+ * Only the 409 is tagged @billing. The 401 and 400 cases are reached before the
+ * route touches LemonSqueezy at all — the auth check and the zod body schema both
+ * run first — so they stay in the default run and keep covering the endpoint
+ * while the payment phase is deferred.
  */
 
 import type { APIRequestContext } from "@playwright/test";
-import { expect, test, verifies, freshAccount, postWebhook, signedInApiContext } from "../src/fixtures.js";
+import {
+  BILLING_TAG,
+  expect,
+  freshAccount,
+  postWebhook,
+  requireWebhookSecret,
+  signedInApiContext,
+  test,
+  verifies,
+} from "../src/fixtures.js";
 import { admin, waitFor } from "../src/supabase.js";
 import type { TestAccount } from "../src/accounts.js";
 import { PLAN_CADENCE, PLAN_TIER, PLAN_VARIANT_ID } from "../src/scenario.js";
@@ -45,10 +59,9 @@ test.describe("Checkout guards", () => {
     }
   });
 
-  test("an already-subscribed customer cannot start a second checkout", async ({
-    browser,
-    cfg,
-  }) => {
+  test("an already-subscribed customer cannot start a second checkout", {
+    tag: BILLING_TAG,
+  }, async ({ browser, cfg }) => {
     verifies(
       "With a live LemonSqueezy subscription, /api/checkout returns 409 and directs the " +
         "customer to change plan instead — preventing a duplicate, uncancellable charge.",
@@ -64,7 +77,9 @@ test.describe("Checkout guards", () => {
         cadence: PLAN_CADENCE,
         variantId: PLAN_VARIANT_ID,
       });
-      expect((await postWebhook(ctx.request, payload, cfg.webhookSecret)).status()).toBe(200);
+      expect(
+        (await postWebhook(ctx.request, payload, requireWebhookSecret(cfg))).status(),
+      ).toBe(200);
 
       await waitFor("subscription to become active", async () => {
         const { data } = await admin()

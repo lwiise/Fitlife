@@ -8,6 +8,25 @@ and outputs. Produces a pass/fail report at `reports/e2e-report.md` (+ `.json`).
 > `packages/config/src/pricing.ts` are test-mode. No card is charged; the default
 > run never submits card details at all.
 
+> ### ⚠️ The payment phase is currently DEFERRED
+>
+> Every test that touches LemonSqueezy is tagged `@billing` and is **excluded from
+> the default run**, so the household half of the suite can be finished and made
+> green first. Nothing is deleted or commented out — the tests are simply not
+> selected.
+>
+> **Consequence:** the default run needs **no LemonSqueezy credentials at all**. A
+> Supabase target is the only prerequisite.
+>
+> Turn payment back on with one variable:
+>
+> ```bash
+> E2E_INCLUDE_BILLING=1 pnpm --filter @fitlife/e2e e2e
+> ```
+>
+> While it is deferred, the report prints a prominent warning so a green run can
+> never be mistaken for "the purchase flow is covered".
+
 ---
 
 ## Quick start
@@ -34,13 +53,15 @@ skip terminal 1.
 
 ## What it covers
 
-| Spec | Covers |
-| --- | --- |
-| `01-family-journey.spec.ts` | The scenario: signup form → trial seeded → mom's profile → husband + child + housekeeper → tier gate refuses on trial → checkout session → signed webhook activates → active family/monthly at the right amount → all three on `/family`. |
-| `02-checkout-guards.spec.ts` | `/api/checkout` refusals: 401 anonymous, 400 unknown tier, 409 when a live subscription already exists (prevents a duplicate uncancellable charge). |
-| `03-webhook-contract.spec.ts` | The public payment webhook as a security boundary: forged signature, tampered body, and the `past_due` / `cancelled` / `expired` / unknown-event state machine. |
-| `04-account-integrity.spec.ts` | RLS isolation between two households (read and write), the PDPL data export, and the family tier's 6-person boundary. |
-| `05-hosted-checkout.spec.ts` | **Opt-in.** Completes LemonSqueezy's hosted checkout in a browser with test card `4242 4242 4242 4242`. |
+**12 cases run by default; 15 more return when `E2E_INCLUDE_BILLING=1`.**
+
+| Spec | Runs now | Deferred (`@billing`) |
+| --- | --- | --- |
+| `01-family-journey.spec.ts` | signup form → 7-day trial seeded → mom's profile → husband + child + housekeeper → tier gate refuses a family of three on the trial → all three render on `/family` | checkout session → signed webhook activation → active family/monthly → status API → correct amount |
+| `02-checkout-guards.spec.ts` | 401 anonymous, 400 unknown tier (both are reached before the route touches LemonSqueezy) | 409 when a live subscription already exists |
+| `03-webhook-contract.spec.ts` | — | the whole file: forged signature, tampered body, `past_due` / `cancelled` / `expired` / unknown-event |
+| `04-account-integrity.spec.ts` | RLS isolation between two households (read **and** write), PDPL data export | family tier's 6-person boundary |
+| `05-hosted-checkout.spec.ts` | — | **doubly opt-in**: hosted checkout in a browser with test card `4242 4242 4242 4242` |
 
 Unit tests for the harness itself (`src/**/*.test.ts`) run under Vitest with
 `pnpm --filter @fitlife/e2e test` — no app or database needed. They are part of
@@ -50,13 +71,16 @@ the monorepo's normal `pnpm test`.
 
 ## How payment is tested, and why
 
+*(This section describes the `@billing` phase, which is deferred — see the notice
+at the top. It runs as written once `E2E_INCLUDE_BILLING=1` is set.)*
+
 Payment here is a hosted redirect. `/api/checkout` mints a LemonSqueezy checkout
 URL; the customer pays on LemonSqueezy's page; and the subscription only becomes
 `active` when LemonSqueezy POSTs an **HMAC-signed webhook** to
 `/api/webhooks/lemonsqueezy`. That webhook is the only thing in the codebase that
 grants paid access.
 
-So the default run:
+So the billing run:
 
 1. Calls the **real** `/api/checkout` and asserts a hosted checkout URL is minted
    for the family/monthly **test-mode** variant.

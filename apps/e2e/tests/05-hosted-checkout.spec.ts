@@ -14,7 +14,14 @@
  * through Stripe).
  */
 
-import { expect, test, verifies, freshAccount, signedInApiContext } from "../src/fixtures.js";
+import {
+  BILLING_TAG,
+  expect,
+  freshAccount,
+  signedInApiContext,
+  test,
+  verifies,
+} from "../src/fixtures.js";
 import { admin, waitFor } from "../src/supabase.js";
 import { assertSandboxVariant } from "../src/guards.js";
 import { addFamilyMembers, completeMomProfile, markOnboardingComplete } from "../src/family.js";
@@ -25,10 +32,13 @@ const TEST_CARD = "4242424242424242";
 const TEST_EXPIRY = "12/34";
 const TEST_CVC = "123";
 
-test.describe("Hosted checkout (opt-in)", () => {
+test.describe("Hosted checkout (opt-in)", { tag: BILLING_TAG }, () => {
+  // Two gates, deliberately: the payment phase must be re-enabled at all, AND
+  // this third-party browser leg opted into separately.
   test.skip(
     process.env.E2E_LIVE_CHECKOUT !== "1",
-    "Set E2E_LIVE_CHECKOUT=1 to drive LemonSqueezy's hosted checkout page with a test card.",
+    "Set E2E_LIVE_CHECKOUT=1 (with E2E_INCLUDE_BILLING=1) to drive LemonSqueezy's hosted " +
+      "checkout page with a test card.",
   );
   test.setTimeout(180_000);
 

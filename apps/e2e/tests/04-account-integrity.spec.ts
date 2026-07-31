@@ -7,7 +7,16 @@
  * export) and the tier boundary for the «العائلة» plan.
  */
 
-import { expect, test, verifies, freshAccount, postWebhook, signedInApiContext } from "../src/fixtures.js";
+import {
+  BILLING_TAG,
+  expect,
+  freshAccount,
+  postWebhook,
+  requireWebhookSecret,
+  signedInApiContext,
+  test,
+  verifies,
+} from "../src/fixtures.js";
 import { anon, asUser, admin, waitFor } from "../src/supabase.js";
 import {
   addFamilyMembers,
@@ -130,10 +139,12 @@ test.describe("Account integrity", () => {
     }
   });
 
-  test("the family plan covers three people and refuses a seventh", async ({
-    browser,
-    cfg,
-  }) => {
+  // Needs a paid family subscription to exist, so it belongs to the deferred
+  // phase. The trial-tier refusal in 01 keeps the person-limit gate covered in
+  // the meantime.
+  test("the family plan covers three people and refuses a seventh", {
+    tag: BILLING_TAG,
+  }, async ({ browser, cfg }) => {
     verifies(
       "The «العائلة» tier's max_people is 6: a household of three is comfortably covered, " +
         "and a seventh beneficiary is refused with the person-limit message.",
@@ -161,7 +172,7 @@ test.describe("Account integrity", () => {
           cadence: PLAN_CADENCE,
           variantId: PLAN_VARIANT_ID,
         }),
-        cfg.webhookSecret,
+        requireWebhookSecret(cfg),
       );
       await waitFor("activation", async () => {
         const { data } = await admin()
