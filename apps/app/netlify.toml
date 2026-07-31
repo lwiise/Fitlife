@@ -29,6 +29,24 @@
 [build.environment]
   NODE_VERSION = "20"
   NEXT_PRIVATE_TARGET = "server"
+  # ⚠️ TEMPORARY — PRE-LAUNCH TESTING ONLY. Unlocks every paid capability for
+  # everyone: no subscription required, unlimited household members, unlimited
+  # plan generations. See apps/app/src/lib/subscription/freeAccess.ts for the
+  # full list of what it changes and what it deliberately leaves alone (the
+  # LemonSqueezy checkout + webhooks stay live, so payments remain testable).
+  #
+  # TO RESTORE PAID ACCESS: delete this single line and redeploy. Nothing else
+  # needs unwinding — every bypass reads this one variable, and the code paths
+  # are unmodified beneath it.
+  #
+  # COST WARNING: the weekly plan-generation limits are off while this is on,
+  # and every generation is a paid Anthropic call.
+  #
+  # Set HERE rather than in the Netlify UI so that turning payments back on is a
+  # reviewable one-line revert in git, not an undocumented dashboard edit that
+  # outlives whoever made it. Next.js inlines NEXT_PUBLIC_* at build time, so a
+  # redeploy is required either way.
+  NEXT_PUBLIC_FREE_ACCESS_MODE = "1"
 
 # Custom Netlify functions (e.g. the plan-generation background worker) are
 # bundled with esbuild, which inlines the relatively-imported @fitlife/plan-engine

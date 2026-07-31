@@ -22,6 +22,13 @@ export default defineConfig({
       NEXT_PUBLIC_WEB_URL: "https://web.example.com",
     },
   },
+  // tsconfig leaves JSX to Next ("preserve"), which makes the transformer here
+  // fall back to the classic runtime and reference a global `React` that a
+  // node-environment test never imports. Only matters for the rare test that
+  // imports a component to assert it renders NOTHING (see freeAccess.test.ts) —
+  // without this, that test's control case fails on transform rather than on
+  // the behaviour it is checking.
+  esbuild: { jsx: "automatic" },
   resolve: {
     alias: {
       "@": path.resolve(here, "src"),
