@@ -49,6 +49,31 @@ node analyze.mjs  <email> [كبدة,...] # targets vs actual day totals, dishes,
 node cleanup.mjs  <email>            # hard-delete via the real /settings flow, then verify
 ```
 
+## Post-audit smoke test
+
+`audit-smoke.mjs` guards the fixes from the 07/2026 engineering audit. Each check
+names the finding it protects, so a failure says WHICH bug came back rather than
+just that something broke. Run it after deploying and after applying migrations
+00023 + 00024; it exits non-zero on any failure, so it can gate a deploy.
+
+```bash
+node audit-smoke.mjs <email>         # or: npm run smoke -- <email>
+```
+
+It proves the RLS policies behave by writing a few sentinel rows
+(`slot='__audit_smoke__'`, `member_id='__audit_smoke__'`) and deleting them —
+the C1 check is literally "does a delete delete", since the bug it guards is a
+DELETE that affects zero rows and returns no error. Cleanup failures are
+reported loudly. **Point it at a QA account, not a customer's.** The two
+tamper checks are non-destructive: they re-write a row's current value, so
+"the write was allowed" is provable without changing data.
+
+It holds a Supabase session rather than the app's cookie session, so anything
+behind a server action or an authenticated API route is out of reach. Those are
+printed as a manual checklist at the end of every run — and note that while
+`NEXT_PUBLIC_FREE_ACCESS_MODE` is on, the tier-limit checks in that list cannot
+be exercised at all (`getTierLimit` returns null for everyone).
+
 ## Walking the app as a real user
 
 `run.mjs` writes the questionnaire straight to PostgREST, so the 10-step adaptive
