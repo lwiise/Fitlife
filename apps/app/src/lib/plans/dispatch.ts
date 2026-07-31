@@ -412,6 +412,12 @@ export async function triggerPlanGeneration(params: {
         // leaves the caller's UI waiting on a reply that never comes. See
         // DISPATCH_ENQUEUE_TIMEOUT_MS for why a timeout is not a failure.
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
+        // Never follow a redirect. If the function is not deployed, this URL
+        // falls through to the Next handler and the middleware bounces it — and
+        // a followed redirect lands on a 200, which reads exactly like success.
+        // Surfacing the 3xx instead names the real problem: nothing is serving
+        // this path.
+        redirect: "manual",
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getInternalFunctionSecret(),
@@ -605,6 +611,12 @@ export async function triggerPlanTranslation(params: {
       {
         method: "POST",
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
+        // Never follow a redirect. If the function is not deployed, this URL
+        // falls through to the Next handler and the middleware bounces it — and
+        // a followed redirect lands on a 200, which reads exactly like success.
+        // Surfacing the 3xx instead names the real problem: nothing is serving
+        // this path.
+        redirect: "manual",
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getInternalFunctionSecret(),
@@ -736,6 +748,12 @@ export async function triggerWorkoutGeneration(params: {
       {
         method: "POST",
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
+        // Never follow a redirect. If the function is not deployed, this URL
+        // falls through to the Next handler and the middleware bounces it — and
+        // a followed redirect lands on a 200, which reads exactly like success.
+        // Surfacing the 3xx instead names the real problem: nothing is serving
+        // this path.
+        redirect: "manual",
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getInternalFunctionSecret(),

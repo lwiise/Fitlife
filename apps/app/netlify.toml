@@ -53,6 +53,13 @@
 # source into the artifact (avoids pnpm workspace-symlink resolution issues).
 [functions]
   node_bundler = "esbuild"
+  # Explicit rather than relying on the default. This is the default location
+  # (resolved relative to `base`, so apps/app/netlify/functions), but a site whose
+  # UI has a Functions directory configured would silently override the implicit
+  # case — and a background function that is not deployed does not 404. The URL
+  # falls through to the Next handler, which redirects, which fetch follows to a
+  # 200, so the app read "enqueued" for a worker that never existed.
+  directory = "netlify/functions"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
