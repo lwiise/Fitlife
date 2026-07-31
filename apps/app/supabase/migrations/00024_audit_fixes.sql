@@ -90,3 +90,25 @@ where exists (
 
 create unique index if not exists subscriptions_one_per_user
   on public.subscriptions (user_id);
+
+
+-- ----------------------------------------------------------------------------
+-- 4. Webhook ordering guard
+-- ----------------------------------------------------------------------------
+--
+-- The LemonSqueezy handler applies whatever arrives, in whatever order it
+-- arrives. Webhook delivery is at-least-once and unordered, so a delayed or
+-- retried subscription_updated carrying status='active' lands after
+-- subscription_expired and quietly un-expires a dead subscription; a replayed
+-- payment_failed re-marks a recovered one past_due.
+--
+-- LemonSqueezy payloads carry no event id, but subscription attributes carry
+-- `updated_at` — the moment the change happened on their side. Recording the
+-- latest one we have applied lets the handler ignore anything older, which
+-- covers both replays (equal timestamp) and out-of-order delivery (older).
+
+alter table public.subscriptions
+  add column if not exists last_event_at timestamptz;
+
+comment on column public.subscriptions.last_event_at is
+  'attributes.updated_at of the most recent LemonSqueezy webhook applied to this row. Events at or before this are ignored as replays/out-of-order.';

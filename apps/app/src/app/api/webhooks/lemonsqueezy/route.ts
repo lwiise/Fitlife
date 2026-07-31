@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLemonsqueezyWebhookSecret } from "@/lib/env";
 import { getTierCadenceByVariantId } from "@fitlife/config";
-import { mapLemonsqueezyStatus, deriveCadence } from "./mapping";
+import { mapLemonsqueezyStatus } from "./mapping";
 
 export const runtime = "nodejs";
 
@@ -26,6 +26,9 @@ interface WebhookData {
     cancelled?: boolean;
     // Present on subscription-invoices (payment_success / payment_failed events)
     subscription_id?: number | string;
+    // When the change happened on LemonSqueezy's side. Drives the ordering
+    // guard — see applyUpdate.
+    updated_at?: string;
   };
 }
 
@@ -104,6 +107,12 @@ export async function POST(request: Request) {
   const userId = payload.meta.custom_data?.user_id;
   const customerId =
     attrs.customer_id != null ? String(attrs.customer_id) : undefined;
+  // Drives the replay / out-of-order guard in applyUpdate. Only trusted when it
+  // parses — a malformed value must not silently disable the guard's bookkeeping.
+  const eventUpdatedAt =
+    attrs.updated_at && !Number.isNaN(Date.parse(attrs.updated_at))
+      ? attrs.updated_at
+      : undefined;
 
   const admin = createAdminClient();
 
@@ -131,10 +140,52 @@ export async function POST(request: Request) {
   // NEW subscription claims the row, so they must be allowed to re-point it.
   // Without that carve-out this guard would reject every second subscription a
   // customer ever buys.
+  /** True when our row already names some LemonSqueezy subscription. */
+  async function rowHoldsASubscription(): Promise<boolean> {
+    if (!userId) return false;
+    const { data } = await admin
+      .from("subscriptions")
+      .select("lemonsqueezy_subscription_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .returns<{ lemonsqueezy_subscription_id: string | null }[]>();
+    return !!data?.[0]?.lemonsqueezy_subscription_id;
+  }
+
   async function applyUpdate(
     update: Record<string, unknown>,
     opts?: { takeover?: boolean },
   ) {
+    // ORDERING GUARD. Webhook delivery is at-least-once and unordered, so a
+    // delayed or retried event about an EARLIER state can land after a later
+    // one and undo it — a subscription_updated with status='active' arriving
+    // after subscription_expired silently un-expires a dead subscription, and
+    // a replayed payment_failed re-marks a recovered one past_due. LemonSqueezy
+    // sends no event id, but attributes.updated_at is the moment the change
+    // happened on their side, so anything at or before what we last applied is
+    // stale by definition. Events without the field are applied as before.
+    if (userId && eventUpdatedAt) {
+      const { data: seen } = await admin
+        .from("subscriptions")
+        .select("last_event_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .returns<{ last_event_at: string | null }[]>();
+      const lastApplied = seen?.[0]?.last_event_at;
+      if (lastApplied && Date.parse(eventUpdatedAt) <= Date.parse(lastApplied)) {
+        console.warn("[lemonsqueezy-webhook] ignoring stale/replayed event", {
+          eventName,
+          eventUpdatedAt,
+          lastApplied,
+          userId,
+        });
+        return { error: null };
+      }
+      update.last_event_at = eventUpdatedAt;
+    }
+
     if (userId && lsSubscriptionId && !opts?.takeover) {
       const { data: existing } = await admin
         .from("subscriptions")
@@ -172,15 +223,26 @@ export async function POST(request: Request) {
       case "subscription_payment_success": {
         // Both fully activate the subscription. created carries variant + renews_at;
         // payment_success (invoice) does not, so only set fields we actually have.
-        const tier = payload.meta.custom_data?.tier;
+        //
+        // TIER/CADENCE come from the VARIANT first and custom_data only as a
+        // fallback. custom_data is frozen at the original checkout, but
+        // /api/subscription/change swaps the variant on the EXISTING
+        // LemonSqueezy subscription and cannot rewrite it — so a renewal
+        // invoice carrying the old custom_data used to stamp the OLD tier back
+        // onto the row. A customer who upgraded to `family` was billed for
+        // family and, one billing cycle later, silently put back on `starter`,
+        // which then tripped the person-count gate.
+        const resolvedFromVariant =
+          attrs.variant_id != null
+            ? getTierCadenceByVariantId(attrs.variant_id)
+            : null;
+        const tier = resolvedFromVariant?.tier ?? payload.meta.custom_data?.tier;
         const cadence =
+          resolvedFromVariant?.cadence ??
           (payload.meta.custom_data?.cadence as
             | "monthly"
             | "annual"
-            | undefined) ??
-          (attrs.variant_id != null
-            ? (deriveCadence(attrs.variant_id) ?? undefined)
-            : undefined);
+            | undefined);
 
         const update: Record<string, unknown> = {
           status: "active",
@@ -194,8 +256,17 @@ export async function POST(request: Request) {
         if (tier) update.tier = tier;
         if (cadence) update.cadence = cadence;
 
-        // A new subscription is entitled to claim the row (see applyUpdate).
-        const { error } = await applyUpdate(update, { takeover: true });
+        // Claiming the row is how a NEW subscription takes over from a dead one.
+        // subscription_created always earns that. payment_success does NOT
+        // earn it unconditionally: unlike created, it also fires for RENEWALS
+        // of an old subscription, so a delayed or retried renewal invoice for a
+        // superseded subscription could re-point the row at it and overwrite
+        // the tier the customer is actually paying for. It may claim only a row
+        // that names no subscription yet — the "subscription_created was
+        // missed" case the carve-out exists for.
+        const takeover =
+          eventName === "subscription_created" || !(await rowHoldsASubscription());
+        const { error } = await applyUpdate(update, { takeover });
         if (error) {
           console.error("[lemonsqueezy-webhook] activate failed", { eventName, error });
           return new NextResponse(null, { status: 500 });
@@ -217,9 +288,8 @@ export async function POST(request: Request) {
         if (attrs.renews_at) update.current_period_end = attrs.renews_at;
         if (attrs.ends_at) update.ends_at = attrs.ends_at;
         if (mapped) update.status = mapped;
-        // Resolve TIER as well as cadence. This branch used to call
-        // deriveCadence, which reads the same variant id but returns only the
-        // billing period — so a plan change made outside our app (the
+        // Resolve TIER as well as cadence from the variant id — a plan change
+        // made outside our app (the
         // LemonSqueezy customer portal, which subscription/page.tsx links to,
         // or a merchant-side upgrade) moved the customer's cadence and price
         // while leaving `tier` untouched. A family→starter downgrade kept

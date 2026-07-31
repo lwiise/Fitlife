@@ -20,8 +20,12 @@ import {
  * to `active`/paid. If it never arrives (mis-configured endpoint, signature
  * mismatch, transient failure), a user who actually paid stays on the trial row
  * and keeps getting asked to subscribe. This queries the Lemonsqueezy API for
- * the user's subscriptions by email and reconciles our row to the real state —
- * so a successful payment always unlocks generation even without the webhook.
+ * the user's subscriptions and reconciles our row to the real state — so a
+ * successful payment always unlocks generation even without the webhook.
+ *
+ * Matched by the stored LemonSqueezy CUSTOMER ID where we have one, falling
+ * back to email only for a genuine cold start (and then only for a
+ * subscription whose custom_data names this user).
  *
  * Idempotent and best-effort: any failure (no email, API error, unknown
  * variant) logs and returns the current row unchanged. Never throws — callers
@@ -34,19 +38,54 @@ export async function reconcileSubscriptionFromLemonSqueezy(
   userId: string,
   email: string | null | undefined,
 ): Promise<SubscriptionRow | null> {
-  if (!email) return getCurrentSubscription(userId);
+  const known = await getCurrentSubscription(userId);
 
   try {
     setupLemonsqueezy();
     const storeId = getLemonsqueezyStoreId();
 
-    const res = await listSubscriptions({
-      filter: { storeId, userEmail: email },
-      page: { size: 100 },
-    });
+    // Prefer IDENTITY over email. Checkout deliberately does not prefill the
+    // email (LS 422s the whole checkout on addresses it cannot validate), so
+    // the address on the LemonSqueezy side is whatever the customer typed —
+    // frequently not their FitLife account email. Matching on it therefore
+    // missed exactly the people this self-heal exists for: someone who paid,
+    // whose webhook was missed, and who is still being asked to subscribe.
+    //
+    // It is also a join on an attribute the user controls rather than on
+    // user_id, so any account whose email happened to equal the address used on
+    // SOMEONE ELSE'S checkout inherited that subscription — including the
+    // subscription id that /cancel, /pause and /change then act upon.
+    //
+    // The customer id is ours, recorded from a verified webhook. Email is kept
+    // only for the genuine cold start (no ids yet), and that path now requires
+    // the matched subscription's own custom_data.user_id to name this user.
+    const byCustomer = known?.lemonsqueezy_customer_id;
+    const filter = byCustomer
+      ? { storeId, customerId: byCustomer }
+      : email
+        ? { storeId, userEmail: email }
+        : null;
+    if (!filter) return known;
 
-    const subs = res.data?.data ?? [];
-    if (subs.length === 0) return getCurrentSubscription(userId);
+    const res = await listSubscriptions({ filter, page: { size: 100 } });
+
+    const all = res.data?.data ?? [];
+    // Cold-start email path only: require the subscription to name this user.
+    // A subscription created by our checkout always carries custom_data.user_id
+    // (see /api/checkout), so this rejects someone else's subscription without
+    // rejecting our own.
+    const subs = byCustomer
+      ? all
+      : all.filter((s) => {
+          const cd = (
+            s.attributes as unknown as {
+              first_subscription_item?: unknown;
+              custom_data?: { user_id?: string };
+            }
+          ).custom_data;
+          return cd?.user_id === userId;
+        });
+    if (subs.length === 0) return known;
 
     const rank = (status: string): number => {
       switch (status) {
@@ -71,12 +110,12 @@ export async function reconcileSubscriptionFromLemonSqueezy(
         new Date(a.attributes.created_at).getTime()
       );
     })[0];
-    if (!best) return getCurrentSubscription(userId);
+    if (!best) return known;
 
     const attrs = best.attributes;
     const mappedStatus = mapLemonsqueezyStatus(attrs.status);
     // Unknown LS status → don't risk writing garbage; leave the row as-is.
-    if (!mappedStatus) return getCurrentSubscription(userId);
+    if (!mappedStatus) return known;
 
     const tierCadence = getTierCadenceByVariantId(attrs.variant_id);
 
@@ -103,6 +142,7 @@ export async function reconcileSubscriptionFromLemonSqueezy(
       .from("subscriptions")
       .update(update)
       .eq("user_id", userId);
+    // 00024 adds unique(user_id), so this names exactly one row.
     if (error) {
       console.error("[reconcileSubscription] update failed", { userId, error });
     } else {

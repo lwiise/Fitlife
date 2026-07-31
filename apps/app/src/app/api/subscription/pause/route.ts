@@ -50,10 +50,39 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
-    await admin
+    // The error is READ, exactly as on the pause path below. This is the mirror
+    // image of that bug: LemonSqueezy has already resumed BILLING by now, so a
+    // silently-failed write leaves our row 'paused' — isSubscriptionActive
+    // returns false and the customer is charged while locked out, having been
+    // told {resumed: true}.
+    //
+    // ends_at is cleared because the pause set it (and current_period_end) to
+    // the resume date as a display value; subscription_updated only writes
+    // ends_at when the incoming value is truthy, so a null would never clear it
+    // and the stale date would sit on the subscription page indefinitely. The
+    // real billing dates arrive with the next webhook.
+    const { error: resumeWriteError } = await admin
       .from("subscriptions")
-      .update({ status: "active" })
-      .eq("id", sub.id);
+      .update({ status: "active", ends_at: null })
+      .eq("id", sub.id)
+      .eq("user_id", user.id);
+
+    if (resumeWriteError) {
+      Sentry.captureException(
+        new Error("Resume written to LS but not to our row"),
+        {
+          tags: { area: "subscription-pause", userId: user.id },
+          extra: {
+            message: resumeWriteError.message,
+            code: resumeWriteError.code,
+          },
+        },
+      );
+      return NextResponse.json(
+        { error: "تعذّر استئناف الاشتراك. يرجى المحاولة بعد قليل" },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({ resumed: true });
   }
 
