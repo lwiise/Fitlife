@@ -31,10 +31,20 @@ import {
   type WorkoutTrainee,
 } from "./systemPrompt";
 import { enforceWorkoutProfileFit, type ProfileFitFlags } from "./equipment";
+import { canFit, remainingMs, dayLoopDeadline } from "../budget";
 
 type AnyClient = SupabaseClient<any, any, any>;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * What one member's weekly expansion is assumed to cost when deciding whether
+ * to start it. A member call is a single week (≤6 sessions) against DAY_MODEL —
+ * far smaller than a meal day, hence well under DAY_CALL_ESTIMATE_MS. Measured
+ * runs land at ~30-60 s; this leaves headroom without deferring a member that
+ * would comfortably have finished.
+ */
+const WORKOUT_MEMBER_CALL_ESTIMATE_MS = 90_000;
 
 /**
  * Placeholder rows for a workout generation (mirrors createPlanRows):
@@ -162,8 +172,30 @@ export async function generateWorkoutPlan(params: {
   context: PlanPromptContext;
   weekStartDate: string;
   onMemberDone?: (member: MemberWorkout, done: number, total: number) => Promise<void>;
+  /**
+   * Running token/cost totals, reported after every accrual.
+   *
+   * A run that throws still spent whatever it spent — the skeleton call alone is
+   * a real charge — but the totals live in this closure, so the caller's catch
+   * had nothing to write and every failed workout run was recorded at $0. The
+   * meal path was fixed for exactly this; see the `cost_usd NULL and the admin
+   * cost view counted it as $0` note in ../generate.ts.
+   */
+  onUsage?: (usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+  }) => void;
+  /**
+   * Wall-clock bound for the whole run, as a Date.now() timestamp. A member
+   * expansion is not started when it cannot fit; the members already generated
+   * are returned and the rest are reported as missing, exactly as a failed
+   * member is. Omitted → unbounded, the pre-deadline behaviour.
+   */
+  deadlineMs?: number;
 }): Promise<WorkoutGenerateResult> {
-  const { anthropicApiKey, context, weekStartDate, onMemberDone } = params;
+  const { anthropicApiKey, context, weekStartDate, onMemberDone, onUsage, deadlineMs } =
+    params;
   const trainees = workoutTrainees(context);
   if (trainees.length === 0) {
     throw new PlanValidationError("no opted-in workout trainees in context");
@@ -172,6 +204,12 @@ export async function generateWorkoutPlan(params: {
   let totalIn = 0;
   let totalOut = 0;
   let totalCost = 0;
+  const reportUsage = () =>
+    onUsage?.({
+      input_tokens: totalIn,
+      output_tokens: totalOut,
+      cost_usd: totalCost,
+    });
 
   // ── Phase 1: skeleton ──
   // Parse + validate INSIDE the retry loop: a malformed/invalid response is
@@ -199,6 +237,7 @@ export async function generateWorkoutPlan(params: {
       totalIn += res.tokensIn;
       totalOut += res.tokensOut;
       totalCost += computeCostUsd(res.tokensIn, res.tokensOut, SKELETON_MODEL);
+      reportUsage();
 
       const parsed = WorkoutSkeletonSchema.safeParse(
         parseJson(res.text, "workout skeleton"),
@@ -226,6 +265,20 @@ export async function generateWorkoutPlan(params: {
   let done = 0;
 
   for (const trainee of trainees) {
+    // Budget gate. Without one, a run could be hard-killed at the platform wall
+    // mid-member, leaving workout_plans 'generating' and the plan_generations
+    // lock 'started' until the 15-minute reclassifier swept them. Stopping
+    // early instead returns the members already built and reports the rest as
+    // missing — the same shape a per-member failure produces, which the caller
+    // already renders as a partial plan.
+    if (!canFit(deadlineMs, WORKOUT_MEMBER_CALL_ESTIMATE_MS)) {
+      console.warn("[workout-generate] out of budget — deferring remaining members", {
+        member: trainee.member_id,
+        remainingSec: Math.round(remainingMs(deadlineMs) / 1000),
+      });
+      missingMembers.push(trainee.member_id);
+      continue;
+    }
     let member: MemberWorkout | null = null;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -240,6 +293,7 @@ export async function generateWorkoutPlan(params: {
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
         totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
+        reportUsage();
 
         const parsed = MemberWorkoutSchema.safeParse(
           parseJson(res.text, `workout member ${trainee.member_id}`),
@@ -354,6 +408,12 @@ export async function runWorkoutPlanGeneration(params: {
 }): Promise<void> {
   const { supabase, anthropicApiKey, workoutPlanId, context, weekStartDate } = params;
   const startMs = Date.now();
+  // Spend so far, kept outside the try so the catch can record what a failed
+  // run actually cost. Previously the catch wrote status/error only, so every
+  // failed workout generation was booked at $0 — and workout generation is the
+  // expensive two-phase one, so the admin margin view understated spend by
+  // exactly the cost of the most costly failures.
+  let accrued = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
   try {
     const doneMembers: MemberWorkout[] = [];
@@ -361,6 +421,12 @@ export async function runWorkoutPlanGeneration(params: {
       anthropicApiKey,
       context,
       weekStartDate,
+      onUsage: (u) => {
+        accrued = u;
+      },
+      // Same wall-clock budget the meal run uses, measured from this
+      // invocation's start (no translation phase on the workout side).
+      deadlineMs: dayLoopDeadline(startMs, false),
       onMemberDone: async (member) => {
         doneMembers.push(member);
         await supabase
@@ -419,6 +485,15 @@ export async function runWorkoutPlanGeneration(params: {
       .update({
         status: "failed",
         error_message: message.slice(0, 500),
+        // Record what the run actually spent before it failed. The skeleton
+        // call alone is a real charge; booking it as $0 hid it from the admin
+        // cost and margin views.
+        tokens_in: accrued.input_tokens,
+        tokens_out: accrued.output_tokens,
+        cost_usd: accrued.cost_usd,
+        ai_input_tokens: accrued.input_tokens,
+        ai_output_tokens: accrued.output_tokens,
+        estimated_cost_usd: accrued.cost_usd,
         duration_ms: Date.now() - startMs,
         completed_at: new Date().toISOString(),
       })

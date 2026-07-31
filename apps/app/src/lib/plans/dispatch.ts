@@ -133,18 +133,28 @@ export async function triggerPlanGeneration(params: {
     }
   }
 
-  // Don't start a new generation while one is still running. A second run can't
-  // carry the in-progress plan over (its members aren't complete yet), so it
-  // would restart every member from scratch — and two background functions would
-  // race. We CAN'T key this off meal_plans.status: the shell flips to 'ready' on
-  // the first emit and stays 'ready' for the whole run. The durable signal is the
-  // plan_generations 'started' row, created at dispatch (createPlanRows) and
-  // cleared only at terminal completion — the shell flip can't fake it.
+  // Don't start a new MEAL generation while one is still running. A second run
+  // can't carry the in-progress plan over (its members aren't complete yet), so
+  // it would restart every member from scratch — and two background functions
+  // would race. We CAN'T key this off meal_plans.status: the shell flips to
+  // 'ready' on the first emit and stays 'ready' for the whole run. The durable
+  // signal is the plan_generations 'started' row, created at dispatch
+  // (createPlanRows) and cleared only at terminal completion.
+  //
+  // Scoped to plan_kind='meal'. Migration 00014 deliberately replaced 00012's
+  // one-run-per-user lock with a per-(user, plan_kind) one so that a meal run
+  // and a workout run may coexist — triggerWorkoutGeneration below honoured
+  // that, this guard did not. Unscoped, a live workout run (which waits up to
+  // 8 minutes for meals by design, then generates) reported 'busy' for every
+  // meal dispatch: "new plan" did nothing, add-member silently deferred the
+  // member, and the housekeeper translation was skipped, until the run finished
+  // or the 15-minute stale window elapsed.
   const { data: liveGens } = await supabase
     .from("plan_generations")
     .select("id, started_at")
     .eq("user_id", userId)
     .eq("status", "started")
+    .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
     .returns<{ id: string; started_at: string }[]>();
@@ -429,12 +439,15 @@ export async function triggerPlanTranslation(params: {
   // runMealPlanGeneration / the background fn), so a no-op here is safe: the maid
   // page keeps polling and the freshly-generated plan lands already translated.
   // Same durable signal as triggerPlanGeneration: a live plan_generations
-  // 'started' row. Unlike that guard we do NOT reclassify a stale row here.
+  // 'started' row, scoped to plan_kind='meal' for the same reason (a workout
+  // run writes nothing to plan_data, so it must not block a translation).
+  // Unlike that guard we do NOT reclassify a stale row here.
   const { data: liveGens } = await supabase
     .from("plan_generations")
     .select("id, started_at")
     .eq("user_id", userId)
     .eq("status", "started")
+    .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
     .returns<{ id: string; started_at: string }[]>();
