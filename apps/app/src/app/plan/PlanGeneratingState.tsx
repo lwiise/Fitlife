@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
+import { generationHasStalled } from "@/lib/plans/generationTiming";
 
 const POLL_INTERVAL_MS = 3000;
 // Generation runs one concurrent Anthropic call per family member; the slowest
 // member can take ~2-3 min. After this we soften the copy (but keep waiting) so
 // a normal run never looks broken.
 const LONG_RUNNING_MS = 90_000;
-// Genuine-stuck threshold — only past this do we show the refresh/retry
-// fallback. Kept inside the background function's 15-min budget.
-const TIMEOUT_MS = 780_000;
+// The genuine-stuck threshold is no longer a wall clock — see
+// lib/plans/generationTiming.ts. We now give up only once the plan ROW has gone
+// silent, which is the same signal the server reclassifies on, so a run that is
+// still writing is never called stuck no matter how long it legitimately takes.
 
 // Rotating reassurance copy (this phase has no real per-day signal yet, so these
 // are presentational — they cycle to convey active work during a short wait).
@@ -36,16 +38,26 @@ export function PlanGeneratingState({
   const [isLong, setIsLong] = useState(false);
   const [progress, setProgress] = useState(6);
   const [stepIndex, setStepIndex] = useState(0);
+  // Client-clock instant of the last SERVER write, rebuilt from the route's
+  // server-measured `age_ms` on every poll. Starts at "just now" — the patient
+  // default — and the first poll (fired immediately below) corrects it, so a
+  // reload can no longer hand a long-dead run a fresh window.
+  const lastWriteAtRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
-    const startedAt = Date.now();
+    const mountedAt = Date.now();
+    lastWriteAtRef.current = mountedAt;
 
     // Time-based progress estimate (no real signal from the bg function): ease
     // toward ~95% over the expected window, then snap to 100% on completion.
+    // Deliberately anchored to THIS mount rather than to the run's true age: the
+    // bar is presentational, and restarting it on a refresh is honest about the
+    // fact that we have no per-day signal to report. Only the stall clock below
+    // needs the server's real age, and it gets it from `age_ms`.
     const progressTimer = setInterval(() => {
       if (cancelled) return;
-      const elapsed = Date.now() - startedAt;
+      const elapsed = Date.now() - mountedAt;
       const pct = Math.max(
         6,
         Math.min(95, Math.round(100 * (1 - Math.exp(-elapsed / 45000)))),
@@ -54,44 +66,70 @@ export function PlanGeneratingState({
       // Advance the reassurance copy every ~4s off the same timer (no extra
       // interval to clean up).
       setStepIndex(Math.floor(elapsed / 4000) % GENERATING_STEPS.length);
+      if (elapsed >= LONG_RUNNING_MS) setIsLong(true);
     }, 1000);
 
-    const poll = setInterval(async () => {
+    const checkStatus = async () => {
       if (cancelled) return;
-
-      const elapsed = Date.now() - startedAt;
-      if (elapsed > TIMEOUT_MS) {
-        clearInterval(poll);
-        clearInterval(progressTimer);
-        setTimedOut(true);
-        return;
-      }
-      if (elapsed >= LONG_RUNNING_MS) {
-        setIsLong(true);
-      }
 
       try {
         const res = await fetch("/api/plans/status", { cache: "no-store" });
-        if (!res.ok) return;
-        const body = (await res.json()) as { id: string; status: string };
-        if (body.id !== planId) return;
-        if (body.status === "ready" || body.status === "failed") {
-          clearInterval(poll);
-          clearInterval(progressTimer);
-          setProgress(100);
-          // Let the bar visibly complete, then hard-reload (a fresh server
-          // render guarantees the plan/failed state shows automatically).
-          setTimeout(() => window.location.reload(), 500);
+        if (res.ok) {
+          const body = (await res.json()) as {
+            id: string;
+            status: string;
+            age_ms?: number;
+          };
+          if (body.id !== planId) {
+            // A newer plan superseded the one this tab is watching (add-member
+            // sync, a second generation). The status route only ever reports the
+            // latest, so this tab can never see its own plan finish — reload and
+            // let the server render whatever is actually current.
+            stopTimers();
+            window.location.reload();
+            return;
+          }
+          if (typeof body.age_ms === "number" && Number.isFinite(body.age_ms)) {
+            lastWriteAtRef.current = Date.now() - Math.max(0, body.age_ms);
+          }
+          if (body.status === "ready" || body.status === "failed") {
+            stopTimers();
+            setProgress(100);
+            // Let the bar visibly complete, then hard-reload (a fresh server
+            // render guarantees the plan/failed state shows automatically).
+            setTimeout(() => window.location.reload(), 500);
+            return;
+          }
         }
       } catch {
-        // network blip — keep polling
+        // network blip — fall through to the stall check, which is what turns a
+        // permanently-broken poll into an answer instead of an endless spinner.
       }
-    }, POLL_INTERVAL_MS);
+
+      // Stuck means "nothing has written to the row", never "the wall clock ran
+      // out". A run still emitting day snapshots keeps this from firing for as
+      // long as it legitimately needs.
+      if (generationHasStalled(lastWriteAtRef.current, Date.now())) {
+        stopTimers();
+        setTimedOut(true);
+      }
+    };
+
+    const poll = setInterval(checkStatus, POLL_INTERVAL_MS);
+    // Fire once immediately so a reloaded tab learns the row's true age within
+    // network latency rather than after a full interval.
+    void checkStatus();
+
+    // Declared after both intervals so neither identifier is referenced before
+    // its binding is initialised; every call site runs inside a later tick.
+    function stopTimers() {
+      clearInterval(poll);
+      clearInterval(progressTimer);
+    }
 
     return () => {
       cancelled = true;
-      clearInterval(poll);
-      clearInterval(progressTimer);
+      stopTimers();
     };
   }, [planId]);
 

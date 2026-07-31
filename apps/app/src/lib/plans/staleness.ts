@@ -1,9 +1,13 @@
 import { planHasContent, type MealPlan } from "@fitlife/plan-engine";
 
-// A 'generating' plan (or a 'ready' shell still flagged generating) whose
-// updated_at is older than this is treated as crashed/stale — the background
-// function's hard budget is ~15 min, so past that nothing is still writing.
-export const STALE_GENERATION_MIN = 15;
+// The threshold now lives in the leaf module `generationTiming.ts` so the two
+// client generating screens can measure the SAME silence without importing this
+// file (which pulls in the plan engine). Re-exported here because this module's
+// existing consumers — getLatestPlan, getLatestWorkoutPlan — import it from the
+// staleness contract, and that is the right place for them to read it.
+export { STALE_GENERATION_MIN } from "./generationTiming";
+
+import { STALE_GENERATION_MIN } from "./generationTiming";
 
 export interface StalenessInput {
   status: "generating" | "ready" | "failed";
