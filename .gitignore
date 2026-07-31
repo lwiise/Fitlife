@@ -58,6 +58,10 @@ next-env.d.ts
 # Netlify build's submodule checkout.
 .claude/worktrees/
 
+# E2E suite local config + artifacts
+apps/e2e/.env.e2e
+apps/e2e/reports/
+apps/e2e/.e2e-state/
 # Local design references (cloned repos browsed for layout ideas, never imported).
 # Same gitlink hazard as worktrees if committed.
 _reference/
