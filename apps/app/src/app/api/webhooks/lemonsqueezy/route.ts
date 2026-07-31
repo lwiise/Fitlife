@@ -154,6 +154,12 @@ export async function POST(request: Request) {
         return { error: null };
       }
     }
+    // 00024 adds unique(user_id), so `.eq("user_id", …)` now names exactly one
+    // row. Before it, this update had no limit and stamped EVERY row a user
+    // held, while the supersession guard above inspected only the newest — so
+    // the read path and the write path disagreed the moment a second row
+    // existed. Keeping the scope explicit documents the invariant the guard
+    // already relies on.
     const q = admin.from("subscriptions").update(update);
     return userId
       ? await q.eq("user_id", userId)

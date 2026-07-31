@@ -20,6 +20,7 @@ import {
   type LocaleCode,
 } from "@fitlife/plan-engine";
 import type { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEngagementDigest } from "@/lib/engagement/digest";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
@@ -156,7 +157,12 @@ export async function triggerPlanGeneration(params: {
     if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
     // Stale 'started' (the bg worker was hard-killed at its budget and its catch
     // never ran) → reclassify so the guard can't deadlock 'busy' forever.
-    await supabase
+    //
+    // Service-role: plan_generations is an AUDIT table and 00024 removes the
+    // user's UPDATE policy (it let a user reset their own quota, clear the
+    // in-flight lock, and rewrite the cost columns the admin dashboards read).
+    // Every legitimate UPDATE is a server-side bookkeeping write like this one.
+    await createAdminClient()
       .from("plan_generations")
       .update({
         status: "failed",
@@ -290,10 +296,15 @@ export async function triggerPlanGeneration(params: {
   }
 
   // Development: no serverless timeout — run generation inline.
+  //
+  // Service-role client, matching what the PRODUCTION background function
+  // already uses. The generation closes its own plan_generations audit row, and
+  // 00024 removed the user's UPDATE policy on that table — with the user client
+  // the dev-inline run would silently leave every audit row open.
   if (process.env.NODE_ENV === "development") {
     try {
       await runMealPlanGeneration({
-        supabase,
+        supabase: createAdminClient() as unknown as ServerClient,
         anthropicApiKey: getAnthropicKey(),
         mealPlanId,
         context,
@@ -564,7 +575,8 @@ export async function triggerWorkoutGeneration(params: {
       ? Infinity
       : (Date.now() - startedMs) / 60_000;
     if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
-    await supabase
+    // Service-role for the same reason as the meal reclassifier above (00024).
+    await createAdminClient()
       .from("plan_generations")
       .update({
         status: "failed",
@@ -602,11 +614,12 @@ export async function triggerWorkoutGeneration(params: {
 
   const weekStartDate = riyadhTodayISO();
 
-  // Development: no serverless timeout — run inline.
+  // Development: no serverless timeout — run inline. Service-role for the same
+  // reason as the meal path above (00024 audit-table lockdown).
   if (process.env.NODE_ENV === "development") {
     try {
       await runWorkoutPlanGeneration({
-        supabase,
+        supabase: createAdminClient() as unknown as ServerClient,
         anthropicApiKey: getAnthropicKey(),
         workoutPlanId,
         context,
@@ -661,7 +674,8 @@ export async function triggerWorkoutGeneration(params: {
       .from("workout_plans")
       .update({ status: "failed", error_message: "dispatch failed" })
       .eq("id", workoutPlanId);
-    await supabase
+    // Service-role: audit-row bookkeeping (00024 removed the user UPDATE policy).
+    await createAdminClient()
       .from("plan_generations")
       .update({
         status: "failed",

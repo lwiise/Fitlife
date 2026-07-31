@@ -134,5 +134,48 @@ select * from (values
     (select case when exists (select 1 from pg_constraint
       where conname='subscriptions_status_check'
       and pg_get_constraintdef(oid) like '%paused%')
-      then 'APPLIED' else 'MISSING' end))
+      then 'APPLIED' else 'MISSING' end)),
+  -- Until this is APPLIED, tapping the selected «كيف كانت؟» chip to clear a
+  -- verdict deletes zero rows and returns no error: the action reports success
+  -- and the verdict reappears on the next render.
+  ('00024 meal_verdicts DELETE policy (clearing a verdict was a silent no-op)',
+    (select case when exists (select 1 from pg_policies
+      where schemaname='public' and tablename='meal_verdicts' and cmd='DELETE')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00024 body_logs DELETE policy',
+    (select case when exists (select 1 from pg_policies
+      where schemaname='public' and tablename='body_logs' and cmd='DELETE')
+      then 'APPLIED' else 'MISSING' end)),
+  -- plan_generations is an audit table; a user UPDATE policy let the browser
+  -- reset its own generation quota and rewrite the admin cost columns.
+  ('00024 plan_generations user UPDATE policy REMOVED',
+    (select case when not exists (select 1 from pg_policies
+      where schemaname='public' and tablename='plan_generations' and cmd='UPDATE')
+      then 'APPLIED' else 'MISSING' end)),
+  ('00024 subscriptions unique(user_id)',
+    (select case when exists (select 1 from pg_indexes where schemaname='public'
+      and indexname='subscriptions_one_per_user')
+      then 'APPLIED' else 'MISSING' end)),
+  -- ── Class guard ───────────────────────────────────────────────────────────
+  -- Every RLS-enabled table the app DELETEs from must carry a DELETE policy.
+  -- Without one, Postgres filters the statement to zero rows and returns NO
+  -- error, so the app reports success and the row survives. This has now shipped
+  -- twice (meal_checkins, fixed in 00019; meal_verdicts, fixed in 00024) — this
+  -- row makes the third time impossible to miss. Extend the list when a new
+  -- table gains a delete path.
+  ('CLASS GUARD: all app-deleted tables have a DELETE policy',
+    (select case when not exists (
+      select 1 from unnest(array[
+        'meal_checkins','meal_verdicts','meal_absences',
+        'workout_checkins','member_exceptions','body_logs','family_members'
+      ]) as t(tbl)
+      where exists (
+        select 1 from pg_tables
+        where schemaname='public' and tablename=t.tbl and rowsecurity
+      )
+      and not exists (
+        select 1 from pg_policies
+        where schemaname='public' and tablename=t.tbl and cmd='DELETE'
+      )
+    ) then 'APPLIED' else 'MISSING' end))
 ) as report(migration, status);
