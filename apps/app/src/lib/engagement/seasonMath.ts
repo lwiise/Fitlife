@@ -42,6 +42,7 @@
 //     from multiple same-week plan versions (last write wins).
 
 import { addDaysISO } from "@/lib/plans/dayMapping";
+import { HOUSEHOLD_CHECKIN_MEMBER } from "./types";
 
 export const HONOR_DAYS_GOAL = 5; // meal days in a week to "honor" the season
 export const CAP = 14; // invisible capacity the family meal ring fills toward
@@ -503,7 +504,22 @@ export function computeSeasonStats(input: {
   // ── Meals: only «طبختها كما هي» is visible to the season ─────────────────
   // Swapped and skipped rows are invisible everywhere below (ring, strip,
   // stars, member scores) — one filter, so the surfaces can never disagree.
-  const happened = checkins.filter(isCookedAsIs);
+  // Roster-filtered as well as status-filtered. member_id carries no foreign
+  // key (it holds the "mom"/"household" sentinels), so removing a family member
+  // leaves their check-ins behind — and those orphans then filled the family
+  // ring, lit strip days and earned stars while contributing to nobody's score,
+  // because the per-member loop below DOES filter the roster. The family total
+  // and the sum of the member scores could not reconcile. The 'household'
+  // sentinel is deliberately kept: it names no member, and it is the
+  // whole-kitchen attestation the family surfaces are meant to reflect.
+  const happened = checkins
+    .filter(isCookedAsIs)
+    .filter(
+      (c) =>
+        !c.member_id ||
+        c.member_id === HOUSEHOLD_CHECKIN_MEMBER ||
+        memberIds.has(c.member_id),
+    );
 
   // Meal-true family total: the DISH is the meal's identity, so a shared dinner
   // marked by three people is ONE followed meal (household size can never
@@ -569,7 +585,12 @@ export function computeSeasonStats(input: {
       .map(workoutKey),
   );
   const workoutActs = workoutActSet.size;
-  const sessionsDone = new Set(effectiveWorkouts.map(workoutKey)).size;
+  // Roster-filtered, like workoutActs above. It used to count EVERY row,
+  // including sessions belonging to someone no longer in the household —
+  // member_id carries no foreign key, so removing a member leaves their marks
+  // behind. The card renders this number beside a ring filled from workoutActs,
+  // so the two could disagree with each other on the same card.
+  const sessionsDone = workoutActSet.size;
 
   // The ring fills toward the household's OWN week (planned meals + sessions)
   // whenever the caller can derive it: now that every dish counts, a fixed

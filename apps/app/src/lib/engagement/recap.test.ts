@@ -130,3 +130,40 @@ describe("buildShareText", () => {
     expect(text).toContain("أسبوع جديد");
   });
 });
+
+describe("weight_delta_kg survives Postgres numeric-as-string", () => {
+  // body_logs.weight_kg is a `numeric`. supabase-js hands those back as STRINGS
+  // often enough that seasonProps.ts wraps them in Number() and memberEdit.ts
+  // carries the comment "Postgres hands numerics back as strings sometimes".
+  // computeWeeklyRecap used to filter on `typeof v === "number"`, so in that
+  // case every value was discarded and the recap's weight line silently never
+  // rendered. The old tests passed numbers straight in and could not catch it.
+  it("computes a delta from string weights", () => {
+    const recap = computeWeeklyRecap({
+      plan: makePlan(),
+      checkins: [],
+      verdicts: [],
+      weights: [
+        { recorded_on: "2026-07-23", weight_kg: "71.80" },
+        { recorded_on: "2026-07-17", weight_kg: "72.50" },
+      ],
+    });
+
+    expect(recap.weight_delta_kg).toBe(-0.7);
+  });
+
+  it("ignores unparseable values rather than yielding NaN", () => {
+    const recap = computeWeeklyRecap({
+      plan: makePlan(),
+      checkins: [],
+      verdicts: [],
+      weights: [
+        { recorded_on: "2026-07-23", weight_kg: "not-a-number" },
+        { recorded_on: "2026-07-17", weight_kg: "72.50" },
+      ],
+    });
+
+    // Only one usable reading → no delta, and never NaN on screen.
+    expect(recap.weight_delta_kg).toBeNull();
+  });
+});

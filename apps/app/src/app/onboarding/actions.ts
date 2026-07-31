@@ -42,6 +42,7 @@ import {
   firstFieldErrorAr,
   VALIDATION_ERROR_AR,
 } from "./serverSchemas";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
 type ProfileUpdates = Partial<{
@@ -1303,6 +1304,67 @@ export async function addHousekeeper(input: {
   return { ok: true, plan_generation_id: null };
 }
 
+/**
+ * Delete every engagement row a removed member owns, and drop them from the
+ * addition order.
+ *
+ * `member_id` on the engagement tables is TEXT with NO foreign key — it has to
+ * be, because it also carries the "mom" and "household" sentinels — so nothing
+ * cascades when a family_members row is deleted. Their check-ins, verdicts,
+ * session marks, absences and weigh-ins simply stayed behind, and the season
+ * board still read them: the family ring and strip counted meals for someone no
+ * longer in the household while the per-member scores (which do filter the
+ * roster) did not, so the family total and the sum of its members could not
+ * reconcile. seasonMath now filters as well, but the rows themselves should go.
+ *
+ * Best-effort: the member is already deleted and that is the user's intent, so
+ * a cleanup failure is reported to Sentry rather than surfaced as a failed
+ * removal. The stale id is also pruned from member_addition_order, which
+ * pickNextMemberId reads to choose the next member to generate.
+ */
+async function purgeMemberEngagementRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  memberId: string,
+): Promise<void> {
+  const tables = [
+    "meal_checkins",
+    "meal_verdicts",
+    "workout_checkins",
+    "meal_absences",
+    "body_logs",
+  ] as const;
+
+  for (const table of tables) {
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from(table)
+      .delete()
+      .eq("user_id", userId)
+      .eq("member_id", memberId);
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { area: "family", step: `removeFamilyMember.purge.${table}`, userId },
+      });
+    }
+  }
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("member_addition_order")
+    .eq("id", userId)
+    .single();
+  const order = (profileRow as { member_addition_order: unknown } | null)
+    ?.member_addition_order;
+  if (Array.isArray(order) && order.includes(memberId)) {
+    await supabase
+      .from("profiles")
+      .update({
+        member_addition_order: (order as string[]).filter((id) => id !== memberId),
+      })
+      .eq("id", userId);
+  }
+}
+
 /** Phase 2 — remove a member, then regenerate (or skip if only Mom remains). */
 export async function removeFamilyMember(
   memberId: string,
@@ -1325,6 +1387,8 @@ export async function removeFamilyMember(
     });
     return { ok: false, error: error.message };
   }
+
+  await purgeMemberEngagementRows(supabase, user.id, memberId);
 
   revalidatePath("/family");
 
