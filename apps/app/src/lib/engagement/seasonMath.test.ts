@@ -12,6 +12,7 @@ import {
   type SeasonWorkoutMark,
   plannedMealSlots,
   collapseMealAbsences,
+  dishKeyFor,
 } from "./seasonMath";
 
 const WEEK_START = "2026-07-17"; // Friday, matching a real plan anchor
@@ -46,6 +47,195 @@ function rawRow(overrides: Partial<RawSeasonMealRow> = {}): RawSeasonMealRow {
     ...overrides,
   };
 }
+
+// Owner directive 07/2026 — «present the real numbers»: a family meal is a
+// DISH. The reported case: a house cooked five dishes in one day and the card
+// said three, because the three that shared a slot collapsed into one.
+describe("computeSeasonStats — a meal is a dish, not a slot", () => {
+  /** `dishKeys` for one day: member → slot → dish. */
+  const dayDishes = (
+    perMember: Record<string, Record<string, string>>,
+    dayIndex = 0,
+  ) => {
+    const keys: Record<string, string> = {};
+    for (const [memberId, slots] of Object.entries(perMember)) {
+      for (const [slot, dish] of Object.entries(slots)) {
+        keys[dishKeyFor(dayIndex, slot, memberId)] = dish;
+      }
+    }
+    return keys;
+  };
+
+  it("counts two different dishes in one slot as two meals", () => {
+    // Mom's own lunch beside the children's shared lunch: two pots, two meals.
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "m1", slot: "lunch" }),
+        mark({ member_id: "m2", slot: "lunch" }),
+      ],
+      dishKeys: dayDishes({
+        mom: { lunch: "سلطة-دجاج" },
+        m1: { lunch: "كبسة" },
+        m2: { lunch: "كبسة" },
+      }),
+    });
+    expect(stats.followedMeals).toBe(2);
+    expect(stats.days[0]!.cookedMeals).toBe(2);
+    expect(stats.activeDays).toBe(1);
+  });
+
+  it("the reported case: five dishes cooked in a day read as five, not three", () => {
+    const dishKeys = dayDishes({
+      mom: { breakfast: "بيض", lunch: "سلطة-دجاج", dinner: "شوربة" },
+      m1: { breakfast: "بيض", lunch: "كبسة", dinner: "شوربة" },
+      m2: { breakfast: "فطور-أطفال", lunch: "كبسة", dinner: "شوربة" },
+    });
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        // breakfast: بيض (shared by mom+m1) and فطور-أطفال → 2 meals
+        mark({ member_id: "mom", slot: "breakfast" }),
+        mark({ member_id: "m1", slot: "breakfast" }),
+        mark({ member_id: "m2", slot: "breakfast" }),
+        // lunch: سلطة-دجاج and كبسة → 2 meals
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "m1", slot: "lunch" }),
+        mark({ member_id: "m2", slot: "lunch" }),
+        // dinner: one pot for everyone → 1 meal
+        mark({ member_id: "mom", slot: "dinner" }),
+        mark({ member_id: "m1", slot: "dinner" }),
+        mark({ member_id: "m2", slot: "dinner" }),
+      ],
+      dishKeys,
+      plannedMealsPerDay: [5, 0, 0, 0, 0, 0, 0],
+    });
+    expect(stats.followedMeals).toBe(5);
+    expect(stats.days[0]!.complete).toBe(true);
+    expect(stats.days[0]!.stars).toBe(3);
+  });
+
+  it("marking one more dish in an already-marked slot moves the number", () => {
+    const dishKeys = dayDishes({
+      mom: { lunch: "سلطة-دجاج" },
+      m1: { lunch: "كبسة" },
+    });
+    const before = computeSeasonStats({
+      members,
+      checkins: [mark({ member_id: "mom", slot: "lunch" })],
+      dishKeys,
+    });
+    const after = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "m1", slot: "lunch" }),
+      ],
+      dishKeys,
+    });
+    expect(before.followedMeals).toBe(1);
+    expect(after.followedMeals).toBe(2);
+  });
+
+  it("a shared dish is still ONE meal however many people mark it", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom" }),
+        mark({ member_id: "m1" }),
+        mark({ member_id: "m2" }),
+      ],
+      dishKeys: dayDishes({
+        mom: { lunch: "كبسة" },
+        m1: { lunch: "كبسة" },
+        m2: { lunch: "كبسة" },
+      }),
+    });
+    expect(stats.followedMeals).toBe(1);
+    expect(stats.ranked.map((m) => m.score)).toEqual([1, 1, 1]);
+  });
+
+  it("a whole-kitchen 'household' row never double-counts an identified dish", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "household", slot: "lunch" }),
+      ],
+      dishKeys: dayDishes({ mom: { lunch: "كبسة" } }),
+    });
+    expect(stats.followedMeals).toBe(1);
+  });
+
+  it("a household row still counts alone for a slot nothing else identifies", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "household", slot: "dinner" }),
+      ],
+      dishKeys: dayDishes({ mom: { lunch: "كبسة" } }),
+    });
+    expect(stats.followedMeals).toBe(2);
+  });
+
+  it("a mark the plan can't resolve falls back to slot identity, never inflating", () => {
+    // m1 was dropped from the roster's plan — his mark shares mom's slot and
+    // must not invent a second meal.
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "m1", slot: "lunch" }),
+      ],
+      dishKeys: dayDishes({ mom: { lunch: "كبسة" } }),
+    });
+    expect(stats.followedMeals).toBe(1);
+  });
+
+  it("without a dishKeys map, counting is exactly the legacy per-slot figure", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "m1", slot: "lunch" }),
+        mark({ member_id: "m2", slot: "dinner" }),
+      ],
+    });
+    expect(stats.followedMeals).toBe(2);
+  });
+
+  it("fills the ring against the household's own week when a capacity is given", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [
+        mark({ member_id: "mom", slot: "lunch" }),
+        mark({ member_id: "m1", slot: "lunch" }),
+      ],
+      dishKeys: dayDishes({ mom: { lunch: "سلطة" }, m1: { lunch: "كبسة" } }),
+      weeklyCapacity: 20,
+    });
+    expect(stats.followedMeals).toBe(2);
+    expect(stats.fillFrac).toBeCloseTo(0.1);
+  });
+
+  it("falls back to CAP when no capacity is known, and never overfills", () => {
+    const stats = computeSeasonStats({
+      members,
+      checkins: [mark()],
+    });
+    expect(stats.fillFrac).toBeCloseTo(1 / 14);
+    const full = computeSeasonStats({
+      members,
+      checkins: Array.from({ length: 7 }, (_, day) =>
+        ["breakfast", "lunch", "dinner"].map((slot) => mark({ day_index: day, slot })),
+      ).flat(),
+      weeklyCapacity: 6,
+    });
+    expect(full.fillFrac).toBe(1);
+  });
+});
 
 describe("computeSeasonStats — meals", () => {
   it("collapses a shared meal's fan-out to ONE family meal but credits each sharer", () => {
@@ -189,15 +379,15 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
       computeSeasonStats({
         members,
         checkins: slots.map((slot) => mark({ slot })),
-        plannedMealSlotsPerDay: dayPlan(4),
+        plannedMealsPerDay: dayPlan(4),
       }).days[0]!;
 
     // A 4-meal day: three marks used to buy three stars — now it's two.
     const three = cooked(["breakfast", "lunch", "dinner"]);
     expect(three.stars).toBe(2);
     expect(three.complete).toBe(false);
-    expect(three.cookedSlots).toBe(3);
-    expect(three.plannedSlots).toBe(4);
+    expect(three.cookedMeals).toBe(3);
+    expect(three.plannedMeals).toBe(4);
 
     const all = cooked(["breakfast", "lunch", "dinner", "snack"]);
     expect(all.stars).toBe(3);
@@ -211,7 +401,7 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
         checkins: ["breakfast", "lunch", "dinner"]
           .slice(0, n)
           .map((slot) => mark({ slot })),
-        plannedMealSlotsPerDay: dayPlan(3),
+        plannedMealsPerDay: dayPlan(3),
       }).days[0]!.stars;
     expect([stars(0), stars(1), stars(2), stars(3)]).toEqual([0, 1, 2, 3]);
   });
@@ -223,7 +413,7 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
         checkins: ["breakfast", "lunch", "dinner", "snack", "snack2"]
           .slice(0, planned - 1)
           .map((slot) => mark({ slot })),
-        plannedMealSlotsPerDay: dayPlan(planned),
+        plannedMealsPerDay: dayPlan(planned),
       }).days[0]!;
       expect(day.stars).toBeLessThanOrEqual(2);
       expect(day.stars).toBeGreaterThanOrEqual(1);
@@ -235,7 +425,7 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
     const day = computeSeasonStats({
       members,
       checkins: [mark({ slot: "lunch" })],
-      plannedMealSlotsPerDay: dayPlan(1),
+      plannedMealsPerDay: dayPlan(1),
     }).days[0]!;
     expect(day.stars).toBe(3);
     expect(day.complete).toBe(true);
@@ -250,7 +440,7 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
         mark({ day_index: 1, slot: "breakfast" }),
         mark({ day_index: 1, slot: "lunch" }),
       ],
-      plannedMealSlotsPerDay: [2, 4, 0, 0, 0, 0, 0],
+      plannedMealsPerDay: [2, 4, 0, 0, 0, 0, 0],
     });
     expect(stats.days[0]!.stars).toBe(3); // 2 of 2 — complete
     expect(stats.days[1]!.stars).toBe(1); // 2 of 4 — partial
@@ -264,7 +454,7 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
         mark({ slot: "lunch" }),
         mark({ slot: "dinner" }),
       ],
-      plannedMealSlotsPerDay: dayPlan(0),
+      plannedMealsPerDay: dayPlan(0),
     });
     expect(stats.days[0]!.stars).toBe(3);
     expect(stats.days[0]!.complete).toBe(false);
@@ -278,7 +468,7 @@ describe("computeSeasonStats — day stars (3 only on a complete day)", () => {
         mark({ slot: "lunch" }),
         mark({ slot: "dinner" }),
       ],
-      plannedMealSlotsPerDay: dayPlan(2),
+      plannedMealsPerDay: dayPlan(2),
     }).days[0]!;
     expect(day.stars).toBe(3);
     expect(day.complete).toBe(true);

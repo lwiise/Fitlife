@@ -10,11 +10,22 @@
 //     the weekly recap keep reading every status), but the season celebrates
 //     the plan actually cooked as written. Superseded the earlier
 //     "cooked-or-swapped" rule at the owner's direction.
+//   • A FAMILY MEAL IS A DISH, NOT A SLOT (owner directive 07/2026 — «present
+//     the real numbers»). The family total was distinct (day, slot) pairs: right
+//     for a shared dish (three people marking one lunch is ONE meal) but wrong
+//     the moment a day holds more than one dish in the same slot — and it does
+//     routinely, because Sara's family methodology gives a member their own
+//     recipe whenever the shared pot doesn't suit them. Five real meals then
+//     rendered as three, and marking the fourth and fifth moved no number at
+//     all. Family-level identity is now (day, slot, DISH) via `dishKeys`, so a
+//     shared dish still counts once and different dishes count separately.
+//     PER-MEMBER counts keep (day, slot) identity — that is what one member can
+//     mark (see plannedMealSlots), and one person eats one dish per slot.
 //   • The strip's THIRD star is EARNED, not a cap: three stars mean the day's
 //     meals were ALL cooked as written. The rating is measured against the
-//     day's OWN plan (its distinct planned slots), so a partial day tops out at
+//     day's OWN plan (its distinct planned dishes), so a partial day tops out at
 //     two stars however many meals it holds. Superseded the earlier
-//     `min(3, cookedSlots)` cap, which handed a 4-meal day its third star at
+//     `min(3, cooked)` cap, which handed a 4-meal day its third star at
 //     three marks.
 //   • The % is PLAN COMPLETION, not an act count (owner directive): a member
 //     with meals only is measured purely on meals — each meal worth
@@ -104,8 +115,9 @@ export interface PlannedTotals {
  * had, while a sibling on a 4-meal plan hit 100% for the same behaviour — so
  * the «فائز هذا الأسبوع» crown turned on snack count rather than adherence.
  *
- * Meal identity is (day, slot) everywhere else in this layer; this is the same
- * rule, applied to the denominator.
+ * This is the PER-MEMBER key space: one person marks at most one row per
+ * (day, slot). The FAMILY total counts dishes instead (see `dishKeys`), because
+ * two members can be served two different dishes in the same slot.
  */
 export function plannedMealSlots(
   days: ReadonlyArray<{ meals: ReadonlyArray<{ slot: string }> }>,
@@ -134,11 +146,12 @@ export interface SeasonDayCell {
   dayIndex: number;
   /** The house cooked the plan as written this day («طبختها كما هي» exists). */
   lit: boolean;
-  /** Distinct meal slots cooked as-is that day. */
-  cookedSlots: number;
-  /** Distinct meal slots the plan holds that day — the star denominator. 0 when
+  /** Distinct DISHES cooked as-is that day — a shared dish counts once, two
+   * different dishes in one slot count twice. */
+  cookedMeals: number;
+  /** Distinct dishes the plan holds that day — the star denominator. 0 when
    * the caller passed no per-day plan (legacy/degraded read). */
-  plannedSlots: number;
+  plannedMeals: number;
   /** Every planned meal of the day was cooked as written — the third star. */
   complete: boolean;
   /** 0-3 rating of the day against its OWN plan; 3 ONLY on a complete day. */
@@ -146,8 +159,9 @@ export interface SeasonDayCell {
 }
 
 export interface SeasonStats {
-  /** Distinct (day, slot) meals cooked as-is — the ring figure AND its sentence
-   * (one number; a shared dinner marked by three people is ONE meal). */
+  /** Distinct DISHES cooked as-is this week — the ring figure AND its sentence.
+   * A shared dinner marked by three people is ONE meal (household size can
+   * never inflate it); mom's own lunch beside the children's is TWO. */
   followedMeals: number;
   /** Distinct days with at least one «طبختها كما هي» mark. */
   activeDays: number;
@@ -343,6 +357,73 @@ function isCookedAsIs(mark: SeasonMealMark): boolean {
   return mark.status === SEASON_COUNTED_MEAL_STATUS;
 }
 
+/** The dish-identity lookup key for one mark: a check-in row knows WHO marked
+ * WHICH slot on WHICH day, and the plan turns that into the dish they ate. The
+ * server builds the map (seasonProps); this is the shared key format. */
+export function dishKeyFor(dayIndex: number, slot: string, memberId: string) {
+  return `${dayIndex}|${slot}|${memberId}`;
+}
+
+/** Stand-in identity for a mark the plan can't resolve to a dish: the
+ * whole-kitchen 'household' sentinel (it names no member), a member dropped
+ * from the roster, or a re-minted plan that no longer describes that slot. It
+ * counts as ONE meal for its slot, and ONLY when no identified dish already
+ * covers that slot — a degraded lookup must never inflate the total. */
+const UNKNOWN_DISH = " unknown";
+
+/**
+ * Distinct dishes cooked per plan day: `day → slot → set of dish identities`.
+ *
+ * The one place a family meal's identity is decided. Every sharer of a shared
+ * dish resolves to the SAME key, so their fan-out collapses to one meal, while
+ * two genuinely different dishes in one slot stay two meals. With no `dishKeys`
+ * map (older callers, degraded reads) every mark falls back to UNKNOWN_DISH and
+ * the result is exactly the legacy distinct-(day, slot) count.
+ */
+function cookedDishesPerDay(
+  happened: SeasonMealMark[],
+  dishKeys?: Record<string, string>,
+): Map<number, Map<string, Set<string>>> {
+  const perDay = new Map<number, Map<string, Set<string>>>();
+  const unresolved = new Map<number, Set<string>>();
+  const slotsOf = (dayIndex: number) => {
+    if (!perDay.has(dayIndex)) perDay.set(dayIndex, new Map());
+    return perDay.get(dayIndex)!;
+  };
+  for (const c of happened) {
+    const dish =
+      c.member_id && dishKeys
+        ? dishKeys[dishKeyFor(c.day_index, c.slot, c.member_id)]
+        : undefined;
+    if (dish === undefined) {
+      if (!unresolved.has(c.day_index)) unresolved.set(c.day_index, new Set());
+      unresolved.get(c.day_index)!.add(c.slot);
+      continue;
+    }
+    const slots = slotsOf(c.day_index);
+    if (!slots.has(c.slot)) slots.set(c.slot, new Set());
+    slots.get(c.slot)!.add(dish);
+  }
+  // An unresolved mark contributes its slot only when nothing identified it —
+  // otherwise a household attestation sitting beside a member's own mark would
+  // count the same meal twice.
+  for (const [dayIndex, slotNames] of unresolved) {
+    const slots = slotsOf(dayIndex);
+    for (const slot of slotNames) {
+      if ((slots.get(slot)?.size ?? 0) > 0) continue;
+      slots.set(slot, new Set([UNKNOWN_DISH]));
+    }
+  }
+  return perDay;
+}
+
+/** Distinct dishes cooked on one day, summed across its slots. */
+function countDishes(slots: Map<string, Set<string>> | undefined): number {
+  let n = 0;
+  for (const dishes of slots?.values() ?? []) n += dishes.size;
+  return n;
+}
+
 /** Any «طبختها كما هي» mark on this plan day (the 'household' sentinel counts —
  * whole-kitchen attestation lights family surfaces). The single definition of
  * «the day lit», shared by the strip cells and the hero's alreadyLit. */
@@ -361,15 +442,15 @@ export function dayHasCookedMark(
  * marks. Partial days split the day's own plan into thirds (floored) and are
  * clamped to 1-2, so any real progress still reads as progress.
  *
- * `plannedSlots <= 0` means the caller supplied no per-day plan (legacy caller,
+ * `plannedMeals <= 0` means the caller supplied no per-day plan (legacy caller,
  * or a day the plan doesn't describe): degrade to the pre-directive count-based
  * rating rather than inventing — or withholding — a completeness claim.
  */
-export function starsForDay(cookedSlots: number, plannedSlots: number): number {
-  if (cookedSlots <= 0) return 0;
-  if (plannedSlots <= 0) return Math.min(3, cookedSlots);
-  if (cookedSlots >= plannedSlots) return 3;
-  return Math.min(2, Math.max(1, Math.floor((3 * cookedSlots) / plannedSlots)));
+export function starsForDay(cookedMeals: number, plannedMeals: number): number {
+  if (cookedMeals <= 0) return 0;
+  if (plannedMeals <= 0) return Math.min(3, cookedMeals);
+  if (cookedMeals >= plannedMeals) return 3;
+  return Math.min(2, Math.max(1, Math.floor((3 * cookedMeals) / plannedMeals)));
 }
 
 export function computeSeasonStats(input: {
@@ -391,13 +472,24 @@ export function computeSeasonStats(input: {
    * open rather than zero the pillar. */
   workoutWeekStart?: string;
   workoutWeekEnd?: string;
-  /** Distinct meal slots the plan holds for each day of the week, indexed by
-   * plan day_index (length 7). The star denominators — a day earns its third
-   * star only when all of its planned meals were cooked as written. Omitted (or
-   * 0 for a day) degrades that day to the legacy count-based rating. Built from
+  /** Distinct DISHES the plan holds for each day of the week, indexed by plan
+   * day_index (length 7). The star denominators — a day earns its third star
+   * only when all of its planned meals were cooked as written. Omitted (or 0
+   * for a day) degrades that day to the legacy count-based rating. Built from
    * the SEASON ROSTER's meals only: the housekeeper is never marked, so her
-   * slots must never be part of «كل وجبات اليوم». */
-  plannedMealSlotsPerDay?: number[];
+   * dishes must never be part of «كل وجبات اليوم». */
+  plannedMealsPerDay?: number[];
+  /** `${day_index}|${slot}|${member_id}` → the identity of the dish that member
+   * is served at that meal (built from the plan by the server — see
+   * `dishKeyFor`). Sharers of one dish all map to the SAME key, so their marks
+   * collapse into one family meal, while different dishes in the same slot stay
+   * separate meals. Omitted → every mark falls back to slot identity, i.e. the
+   * legacy count. */
+  dishKeys?: Record<string, string>;
+  /** What a full week looks like for THIS household — planned meals plus
+   * planned sessions — so the ring fills against their real week. Falls back to
+   * CAP when the caller can't derive it. */
+  weeklyCapacity?: number;
   /** Per-member weekly plan totals (the % denominators — owner directive:
    * the % measures completion of the member's OWN plan). A missing member or
    * zero planned meals yields 0% for that pillar (never a division by zero);
@@ -413,34 +505,27 @@ export function computeSeasonStats(input: {
   // stars, member scores) — one filter, so the surfaces can never disagree.
   const happened = checkins.filter(isCookedAsIs);
 
-  // Meal-true family total: (day, slot) is the meal's identity, so a shared
-  // dinner marked by three people is ONE followed meal (household size can
-  // never inflate it — mirrors the engagement digest's collapse).
-  const followedMeals = new Set(happened.map((c) => `${c.day_index}|${c.slot}`))
-    .size;
-
-  // Distinct cooked-as-is meal slots per plan day → strip cells + stars. Each
-  // day is rated against ITS OWN planned slots, so the third star always means
-  // «كل وجبات اليوم» (see starsForDay).
-  const slotsPerDay = new Map<number, Set<string>>();
-  for (const c of happened) {
-    if (!slotsPerDay.has(c.day_index)) slotsPerDay.set(c.day_index, new Set());
-    slotsPerDay.get(c.day_index)!.add(c.slot);
-  }
-  const plannedPerDay = input.plannedMealSlotsPerDay ?? [];
+  // Meal-true family total: the DISH is the meal's identity, so a shared dinner
+  // marked by three people is ONE followed meal (household size can never
+  // inflate it), while mom's own lunch beside the children's is genuinely two.
+  // Each day is rated against ITS OWN planned dishes, so the third star always
+  // means «كل وجبات اليوم» (see starsForDay).
+  const dishesPerDay = cookedDishesPerDay(happened, input.dishKeys);
+  const plannedPerDay = input.plannedMealsPerDay ?? [];
   const days: SeasonDayCell[] = Array.from({ length: 7 }, (_, i) => {
-    const cookedSlots = slotsPerDay.get(i)?.size ?? 0;
-    const plannedSlots = Math.max(0, Math.floor(plannedPerDay[i] ?? 0));
+    const cookedMeals = countDishes(dishesPerDay.get(i));
+    const plannedMeals = Math.max(0, Math.floor(plannedPerDay[i] ?? 0));
     return {
       dayIndex: i,
-      lit: cookedSlots > 0,
-      cookedSlots,
-      plannedSlots,
-      complete: plannedSlots > 0 && cookedSlots >= plannedSlots,
-      stars: starsForDay(cookedSlots, plannedSlots),
+      lit: cookedMeals > 0,
+      cookedMeals,
+      plannedMeals,
+      complete: plannedMeals > 0 && cookedMeals >= plannedMeals,
+      stars: starsForDay(cookedMeals, plannedMeals),
     };
   });
-  const activeDays = slotsPerDay.size;
+  const followedMeals = days.reduce((n, d) => n + d.cookedMeals, 0);
+  const activeDays = days.filter((d) => d.lit).length;
   const honored = activeDays >= HONOR_DAYS_GOAL;
 
   // ── Workouts: week-scoped, then done/moved only ─────────────────────────
@@ -486,9 +571,16 @@ export function computeSeasonStats(input: {
   const workoutActs = workoutActSet.size;
   const sessionsDone = new Set(effectiveWorkouts.map(workoutKey)).size;
 
+  // The ring fills toward the household's OWN week (planned meals + sessions)
+  // whenever the caller can derive it: now that every dish counts, a fixed
+  // capacity would peg a large family at 100% by midweek. CAP is the fallback.
+  const capacity =
+    input.weeklyCapacity && input.weeklyCapacity > 0
+      ? Math.floor(input.weeklyCapacity)
+      : CAP;
   const fillFrac = Math.min(
     1,
-    CAP > 0 ? (followedMeals + workoutActs) / CAP : 0,
+    capacity > 0 ? (followedMeals + workoutActs) / capacity : 0,
   );
   const hasActivity = followedMeals > 0 || workoutActs > 0;
 
