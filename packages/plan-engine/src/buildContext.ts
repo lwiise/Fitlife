@@ -439,7 +439,12 @@ export function getBeneficiaries(context: PlanPromptContext): Beneficiary[] {
   const list: Beneficiary[] = [
     {
       member_id: "mom",
-      member_name_ar: context.mom.display_name ?? "العميلة",
+      // Name-less owner → a neutral label, gendered by the answered الجنس. It
+      // surfaces as the member's tab name, so it must not call a male owner
+      // «العميلة».
+      member_name_ar:
+        context.mom.display_name ??
+        (context.mom.sex === "male" ? "العميل" : "العميلة"),
       role: "mom",
     },
   ];
