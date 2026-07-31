@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { canonicalRecipeKey } from "@fitlife/plan-engine";
 import { addDaysISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -17,6 +18,7 @@ import {
   collapseMealMarks,
   collapseWorkoutMarks,
   dayHasCookedMark,
+  dishKeyFor,
   isISODate,
   plannedMealSlots,
   workoutMarkingWindow,
@@ -56,10 +58,16 @@ export interface FamilySeasonProps {
    * the member has a workout plan, meals-only otherwise). `sessions` present
    * ONLY when the member is in the ready workout plan. */
   planned: Record<string, PlannedTotals>;
-  /** Distinct meal slots planned for each day of the plan week (indexed by
+  /** Distinct DISHES planned for each day of the plan week (indexed by
    * day_index, length 7) — the strip's star denominators, so a day shows three
    * stars only when ALL of its meals were cooked as written. */
-  plannedMealSlotsPerDay: number[];
+  plannedMealsPerDay: number[];
+  /** `${day_index}|${slot}|${member_id}` → dish identity: what makes the family
+   * total count real MEALS (one shared pot = one meal; two different dishes in
+   * a slot = two). */
+  dishKeys: Record<string, string>;
+  /** Planned dishes + planned sessions for the week — the ring's capacity. */
+  weeklyCapacity: number;
   weekStartDate?: string;
   /** The workout marking window (YYYY-MM-DD, inclusive) — the CURRENT
    * Sunday-anchored week the workout UI writes into. Scopes workout marks on the
@@ -190,24 +198,53 @@ export async function getFamilySeasonProps(
     };
   }
 
-  // Per-day star denominators — «كل وجبات اليوم» (owner directive 07/2026: the
-  // strip's third star is earned only by a fully cooked day). Meal identity is
-  // (day, slot) everywhere in the engagement layer — a shared lunch is ONE meal
-  // however many members eat it — so a day's plan is its DISTINCT slots, taken
-  // across the SEASON ROSTER only. The housekeeper is deliberately excluded
-  // (she is never in `members`, is never marked, and a slot only she carries
-  // would put a complete day out of the family's reach).
+  // Dish identities + per-day star denominators — «كل وجبات اليوم» (owner
+  // directive 07/2026: the third star is earned only by a fully cooked day, and
+  // the family's numbers must be the REAL count of meals).
+  //
+  // A family meal is a DISH: members who share one pot resolve to the same
+  // canonical recipe key, so their marks collapse into one meal however many
+  // people eat it; a member Sara gave their own recipe in the same slot is a
+  // SEPARATE meal, because it is separate cooking. Counting distinct slots
+  // instead used to hide those meals entirely — a house that cooked five dishes
+  // in a day read as three, and marking the fourth and fifth changed nothing.
+  //
+  // Both sides are built from the same derivation so the ring can always reach
+  // the plan: a member's marks are keyed (day, slot, member), so when a day
+  // gives one member two meals in one slot (two snacks) only the last is
+  // markable — `perSlot` keeps exactly that one, and it is what the denominator
+  // counts. The SEASON ROSTER only: the housekeeper is never marked, so her
+  // dishes must never put a complete day out of the family's reach.
   const rosterIds = new Set(members.map((m) => m.id));
-  const plannedSlotSets = Array.from({ length: 7 }, () => new Set<string>());
+  const dishKeys: Record<string, string> = {};
+  const plannedDishSets = Array.from({ length: 7 }, () => new Set<string>());
   for (const pm of latestPlan.plan_data.members) {
     if (!rosterIds.has(pm.member_id)) continue;
     for (const d of pm.days) {
-      const set = plannedSlotSets[d.day_index];
+      const set = plannedDishSets[d.day_index];
       if (!set) continue; // day_index outside [0,6] — never expected
-      for (const meal of d.meals) set.add(meal.slot);
+      const perSlot = new Map<string, string>();
+      for (const meal of d.meals) {
+        // The dish's identity, normalised the same way verdicts are keyed. A
+        // name that normalises to nothing falls back to slot identity, which
+        // merges that slot's marks — the old behaviour, never an inflation.
+        perSlot.set(
+          meal.slot,
+          canonicalRecipeKey(meal.recipe_name_ar) || `slot:${meal.slot}`,
+        );
+      }
+      for (const [slot, dish] of perSlot) {
+        dishKeys[dishKeyFor(d.day_index, slot, pm.member_id)] = dish;
+        set.add(`${slot}|${dish}`);
+      }
     }
   }
-  const plannedMealSlotsPerDay = plannedSlotSets.map((s) => s.size);
+  const plannedMealsPerDay = plannedDishSets.map((s) => s.size);
+  // A full week for THIS household: every planned dish plus every planned
+  // session — the ring's capacity, so its fill means «كم أتممنا من أسبوعنا».
+  const weeklyCapacity =
+    plannedMealsPerDay.reduce((n, d) => n + d, 0) +
+    members.reduce((n, m) => n + (plannedSessionsById.get(m.id) ?? 0), 0);
 
   const supabase = await createClient();
 
@@ -371,7 +408,9 @@ export async function getFamilySeasonProps(
     workoutCheckins,
     goalReached,
     planned,
-    plannedMealSlotsPerDay,
+    plannedMealsPerDay,
+    dishKeys,
+    weeklyCapacity,
     weekStartDate,
     workoutWeekStart,
     workoutWeekEnd,
