@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDayPrompt, buildSkeletonPrompt } from "./systemPrompt";
+import { buildDayPrompt, buildSkeletonPrompt, STATIC_SYSTEM } from "./systemPrompt";
 import type { PlanPromptContext } from "./buildContext";
 import type { PlanSkeleton } from "./schema";
 
@@ -69,6 +69,51 @@ const skeleton: PlanSkeleton = {
   methodology_notes_ar: "ملاحظات",
   safety_disclaimer_ar: "تنبيه",
 };
+
+// The account owner is the plan's READER. A male owner was still being written
+// to in the feminine: the day prompt ordered «صيغة المؤنث» unconditionally, so
+// every recipe step and note came back addressed to a woman.
+describe("owner gender drives the addressed voice", () => {
+  function maleOwner(): PlanPromptContext {
+    const ctx = makeMomContext("shared");
+    ctx.mom.sex = "male";
+    ctx.mom.display_name = "أبو محمد";
+    return ctx;
+  }
+
+  it("orders masculine address in a male owner's day prompt", () => {
+    const prompt = buildDayPrompt(maleOwner(), skeleton, 0, "اليوم 1");
+    expect(prompt).toContain("خاطبي قارئ الخطة بصيغة **المذكر**");
+    expect(prompt).not.toContain("خاطبي قارئة الخطة");
+  });
+
+  it("keeps feminine address for a female owner", () => {
+    const prompt = buildDayPrompt(makeMomContext("shared"), skeleton, 0, "اليوم 1");
+    expect(prompt).toContain("خاطبي قارئة الخطة بصيغة **المؤنث**");
+    expect(prompt).not.toContain("خاطبي قارئ الخطة");
+  });
+
+  it("names a male owner العميل and picks his BMR formula", () => {
+    const prompt = buildSkeletonPrompt(maleOwner());
+    expect(prompt).toContain("العميل (رب الأسرة)");
+    expect(prompt).not.toContain("العميلة (الأم)");
+    expect(prompt).toContain("معادلة BMR للذكر");
+  });
+
+  it("genders the questionnaire section headers", () => {
+    const ctx = maleOwner();
+    ctx.mom.notes = "أفضل وجبات سريعة";
+    const prompt = buildSkeletonPrompt(ctx);
+    expect(prompt).toContain("ملاحظات إضافية من العميل");
+    expect(prompt).not.toContain("ملاحظات إضافية من العميلة");
+  });
+
+  // The safe-calorie floors live in the cached methodology, and were written
+  // for women only — a man's plan would otherwise inherit a female floor.
+  it("does not leave the female calorie floor as the only stated limit", () => {
+    expect(STATIC_SYSTEM).toContain("الرجل البالغ: الأرقام أعلاه حدود نسائية");
+  });
+});
 
 describe("buildDayPrompt — mom meal_mode", () => {
   it("flags 'independent' as the own-dishes exception for mom", () => {

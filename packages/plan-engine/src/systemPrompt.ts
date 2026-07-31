@@ -185,6 +185,20 @@ function labeled(map: Record<string, string>, key: string | null | undefined): s
   return map[key] ?? key;
 }
 
+/**
+ * The ACCOUNT OWNER's answered الجنس, as a picker — the same contract as the
+ * app's lib/copy/gender.ts. The owner is the plan's reader: every section that
+ * names them, and every instruction addressed TO them, follows this. Feminine
+ * is the fallback only for a profile that never answered (legacy rows) — it is
+ * NOT a blanket default applied to male owners.
+ * Imperatives addressed to Sara herself (طبّقي، اكتبي…) stay feminine: she is
+ * the coach persona, not the reader.
+ */
+function ownerG(context: PlanPromptContext) {
+  const male = context.mom.sex === "male";
+  return (feminine: string, masculine: string): string => (male ? masculine : feminine);
+}
+
 function describeMom(c: PlanPromptContext): string {
   const m = c.mom;
   // The account owner is female by default; a male owner (الجنس asked at
@@ -491,6 +505,7 @@ const SARA_METHODOLOGY = `## معادلة السعرات (Mifflin-St Jeor للب
 - المرأة البالغة: الحد الأدنى 1600 سعرة/يوم في الظروف الطبيعية.
 - أقل من 1400 سعرة/يوم: يتطلب تبريراً صريحاً وإشرافاً مختصاً — لا تنزلي تحته.
 - 1500 سعرة: مقبول فقط إذا دعمه حساب TDEE وكانت الماكروز والمغذيات كافية وبدون أعراض.
+- الرجل البالغ: الأرقام أعلاه حدود نسائية ولا تُطبَّق عليه. التزمي بقاعدة العجز النسبي (TDEE − 15% إلى 20%)، ولا تنزلي بسعراته اليومية تحت معدل الأيض الأساسي (BMR) المحسوب له.
 هذه الحدود للبالغين فقط — الأطفال يُخطَّط لهم بالحصص لا بالسعرات.
 
 ## الحالات التي تتطلب طبيباً قبل الخطة
@@ -769,7 +784,7 @@ function familyWideText(context: PlanPromptContext): string {
 function feedbackText(context: PlanPromptContext): string {
   const fb = context.user_feedback?.trim();
   if (!fb) return "";
-  return `\n\n# ملاحظات العميلة (راعيها في هذه الخطة الجديدة)
+  return `\n\n# ${ownerG(context)("ملاحظات العميلة", "ملاحظات العميل")} (راعيها في هذه الخطة الجديدة)
 ${fb}
 طبّقي هذه الملاحظات قدر الإمكان مع الحفاظ على منهجيتك وأسلوب كتابك وبنية الوصفات والقواعد الصحية.`;
 }
@@ -851,7 +866,7 @@ function deepDiveText(context: PlanPromptContext): string {
     lines.push(`- ${label}: ${rendered}`);
   }
   if (lines.length === 0) return "";
-  return `\n\n# نمط حياة العميلة (تفاصيل إضافية من الاستبيان)
+  return `\n\n# ${ownerG(context)("نمط حياة العميلة", "نمط حياة العميل")} (تفاصيل إضافية من الاستبيان)
 ${lines.join("\n")}
 راعيها في توزيع الوجبات وأسلوب الطبخ والتنويع، مع بقاء المنهجية والقواعد الصحية أولاً.`;
 }
@@ -864,7 +879,7 @@ ${lines.join("\n")}
 function momNotesText(context: PlanPromptContext): string {
   const n = context.mom.notes?.trim();
   if (!n) return "";
-  return `\n\n# ملاحظات إضافية من العميلة (من الاستبيان)
+  return `\n\n# ${ownerG(context)("ملاحظات إضافية من العميلة", "ملاحظات إضافية من العميل")} (من الاستبيان)
 ${n}
 راعيها قدر الإمكان مع الحفاظ على منهجيتك والقواعد الصحية.`;
 }
@@ -1040,7 +1055,10 @@ ${memberBlocks}${familyWideText(context)}${feedbackText(context)}
 - st (خطوات التحضير): 3 خطوات قصيرة كحد أقصى، صيغة أمر مباشرة بلا حشو.
 - الحقول الاختيارية (sub، nt): اتركيها فارغة تماماً إلا عند ضرورة حقيقية.
 - قائمة مكونات موجزة. "سلطة حرة" → u:"unlimited".
-- الكتابة بالعربية فقط، صيغة المؤنث، بدون علامات تعجب.
+- ${ownerG(context)(
+    "الكتابة بالعربية فقط، بدون علامات تعجب. خاطبي قارئة الخطة بصيغة **المؤنث** (اخلطي، أضيفي، قدّمي).",
+    "الكتابة بالعربية فقط، بدون علامات تعجب. خاطبي قارئ الخطة بصيغة **المذكر** (اخلط، أضف، قدّم) — لا تستخدمي صيغة المؤنث في خطوات التحضير أو الملاحظات.",
+  )}
 
 # الإخراج
 أرجعي JSON صالحاً فقط لهذا اليوم. استخدمي **المفاتيح المختصرة التالية بالضبط** (لتصغير الحجم)، ولا تضيفي أي مفاتيح أخرى (لا day_total ولا slot_name_ar — نحسبهما نحن):
