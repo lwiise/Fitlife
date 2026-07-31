@@ -10,6 +10,7 @@ import {
   GENERATION_SILENCE_LIMIT_MS,
   SERVER_VERDICT_MARGIN_MS,
   STALE_GENERATION_MIN,
+  WORKER_ACK_LIMIT_MS,
   ageMsFrom,
   generationHasStalled,
 } from "./generationTiming";
@@ -134,5 +135,33 @@ describe("ageMsFrom", () => {
     expect(
       generationHasStalled(twentyMinutesIn - freshAgeMs, twentyMinutesIn),
     ).toBe(false);
+  });
+});
+
+/**
+ * The invocation-ACK verdict. The worker stamps `worker_ack_at` before any model
+ * call, so its absence is a much sharper signal than silence — and it must be
+ * answered much sooner, since a run that never started will never start.
+ */
+describe("worker ACK verdict", () => {
+  it("resolves far sooner than the generic stall", () => {
+    // The whole point: "never started" must not cost the customer the same
+    // fifteen minutes as "still working".
+    expect(WORKER_ACK_LIMIT_MS).toBeLessThan(GENERATION_SILENCE_LIMIT_MS);
+    expect(WORKER_ACK_LIMIT_MS).toBeLessThan(STALE_GENERATION_MIN * 60_000);
+  });
+
+  it("still gives a healthy worker room to ACK", () => {
+    // The ACK is written before the first model call, so it lands in ~1s. A
+    // limit under ~10s would start failing live runs on cold starts alone.
+    expect(WORKER_ACK_LIMIT_MS).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it("keeps the client's broken-poll fallback strictly after the server's verdict", () => {
+    // Same ordering rule as the 15-minute case: the server's specific answer
+    // must always beat the client's generic one.
+    const clientBrokenPollAt = WORKER_ACK_LIMIT_MS + SERVER_VERDICT_MARGIN_MS;
+    expect(clientBrokenPollAt).toBeGreaterThan(WORKER_ACK_LIMIT_MS);
+    expect(clientBrokenPollAt).toBeLessThan(GENERATION_SILENCE_LIMIT_MS);
   });
 });

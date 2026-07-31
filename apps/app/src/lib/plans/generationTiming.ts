@@ -60,6 +60,24 @@ export const GENERATION_SILENCE_LIMIT_MS =
   STALE_GENERATION_MIN * 60_000 + SERVER_VERDICT_MARGIN_MS;
 
 /**
+ * How long a plan row may sit with NO invocation ACK from the background worker
+ * before we conclude the run never started.
+ *
+ * This is a much sharper question than "is it stuck", and it deserves a much
+ * shorter answer. The worker's ACK is written before any model call — within a
+ * second or two of invocation — so its absence after a minute and a half does
+ * not mean "slow", it means "nothing is coming". The 15-minute staleness rule
+ * cannot tell those apart, which is why a misconfigured worker (a rejected
+ * shared secret, a missing key) presented as a quarter-hour blank spinner
+ * instead of an error the customer could act on.
+ *
+ * Generous relative to the thing it measures — a healthy ACK lands ~100x sooner
+ * — because the cost of firing early is a false failure on a live run, while the
+ * cost of firing late is only a slightly longer wait before a truthful message.
+ */
+export const WORKER_ACK_LIMIT_MS = 90_000;
+
+/**
  * Age in ms of an ISO timestamp, floored at 0.
  *
  * An absent or unparseable timestamp yields 0 — "written just now", the most

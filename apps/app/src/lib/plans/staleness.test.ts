@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { MealPlan } from "@fitlife/plan-engine";
 
 import { resolveStaleness, STALE_GENERATION_MIN } from "./staleness";
+import { WORKER_ACK_LIMIT_MS } from "./generationTiming";
 
 const NOW = Date.parse("2026-07-27T16:00:00.000Z");
 const minutesAgo = (m: number) => new Date(NOW - m * 60_000).toISOString();
@@ -194,5 +195,96 @@ describe("resolveStaleness — nothing to show still fails honestly", () => {
       now: NOW,
     });
     expect(out.status).toBe("failed");
+  });
+});
+
+/**
+ * The invocation ACK. A run refused before it began — rejected shared secret,
+ * missing key, a body the handler rejected — returns before the only code that
+ * terminalizes the row, and Netlify's pre-handler 202 hides that from the
+ * dispatcher. Without this rule the account is indistinguishable from a healthy
+ * slow run for a full fifteen minutes.
+ */
+describe("resolveStaleness — the worker never acknowledged the invocation", () => {
+  const secondsAgo = (sec: number) => new Date(NOW - sec * 1000).toISOString();
+
+  it("fails a generating row that never got an ACK, well before the stale window", () => {
+    const r = resolveStaleness({
+      status: "generating",
+      planData: null,
+      updatedAt: secondsAgo(WORKER_ACK_LIMIT_MS / 1000 + 5),
+      errorMessage: null,
+      workerAcked: false,
+      now: NOW,
+    });
+    expect(r.status).toBe("failed");
+    expect(r.inProgress).toBe(false);
+    // Names the real problem rather than blaming duration.
+    expect(r.errorMessage).toContain("لم تبدأ");
+  });
+
+  it("stays patient inside the ACK window", () => {
+    const r = resolveStaleness({
+      status: "generating",
+      planData: null,
+      updatedAt: secondsAgo(WORKER_ACK_LIMIT_MS / 1000 - 10),
+      errorMessage: null,
+      workerAcked: false,
+      now: NOW,
+    });
+    expect(r.status).toBe("generating");
+  });
+
+  it("never fires for a worker that DID ack — that run keeps the full 15 minutes", () => {
+    // The regression that would hurt most: a live run failed at 90 seconds.
+    const r = resolveStaleness({
+      status: "generating",
+      planData: null,
+      updatedAt: secondsAgo(WORKER_ACK_LIMIT_MS / 1000 + 300),
+      errorMessage: null,
+      workerAcked: true,
+      now: NOW,
+    });
+    expect(r.status).toBe("generating");
+  });
+
+  it("defaults to ACKed when the caller omits the field", () => {
+    // Rows predating the ACK carry no marker; treating them as "never started"
+    // would retroactively fail every in-flight plan on the deploy that ships it.
+    const r = resolveStaleness({
+      status: "generating",
+      planData: null,
+      updatedAt: secondsAgo(WORKER_ACK_LIMIT_MS / 1000 + 300),
+      errorMessage: null,
+      now: NOW,
+    });
+    expect(r.status).toBe("generating");
+  });
+
+  it("keeps a partial week rather than failing it, even with no ACK", () => {
+    // Content is proof the worker ran, whatever the ACK flag claims — the
+    // partial-week rule must still win.
+    const r = resolveStaleness({
+      status: "generating",
+      planData: makePlan({ filledDays: 4 }),
+      updatedAt: minutesAgo(STALE_GENERATION_MIN + 1),
+      errorMessage: null,
+      workerAcked: false,
+      now: NOW,
+    });
+    expect(r.status).toBe("ready");
+    expect(r.planData).not.toBeNull();
+  });
+
+  it("preserves a real error message instead of the generic ACK one", () => {
+    const r = resolveStaleness({
+      status: "generating",
+      planData: null,
+      updatedAt: secondsAgo(WORKER_ACK_LIMIT_MS / 1000 + 5),
+      errorMessage: "boom",
+      workerAcked: false,
+      now: NOW,
+    });
+    expect(r.errorMessage).toBe("boom");
   });
 });

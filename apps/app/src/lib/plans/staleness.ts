@@ -7,7 +7,7 @@ import { planHasContent, type MealPlan } from "@fitlife/plan-engine";
 // staleness contract, and that is the right place for them to read it.
 export { STALE_GENERATION_MIN } from "./generationTiming";
 
-import { STALE_GENERATION_MIN } from "./generationTiming";
+import { STALE_GENERATION_MIN, WORKER_ACK_LIMIT_MS } from "./generationTiming";
 
 export interface StalenessInput {
   status: "generating" | "ready" | "failed";
@@ -15,6 +15,17 @@ export interface StalenessInput {
   /** meal_plans.updated_at (ISO). Unparseable is treated as infinitely old. */
   updatedAt: string;
   errorMessage: string | null;
+  /**
+   * Whether the background worker wrote its invocation ACK (`worker_ack_at` in
+   * plan_data) for this row. False means we have no evidence the worker ever
+   * ran — which, past WORKER_ACK_LIMIT_MS, is the difference between a slow run
+   * and a run that was never going to happen.
+   *
+   * Defaults to TRUE when omitted, which is deliberate: rows created before the
+   * ACK existed carry no marker, and treating those as "never started" would
+   * retroactively fail every in-flight plan on the deploy that ships this.
+   */
+  workerAcked?: boolean;
   now?: number;
 }
 
@@ -62,6 +73,34 @@ export function resolveStaleness(input: StalenessInput): StalenessResult {
     status === "generating" ||
     (status === "ready" && planData?.generating === true) ||
     planEmpty;
+
+  // The worker never acknowledged the invocation.
+  //
+  // This runs ABOVE the staleness branch because it answers a sharper question
+  // far sooner. A run that was refused before it began — rejected shared secret,
+  // missing key, a body the handler rejected — returns before the only code that
+  // terminalizes the row, and Netlify's pre-handler 202 hides that from the
+  // dispatcher. Without this rule such an account is indistinguishable from a
+  // healthy slow run for a full fifteen minutes, and then reports the mushy
+  // «تاخذ وقت أطول من المتوقع» rather than the truth, which is that nothing ever
+  // started. `workerAcked` defaults true, so this can only ever fire for rows
+  // that genuinely carry no ACK.
+  const ackMissing = input.workerAcked === false;
+  if (
+    status === "generating" &&
+    !hasContent &&
+    ackMissing &&
+    now - updatedMs >= WORKER_ACK_LIMIT_MS
+  ) {
+    console.warn("[getLatestPlan] no worker ACK; run never started");
+    return {
+      status: "failed",
+      planData: null,
+      inProgress: false,
+      errorMessage:
+        errorMessage ?? "لم تبدأ عملية إنشاء الخطة. حاولي مرة ثانية.",
+    };
+  }
 
   if (!stillInFlight || ageMin < STALE_GENERATION_MIN) {
     return {

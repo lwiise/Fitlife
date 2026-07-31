@@ -420,6 +420,20 @@ export async function triggerPlanGeneration(params: {
     // wrote, the next dispatch clears the stale row instead of deadlocking on
     // 'busy'. Every other dispatch error keeps the old fail-fast behaviour.
     if (err instanceof Error && err.name === "TimeoutError") {
+      // Report it as generating (see above) but LEAVE A TRACE. This was the one
+      // error path that recorded nothing anywhere: every other one writes
+      // 'failed' below, while this returned ok:true and the run's absence became
+      // indistinguishable from a worker that simply hadn't finished. Service-role
+      // because plan_generations lost its user UPDATE policy in 00024.
+      try {
+        await createAdminClient()
+          .from("plan_generations")
+          .update({ error_message: "enqueue unconfirmed (timeout)" })
+          .eq("meal_plan_id", mealPlanId)
+          .eq("status", "started");
+      } catch (noteErr) {
+        console.error("[triggerPlanGeneration] could not note unconfirmed enqueue", noteErr);
+      }
       return { ok: true, mealPlanId, status: "generating" };
     }
     const errorMessage =

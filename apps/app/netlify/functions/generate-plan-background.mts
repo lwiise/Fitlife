@@ -458,12 +458,48 @@ const handler = async (req: Request): Promise<Response> => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-  if (!expected || !serviceKey || !timingSafeEqualStr(req.headers.get("x-internal-secret"), expected)) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-  if (!supabaseUrl || !anthropicKey) {
-    console.error("[generate-plan-background] missing env");
+  // A missing SUPABASE_SERVICE_ROLE_KEY is a MISCONFIGURATION, not a failed
+  // auth. It used to be folded into the 401 below, so the one variable whose
+  // absence stops this worker dead reported itself as "Unauthorized" — the
+  // least diagnosable answer available. Check the env first, and NAME what is
+  // missing.
+  if (!serviceKey || !supabaseUrl || !anthropicKey) {
+    const missingEnv = [
+      !serviceKey && "SUPABASE_SERVICE_ROLE_KEY",
+      !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL",
+      !anthropicKey && "ANTHROPIC_API_KEY",
+    ].filter(Boolean) as string[];
+    console.error("[generate-plan-background] missing env", { missingEnv });
+    await captureToSentry(
+      new Error(`background function missing env: ${missingEnv.join(", ")}`),
+      { step: "bg-env-gate", tags: { missing: missingEnv.join(",") } },
+    );
     return new Response("Server misconfigured", { status: 500 });
+  }
+  if (
+    !expected ||
+    !timingSafeEqualStr(req.headers.get("x-internal-secret"), expected)
+  ) {
+    // Netlify answers a *-background function with 202 BEFORE this handler runs,
+    // so the dispatcher can never observe this refusal — and until now it also
+    // printed NOTHING. That made a secret mismatch the most invisible way for
+    // generation to stop working: the plan row sits 'generating', the app
+    // believes it enqueued fine, and no log anywhere mentions the run. Record
+    // it. Presence and lengths only — never the values themselves.
+    const received = req.headers.get("x-internal-secret");
+    console.error("[generate-plan-background] auth rejected", {
+      hasInternalSecret: !!process.env.INTERNAL_FUNCTION_SECRET?.trim(),
+      receivedLen: received?.length ?? 0,
+      expectedLen: expected?.length ?? 0,
+    });
+    await captureToSentry(new Error("background function auth rejected"), {
+      step: "bg-auth-gate",
+      tags: {
+        hasInternalSecret: String(!!process.env.INTERNAL_FUNCTION_SECRET?.trim()),
+        secretsMatchLength: String((received?.length ?? 0) === (expected?.length ?? 0)),
+      },
+    });
+    return new Response("Unauthorized", { status: 401 });
   }
 
   let body: {
@@ -744,6 +780,39 @@ const handler = async (req: Request): Promise<Response> => {
       level: "warning",
     });
   }
+
+  // ── Invocation ACK ──────────────────────────────────────────────────────
+  // The worker's "I exist" write, made as early as it safely can be: after the
+  // idempotency probe (so a duplicate invocation on a finished row returns above
+  // and never touches plan_data) and before any model call.
+  //
+  // Why it has to exist: every refusal above this line — the 401, the env 500, a
+  // 400 on a malformed body — returns BEFORE the try block whose catch is the
+  // only code that terminalizes the row, and Netlify's pre-handler 202 hides all
+  // of it from the dispatcher. So "the worker never ran" and "the worker is
+  // still working" were the SAME observable state: status 'generating', empty
+  // plan_data, for fifteen minutes. This write separates them, and
+  // resolveStaleness turns its ABSENCE into a real, retryable error after
+  // WORKER_ACK_LIMIT_MS instead of a blank spinner.
+  //
+  // It lives in plan_data rather than a new column so this ships with no
+  // migration: the field is inert while generating (getLatestPlan only Zod-parses
+  // plan_data once status is 'ready') and the first real emit() overwrites the
+  // object wholesale. The write also bumps updated_at through the meal_plans
+  // trigger, a truthful "alive" signal for the existing staleness contract.
+  //
+  // `status=eq.generating` is belt-and-braces on top of the probe: a row that
+  // already holds a plan can never be blanked by an ACK, whatever order things
+  // arrive in. Not wrapped in a swallowing try — a worker that cannot write this
+  // cannot persist a result later either, so failing loudly beats running a full
+  // generation whose output has nowhere to go.
+  await sbUpdate(
+    supabaseUrl,
+    serviceKey,
+    "meal_plans",
+    `id=eq.${mealPlanId}&status=eq.generating`,
+    { plan_data: { worker_ack_at: new Date().toISOString() } },
+  );
 
   const startMs = Date.now();
   // Netlify kills this function at its budget without running any catch, so the
@@ -1055,7 +1124,26 @@ const handler = async (req: Request): Promise<Response> => {
         },
       );
     } catch (updateErr) {
+      // This is the last line of defence: the run already failed, and if THIS
+      // write is also lost the row stays 'generating' with no explanation — the
+      // exact silent state the invocation ACK exists to expose. A bare
+      // console.error made it invisible outside Netlify's log retention, so
+      // retry the plan row once (the row the customer's screen actually reads)
+      // and report either way.
       console.error("[generate-plan-background] failed to mark rows failed", updateErr);
+      try {
+        await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
+          status: "failed",
+          error_message: errorMessage,
+        });
+      } catch (retryErr) {
+        console.error("[generate-plan-background] terminalize retry failed", retryErr);
+      }
+      await captureToSentry(updateErr, {
+        step: "meal-terminalize",
+        userId,
+        mealPlanId,
+      });
     }
   }
 

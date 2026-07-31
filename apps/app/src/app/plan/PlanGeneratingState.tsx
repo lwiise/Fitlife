@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
-import { generationHasStalled } from "@/lib/plans/generationTiming";
+import {
+  SERVER_VERDICT_MARGIN_MS,
+  WORKER_ACK_LIMIT_MS,
+  generationHasStalled,
+} from "@/lib/plans/generationTiming";
 
 const POLL_INTERVAL_MS = 3000;
 // Generation runs one concurrent Anthropic call per family member; the slowest
@@ -43,6 +47,12 @@ export function PlanGeneratingState({
   // default — and the first poll (fired immediately below) corrects it, so a
   // reload can no longer hand a long-dead run a fresh window.
   const lastWriteAtRef = useRef(0);
+  // Whether ANY poll has ever come back 2xx. If none has, the silence we are
+  // measuring is our own — an expired session (401) or a missing row (404) —
+  // not the worker's, and saying «العملية تاخذ وقت أطول من المتوقع» would blame
+  // the wrong thing.
+  const sawAnyPollRef = useRef(false);
+  const [pollBroken, setPollBroken] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +85,7 @@ export function PlanGeneratingState({
       try {
         const res = await fetch("/api/plans/status", { cache: "no-store" });
         if (res.ok) {
+          sawAnyPollRef.current = true;
           const body = (await res.json()) as {
             id: string;
             status: string;
@@ -104,6 +115,21 @@ export function PlanGeneratingState({
       } catch {
         // network blip — fall through to the stall check, which is what turns a
         // permanently-broken poll into an answer instead of an endless spinner.
+      }
+
+      // A poll that has NEVER succeeded is a different failure with a different
+      // remedy, and it resolves much sooner: the server can't be telling us
+      // anything, so there is nothing to wait for. Sits just past the server's
+      // own ACK verdict so a working session always gets the specific answer
+      // first.
+      if (
+        !sawAnyPollRef.current &&
+        Date.now() - mountedAt >= WORKER_ACK_LIMIT_MS + SERVER_VERDICT_MARGIN_MS
+      ) {
+        stopTimers();
+        setPollBroken(true);
+        setTimedOut(true);
+        return;
       }
 
       // Stuck means "nothing has written to the row", never "the wall clock ran
@@ -137,13 +163,18 @@ export function PlanGeneratingState({
     return (
       <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
         <h1 className="font-extrabold text-xl text-brand-ink leading-tight">
-          العملية تاخذ وقت أطول من المتوقع
+          {pollBroken ? "انقطع الاتصال بالخادم" : "العملية تاخذ وقت أطول من المتوقع"}
         </h1>
         <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-          {g(
-            "حدّثي الصفحة عشان تشيكين إذا الخطة جاهزة، أو حاولي مرة ثانية بعد دقيقة.",
-            "حدّث الصفحة عشان تشيك إذا الخطة جاهزة، أو حاول مرة ثانية بعد دقيقة.",
-          )}
+          {pollBroken
+            ? g(
+                "ما قدرنا نتابع حالة الخطة. تأكدي من الاتصال وحدّثي الصفحة — إذا استمرت المشكلة سجّلي الدخول من جديد.",
+                "ما قدرنا نتابع حالة الخطة. تأكد من الاتصال وحدّث الصفحة — إذا استمرت المشكلة سجّل الدخول من جديد.",
+              )
+            : g(
+                "حدّثي الصفحة عشان تشيكين إذا الخطة جاهزة، أو حاولي مرة ثانية بعد دقيقة.",
+                "حدّث الصفحة عشان تشيك إذا الخطة جاهزة، أو حاول مرة ثانية بعد دقيقة.",
+              )}
         </p>
         <button
           type="button"

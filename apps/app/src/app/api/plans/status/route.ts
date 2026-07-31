@@ -36,6 +36,11 @@ export async function GET() {
     // device clock. This is the signal it uses to tell "still working" from
     // "stuck" — see lib/plans/generationTiming.ts.
     age_ms: ageMsFrom(latest.updated_at, Date.now()),
+    // False on a 'generating' row means the worker never acknowledged the
+    // invocation — "never started", not "slow". The server already converts a
+    // sustained absence into a real failure; this lets the client word its own
+    // fallback honestly too.
+    acked: latest.worker_acked,
     in_progress: latest.in_progress,
     error_message: latest.status === "failed" ? latest.error_message : null,
   });

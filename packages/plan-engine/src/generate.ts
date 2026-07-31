@@ -1529,7 +1529,19 @@ export async function generateMealPlan(params: {
     // run (up to 6) emits a week of dish names per member and was truncating at
     // the old fixed 16000, which threw and failed the WHOLE generation.
     const skeletonCap = skeletonMaxTokens(needsSkeleton.length);
-    const skeletonTimeout = bigCallTimeoutMs(needsSkeleton.length, false);
+    // Clamp the skeleton to the run's remaining budget, exactly as generateDay
+    // already does for each day call. Phase 1 was the one leg that ignored the
+    // deadline entirely: bigCallTimeoutMs can allow up to ~600s for a large
+    // household, and the truncation retry below can spend it a SECOND time, so a
+    // big enough family could burn the whole 15-minute Netlify budget inside the
+    // skeleton and be hard-killed before the first emit() — no catch, no terminal
+    // row, and (before the invocation ACK) nothing to distinguish it from a
+    // worker that never started. Free-access mode is what makes households that
+    // large reachable, since the tier cap no longer bounds member count.
+    const skeletonTimeout = Math.min(
+      bigCallTimeoutMs(needsSkeleton.length, false),
+      Math.max(MIN_VIABLE_CALL_MS, remainingMs(deadlineMs)),
+    );
     const runSkeleton = (maxTokens: number) =>
       streamAnthropic({
         apiKey: anthropicApiKey,
@@ -1549,6 +1561,16 @@ export async function generateMealPlan(params: {
     // ceiling) before giving up — counts the wasted first attempt's tokens toward
     // cost accounting.
     if (sk.stopReason === "max_tokens") {
+      // Don't start a second full-size call that cannot finish inside the run's
+      // remaining budget — that trade turns a recoverable truncation into a hard
+      // kill with no terminal row at all. Failing here reaches the handler's
+      // catch, which marks the plan failed and lets the user retry.
+      if (!canFit(deadlineMs, MIN_VIABLE_CALL_MS)) {
+        throw new PlanValidationError(
+          "skeleton truncated and no budget remains for a retry",
+          "",
+        );
+      }
       const retryMax = Math.min(MAX_OUTPUT_TOKENS, skeletonCap * 2);
       console.warn(
         `[plan-generate] skeleton truncated at ${skeletonCap} — retrying with ${retryMax}`,
