@@ -223,7 +223,31 @@ export function PlanViewer({
   // Marks in flight — while > 0 the optimistic maps are the truth and the
   // props-resync below must hold off (the server hasn't confirmed yet).
   const [pendingWrites, setPendingWrites] = useState(0);
-  const endWrite = () => setPendingWrites((n) => n - 1);
+  const endWrite = () => setPendingWrites((n) => Math.max(0, n - 1));
+
+  /**
+   * Run a write with a hard ceiling on how long it can hold the resync gate.
+   *
+   * `pendingWrites` blocks the re-seed below so an in-flight tap never flickers
+   * back. That is right, but it made a HUNG action (one that neither resolves
+   * nor rejects) permanent: the counter never returned to zero, so every later
+   * server update was ignored and the plan view silently stopped reflecting
+   * server truth — no error, no spinner, nothing to see. The ceiling releases
+   * the gate; the pending promise's own .finally is idempotent via the clamp
+   * above.
+   */
+  const WRITE_GATE_TIMEOUT_MS = 15_000;
+  const beginWrite = (): (() => void) => {
+    setPendingWrites((n) => n + 1);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      endWrite();
+    };
+    setTimeout(release, WRITE_GATE_TIMEOUT_MS);
+    return release;
+  };
 
   // Re-seed the optimistic maps whenever the server sends fresh rows (an
   // action's own revalidation, the generation poll's router.refresh, a soft
@@ -313,7 +337,7 @@ export function PlanViewer({
     else next.set(key, verdict);
     setVerdictMap(next);
     setCheckinError(null);
-    setPendingWrites((n) => n + 1);
+    const release = beginWrite();
     void setMealVerdictAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -336,7 +360,7 @@ export function PlanViewer({
       .catch(() => {
         /* transport failure — the next props-resync restores server truth */
       })
-      .finally(endWrite);
+      .finally(release);
   }
 
   /** One member's own mark: an individual meal, or a member who is OUT of a
@@ -369,7 +393,7 @@ export function PlanViewer({
     }
     setCheckinMap(next);
     setCheckinError(null);
-    setPendingWrites((n) => n + 1);
+    const release = beginWrite();
     void setMealCheckinAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -394,7 +418,7 @@ export function PlanViewer({
       .catch(() => {
         /* transport failure — the next props-resync restores server truth */
       })
-      .finally(endWrite);
+      .finally(release);
   }
 
   /** ONE tap = one status for the whole shared dish: optimistic fan-out to
@@ -423,7 +447,7 @@ export function PlanViewer({
     }
     setCheckinMap(next);
     setCheckinError(null);
-    setPendingWrites((n) => n + 1);
+    const release = beginWrite();
     void setSharedMealCheckinAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -448,7 +472,7 @@ export function PlanViewer({
       .catch(() => {
         /* transport failure — the next props-resync restores server truth */
       })
-      .finally(endWrite);
+      .finally(release);
   }
 
   /** Exclude/restore a sharer for one meal occurrence («إزالة من الوجبة»).
@@ -500,7 +524,7 @@ export function PlanViewer({
       setCheckinMap((cur) => new Map(cur).set(key, donorState));
     }
     setCheckinError(null);
-    setPendingWrites((n) => n + 1);
+    const release = beginWrite();
     void setMealAbsenceAction({
       meal_plan_id: planId,
       day_index: activeDayIndex,
@@ -554,7 +578,7 @@ export function PlanViewer({
       .catch(() => {
         /* transport failure — the next props-resync restores server truth */
       })
-      .finally(endWrite);
+      .finally(release);
   }
 
   // The ?member= param only seeds the initial tab; strip it after mount so a

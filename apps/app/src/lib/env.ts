@@ -92,3 +92,23 @@ export function getLemonsqueezyWebhookSecret(): string {
 export function getSupabaseServiceRoleKey(): string {
   return requireServerEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
+
+/**
+ * Shared secret authenticating the app -> Netlify background-function hop.
+ *
+ * This used to BE the Supabase service-role key: the database master
+ * credential, sent as a request header on every generation, to a URL built from
+ * a NEXT_PUBLIC_ variable. Any misconfiguration of that variable sends the key
+ * somewhere else, and it lands in the request-header log of anything on the
+ * path. A dedicated secret has none of that blast radius.
+ *
+ * Falls back to the service-role key when unset so existing deployments keep
+ * working through the rollout — set INTERNAL_FUNCTION_SECRET in Netlify (any
+ * long random string, matched on both sides) and the fallback stops being used.
+ */
+export function getInternalFunctionSecret(): string {
+  return (
+    process.env.INTERNAL_FUNCTION_SECRET?.trim() ||
+    requireServerEnv("SUPABASE_SERVICE_ROLE_KEY")
+  );
+}

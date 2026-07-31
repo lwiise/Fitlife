@@ -30,7 +30,11 @@ import {
   canRegenerateMemberPlan,
   type AccessResult,
 } from "@/lib/subscription/access";
-import { env, getAnthropicKey, getSupabaseServiceRoleKey } from "@/lib/env";
+import {
+  env,
+  getAnthropicKey,
+  getInternalFunctionSecret,
+} from "@/lib/env";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -374,7 +378,7 @@ export async function triggerPlanGeneration(params: {
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFunctionSecret(),
         },
         body: JSON.stringify({
           userId,
@@ -547,7 +551,7 @@ export async function triggerPlanTranslation(params: {
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFunctionSecret(),
         },
         // Don't ship the whole plan in the body (same payload-limit reasoning as
         // generation above) — the bg fn re-reads plan_data by mealPlanId.
@@ -675,7 +679,7 @@ export async function triggerWorkoutGeneration(params: {
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
         headers: {
           "content-type": "application/json",
-          "x-internal-secret": getSupabaseServiceRoleKey(),
+          "x-internal-secret": getInternalFunctionSecret(),
         },
         body: JSON.stringify({ mode: "workout", userId, workoutPlanId, weekStartDate }),
       },

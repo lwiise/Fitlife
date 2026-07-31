@@ -455,6 +455,12 @@ export function MemberWizard({
   };
 
   const submit = () => {
+    // Double-submit guard. addFamilyMember has no idempotency key and computes
+    // display_order with a read-then-write, so two overlapping submits create
+    // the same person twice — which then counts against the tier limit. The
+    // button is disabled while pending, but a fast double-tap can still land
+    // two calls before React re-renders.
+    if (isPending) return;
     const input = assemble();
     if (!input.name || input.name.length < 2) return setError(g("اكتبي الاسم", "اكتب الاسم"));
     if (!input.birth_year) return setError(g("اكتبي سنة الميلاد", "اكتب سنة الميلاد"));

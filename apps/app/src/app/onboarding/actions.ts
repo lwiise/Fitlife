@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
-import { isValidTier, isValidCadence } from "@/lib/tierIntent";
 import { triggerPlanGeneration, triggerPlanTranslation ,
   triggerWorkoutGeneration,
 } from "@/lib/plans/dispatch";
@@ -16,7 +15,10 @@ import {
   hasLiveLemonsqueezySubscription,
 } from "@/lib/subscription/state";
 import { isFreeAccessMode } from "@/lib/subscription/freeAccess";
-import { countBeneficiaries } from "@/lib/subscription/access";
+import {
+  countBeneficiaries,
+  canGenerateForFamilyChange,
+} from "@/lib/subscription/access";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { memberEditIsSubstantive } from "@/lib/plans/memberEdit";
 import {
@@ -69,8 +71,6 @@ type ProfileUpdates = Partial<{
   consulted_doctor: boolean;
 }>;
 
-type FamilyMemberInsertRow =
-  Database["public"]["Tables"]["family_members"]["Insert"];
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -112,104 +112,7 @@ export async function saveProfileStep(updates: ProfileUpdates): Promise<ActionRe
   return { ok: true };
 }
 
-/**
- * Save the family members (Step 5). Replaces the existing set.
- *
- * Note: delete-then-insert is NOT transactional. Acceptable during onboarding
- * (user can re-run Step 5). Tighten later via a Postgres RPC if it becomes a problem.
- */
-export async function saveFamilyMembers(
-  members: Array<{
-    name: string;
-    role: string;
-    birth_year?: number;
-    preferred_language: string;
-  }>,
-): Promise<ActionResult> {
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { ok: false, error: "Not authenticated" };
-  }
-
-  const { error: deleteError } = await supabase
-    .from("family_members")
-    .delete()
-    .eq("user_id", user.id);
-
-  if (deleteError) {
-    Sentry.captureException(deleteError, {
-      tags: { area: "onboarding", step: "saveFamilyMembers.delete", userId: user.id },
-    });
-    return { ok: false, error: deleteError.message };
-  }
-
-  if (members.length > 0) {
-    const rows: FamilyMemberInsertRow[] = members.map((m, idx) => ({
-      ...m,
-      user_id: user.id,
-      display_order: idx,
-    }));
-    const { error: insertError } = await supabase
-      .from("family_members")
-      .insert(rows);
-
-    if (insertError) {
-      Sentry.captureException(insertError, {
-        tags: { area: "onboarding", step: "saveFamilyMembers.insert", userId: user.id },
-      });
-      return { ok: false, error: insertError.message };
-    }
-  }
-
-  return { ok: true };
-}
-
-/**
- * Complete onboarding: mark profile, then redirect. If the user arrived from a
- * landing-page tier CTA, send them to /pricing with that tier preselected;
- * otherwise to the dashboard.
- */
-export async function completeOnboarding(
-  tier?: string,
-  cadence?: string,
-): Promise<void> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    throw new Error("Not authenticated");
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ onboarding_completed_at: new Date().toISOString() })
-    .eq("id", user.id);
-
-  if (error) {
-    console.error("[completeOnboarding] error:", error);
-    Sentry.captureException(error, {
-      tags: { area: "onboarding", step: "completeOnboarding", userId: user.id },
-    });
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard");
-
-  // TEMPORARY testing mode: a tier carried in from a landing-page CTA would
-  // otherwise still send her to checkout for something already unlocked.
-  if (!isFreeAccessMode() && isValidTier(tier) && isValidCadence(cadence)) {
-    redirect(`/pricing?tier=${tier}&cadence=${cadence}`);
-  }
-  redirect("/dashboard");
-}
 
 // ─── Prompt 1.8c: restructured onboarding ──────────────────────────────────
 
@@ -467,10 +370,26 @@ export async function finishOnboardingToSubscription(): Promise<void> {
   } = await supabase.auth.getUser();
   if (authError || !user) throw new Error("Not authenticated");
 
-  await supabase
+  // The error is READ before redirecting. onboarding_completed_at is a gate,
+  // not a cosmetic flag: syncFamilyPlanAfterSubscribe returns immediately when
+  // it is null, and so does drainDeferredMembers. Discarding a failure here and
+  // redirecting anyway meant the customer went on to pay, came back, and NO
+  // plan was ever generated — with nothing surfaced anywhere, because the only
+  // signal was dropped three steps earlier.
+  const { error: completeError } = await supabase
     .from("profiles")
     .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
+  if (completeError) {
+    Sentry.captureException(completeError, {
+      tags: {
+        area: "onboarding",
+        step: "finishOnboardingToSubscription",
+        userId: user.id,
+      },
+    });
+    throw new Error(completeError.message);
+  }
 
   revalidatePath("/dashboard");
 
@@ -667,10 +586,18 @@ export async function finalizeOnboarding(): Promise<void> {
   } = await supabase.auth.getUser();
   if (authError || !user) throw new Error("Not authenticated");
 
-  await supabase
+  // Same gate, same reason as finishOnboardingToSubscription: a silent failure
+  // here leaves every downstream generation trigger permanently short-circuited.
+  const { error: completeError } = await supabase
     .from("profiles")
     .update({ onboarding_completed_at: new Date().toISOString() })
     .eq("id", user.id);
+  if (completeError) {
+    Sentry.captureException(completeError, {
+      tags: { area: "onboarding", step: "finalizeOnboarding", userId: user.id },
+    });
+    throw new Error(completeError.message);
+  }
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
@@ -1104,7 +1031,11 @@ export async function addFamilyMember(
   const capacity = await assertRoomForAnotherBeneficiary(user.id);
   if (!capacity.ok) return capacity.error;
 
-  // Next display_order = current max + 1.
+  // Next display_order = current max + 1. This is a read-then-write, so two
+  // concurrent adds (a double-tapped submit, or a retried request) can land on
+  // the same order and make the member tabs non-deterministic. There is no
+  // unique index to lean on, so the client also guards the double-submit; this
+  // stays the cheap path and the ordering is cosmetic either way.
   const { data: existingRows } = await supabase
     .from("family_members")
     .select("display_order")
@@ -1294,7 +1225,18 @@ export async function addHousekeeper(input: {
   revalidatePath("/family");
   // Do NOT regenerate the family's meals — just translate the EXISTING plan into
   // her language in place (fire-and-forget). The wife's plan is untouched.
-  if (isLocaleCode(input.preferred_language) && input.preferred_language !== "ar") {
+  //
+  // Gated on the subscription. A translation is a full paid Anthropic pass over
+  // the plan, and this was the only path to one with no access check at all:
+  // an inactive account could drive real spend by re-saving the housekeeper's
+  // language. She is not a beneficiary, so the person-count limit does not
+  // apply — canGenerateForFamilyChange covers exactly the right ground.
+  const access = await canGenerateForFamilyChange(user.id);
+  if (
+    access.allowed &&
+    isLocaleCode(input.preferred_language) &&
+    input.preferred_language !== "ar"
+  ) {
     await triggerPlanTranslation({
       supabase,
       userId: user.id,

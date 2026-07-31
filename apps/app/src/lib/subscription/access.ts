@@ -192,11 +192,14 @@ export async function canRegenerateMemberPlan(
  * the last plan they paid for — locks them out of generation, not history.
  */
 export async function canViewExistingPlans(userId: string): Promise<boolean> {
+  // Every status can view: trialing (even expired), active, past_due, cancelled.
+  // The ONLY thing this answers is "does an account record exist at all", so it
+  // is a presence check, not an entitlement gate — the name overstates it and
+  // the previous body fetched the whole row to return a constant. Kept as-is
+  // behaviourally; locking history behind a lapsed subscription would take away
+  // what the customer already paid for.
   const sub = await getCurrentSubscription(userId);
-  if (!sub) return false;
-  // Trialing (even if expired), active, past_due, cancelled all see history.
-  // Only fully purged accounts (no subscription row) cannot view.
-  return true;
+  return sub !== null;
 }
 
 /**

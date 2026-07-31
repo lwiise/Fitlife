@@ -113,9 +113,31 @@ export const momProfileInputSchema = z
     message: "مستوى النشاط مطلوب",
   });
 
+/**
+ * The family_members.role CHECK constraint, mirrored exactly (00001).
+ *
+ * It was `z.string().min(2).max(30)`, which accepted anything. Two consequences:
+ * an invalid value reached Postgres and came back as a raw English CHECK
+ * violation shown to an Arabic user; and "housekeeper" was accepted here, which
+ * is the value countBeneficiaries EXCLUDES — so a direct call to the server
+ * action could add uncounted members and walk straight past the tier limit.
+ */
+const FAMILY_ROLES = [
+  "dad",
+  "son",
+  "daughter",
+  "housekeeper",
+  "other_adult",
+  "other_child",
+] as const;
+
 export const familyMemberInputSchema = z.object({
   member_type: z.enum(["adult", "child", "pregnant", "lactating"]),
-  role: z.string().trim().min(2).max(30),
+  // The housekeeper has her own action (addHousekeeper) and is not a plan
+  // beneficiary; accepting the role here is what made the tier limit bypassable.
+  role: z.enum(FAMILY_ROLES).refine((r) => r !== "housekeeper", {
+    message: "بيانات غير صالحة",
+  }),
   name: z.string().trim().min(2, "الاسم حرفان على الأقل").max(60, "الاسم طويل"),
   birth_year: z
     .number()

@@ -39,6 +39,7 @@ import {
   ownerRequiresDoctorSignOff,
   memberRequiresDoctorSignOff,
 } from "../../../../packages/plan-engine/src/medicalGate";
+import { isChildByAge } from "../../../../packages/plan-engine/src/childRule";
 // Error reporting over plain fetch — @sentry/* cannot be bundled here for the
 // same reason @supabase/supabase-js cannot (see the note above). Without this
 // the function reported nothing at all: every failure died in the Netlify log.
@@ -58,6 +59,18 @@ type Activity =
   | null;
 
 // ─── Supabase PostgREST over fetch (service-role) ──────────────────────────
+/**
+ * Constant-time string compare for the shared secret. `!==` leaks length and
+ * prefix information through timing; the secret is long-lived, so that is worth
+ * closing even though the window is small.
+ */
+function timingSafeEqualStr(a: string | null, b: string): boolean {
+  if (!a || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 function sbHeaders(serviceKey: string): Record<string, string> {
   return {
     apikey: serviceKey,
@@ -333,7 +346,7 @@ async function buildContextViaFetch(
       school_meal_handling: (m.school_meal_handling as string | null) ?? null,
       picky_eater: !!m.picky_eater,
       consulted_doctor: m.consulted_doctor === true,
-      is_child: memberType === "child" || (age != null && age < 18),
+      is_child: isChildByAge(memberType, age),
       preferred_language: m.preferred_language as string,
       meal_mode: m.meal_mode === "independent" ? "independent" : "shared",
       target_weight_kg: (m.target_weight_kg as number | null) ?? null,
@@ -436,11 +449,16 @@ async function buildContextViaFetch(
 
 // ─── Handler ───────────────────────────────────────────────────────────────
 const handler = async (req: Request): Promise<Response> => {
-  const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // The caller's shared secret. Prefer a dedicated value; fall back to the
+  // service-role key so a deployment that has not set INTERNAL_FUNCTION_SECRET
+  // yet keeps working. See getInternalFunctionSecret in the app.
+  const expected =
+    process.env.INTERNAL_FUNCTION_SECRET?.trim() || serviceKey;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-  if (!expected || req.headers.get("x-internal-secret") !== expected) {
+  if (!expected || !serviceKey || !timingSafeEqualStr(req.headers.get("x-internal-secret"), expected)) {
     return new Response("Unauthorized", { status: 401 });
   }
   if (!supabaseUrl || !anthropicKey) {
@@ -496,13 +514,13 @@ const handler = async (req: Request): Promise<Response> => {
     try {
       const planRow = await sbSelectOne(
         supabaseUrl,
-        expected,
+        serviceKey,
         "workout_plans",
         `id=eq.${workoutPlanId}&select=status`,
       );
       const genRows = await sbSelectMany(
         supabaseUrl,
-        expected,
+        serviceKey,
         "plan_generations",
         `workout_plan_id=eq.${workoutPlanId}&select=status&order=created_at.asc&limit=1`,
       );
@@ -545,7 +563,7 @@ const handler = async (req: Request): Promise<Response> => {
         try {
           mealGens = (await sbSelectMany(
             supabaseUrl,
-            expected,
+            serviceKey,
             "plan_generations",
             `user_id=eq.${userId}&status=eq.started&plan_kind=eq.meal&select=status,started_at&limit=1`,
           )) as Array<{ status?: string; started_at?: string }>;
@@ -575,7 +593,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     try {
-      const context = await buildContextViaFetch(supabaseUrl, expected, userId);
+      const context = await buildContextViaFetch(supabaseUrl, serviceKey, userId);
       // Intensity feedback (00022): recent per-member ratings steer this
       // week's volume/intensity via the trainee prompt's adaptation clause.
       // Best-effort — a pre-apply prod (no table / no column) simply yields
@@ -586,7 +604,7 @@ const handler = async (req: Request): Promise<Response> => {
           .slice(0, 10);
         const rows = (await sbSelectMany(
           supabaseUrl,
-          expected,
+          serviceKey,
           "workout_checkins",
           `user_id=eq.${userId}&local_date=gte.${since}&select=member_id,status,intensity&limit=500`,
         )) as Array<{ member_id: string | null; status: string; intensity?: string | null }>;
@@ -601,7 +619,7 @@ const handler = async (req: Request): Promise<Response> => {
           String(fbErr),
         );
       }
-      const sb = makeFetchSupabase(supabaseUrl, expected);
+      const sb = makeFetchSupabase(supabaseUrl, serviceKey);
       await runWorkoutPlanGeneration({
         supabase: sb,
         anthropicApiKey: anthropicKey,
@@ -629,7 +647,7 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response("Missing locale", { status: 400 });
     }
     // Re-read the plan from the DB by id instead of taking it in the body.
-    const planToTranslate = await fetchPlanById(supabaseUrl, expected, mealPlanId);
+    const planToTranslate = await fetchPlanById(supabaseUrl, serviceKey, mealPlanId);
     if (!planToTranslate) {
       // No row, or plan_data no longer parses — nothing to translate. Non-fatal:
       // the maid view falls back to Arabic and re-triggers on her next visit.
@@ -644,12 +662,12 @@ const handler = async (req: Request): Promise<Response> => {
         // Persist each day as it lands (today-first) so the maid sees recipes
         // within seconds. The final update below is the complete snapshot.
         onDayTranslated: async (p) => {
-          await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+          await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
             plan_data: p,
           });
         },
       });
-      await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+      await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
         plan_data: translated,
       });
       // Audit the translation's token spend (see runMealPlanTranslation). The
@@ -657,7 +675,7 @@ const handler = async (req: Request): Promise<Response> => {
       // sharing the plan's id never consumes a generation slot.
       try {
         const completedAt = new Date().toISOString();
-        await sbInsert(supabaseUrl, expected, "plan_generations", {
+        await sbInsert(supabaseUrl, serviceKey, "plan_generations", {
           user_id: userId,
           meal_plan_id: mealPlanId,
           model: usage.model,
@@ -693,13 +711,13 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const planRow = await sbSelectOne(
       supabaseUrl,
-      expected,
+      serviceKey,
       "meal_plans",
       `id=eq.${mealPlanId}&select=status`,
     );
     const genRows = await sbSelectMany(
       supabaseUrl,
-      expected,
+      serviceKey,
       "plan_generations",
       `meal_plan_id=eq.${mealPlanId}&select=status&order=created_at.asc&limit=1`,
     );
@@ -739,7 +757,7 @@ const handler = async (req: Request): Promise<Response> => {
   // failed generations read $0 in the admin cost view.
   let accrued = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
   try {
-    const context = await buildContextViaFetch(supabaseUrl, expected, userId);
+    const context = await buildContextViaFetch(supabaseUrl, serviceKey, userId);
     // Re-derive now that the context (and so the housekeeper locale) is known:
     // the end-of-run translation pass runs after the day loop and needs its own
     // slice of the same box.
@@ -756,7 +774,7 @@ const handler = async (req: Request): Promise<Response> => {
       const [checkinRows, verdictRows] = await Promise.all([
         sbSelectMany(
           supabaseUrl,
-          expected,
+          serviceKey,
           "meal_checkins",
           // local_date identifies the MEAL — rows are per person since 00019;
           // computeEngagementDigest collapses them so counts stay meal-true.
@@ -764,7 +782,7 @@ const handler = async (req: Request): Promise<Response> => {
         ),
         sbSelectMany(
           supabaseUrl,
-          expected,
+          serviceKey,
           "meal_verdicts",
           `user_id=eq.${userId}&created_at=gte.${sinceIso}&select=recipe_name_ar,canonical_key,verdict&limit=400`,
         ),
@@ -788,7 +806,7 @@ const handler = async (req: Request): Promise<Response> => {
     // the plan in the body.
     let existingPlan: MealPlan | null = null;
     if (body.carryOver) {
-      const prior = await fetchPriorPlan(supabaseUrl, expected, userId, mealPlanId);
+      const prior = await fetchPriorPlan(supabaseUrl, serviceKey, userId, mealPlanId);
       if (prior) {
         existingPlan =
           body.regenerateMemberId && !body.regenScope && !body.regenerateSharedGroup
@@ -859,7 +877,7 @@ const handler = async (req: Request): Promise<Response> => {
       onProgress: async (snapshot) => {
         await sbUpdate(
           supabaseUrl,
-          expected,
+          serviceKey,
           "meal_plans",
           `id=eq.${mealPlanId}`,
           { status: "ready", plan_data: snapshot },
@@ -880,7 +898,7 @@ const handler = async (req: Request): Promise<Response> => {
     try {
       const hkRows = await sbSelectMany(
         supabaseUrl,
-        expected,
+        serviceKey,
         "family_members",
         `user_id=eq.${userId}&role=eq.housekeeper&select=preferred_language&limit=1`,
       );
@@ -903,7 +921,7 @@ const handler = async (req: Request): Promise<Response> => {
       // a partial plan (and hold this run's 'started' lock through translation).
       const memberRows = await sbSelectMany(
         supabaseUrl,
-        expected,
+        serviceKey,
         "family_members",
         `user_id=eq.${userId}&select=id,role`,
       );
@@ -940,7 +958,7 @@ const handler = async (req: Request): Promise<Response> => {
           plan,
           locale: endLocale,
           onDayTranslated: async (p) => {
-            await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+            await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
               plan_data: p,
             });
           },
@@ -974,7 +992,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.warn(`[generate-plan-background] ${partialNote}`, { userId, mealPlanId });
     }
 
-    await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+    await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
       status: "ready",
       plan_data: finalPlan,
       generated_at: generatedAt,
@@ -984,7 +1002,7 @@ const handler = async (req: Request): Promise<Response> => {
     });
     await sbUpdate(
       supabaseUrl,
-      expected,
+      serviceKey,
       "plan_generations",
       `meal_plan_id=eq.${mealPlanId}`,
       {
@@ -1013,13 +1031,13 @@ const handler = async (req: Request): Promise<Response> => {
     // kept the message, so the stack and the failing step were unrecoverable.
     await captureToSentry(err, { step: "meal-generation", userId, mealPlanId });
     try {
-      await sbUpdate(supabaseUrl, expected, "meal_plans", `id=eq.${mealPlanId}`, {
+      await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
         status: "failed",
         error_message: errorMessage,
       });
       await sbUpdate(
         supabaseUrl,
-        expected,
+        serviceKey,
         "plan_generations",
         `meal_plan_id=eq.${mealPlanId}`,
         {
