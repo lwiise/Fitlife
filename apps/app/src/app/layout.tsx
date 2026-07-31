@@ -6,6 +6,7 @@ import { AnalyticsProvider } from "./AnalyticsProvider";
 import { VersionWatcher } from "@/components/VersionWatcher";
 import { BuildStamp } from "@/components/BuildStamp";
 import { ConsentSlot } from "./ConsentSlot";
+import { FreeAccessBadge } from "@/components/FreeAccessBadge";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -52,6 +53,10 @@ export default function RootLayout({
         <ConsentSlot />
         <VersionWatcher />
         <BuildStamp />
+        {/* Renders nothing unless the TEMPORARY free-access testing mode is on.
+            Last in the document and pointer-events-none, for the same reason as
+            the elements above: nothing here may move or intercept a CTA. */}
+        <FreeAccessBadge />
       </body>
     </html>
   );

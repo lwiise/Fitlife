@@ -14,6 +14,7 @@ import {
   isSubscriptionActive,
   getTierLimit,
 } from "@/lib/subscription/state";
+import { isFreeAccessMode } from "@/lib/subscription/freeAccess";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { memberEditIsSubstantive } from "@/lib/plans/memberEdit";
 import {
@@ -199,7 +200,9 @@ export async function completeOnboarding(
 
   revalidatePath("/dashboard");
 
-  if (isValidTier(tier) && isValidCadence(cadence)) {
+  // TEMPORARY testing mode: a tier carried in from a landing-page CTA would
+  // otherwise still send her to checkout for something already unlocked.
+  if (!isFreeAccessMode() && isValidTier(tier) && isValidCadence(cadence)) {
     redirect(`/pricing?tier=${tier}&cadence=${cadence}`);
   }
   redirect("/dashboard");
@@ -473,7 +476,13 @@ export async function finishOnboardingToSubscription(): Promise<void> {
   // lemonsqueezy_subscription_id — trial rows never do. Mirror the post-checkout
   // path: kick off the whole-family generation and land them on /plan.
   const sub = await getCurrentSubscription(user.id);
-  if (sub && isSubscriptionActive(sub) && sub.lemonsqueezy_subscription_id) {
+  // TEMPORARY testing mode treats the household as already covered: there is
+  // nothing to buy, so the pricing screen below would be a dead end between
+  // finishing the questions and seeing a plan.
+  const covered = isFreeAccessMode()
+    ? true
+    : Boolean(sub && isSubscriptionActive(sub) && sub.lemonsqueezy_subscription_id);
+  if (covered) {
     // Always land on /plan: it renders every state correctly (progress while
     // generating, the plan when ready, the retry UI on failure) — bouncing to
     // the dashboard on a declined sync left users staring at "no plan yet".
@@ -550,7 +559,13 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
   const sub = await getCurrentSubscription(user.id);
   // Only a PAID active subscription unlocks the family — trial rows (no LS id)
   // never auto-generate beyond the explicit mom-only path.
-  if (!sub || !isSubscriptionActive(sub) || !sub.lemonsqueezy_subscription_id) {
+  //
+  // TEMPORARY testing mode is the one exception: there is no LS id to hold,
+  // yet the whole household is meant to generate together. Without this the
+  // mode would unlock the member LIMIT but still leave everyone past the first
+  // person without a plan — the exact thing being tested.
+  const freeAccess = isFreeAccessMode();
+  if (!freeAccess && (!sub || !isSubscriptionActive(sub) || !sub.lemonsqueezy_subscription_id)) {
     return { triggered: false };
   }
 
@@ -573,7 +588,9 @@ export async function syncFamilyPlanAfterSubscribe(): Promise<{ triggered: boole
       isPaidActive: true,
       planMemberCount: latest?.member_count ?? 0,
       beneficiaryCount,
-      tierMaxPeople: getTierLimit(sub.tier),
+      // In free mode `sub` may be absent entirely; the limit is unlimited either
+      // way, so fall back to the same null rather than dereferencing it.
+      tierMaxPeople: sub ? getTierLimit(sub.tier) : null,
     })
   ) {
     return { triggered: false };

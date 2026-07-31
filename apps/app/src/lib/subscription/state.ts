@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { isFreeAccessMode } from "./freeAccess";
 import {
   PRICING_TIERS,
   type Tier,
@@ -113,6 +114,13 @@ export function isTrialExpired(sub: SubscriptionRow): boolean {
  * 'paused' is deliberately NOT here: billing has stopped, so access should too.
  */
 export function isSubscriptionActive(sub: SubscriptionRow): boolean {
+  // TEMPORARY testing mode — see lib/subscription/freeAccess.ts. Placed at the
+  // very top so it covers every status, including trials that have run out:
+  // during testing an expired trial must not quietly re-lock the app. Every
+  // downstream surface (access gates, banners, the family sync) reads through
+  // this one predicate, so this single line unlocks them consistently.
+  if (isFreeAccessMode()) return true;
+
   if (sub.status === "active") {
     // If we have a current_period_end, require it to be in the future.
     // Webhooks fill this; only legacy/seed rows may have it null — treat as active.
@@ -171,5 +179,11 @@ export function hasLiveLemonsqueezySubscription(
  * excluding the housekeeper). null means unlimited.
  */
 export function getTierLimit(tier: Tier): number | null {
+  // TEMPORARY testing mode — null means unlimited, so a household of any size
+  // passes the person-count check. This is the switch that makes "add as many
+  // members as I want" work; the tier's real max_people is left untouched so
+  // pricing copy and the plan-comparison table still show the true numbers.
+  if (isFreeAccessMode()) return null;
+
   return PRICING_TIERS[tier].max_people;
 }
