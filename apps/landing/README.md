@@ -42,13 +42,9 @@ product page and it becomes a direct checkout link instead.
 
 - [ ] **Production domain** — set `NEXT_PUBLIC_SITE_URL` env var (or edit the
       `metadataBase` fallback in `src/app/layout.tsx`).
-- [ ] *(optional)* **`SALLA.productUrl`** in `src/lib/config.ts` — upgrades the
-      no-JS fallback from a WhatsApp hand-off to a real checkout link.
-- [ ] **Logo** — the header renders a text mark (`Header.tsx`) and the favicon
-      is a placeholder (`src/app/icon.svg`); swap in the real assets.
-- [ ] **Social links** — the three footer icons point at `#`
-      (`src/components/sections/Footer.tsx`); set the real profile URLs or
-      remove the ones you don't use.
+- [ ] **Favicon** — still the placeholder "FL" mark (`src/app/icon.svg`). The
+      wordmark itself is done: the header, receipt masthead and footer all
+      render the real `/logo.png`.
 - [ ] **OG image** — add a designed `src/app/opengraph-image.png` (1200×630)
       so WhatsApp/Twitter shares show a card instead of plain text.
 - [ ] **WhatsApp number/message** — confirm `whatsappNumber` and
