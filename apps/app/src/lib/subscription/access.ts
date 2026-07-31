@@ -14,7 +14,11 @@ export type AccessReason =
   | "subscription_inactive"
   | "past_due"
   | "rate_limit"
-  | "person_count_exceeded";
+  | "person_count_exceeded"
+  // The household size could not be read (DB error). Distinct from
+  // person_count_exceeded: nothing is known to be wrong, we simply cannot
+  // verify the limit, so the honest answer is "try again" — not a silent grant.
+  | "count_unavailable";
 
 export interface AccessDetails {
   current_people?: number;
@@ -32,8 +36,15 @@ export type AccessResult =
 
 /**
  * Counts beneficiaries: Mom (always 1) + non-housekeeper family members.
+ *
+ * Returns null when the count could not be read. It used to return 1 on error,
+ * commented "assume worst case (no family members beyond Mom)" — but for a
+ * LIMIT check 1 is the BEST case, not the worst: `1 > maxPeople` is false for
+ * every tier, so any transient query error silently removed the tier limit
+ * entirely and generated plans for an uncapped household. Callers now fail
+ * closed with a retryable reason.
  */
-async function countBeneficiaries(userId: string): Promise<number> {
+export async function countBeneficiaries(userId: string): Promise<number | null> {
   const supabase = await createClient();
 
   const { count, error } = await supabase
@@ -44,8 +55,7 @@ async function countBeneficiaries(userId: string): Promise<number> {
 
   if (error) {
     console.error("[countBeneficiaries] error:", error);
-    // Defensive: assume worst case (no family members beyond Mom)
-    return 1;
+    return null;
   }
   return (count ?? 0) + 1;
 }
@@ -93,6 +103,10 @@ async function checkSubscriptionAndPersonCount(
   const maxPeople = getTierLimit(sub.tier);
   if (maxPeople !== null) {
     const currentPeople = await countBeneficiaries(userId);
+    if (currentPeople === null) {
+      // Fail CLOSED: we cannot verify the limit, so we do not grant past it.
+      return { allowed: false, reason: "count_unavailable" };
+    }
     if (currentPeople > maxPeople) {
       return {
         allowed: false,

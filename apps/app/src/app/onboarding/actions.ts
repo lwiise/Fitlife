@@ -13,8 +13,10 @@ import {
   getCurrentSubscription,
   isSubscriptionActive,
   getTierLimit,
+  hasLiveLemonsqueezySubscription,
 } from "@/lib/subscription/state";
 import { isFreeAccessMode } from "@/lib/subscription/freeAccess";
+import { countBeneficiaries } from "@/lib/subscription/access";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { memberEditIsSubstantive } from "@/lib/plans/memberEdit";
 import {
@@ -918,8 +920,30 @@ export interface FamilyMemberInput {
 
 type AddMemberResult =
   | { ok: true; member_id: string; plan_generation_id: string | null }
-  | { ok: false; upgrade_required: true; member_id: string; current: number; max: number }
+  | {
+      ok: false;
+      upgrade_required: true;
+      member_id: string;
+      current: number;
+      max: number;
+      /**
+       * Where the upgrade CTA should actually go. An EXISTING paying subscriber
+       * is refused at /pricing — /api/checkout 409s them with «غيّري الباقة من
+       * صفحة الاشتراك» — so sending them there made the only exit from the
+       * over-limit state a dead end. Resolved server-side, where the
+       * subscription is already in hand.
+       */
+      upgrade_href: "/subscription" | "/pricing";
+    }
   | { ok: false; error: string };
+
+/** /subscription for a live subscriber (checkout would 409), /pricing otherwise. */
+async function upgradeDestination(
+  userId: string,
+): Promise<"/subscription" | "/pricing"> {
+  const sub = await getCurrentSubscription(userId);
+  return hasLiveLemonsqueezySubscription(sub) ? "/subscription" : "/pricing";
+}
 
 /** Build the family_members row payload from a wizard input (shared add/update). */
 function buildMemberRow(input: FamilyMemberInput, userId: string) {
@@ -1002,6 +1026,55 @@ function buildMemberRow(input: FamilyMemberInput, userId: string) {
   };
 }
 
+/**
+ * Is there room for one more beneficiary on the current tier?
+ *
+ * The limit is enforced HERE, at the boundary, rather than by the generation
+ * that follows an add. Writing the row first and discovering the limit
+ * afterwards is what let a household sit permanently above its tier — and
+ * because the same count gates generation, that state blocked plans for
+ * everyone in the family, not just the member who crossed the line.
+ *
+ * Free-access mode and unlimited tiers return room unconditionally (getTierLimit
+ * already encodes both). A subscription that cannot be read, or a count that
+ * cannot be read, refuses — the same fail-closed stance as the access gate.
+ */
+async function assertRoomForAnotherBeneficiary(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: AddMemberResult }> {
+  const sub = await getCurrentSubscription(userId);
+  const maxPeople = sub ? getTierLimit(sub.tier) : getTierLimit("starter");
+  if (maxPeople === null) return { ok: true };
+
+  const current = await countBeneficiaries(userId);
+  if (current === null) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        error: "تعذّر التحقق من عدد أفراد عائلتك. يرجى المحاولة بعد قليل",
+      },
+    };
+  }
+  if (current + 1 > maxPeople) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        upgrade_required: true,
+        // No row was written, so there is no member id to report.
+        member_id: "",
+        current: current + 1,
+        max: maxPeople,
+        upgrade_href: hasLiveLemonsqueezySubscription(sub)
+          ? "/subscription"
+          : "/pricing",
+      },
+    };
+  }
+  return { ok: true };
+}
+
 /** Phase 2 — add a family member, then regenerate the whole-family plan (free). */
 export async function addFamilyMember(
   input: FamilyMemberInput,
@@ -1017,6 +1090,18 @@ export async function addFamilyMember(
   if (!parsedMember.success) {
     return { ok: false, error: firstFieldErrorAr(parsedMember.error) };
   }
+
+  // Tier limit, checked BEFORE the insert. The row used to be written first and
+  // the limit consulted only afterwards, by the generation that followed — so
+  // an over-limit add saved the member and THEN showed a paywall, leaving the
+  // household permanently above its tier. Since countBeneficiaries drives the
+  // generation gate, that state also denied plan generation for everyone,
+  // including a plain regenerate for mom.
+  //
+  // A housekeeper is not a beneficiary and is added through addHousekeeper,
+  // which is deliberately not gated.
+  const capacity = await assertRoomForAnotherBeneficiary(user.id);
+  if (!capacity.ok) return capacity.error;
 
   // Next display_order = current max + 1.
   const { data: existingRows } = await supabase
@@ -1116,7 +1201,14 @@ export async function addFamilyMember(
   if (gen.ok)
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")
-    return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
+    return {
+      ok: false,
+      upgrade_required: true,
+      member_id: memberId,
+      current: gen.current,
+      max: gen.max,
+      upgrade_href: await upgradeDestination(user.id),
+    };
   // Current plan still generating → member is saved; defer their generation (the
   // dashboard "generate plan" banner picks it up once the current plan is ready).
   if (gen.kind === "busy")
@@ -1313,7 +1405,14 @@ export async function updateFamilyMember(
   if (gen.ok)
     return { ok: true, member_id: memberId, plan_generation_id: gen.plan_generation_id };
   if (gen.kind === "upgrade")
-    return { ok: false, upgrade_required: true, member_id: memberId, current: gen.current, max: gen.max };
+    return {
+      ok: false,
+      upgrade_required: true,
+      member_id: memberId,
+      current: gen.current,
+      max: gen.max,
+      upgrade_href: await upgradeDestination(user.id),
+    };
   // Current plan still generating → edit is saved; defer the regen.
   if (gen.kind === "busy")
     return { ok: true, member_id: memberId, plan_generation_id: null };

@@ -248,7 +248,12 @@ export function MemberWizard({
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [polling, setPolling] = useState(false);
-  const [upgrade, setUpgrade] = useState<{ current: number; max: number } | null>(null);
+  const [upgrade, setUpgrade] = useState<{
+    current: number;
+    max: number;
+    /** Server-resolved: /subscription for a live subscriber, /pricing otherwise. */
+    href: string;
+  } | null>(null);
   // 0-based position in a multi-member batch (e.g. "الطفل ٢ من ٣").
   const [memberIndex, setMemberIndex] = useState(0);
 
@@ -465,7 +470,10 @@ export function MemberWizard({
         ? await updateFamilyMember(editMemberId, input)
         : await addFamilyMember(input);
       if (!result.ok) {
-        // Member is saved, but their tier can't cover the new headcount → upgrade.
+        // Tier can't cover the new headcount → upgrade. The member is NOT
+        // saved: the limit is checked before the insert, so the household is
+        // never left above its tier (which used to block plan generation for
+        // everyone in the family, not just the newcomer).
         if ("upgrade_required" in result) {
           // On the state transition, not the `upgrade &&` render below — that
           // re-fires on every re-render while the screen is up and would turn
@@ -475,7 +483,11 @@ export function MemberWizard({
             current: result.current,
             max: result.max,
           });
-          setUpgrade({ current: result.current, max: result.max });
+          setUpgrade({
+            current: result.current,
+            max: result.max,
+            href: result.upgrade_href,
+          });
           return;
         }
         setError(result.error);
@@ -552,10 +564,10 @@ export function MemberWizard({
             </h2>
             <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
               باقتك الحالية تكفي {upgrade.max}، وعائلتك صارت {upgrade.current}.
-              حفظنا بيانات {name}، رقّي باقتك لنجهّز خطط العائلة المنسقة.
+              رقّي باقتك لنضيف {name} ونجهّز خطط العائلة المنسقة.
             </p>
             <a
-              href="/pricing"
+              href={upgrade.href}
               className="mt-6 w-full inline-flex items-center justify-center bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             >
               عرض الباقات

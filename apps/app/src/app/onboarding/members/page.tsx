@@ -83,7 +83,14 @@ export default async function OnboardingMembersPage() {
         </div>
       </div>
 
-      <OnboardingFamilyBuilder sex={sex} />
+      <OnboardingFamilyBuilder
+        sex={sex}
+        // The spouse is singular. /family computes exactly this guard
+        // (canAddHusband) before offering the row; the onboarding copy of the
+        // same screen never did, so returning to it after a partial run offered
+        // the checkbox again and a second role="dad" could be created.
+        canAddSpouse={!allMembers.some((m) => m.role === "dad")}
+      />
     </main>
   );
 }

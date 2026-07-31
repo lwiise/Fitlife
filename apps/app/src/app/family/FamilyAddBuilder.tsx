@@ -103,7 +103,12 @@ export function FamilyAddBuilder({
           <MemberWizard
             key={`husband-${index}`}
             type="adult"
-            role="dad"
+            // A MALE owner's spouse must not carry role="dad": MemberWizard
+            // derives sex from the role (`role === "dad" ? "male"`), so she
+            // would be stored as male and planned on a man's BMR/TDEE. The
+            // onboarding builder already draws this distinction — this copy of
+            // the same screen never got the fix.
+            role={ownerSex === "male" ? "other_adult" : "dad"}
             count={1}
             onComplete={advance}
             terminalLabel={terminalLabel}

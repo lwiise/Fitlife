@@ -26,7 +26,15 @@ type Task =
  * generates the whole family at once. Each member is saved as it's completed;
  * generation stays deferred until the sequence ends.
  */
-export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
+export function OnboardingFamilyBuilder({
+  sex,
+  canAddSpouse = true,
+}: {
+  sex?: "female" | "male";
+  /** False once the household already holds a role="dad" — the spouse row is
+   * hidden, mirroring /family's canAddHusband. */
+  canAddSpouse?: boolean;
+}) {
   const g = genderPick(sex);
   const isMale = sex === "male";
   const [phase, setPhase] = useState<"select" | "fill" | "finalizing">("select");
@@ -41,8 +49,12 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
   const [child, setChild] = useState(0);
   const [preg, setPreg] = useState(0);
 
+  // A spouse that already exists can never be queued, even if stale state says
+  // otherwise (the row is hidden, so it can no longer be toggled off).
+  const wantsSpouse = husband && canAddSpouse;
+
   const totalSelected =
-    (husband ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
+    (wantsSpouse ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
 
   // `source` matters: finalize() is reached four very different ways — the
   // queue running out, an empty selection, the skip link on the picker, and
@@ -60,7 +72,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
       source,
       members_selected: totalSelected,
       queue_index: index,
-      husband,
+      husband: wantsSpouse,
       maid,
       adults: adult,
       children: child,
@@ -77,7 +89,7 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
 
   const start = () => {
     const q: Task[] = [];
-    if (husband) q.push({ kind: "husband" });
+    if (wantsSpouse) q.push({ kind: "husband" });
     if (adult > 0) q.push({ kind: "adult", count: adult });
     if (child > 0) q.push({ kind: "child", count: child });
     if (preg > 0) q.push({ kind: "preg", count: preg });
@@ -200,12 +212,14 @@ export function OnboardingFamilyBuilder({ sex }: { sex?: "female" | "male" }) {
         </header>
 
         <div className="space-y-2">
-          <CheckRow
-            label={g("زوج", "زوجة")}
-            Icon={User}
-            checked={husband}
-            onToggle={() => setHusband((v) => !v)}
-          />
+          {canAddSpouse && (
+            <CheckRow
+              label={g("زوج", "زوجة")}
+              Icon={User}
+              checked={husband}
+              onToggle={() => setHusband((v) => !v)}
+            />
+          )}
           <StepperRow label="بالغ ثاني" Icon={UserPlus} value={adult} onChange={setAdult} />
           <StepperRow label="طفل" Icon={Baby} value={child} onChange={setChild} />
           <StepperRow

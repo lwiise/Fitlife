@@ -5,7 +5,12 @@ import { createCheckout } from "@lemonsqueezy/lemonsqueezy.js";
 import { getVariantId } from "@fitlife/config";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentSubscription } from "@/lib/subscription/state";
+import {
+  getCurrentSubscription,
+  getTierLimit,
+  hasLiveLemonsqueezySubscription,
+} from "@/lib/subscription/state";
+import { countBeneficiaries } from "@/lib/subscription/access";
 import {
   setupLemonsqueezy,
   describeLsError,
@@ -52,8 +57,46 @@ export async function POST(request: Request) {
   const sub = await getCurrentSubscription(user.id);
   const variantId = getVariantId(parsed.tier, parsed.cadence);
 
+  // A downgrade must not strand members. Nothing used to check this: a family
+  // of six could move to `starter` (max 1), LemonSqueezy would prorate, and
+  // from then on the person-count gate denied every generation — including a
+  // plain regenerate for mom — while all six stayed visible in the UI. The
+  // household was billed correctly and the product simply stopped working,
+  // with no warning at the moment of the decision.
+  //
+  // Checked BEFORE calling LemonSqueezy, so a refusal costs nothing.
+  const targetMax = getTierLimit(parsed.tier);
+  if (targetMax !== null) {
+    const current = await countBeneficiaries(user.id);
+    if (current === null) {
+      return NextResponse.json(
+        { error: "تعذّر التحقق من عدد أفراد عائلتك. يرجى المحاولة بعد قليل" },
+        { status: 503 },
+      );
+    }
+    if (current > targetMax) {
+      const surplus = current - targetMax;
+      return NextResponse.json(
+        {
+          error:
+            `هذه الباقة تكفي ${targetMax} ${targetMax === 1 ? "فرد" : "أفراد"}، ` +
+            `وعائلتك ${current}. احذفي ${surplus} ${surplus === 1 ? "فرداً" : "أفراد"} ` +
+            `من صفحة العائلة أولاً ثم غيّري الباقة.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   // ── Existing subscriber: swap the variant in place (no double-billing) ──
-  if (sub?.lemonsqueezy_subscription_id) {
+  //
+  // Gated on hasLiveLemonsqueezySubscription, not merely on the id being
+  // present. A cancelled or expired row keeps its subscription id, so this
+  // branch used to fire for those users and try to mutate a DEAD LemonSqueezy
+  // subscription — a 502 and no way back to paying. /api/checkout draws the
+  // same line (it excludes 'cancelled' precisely so they can re-subscribe), so
+  // they now fall through to the checkout branch below.
+  if (sub?.lemonsqueezy_subscription_id && hasLiveLemonsqueezySubscription(sub)) {
     if (sub.tier === parsed.tier && sub.cadence === parsed.cadence) {
       return NextResponse.json({ error: "هذه خطتك الحالية بالفعل" }, { status: 400 });
     }
@@ -78,8 +121,14 @@ export async function POST(request: Request) {
 
     // Optimistic DB update so the UI reflects the new tier right away; the
     // subscription_updated webhook reconciles period dates later (idempotent).
+    //
+    // The error is READ. LemonSqueezy has already changed the plan and prorated
+    // the charge by this point, so a silently-failed write leaves the customer
+    // billed for the new tier and served the old one — while the route reports
+    // {updated: true}. Surfacing it turns that into a visible, retryable
+    // failure (the LS side is idempotent, so a retry re-syncs).
     const admin = createAdminClient();
-    await admin
+    const { error: updateError } = await admin
       .from("subscriptions")
       .update({
         tier: parsed.tier,
@@ -89,6 +138,20 @@ export async function POST(request: Request) {
       })
       .eq("id", sub.id)
       .eq("user_id", user.id);
+
+    if (updateError) {
+      Sentry.captureException(
+        new Error("Tier changed at LemonSqueezy but not written to our row"),
+        {
+          tags: { area: "subscription-change", userId: user.id },
+          extra: { message: updateError.message, code: updateError.code },
+        },
+      );
+      return NextResponse.json(
+        { error: "تم تغيير الباقة، لكن تعذّر تحديث حسابك. يرجى تحديث الصفحة بعد قليل" },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({ updated: true }, { status: 200 });
   }

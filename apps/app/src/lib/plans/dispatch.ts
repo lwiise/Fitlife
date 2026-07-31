@@ -115,15 +115,22 @@ export async function triggerPlanGeneration(params: {
     : regenerateMemberId
       ? await canRegenerateMemberPlan(userId, regenerateMemberId)
       : await canGenerateNewPlan(userId);
-  // On a full-family run, exceeding the tier's people limit doesn't block: we
+  // Exceeding the tier's people limit CAPS the run rather than blocking it: we
   // generate up to the limit (mom + as many members as fit) and defer the rest,
-  // which the dashboard then nudges to upgrade for. Single-member runs (add/edit)
-  // and other denials (inactive/past_due/trial) still block.
-  const isFullRun = !onlyMemberId && !regenerateMemberId && !regenerateSharedGroup;
+  // which the dashboard then nudges to upgrade for. Other denials
+  // (inactive/past_due/trial/count_unavailable) still block.
+  //
+  // This now applies to single-member runs too, not just full ones. Adds and
+  // downgrades are refused at the boundary, so a household can no longer be
+  // pushed over the line — but accounts that crossed it BEFORE that guard
+  // existed are still out there, and denying single-member runs left them
+  // unable to generate anything at all: not a new member, not an edit, not even
+  // a plain regenerate for mom. The account was stuck until a member was
+  // deleted or the tier upgraded. Capping degrades instead: the members who fit
+  // keep working while the paywall does its job.
   let capMaxPeople: number | null = null;
   if (!access.allowed) {
     if (
-      isFullRun &&
       access.reason === "person_count_exceeded" &&
       access.details?.max_people != null
     ) {
@@ -284,6 +291,14 @@ export async function triggerPlanGeneration(params: {
     const keep = new Set(
       beneficiaries.slice(0, Math.max(0, capMaxPeople - 1)).map((m) => m.id),
     );
+    // A run TARGETING a member the cap excludes has nothing to do — generating
+    // the untargeted rest would silently report success while that member's
+    // plan never appeared. Refusing is the honest answer, and it is the one the
+    // caller already maps to the upgrade screen. Runs targeting a covered
+    // member (or mom) still proceed.
+    if (targetMemberId && targetMemberId !== "mom" && !keep.has(targetMemberId)) {
+      return { ok: false, kind: "access", access: access as Extract<AccessResult, { allowed: false }> };
+    }
     context.family_members = context.family_members.filter(
       (m) => m.role === "housekeeper" || keep.has(m.id),
     );

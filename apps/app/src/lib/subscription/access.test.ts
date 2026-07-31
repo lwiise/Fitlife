@@ -347,3 +347,44 @@ describe("canRegenerateMemberPlan — per-member weekly quota", () => {
     expect(mockCountMemberRegens).not.toHaveBeenCalled();
   });
 });
+
+describe("countBeneficiaries fails CLOSED", () => {
+  // It used to `return 1` on a query error, commented "assume worst case (no
+  // family members beyond Mom)". For a LIMIT check 1 is the BEST case:
+  // `1 > maxPeople` is false for every tier, so any transient error silently
+  // removed the tier limit and generated plans for an uncapped household.
+  it("a count query error denies with count_unavailable, never allows", async () => {
+    mockGetCurrentSubscription.mockResolvedValue(makeSub({ tier: "starter" }));
+    mockIsSubscriptionActive.mockReturnValue(true);
+    mockGetTierLimit.mockReturnValue(1);
+    stubBeneficiaryCount(0, { message: "connection reset" });
+
+    const res = await canGenerateForFamilyChange(USER);
+
+    expect(res.allowed).toBe(false);
+    if (!res.allowed) expect(res.reason).toBe("count_unavailable");
+  });
+
+  it("the error path does not fall through to the old 'just Mom' answer", async () => {
+    // A household of five on starter must not be waved through just because the
+    // count failed — the pre-fix behaviour returned 1 and allowed exactly this.
+    mockGetCurrentSubscription.mockResolvedValue(makeSub({ tier: "starter" }));
+    mockIsSubscriptionActive.mockReturnValue(true);
+    mockGetTierLimit.mockReturnValue(1);
+    stubBeneficiaryCount(4, { message: "timeout" });
+
+    const res = await canGenerateForFamilyChange(USER);
+
+    expect(res.allowed).toBe(false);
+  });
+
+  it("an unlimited tier still skips the count entirely", async () => {
+    mockGetCurrentSubscription.mockResolvedValue(makeSub({ tier: "premium" }));
+    mockIsSubscriptionActive.mockReturnValue(true);
+    mockGetTierLimit.mockReturnValue(null);
+
+    const res = await canGenerateForFamilyChange(USER);
+
+    expect(res.allowed).toBe(true);
+  });
+});

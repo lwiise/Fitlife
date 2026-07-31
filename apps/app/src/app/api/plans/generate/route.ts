@@ -132,6 +132,13 @@ async function handleGenerate(req: Request) {
             { status: 403 },
           );
         }
+        case "count_unavailable":
+          // The household size could not be read, so the tier limit could not
+          // be checked. Retryable, and deliberately NOT a silent grant.
+          return NextResponse.json(
+            { error: "تعذّر التحقق من عدد أفراد عائلتك. يرجى المحاولة بعد قليل" },
+            { status: 503 },
+          );
         case "rate_limit": {
           const days = access.details?.days_until_reset ?? 7;
           // Per-member regenerate quota (3/week per member) vs the account-wide
