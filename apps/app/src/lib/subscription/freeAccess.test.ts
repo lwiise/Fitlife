@@ -103,6 +103,22 @@ describe("subscription gates under free access", () => {
     }
   });
 
+  it("hides the trial countdown banner when the mode is on", async () => {
+    // The trial ROW survives free mode (signup grants it), so this banner is the
+    // one payment prompt the gates cannot reach: it keys off status alone. Called
+    // as a plain function — it returns null before touching JSX, so no renderer
+    // is needed to assert the thing that matters.
+    vi.resetModules();
+    process.env[FLAG] = "1";
+    const { TrialBanner } = await import("@/components/subscription/TrialBanner");
+    expect(TrialBanner({ subscription: expiredTrial })).toBeNull();
+
+    vi.resetModules();
+    delete process.env[FLAG];
+    const off = await import("@/components/subscription/TrialBanner");
+    expect(off.TrialBanner({ subscription: expiredTrial })).not.toBeNull();
+  });
+
   it("still refuses a fresh checkout only when a live LS subscription exists", async () => {
     // Free mode makes isSubscriptionActive() true for everything, so this guard
     // could have started blocking checkout for trial users — it must not, since

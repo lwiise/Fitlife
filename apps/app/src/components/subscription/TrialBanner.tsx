@@ -2,6 +2,7 @@ import { Clock, AlertTriangle, Check, ChefHat } from "lucide-react";
 
 import type { SubscriptionRow } from "@/lib/subscription/state";
 import { getTrialDaysRemaining } from "@/lib/subscription/state";
+import { isFreeAccessMode } from "@/lib/subscription/freeAccess";
 import { buildTrialEndsMessage } from "@/lib/subscription/strings";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -68,6 +69,15 @@ export function TrialBanner({
   checklist?: TrialChecklist;
   ownerSex?: string | null;
 }) {
+  // TEMPORARY testing mode — see lib/subscription/freeAccess.ts. Every account
+  // still carries the trial row that signup grants, so without this the one
+  // surface the mode misses is also the loudest: a countdown to an expiry that
+  // no longer expires, next to «اختيار خطة», on a build where nothing is behind
+  // a plan. Once the trial date passes it escalates to «اشتركي الآن» — a demand
+  // to pay for what the same page is giving away. The guard lives INSIDE the
+  // component so every call site is covered by construction.
+  if (isFreeAccessMode()) return null;
+
   if (subscription.status !== "trialing") return null;
 
   const g = genderPick(ownerSex);

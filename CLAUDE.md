@@ -84,6 +84,8 @@ Before building ANY section, you must:
 
 ## Architecture Changes Since Original Handoff (May 24-26, 2026)
 
+**PAYMENT IS CURRENTLY OFF IN PRODUCTION (07/2026, owner directive — temporary, pre-launch testing)**: `NEXT_PUBLIC_FREE_ACCESS_MODE = "1"` is set in `apps/app/netlify.toml` `[build.environment]`, so every paid capability is open to everyone: no subscription needed (expired trials included), unlimited household members, unlimited plan generations, advisor chat open, no post-onboarding bounce to /pricing, and no trial countdown banner. Every gate reads the ONE predicate `isFreeAccessMode()` (`apps/app/src/lib/subscription/freeAccess.ts`) — grep it for the complete list. **To take payments again: delete that one line from netlify.toml and redeploy.** Nothing else was loosened, so there is no second thing to remember. The LemonSqueezy checkout + webhooks are deliberately untouched and stay testable while the mode is on, as is the advisor's 30-messages/day cap (cost protection, not a paywall). Cost note: the weekly generation limits are a spend guard, and every generation is a paid Anthropic call — unlimited generations means unlimited AI spend while this is on. A «وضع الاختبار» badge renders on every page so the mode cannot be silently forgotten. Guarded by `freeAccess.test.ts`, whose most important assertion is that the mode is OFF for any value other than exactly `"1"`.
+
 **Auth method**: Switched from magic-link (passwordless) to email + password. Supabase auth via signInWithPassword and signUp. Forms include both email and password inputs.
 
 **Site architecture**: Merged from two Netlify sites to one unified site.
