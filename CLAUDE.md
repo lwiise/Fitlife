@@ -318,6 +318,52 @@ before it are ignored as replays / out-of-order delivery.
 
 ---
 
+## Stored enums must reach a prompt as Arabic RULES (08/2026)
+
+Found by driving the deployed app as a real user (Riyadh household, `lactose_free` +
+`ibs`). Three surfaces were handing the model — or the customer — a raw database
+value, and one was missing the data entirely.
+
+**A dietary restriction is a RULE, not a label.** `describeMom`/`describeMember`/
+`familyWideText` rendered `قيود غذائية: lactose_free.` — an English snake_case token
+dropped into an Arabic prompt with NO directive, while the allergy line directly
+beneath it carried an explicit «تجنّبيها تماماً». The generated week for that account
+then served لبنة on three days plus جبن قريش and موزاريلا, none of them lactose-free,
+with notes recommending لبنة on health grounds — and the advisor chat, reading the SAME
+profile, correctly told the same user that ordinary لبنة was not safe for her. The two
+AI surfaces contradicted each other because only one was told what the token forbids.
+`RESTRICTION_RULES_AR` (systemPrompt.ts) now names each restriction in Arabic AND lists
+what it rules out in the ingredient vocabulary the plan is written in, with Gulf staples
+called out by name (لبنة، جريش، برغل، فريكة، مرقوق، ساوردو) because that is what the
+cookbook reaches for by default. Unknown values pass through verbatim — a constraint is
+never silently dropped. Guarded by `dietaryRestrictions.test.ts`.
+
+**The condition catalogue moved INTO the engine.** The same line rendered «تعاني من: ibs».
+The Arabic labels existed, but only in `apps/app/src/lib/plans/medicalConditions.ts`,
+which the engine cannot import. `packages/plan-engine/src/medicalConditionLabels.ts` is
+now the single catalogue and the app file re-exports it, so wizard chips and prompt text
+cannot drift — the failure mode this repo already hit once when the UI chip roster and
+the engine's gate list diverged by a slug.
+
+**The advisor could not answer a calorie question for anyone.** `buildHouseholdContext`
+shipped goal/cuisine/allergies/restrictions/conditions but NOT `birth_year`, `weight_kg`,
+`height_cm`, `activity_level` or `sex` — for the owner or any member. So «كم سعرة أحتاج؟»
+was answered by asking the user to re-type her age, height, weight and activity level,
+all four of which she gave during onboarding and all four of which /profile shows back to
+her. It also had no date at all: the plan summary lists day NAMES only, so «وش تاكل اليوم؟»
+and «وش تاكل بكرة؟» returned the SAME day, and the wrong one. `contextFormat.ts` (pure,
+split out of the `server-only` module so it is testable) adds both, in Riyadh time, plus
+Arabic labels for every enum. Guarded by `contextFormat.test.ts`.
+
+**The chat renders PLAIN TEXT.** `ChatPanel` puts the reply in a `whitespace-pre-wrap`
+div with no markdown renderer, and the model was emitting `**bold**`, `##` headings and
+pipe tables — which customers saw as literal syntax. The chat system prompt now forbids
+markdown, emoji and exclamation marks (the last two were already against the house tone
+rules) and pins the dialect to Saudi Gulf, after «فطورج» — an eastern-Gulf/Kuwaiti form —
+reached a Riyadh user.
+
+---
+
 ## Engineering audit + fixes (07/31/2026)
 
 A read-only audit of the whole codebase (auth, family, payments, generation, engagement,

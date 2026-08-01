@@ -1,12 +1,21 @@
 import "server-only";
 
-import type { MealPlan } from "@fitlife/plan-engine";
+import { conditionLabels, type MealPlan } from "@fitlife/plan-engine";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { getLatestPlan } from "@/lib/plans/getLatestPlan";
 import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
+import {
+  CUISINE_AR,
+  GOAL_AR,
+  RESTRICTION_AR,
+  label,
+  labelList,
+  measurements,
+  todayLine,
+} from "./contextFormat";
 
 /** Render a jsonb-ish value (usually a string[]) as a compact comma list. */
 function list(value: unknown): string {
@@ -19,8 +28,9 @@ function list(value: unknown): string {
   return "لا شيء";
 }
 
-function strList(value: string[] | null | undefined): string {
-  return value && value.length ? value.join("، ") : "لا شيء";
+/** Conditions are stored as slugs; the advisor was quoting «ibs» at the user. */
+function conditionList(value: string[] | null | undefined): string {
+  return value && value.length ? conditionLabels(value) : "لا شيء";
 }
 
 function lifeStage(m: {
@@ -73,17 +83,23 @@ export async function buildHouseholdContext(userId: string): Promise<string> {
 
   const sections: string[] = [];
 
+  sections.push(todayLine());
+
   if (profile) {
     sections.push(
       [
         "صاحبة الحساب:",
         `- الاسم: ${profile.display_name ?? "غير محدد"}`,
-        `- الهدف: ${profile.primary_goal ?? "غير محدد"}`,
-        `- المطبخ المفضل: ${profile.cuisine_preference ?? "غير محدد"}`,
+        ...measurements(profile),
+        `- الهدف: ${label(GOAL_AR, profile.primary_goal)}`,
+        profile.meals_per_day != null
+          ? `- عدد الوجبات اليومية المعتاد: ${profile.meals_per_day}`
+          : "",
+        `- المطبخ المفضل: ${label(CUISINE_AR, profile.cuisine_preference)}`,
         `- الحساسيات: ${list(profile.allergies)}`,
         `- أطعمة لا تحبها: ${list(profile.dislikes)}`,
-        `- قيود غذائية: ${strList(profile.dietary_restrictions)}`,
-        `- حالات طبية: ${strList(profile.medical_conditions)}${profile.consulted_doctor ? " (راجعت الطبيب)" : ""}`,
+        `- قيود غذائية: ${labelList(RESTRICTION_AR, profile.dietary_restrictions)}`,
+        `- حالات طبية: ${conditionList(profile.medical_conditions)}${profile.consulted_doctor ? " (راجعت الطبيب)" : ""}`,
         profile.target_weight_kg != null
           ? `- الوزن المستهدف: ${profile.target_weight_kg} كجم`
           : "",
@@ -106,12 +122,22 @@ export async function buildHouseholdContext(userId: string): Promise<string> {
   if (beneficiaries.length) {
     const roster = beneficiaries.map((m) => {
       const stage = lifeStage(m);
+      // Same omission as the owner's block: without age/height/weight/activity
+      // the advisor cannot answer a calorie or portion question about a member
+      // either, and every member's own numbers are already on file.
+      const physical = measurements(m)
+        .map((s) => s.replace(/^- /, ""))
+        .join("، ");
       return [
         `- ${m.name} (${m.role}${stage ? `، ${stage}` : ""}):`,
+        physical ? `${physical}.` : "",
+        m.primary_goal ? `الهدف: ${label(GOAL_AR, m.primary_goal)}.` : "",
         `حساسيات: ${list(m.allergies)}`,
-        `قيود: ${strList(m.dietary_restrictions)}`,
-        `حالات طبية: ${strList(m.medical_conditions)}`,
-      ].join(" ");
+        `قيود: ${labelList(RESTRICTION_AR, m.dietary_restrictions)}`,
+        `حالات طبية: ${conditionList(m.medical_conditions)}`,
+      ]
+        .filter(Boolean)
+        .join(" ");
     });
     sections.push(["أفراد الأسرة:", ...roster].join("\n"));
   }

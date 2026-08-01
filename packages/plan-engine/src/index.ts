@@ -15,6 +15,14 @@ export {
   isChildByBirthYear,
 } from "./childRule";
 
+export {
+  GATE_CONDITIONS,
+  STABLE_CONDITIONS,
+  conditionLabelAr,
+  conditionLabels,
+} from "./medicalConditionLabels";
+export type { ConditionOption } from "./medicalConditionLabels";
+
 export type {
   PlanPromptContext,
   PlanPromptContextMom,

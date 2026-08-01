@@ -7,6 +7,7 @@ import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
 import { engagementText } from "./engagementDigest";
 import { isChildByAge } from "./childRule";
+import { conditionLabels } from "./medicalConditionLabels";
 
 /**
  * Standalone translation prompt — translates an existing plan's meals into the
@@ -180,6 +181,42 @@ const SLEEP_BAND_LABELS_AR: Record<string, string> = {
   gt8: "أكثر من 8 ساعات",
 };
 
+/**
+ * Dietary restrictions as ENFORCEABLE rules, not labels.
+ *
+ * These used to reach the model as the raw stored enum — `قيود غذائية:
+ * lactose_free.` — an English snake_case token dropped into an Arabic prompt
+ * with no directive attached, while the allergy line right beneath it carried
+ * an explicit «تجنّبيها تماماً». Measured consequence on a real `lactose_free`
+ * account: the generated week served لبنة on three days, جبن قريش once and
+ * موزاريلا once, none of them marked lactose-free — and the advisor chat, which
+ * reads the same profile, correctly told the same user that لبنة التقليدية is
+ * not safe for her. The model was never told what the token forbids.
+ *
+ * Each entry therefore names the restriction in Arabic AND lists what it rules
+ * out, in the concrete ingredient vocabulary the plan is written in. Gulf
+ * staples are called out by name (لبنة، جريش، برغل، فريكة، مرقوق) because that
+ * is what the cookbook reaches for by default.
+ */
+const RESTRICTION_RULES_AR: Record<string, string> = {
+  lactose_free:
+    "خالٍ من اللاكتوز — امنعي الحليب واللبن والزبادي واللبنة والقشدة والأجبان الطرية (قريش، موزاريلا، فيتا) وأي صلصة بالكريمة. لا تستخدمي هذه الأصناف إلا إذا كتبتِ في المكوّن صراحةً أنه «خالٍ من اللاكتوز» أو نباتي",
+  gluten_free:
+    "خالٍ من الجلوتين — امنعي القمح والشعير والشوفان غير الموسوم والبرغل والجريش والفريكة والمرقوق والخبز والمعكرونة والساوردو. البدائل: الأرز، الكينوا، الذرة، البطاطس",
+  nut_free:
+    "خالٍ من المكسرات — امنعي جميع المكسرات والفول السوداني وزبدتها وزيوتها والطحينة المخلوطة بها",
+  vegetarian: "نباتي — بلا لحوم ولا دواجن ولا أسماك ولا مأكولات بحرية. البيض والألبان مسموحة",
+  vegan: "نباتي صرف — بلا أي منتج حيواني إطلاقاً: لا لحوم ولا دواجن ولا أسماك ولا بيض ولا ألبان ولا عسل",
+};
+
+/**
+ * Render a restriction list as rules. Unknown values (free text, future enums)
+ * pass through verbatim so nothing is ever silently dropped from a constraint.
+ */
+function restrictionRules(values: readonly string[]): string {
+  return values.map((v) => RESTRICTION_RULES_AR[v] ?? v).join("؛ ");
+}
+
 function labeled(map: Record<string, string>, key: string | null | undefined): string {
   if (!key) return "غير محدد";
   return map[key] ?? key;
@@ -226,7 +263,7 @@ function describeMom(c: PlanPromptContext): string {
   let line = parts.join("، ") + ".";
 
   if (m.medical_conditions.length > 0) {
-    line += ` ${g("تعاني", "يعاني")} من: ${m.medical_conditions.join("، ")} — طبّقي قواعد الحالة الصحية المناسبة.`;
+    line += ` ${g("تعاني", "يعاني")} من: ${conditionLabels(m.medical_conditions)} — طبّقي قواعد الحالة الصحية المناسبة.`;
   } else {
     line += g(" لا تعاني من حالات صحية.", " لا يعاني من حالات صحية.");
   }
@@ -251,7 +288,7 @@ function describeMom(c: PlanPromptContext): string {
     }
   }
   if (m.dietary_restrictions.length > 0) {
-    line += ` قيود غذائية: ${m.dietary_restrictions.join("، ")}.`;
+    line += ` قيود غذائية ملزمة: ${restrictionRules(m.dietary_restrictions)} — التزمي بها في كل وجبة.`;
   }
   if (m.allergies.length > 0) {
     line += ` حساسية: ${m.allergies.join("، ")} — تجنّبيها تماماً.`;
@@ -337,7 +374,7 @@ function describeMember(member: PlanPromptContextMember): string {
 
   let line = parts.join("، ") + ".";
   if (member.dietary_restrictions.length > 0) {
-    line += ` قيود: ${member.dietary_restrictions.join("، ")}.`;
+    line += ` قيود غذائية ملزمة: ${restrictionRules(member.dietary_restrictions)} — التزمي بها في كل وجبة له.`;
   }
   if (member.allergies.length > 0) {
     line += ` حساسية: ${member.allergies.join("، ")} — تجنّبيها تماماً.`;
@@ -346,7 +383,7 @@ function describeMember(member: PlanPromptContextMember): string {
     line += ` لا يحب: ${member.dislikes.join("، ")}.`;
   }
   if (member.medical_conditions.length > 0) {
-    line += ` حالات صحية: ${member.medical_conditions.join("، ")}.`;
+    line += ` حالات صحية: ${conditionLabels(member.medical_conditions)}.`;
   }
   if (member.member_type === "pregnant") {
     line += ` حامل (الثلث ${member.trimester ?? "غير محدد"})${member.high_risk_pregnancy ? " — عالي الخطورة" : ""} — طبّقي قواعد الحمل.`;
@@ -760,7 +797,9 @@ function familyWideText(context: PlanPromptContext): string {
   const fw = context.family_wide;
   const bits: string[] = [];
   if (fw.dietary_restrictions.length > 0)
-    bits.push(`قيود غذائية للعائلة: ${fw.dietary_restrictions.join("، ")}`);
+    bits.push(
+      `قيود غذائية ملزمة على كل العائلة: ${restrictionRules(fw.dietary_restrictions)}`,
+    );
   if (fw.dislikes.length > 0)
     bits.push(`أطعمة لا تأكلها العائلة أبداً: ${fw.dislikes.join("، ")}`);
   if (fw.cooking_methods.length > 0)
