@@ -318,6 +318,33 @@ before it are ignored as replays / out-of-order delivery.
 
 ---
 
+## Phase 1 must leave room for phase 2 (08/2026)
+
+Sentry bfda604f, production, a 3-member household: `PlanValidationError: All 7 day
+generations failed — deferred: run budget spent before this day started (no model call
+made)`. The run spent 856s and $0.46 and produced ZERO days.
+
+`bigCallTimeoutMs` sizes the SKELETON call to the work (280s at 3 members, up to 600s)
+and knew nothing about the 15-minute run deadline — and the max_tokens truncation retry
+can run it a SECOND time at double the cap. So phase 1 could legitimately spend the whole
+box and hand the day loop a budget it had already exhausted; the loop then correctly
+deferred all 7 days. The skeleton timeout is now clamped to
+`remaining - DAY_CALL_ESTIMATE_MS` (floored at `MIN_VIABLE_CALL_MS`), and the truncation
+retry is refused unless a second call AND a day call still fit. Guarded by
+`skeletonBudget.test.ts`.
+
+**Consequence worth knowing: an empty run used to destroy a working plan.** Adding a
+third member triggers a full shared-group rebuild (`prepareSharedGroupRegen`), so nothing
+is carried; when that run came back empty it was written `failed`, and being the NEWEST
+row it replaced a complete 7/7 week with an error screen on /plan and /dashboard. The
+good plan was never deleted, only shadowed — and since `DeferredMemberDrain` requires
+status "ready", the household could not self-heal either. `getLatestPlan` now reads TWO
+rows and, when the newest is failed-with-no-content, serves the previous ready plan
+instead. A stale week beats an error screen, and it keeps the drain's precondition
+satisfiable. Guarded by `previousPlanFallback.test.ts`.
+
+---
+
 ## Stored enums must reach a prompt as Arabic RULES (08/2026)
 
 Found by driving the deployed app as a real user (Riyadh household, `lactose_free` +

@@ -1529,7 +1529,26 @@ export async function generateMealPlan(params: {
     // run (up to 6) emits a week of dish names per member and was truncating at
     // the old fixed 16000, which threw and failed the WHOLE generation.
     const skeletonCap = skeletonMaxTokens(needsSkeleton.length);
-    const skeletonTimeout = bigCallTimeoutMs(needsSkeleton.length, false);
+    // Phase 1 must leave room for phase 2. `bigCallTimeoutMs` sizes this call to
+    // the WORK (280s at 3 members, up to 600s) and knew nothing about the run
+    // deadline, and the truncation retry below can run it a SECOND time — so the
+    // skeleton could legitimately spend the whole 15-minute box and hand the day
+    // loop a budget it had already exhausted.
+    //
+    // Measured in production on a 3-member household: 856s spent, $0.46 billed,
+    // and every one of the 7 days deferred with "run budget spent before this
+    // day started (no model call made)". Zero days, so the plan was empty and
+    // marked failed — which, being the newest row, then hid the complete week
+    // the family already had. A budget the first phase can spend entirely is not
+    // a budget.
+    const skeletonTimeoutFor = (): number =>
+      Math.max(
+        MIN_VIABLE_CALL_MS,
+        Math.min(
+          bigCallTimeoutMs(needsSkeleton.length, false),
+          remainingMs(deadlineMs) - DAY_CALL_ESTIMATE_MS,
+        ),
+      );
     const runSkeleton = (maxTokens: number) =>
       streamAnthropic({
         apiKey: anthropicApiKey,
@@ -1537,7 +1556,7 @@ export async function generateMealPlan(params: {
         maxTokens,
         systemStatic: STATIC_SYSTEM,
         systemPrompt: skeletonSystemPrompt,
-        timeoutMs: skeletonTimeout,
+        timeoutMs: skeletonTimeoutFor(),
       });
     let sk = await runSkeleton(skeletonCap);
     totalIn += sk.tokensIn;
@@ -1550,6 +1569,16 @@ export async function generateMealPlan(params: {
     // cost accounting.
     if (sk.stopReason === "max_tokens") {
       const retryMax = Math.min(MAX_OUTPUT_TOKENS, skeletonCap * 2);
+      // Doubling the cap doubles the worst-case wall time, so only retry when a
+      // second attempt AND a day call still fit. Without this the retry is what
+      // pushed the 3-member run past its own budget — and a retry that leaves no
+      // room for a single day cannot produce a plan even if it succeeds.
+      if (!canFit(deadlineMs, MIN_VIABLE_CALL_MS + DAY_CALL_ESTIMATE_MS)) {
+        throw new PlanValidationError(
+          `Skeleton truncated at ${skeletonCap} and the run budget has no room to retry`,
+          sk.text,
+        );
+      }
       console.warn(
         `[plan-generate] skeleton truncated at ${skeletonCap} — retrying with ${retryMax}`,
       );

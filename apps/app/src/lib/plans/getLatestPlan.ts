@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { MealPlanSchema, type MealPlan } from "@fitlife/plan-engine";
+import { MealPlanSchema, planHasContent, type MealPlan } from "@fitlife/plan-engine";
 
 import { resolveStaleness, STALE_GENERATION_MIN } from "./staleness";
 
@@ -39,13 +39,20 @@ type MealPlanRow = {
 export async function getLatestPlan(userId: string): Promise<LatestPlanSummary | null> {
   const supabase = await createClient();
 
+  // Two rows, not one: a regeneration that produces NOTHING must not be allowed
+  // to hide the week the household already has. Adding a third member triggers a
+  // full shared-group rebuild, and when that run came back empty (see the
+  // skeleton budget clamp in plan-engine/generate.ts) the failed row — being
+  // newest — replaced a complete 7/7 plan with an error screen on every surface.
+  // The good plan was never deleted, only shadowed. Falling back to it costs
+  // nothing when the newest row is healthy, because then it is never consulted.
   const { data, error } = await supabase
     .from("meal_plans")
     .select("id, status, plan_data, generated_at, error_message, updated_at")
     .eq("user_id", userId)
     .neq("status", "archived")
     .order("created_at", { ascending: false })
-    .limit(1)
+    .limit(2)
     .returns<MealPlanRow[]>();
 
   if (error || !data || data.length === 0) return null;
@@ -87,6 +94,42 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     updatedAt: row.updated_at,
     errorMessage: row.error_message ?? null,
   });
+
+  // The newest run died with nothing to show. If the previous plan is still
+  // usable, serve THAT — a stale week beats an error screen, and it keeps the
+  // drain's `status === "ready"` precondition satisfiable so the household can
+  // recover without the customer doing anything.
+  if (resolved.status === "failed" && !resolved.planData && data.length > 1) {
+    const prev = data[1];
+    if (prev && prev.status === "ready") {
+      const prevParsed = MealPlanSchema.safeParse(prev.plan_data);
+      if (prevParsed.success && planHasContent(prevParsed.data)) {
+        const prevResolved = resolveStaleness({
+          status: "ready",
+          planData: prevParsed.data,
+          updatedAt: prev.updated_at,
+          errorMessage: null,
+        });
+        if (prevResolved.planData) {
+          console.warn(
+            "[getLatestPlan] newest plan failed with no content; serving the previous ready plan",
+            { failedId: row.id, servingId: prev.id },
+          );
+          return {
+            id: prev.id,
+            status: prevResolved.status,
+            plan_data: prevResolved.planData,
+            week_start_date: prevResolved.planData.week_start_date ?? null,
+            member_count: prevResolved.planData.members.length,
+            member_ids: prevResolved.planData.members.map((m) => m.member_id),
+            in_progress: prevResolved.inProgress,
+            error_message: prevResolved.errorMessage,
+            updated_at: prev.updated_at,
+          };
+        }
+      }
+    }
+  }
 
   return {
     id: row.id,
