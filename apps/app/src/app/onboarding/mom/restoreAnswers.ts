@@ -90,3 +90,30 @@ export function restoreActivityLevel(
   if (!level || !(level in ACTIVITY_LEVEL_LABELS)) return null;
   return level as ActivityLevel;
 }
+
+/**
+ * Where a returning user should land.
+ *
+ * `saveProfileStep` already persists the first two steps, and `restoreAnswers`
+ * reads them back — but the wizard always mounted at index 0, so a refresh (or
+ * a return visit) re-asked every screen whose answer was already on the row.
+ * Observed: refreshing at step 8 of 11 dropped back to «1 / 10» with the name
+ * and birth year pre-filled, i.e. ten screens of clicking to get back.
+ *
+ * Deliberately conservative — it only skips a step when EVERY field that step
+ * requires is present, and it stops at the first gap, so it can never jump over
+ * something unanswered. It cannot go past `goalActivity`: the goal itself is
+ * stored SARA-mapped at final submit (see restoreAnswers), so from that screen
+ * on there is genuinely nothing saved to resume from.
+ */
+export function initialStepIndex(saved?: SavedMomAnswers): number {
+  if (!saved) return 0;
+  const identityDone =
+    !!saved.sex && !!saved.display_name?.trim() && saved.birth_year != null;
+  if (!identityDone) return 0;
+  const num = (v: number | string | null) =>
+    v == null || (typeof v === "string" && v.trim() === "") ? null : Number(v);
+  const physicalDone = num(saved.height_cm) != null && num(saved.weight_kg) != null;
+  if (!physicalDone) return 1;
+  return 2;
+}

@@ -82,7 +82,8 @@ export async function TodaysMeals({
         <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
           <Loader2 className="size-6 mx-auto animate-spin motion-reduce:animate-none text-brand-purple-900" aria-hidden="true" />
           <p className="font-bold text-brand-ink text-lg mt-3">خطتك تتجهز الآن…</p>
-          <p className="mt-1 text-brand-ink-muted text-sm">خلال دقيقة تقريباً</p>
+          {/* Real runs take 5-12 min (measured); «دقيقة تقريباً» read as stuck. */}
+          <p className="mt-1 text-brand-ink-muted text-sm">خلال دقائق قليلة</p>
           <Link
             href="/plan"
             className="inline-flex items-center justify-center min-h-11 mt-4 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"

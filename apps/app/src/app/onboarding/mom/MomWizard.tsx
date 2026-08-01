@@ -38,6 +38,7 @@ import {
   restoreIdentity,
   restorePhysical,
   type SavedMomAnswers,
+  initialStepIndex,
 } from "./restoreAnswers";
 import { genderPick } from "@/lib/copy/gender";
 import { CUISINES, COOKING } from "@/app/profile/labels";
@@ -136,7 +137,7 @@ export function MomWizard({ saved }: { saved?: SavedMomAnswers } = {}) {
   const reduceMotion = useReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() => initialStepIndex(saved));
 
   const [identity, setIdentity] = useState<Identity | undefined>(() =>
     restoreIdentity(saved),

@@ -160,7 +160,11 @@ describe("resolveStaleness — nothing to show still fails honestly", () => {
     });
     expect(out.status).toBe("failed");
     expect(out.planData).toBeNull();
-    expect(out.errorMessage).toMatch(/تعذّر/);
+    // The fallback must DESCRIBE the stall, not repeat the failure screen's own
+    // body copy — «تفاصيل تقنية» used to expand to a verbatim duplicate of the
+    // sentence the user had just read.
+    expect(out.errorMessage).toMatch(/توقّف التحضير/);
+    expect(out.errorMessage).toContain("15");
   });
 
   it("fails when there is no plan row content at all", () => {

@@ -130,14 +130,18 @@ export function PlanGeneratingState({
         {name ? `نحضّر خطة ${name}...` : "نحضّر خطتك..."}
       </h1>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
+        {/* Measured on production: a one-member week took 9 minutes wall clock,
+            a two-member week 12. The old copy promised «دقيقة إلى دقيقتين»,
+            so every real run overran its own estimate by 5x and looked stuck.
+            The page keeps working if she leaves — say that instead. */}
         {isLong
           ? g(
-              "نجهّز خطة مفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفلين الصفحة.",
-              "نجهّز خطة مفصّلة. تحتاج دقيقة أو دقيقتين إضافية، لا تقفل الصفحة.",
+              "الخطة تحتاج وقتاً أطول قليلاً. يمكنكِ إغلاق الصفحة، ونكمل التحضير.",
+              "الخطة تحتاج وقتاً أطول قليلاً. يمكنك إغلاق الصفحة، ونكمل التحضير.",
             )
           : g(
-              "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفلين الصفحة.",
-              "هذي العملية تاخذ من دقيقة إلى دقيقتين. لا تقفل الصفحة.",
+              "تستغرق عادة من خمس إلى عشر دقائق. يمكنكِ إغلاق الصفحة، ونكمل التحضير.",
+              "تستغرق عادة من خمس إلى عشر دقائق. يمكنك إغلاق الصفحة، ونكمل التحضير.",
             )}
       </p>
       <div

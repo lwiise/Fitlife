@@ -86,6 +86,13 @@ export function resolveStaleness(input: StalenessInput): StalenessResult {
     status: "failed",
     planData: null,
     inProgress: false,
-    errorMessage: errorMessage ?? "تعذّر إكمال إنشاء الخطة. يرجى المحاولة مرة أخرى.",
+    // Say what actually happened. This used to fall back to the very sentence
+    // the failure screen already shows as its body copy, so «تفاصيل تقنية»
+    // expanded to a verbatim repeat and told a stuck user nothing — the state
+    // this branch exists to explain is precisely the one with no other signal
+    // (the worker never wrote a row, so there is no engine message to show).
+    errorMessage:
+      errorMessage ??
+      `توقّف التحضير قبل أن تكتمل أي وجبة — مضى أكثر من ${STALE_GENERATION_MIN} دقيقة دون أي تحديث من مولّد الخطة.`,
   };
 }

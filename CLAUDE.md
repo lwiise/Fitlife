@@ -355,6 +355,27 @@ and «وش تاكل بكرة؟» returned the SAME day, and the wrong one. `cont
 split out of the `server-only` module so it is testable) adds both, in Riyadh time, plus
 Arabic labels for every enum. Guarded by `contextFormat.test.ts`.
 
+**Onboarding resumes where the data stops.** `saveProfileStep` persisted the first
+steps and `restoreAnswers` read them back, but `MomWizard` always mounted at index 0 —
+refreshing at step 8 of 11 dropped the user to «1 / 10» with her answers pre-filled and
+ten screens of clicking to return, on the app's biggest drop-off surface.
+`initialStepIndex` (in `restoreAnswers.ts`, the pure module, so the test does not import
+the client component into a node-environment suite) resumes at the first step whose data
+is NOT provably saved. It stops at `goalActivity` by design: `primary_goal` is stored
+SARA-mapped at final submit, so there is nothing after it to resume from.
+
+**Generation timing copy matched no observed run.** `/plan` promised «من دقيقة إلى
+دقيقتين» and the dashboard «خلال دقيقة تقريباً»; measured on production, a one-member
+week took 9 minutes and a two-member week 12, so every real run overran its own estimate
+by 5x and read as stuck. Now «من خمس إلى عشر دقائق», and it says she may close the page
+— which was always true (the work is a background function) and is the more useful fact.
+
+**«تفاصيل تقنية» disclosed nothing.** `resolveStaleness` fell back to the exact sentence
+the failure screen already shows as body copy, so expanding the disclosure repeated what
+the user had just read — in the one state that has no other signal, because the worker
+never wrote a row. The fallback now describes the stall, and `PlanFailedState` hides the
+disclosure entirely when it would duplicate the body.
+
 **The chat renders PLAIN TEXT.** `ChatPanel` puts the reply in a `whitespace-pre-wrap`
 div with no markdown renderer, and the model was emitting `**bold**`, `##` headings and
 pipe tables — which customers saw as literal syntax. The chat system prompt now forbids

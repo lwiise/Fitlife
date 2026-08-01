@@ -19,6 +19,17 @@ export function PlanFailedState({
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const bodyCopy = g(
+    "صار خطأ غير متوقع. حاولي مرة ثانية، وإذا تكرر تواصلي معنا.",
+    "صار خطأ غير متوقع. حاول مرة ثانية، وإذا تكرر تواصل معنا.",
+  );
+  // Only offer the disclosure when it ADDS something. The stale-plan fallback
+  // used to be the body sentence itself, so expanding «تفاصيل تقنية» repeated
+  // what she had just read — a disclosure that discloses nothing is worse than
+  // none, because it spends the one moment she was willing to look deeper.
+  const detail = reason?.trim();
+  const hasDetail = !!detail && detail !== bodyCopy.trim();
+
   function handleRetry() {
     setErrorMessage(null);
     startTransition(async () => {
@@ -48,10 +59,7 @@ export function PlanFailedState({
         ما قدرنا ننشئ خطتك
       </h1>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
-        {g(
-          "صار خطأ غير متوقع. حاولي مرة ثانية، وإذا تكرر تواصلي معنا.",
-          "صار خطأ غير متوقع. حاول مرة ثانية، وإذا تكرر تواصل معنا.",
-        )}
+        {bodyCopy}
       </p>
 
       {errorMessage && (
@@ -64,13 +72,13 @@ export function PlanFailedState({
         </p>
       )}
 
-      {reason && (
+      {hasDetail && (
         <details className="mt-4 text-start">
           <summary className="cursor-pointer text-brand-ink-muted/70 text-xs hover:text-brand-ink-muted">
             تفاصيل تقنية
           </summary>
           <p className="mt-2 text-brand-ink-muted/80 text-xs leading-relaxed break-words bg-brand-surface rounded-lg p-3">
-            {reason}
+            {detail}
           </p>
         </details>
       )}
