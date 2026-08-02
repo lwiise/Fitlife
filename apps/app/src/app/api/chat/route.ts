@@ -13,6 +13,7 @@ import { getAnthropicKey } from "@/lib/env";
 import { hasAdvisorAccess } from "@/lib/subscription/access";
 import { buildHouseholdContext } from "@/lib/chat/context";
 import { CHAT_SYSTEM_STATIC, buildChatSystemPrompt } from "@/lib/chat/systemRules";
+import { dailyCapMessage } from "@/lib/chat/capMessage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -66,14 +67,19 @@ export async function POST(request: Request) {
   // a missing audit table.
   try {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count, error } = await supabase
+    // Ordered rather than head-only: when the cap is hit we need the OLDEST
+    // row's timestamp to say when a slot actually frees. The window is 24h
+    // rolling, so "tomorrow" was both wrong and unhelpful.
+    const { data: recent, error } = await supabase
       .from("chat_messages")
-      .select("id", { count: "exact", head: true })
+      .select("created_at")
       .eq("user_id", user.id)
-      .gte("created_at", since);
-    if (!error && (count ?? 0) >= DAILY_CAP) {
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .returns<{ created_at: string }[]>();
+    if (!error && (recent?.length ?? 0) >= DAILY_CAP) {
       return NextResponse.json(
-        { error: "تم بلوغ الحد اليومي من الأسئلة. يرجى المحاولة غداً." },
+        { error: dailyCapMessage(recent?.[0]?.created_at ?? null) },
         { status: 429 },
       );
     }
