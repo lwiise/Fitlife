@@ -48,20 +48,25 @@ type MealPlanRow = {
 export async function getLatestPlan(userId: string): Promise<LatestPlanSummary | null> {
   const supabase = await createClient();
 
-  // Two rows, not one: a regeneration that produces NOTHING must not be allowed
+  // More than one row: a regeneration that produces NOTHING must not be allowed
   // to hide the week the household already has. Adding a third member triggers a
   // full shared-group rebuild, and when that run came back empty (see the
   // skeleton budget clamp in plan-engine/generate.ts) the failed row — being
   // newest — replaced a complete 7/7 plan with an error screen on every surface.
-  // The good plan was never deleted, only shadowed. Falling back to it costs
-  // nothing when the newest row is healthy, because then it is never consulted.
+  // The good plan was never deleted, only shadowed.
+  //
+  // The window is 5, not 2, because failures STACK: the account this was found
+  // on had two consecutive empty runs (the original and the user's retry), which
+  // put the last good week third. Reading only one row back would have found
+  // another failure and given up. Falling back costs nothing when the newest row
+  // is healthy, because then the rest are never examined.
   const { data, error } = await supabase
     .from("meal_plans")
     .select("id, status, plan_data, generated_at, error_message, updated_at")
     .eq("user_id", userId)
     .neq("status", "archived")
     .order("created_at", { ascending: false })
-    .limit(2)
+    .limit(5)
     .returns<MealPlanRow[]>();
 
   if (error || !data || data.length === 0) return null;
@@ -123,8 +128,10 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
   // drain's `status === "ready"` precondition satisfiable so the household can
   // recover without the customer doing anything.
   if (resolved.status === "failed" && !resolved.planData && data.length > 1) {
-    const prev = data[1];
-    if (prev && prev.status === "ready") {
+    // Skip over any further failed/empty rows to the most recent week that
+    // actually has meals in it.
+    for (const prev of data.slice(1)) {
+      if (!prev || prev.status !== "ready") continue;
       const prevParsed = MealPlanSchema.safeParse(prev.plan_data);
       if (prevParsed.success && planHasContent(prevParsed.data)) {
         const prevResolved = resolveStaleness({
@@ -132,10 +139,11 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
           planData: prevParsed.data,
           updatedAt: prev.updated_at,
           errorMessage: null,
+          workerAcked: workerAckedFromPlanData(prev.plan_data),
         });
         if (prevResolved.planData) {
           console.warn(
-            "[getLatestPlan] newest plan failed with no content; serving the previous ready plan",
+            "[getLatestPlan] newest plan failed with no content; serving the last ready plan",
             { failedId: row.id, servingId: prev.id },
           );
           return {

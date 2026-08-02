@@ -53,21 +53,33 @@ function plan(filledDays: number, memberIds = ["mom"]) {
   };
 }
 
-/** The rule getLatestPlan applies when the newest row is failed-and-empty. */
-function shouldServePrevious(
-  newest: { status: string; planData: unknown },
-  previous?: { status: string; planData: unknown },
-): boolean {
+type Row = { status: string; planData: unknown };
+
+/**
+ * The rule getLatestPlan applies: when the newest row is failed-and-empty, scan
+ * BACK through the window for the most recent week that actually has meals.
+ * Returns the index served, or -1 for "keep the newest".
+ */
+function servedIndex(rows: Row[]): number {
+  const newest = rows[0]!;
   const newestResolved = resolveStaleness({
     status: newest.status as "ready" | "failed" | "generating",
     planData: null,
     updatedAt: new Date().toISOString(),
     errorMessage: null,
   });
-  if (!(newestResolved.status === "failed" && !newestResolved.planData)) return false;
-  if (!previous || previous.status !== "ready") return false;
-  const parsed = MealPlanSchema.safeParse(previous.planData);
-  return parsed.success && planHasContent(parsed.data);
+  if (!(newestResolved.status === "failed" && !newestResolved.planData)) return -1;
+  for (let i = 1; i < rows.length; i++) {
+    const prev = rows[i]!;
+    if (prev.status !== "ready") continue;
+    const parsed = MealPlanSchema.safeParse(prev.planData);
+    if (parsed.success && planHasContent(parsed.data)) return i;
+  }
+  return -1;
+}
+
+function shouldServePrevious(newest: Row, previous?: Row): boolean {
+  return servedIndex(previous ? [newest, previous] : [newest]) > 0;
 }
 
 describe("previous-plan fallback", () => {
@@ -111,6 +123,28 @@ describe("previous-plan fallback", () => {
     expect(shouldServePrevious({ status: "failed", planData: null }, undefined)).toBe(
       false,
     );
+  });
+
+  it("skips STACKED failures to reach the last good week", () => {
+    // The account this was found on had two consecutive empty runs — the
+    // original and the user's retry — which put the good plan third. A
+    // one-row-back window found another failure and gave up.
+    const rows: Row[] = [
+      { status: "failed", planData: null },
+      { status: "failed", planData: null },
+      { status: "ready", planData: plan(7, ["mom", "m1"]) },
+    ];
+    expect(servedIndex(rows)).toBe(2);
+  });
+
+  it("gives up when every row in the window is unusable", () => {
+    expect(
+      servedIndex([
+        { status: "failed", planData: null },
+        { status: "failed", planData: null },
+        { status: "ready", planData: plan(0) },
+      ]),
+    ).toBe(-1);
   });
 
   it("keeps a PARTIAL newest plan rather than reaching backwards", () => {
