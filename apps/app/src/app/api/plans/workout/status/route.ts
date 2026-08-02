@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
+import { ageMsFrom } from "@/lib/plans/generationTiming";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,8 @@ export async function GET() {
     id: latest.id,
     status: latest.status,
     updated_at: latest.updated_at,
+    // Server-measured silence — the stall signal. See the sibling meal route.
+    age_ms: ageMsFrom(latest.updated_at, Date.now()),
     in_progress: latest.in_progress,
     waiting_for_meals: waitingForMeals,
     error_message: latest.status === "failed" ? latest.error_message : null,

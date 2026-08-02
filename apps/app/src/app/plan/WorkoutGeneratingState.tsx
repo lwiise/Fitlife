@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, UtensilsCrossed } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
+import { generationHasStalled } from "@/lib/plans/generationTiming";
 
 const POLL_INTERVAL_MS = 3000;
 const LONG_RUNNING_MS = 90_000;
-const TIMEOUT_MS = 780_000;
+// No wall-clock timeout — see lib/plans/generationTiming.ts. This screen gives
+// up only once the workout row has gone silent, which matters more here than on
+// the meal side: a workout run can legitimately spend up to WAIT_MAX_MS holding
+// for meals BEFORE it starts its own ~15-min budget, so no fixed deadline can
+// be both long enough for the slow case and meaningful in the fast one.
 
 // Rotating reassurance copy — same presentational pattern as the meal plan's
 // generating card so both flows feel identical.
@@ -47,15 +52,24 @@ export function WorkoutGeneratingState({
   // Baseline for elapsed-time math; re-anchored while the worker waits for
   // meals so the deferred phase never counts toward long-running/timeout.
   const activeStartRef = useRef(0);
+  // Client-clock instant of the last server write, rebuilt from the route's
+  // server-measured `age_ms`. Also re-anchored during the meals-first hold: the
+  // workout row genuinely isn't written during that phase, so counting it as
+  // silence would call a correctly-waiting run stuck.
+  const lastWriteAtRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     activeStartRef.current = Date.now();
+    lastWriteAtRef.current = Date.now();
 
     const progressTimer = setInterval(() => {
       if (cancelled) return;
       if (waitingRef.current) {
         activeStartRef.current = Date.now();
+        // The meals-first hold is the worker behaving correctly, not a stall —
+        // hold the silence clock open for as long as it lasts.
+        lastWriteAtRef.current = Date.now();
         setProgress(6);
         return;
       }
@@ -72,34 +86,46 @@ export function WorkoutGeneratingState({
       if (cancelled) return;
 
       const elapsed = Date.now() - activeStartRef.current;
-      if (elapsed > TIMEOUT_MS) {
-        clearInterval(poll);
-        clearInterval(progressTimer);
-        setTimedOut(true);
-        return;
-      }
       if (elapsed >= LONG_RUNNING_MS) {
         setIsLong(true);
       }
 
       try {
         const res = await fetch("/api/plans/workout/status", { cache: "no-store" });
-        if (!res.ok) return;
-        const body = (await res.json()) as {
-          status?: string;
-          waiting_for_meals?: boolean;
-        };
-        const waiting = !!body.waiting_for_meals && body.status === "generating";
-        waitingRef.current = waiting;
-        setWaitingForMeals(waiting);
-        if (body.status === "ready" || body.status === "failed") {
-          clearInterval(poll);
-          clearInterval(progressTimer);
-          setProgress(100);
-          setTimeout(() => window.location.reload(), 500);
+        if (res.ok) {
+          const body = (await res.json()) as {
+            status?: string;
+            age_ms?: number;
+            waiting_for_meals?: boolean;
+          };
+          const waiting = !!body.waiting_for_meals && body.status === "generating";
+          waitingRef.current = waiting;
+          setWaitingForMeals(waiting);
+          if (typeof body.age_ms === "number" && Number.isFinite(body.age_ms)) {
+            lastWriteAtRef.current = Date.now() - Math.max(0, body.age_ms);
+          }
+          if (waiting) {
+            // Holding for meals by design — keep the silence clock open (the
+            // progress timer re-anchors it every second, this covers the gap
+            // when a poll lands between ticks).
+            lastWriteAtRef.current = Date.now();
+          }
+          if (body.status === "ready" || body.status === "failed") {
+            clearInterval(poll);
+            clearInterval(progressTimer);
+            setProgress(100);
+            setTimeout(() => window.location.reload(), 500);
+            return;
+          }
         }
       } catch {
-        // network blip — keep polling
+        // network blip — fall through to the stall check below.
+      }
+
+      if (generationHasStalled(lastWriteAtRef.current, Date.now())) {
+        clearInterval(poll);
+        clearInterval(progressTimer);
+        setTimedOut(true);
       }
     };
 

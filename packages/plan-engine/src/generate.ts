@@ -1530,17 +1530,21 @@ export async function generateMealPlan(params: {
     // the old fixed 16000, which threw and failed the WHOLE generation.
     const skeletonCap = skeletonMaxTokens(needsSkeleton.length);
     // Phase 1 must leave room for phase 2. `bigCallTimeoutMs` sizes this call to
-    // the WORK (280s at 3 members, up to 600s) and knew nothing about the run
-    // deadline, and the truncation retry below can run it a SECOND time — so the
-    // skeleton could legitimately spend the whole 15-minute box and hand the day
-    // loop a budget it had already exhausted.
+    // the WORK (280s at 3 members, up to ~600s for a large household) and knew
+    // nothing about the run deadline, and the truncation retry below can spend
+    // it a SECOND time. Free-access mode is what makes households that large
+    // reachable, since the tier cap no longer bounds member count.
     //
-    // Measured in production on a 3-member household: 856s spent, $0.46 billed,
-    // and every one of the 7 days deferred with "run budget spent before this
-    // day started (no model call made)". Zero days, so the plan was empty and
-    // marked failed — which, being the newest row, then hid the complete week
-    // the family already had. A budget the first phase can spend entirely is not
-    // a budget.
+    // Clamping to the remaining budget alone is not enough: it stops the hard
+    // kill, but still allows the skeleton to consume every last millisecond and
+    // hand the day loop nothing. Measured in production on a 3-member household
+    // (Sentry bfda604f), twice, 430ms apart: 856s spent, zero days, every one of
+    // the 7 deferred with "run budget spent before this day started (no model
+    // call made)". So the reserve is one DAY call, not zero — a budget the first
+    // phase can spend entirely is not a budget.
+    //
+    // Re-evaluated per attempt, so the truncation retry gets what is left rather
+    // than a stale figure computed before the first call.
     const skeletonTimeoutFor = (): number =>
       Math.max(
         MIN_VIABLE_CALL_MS,

@@ -23,6 +23,10 @@ import type { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEngagementDigest } from "@/lib/engagement/digest";
 import { getLatestPlan, STALE_GENERATION_MIN } from "@/lib/plans/getLatestPlan";
+import {
+  WORKER_ACK_LIMIT_MS,
+  workerAckedFromPlanData,
+} from "@/lib/plans/generationTiming";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import {
   canGenerateNewPlan,
@@ -162,20 +166,50 @@ export async function triggerPlanGeneration(params: {
   // or the 15-minute stale window elapsed.
   const { data: liveGens } = await supabase
     .from("plan_generations")
-    .select("id, started_at")
+    .select("id, started_at, meal_plan_id")
     .eq("user_id", userId)
     .eq("status", "started")
     .eq("plan_kind", "meal")
     .order("started_at", { ascending: false })
     .limit(1)
-    .returns<{ id: string; started_at: string }[]>();
+    .returns<{ id: string; started_at: string; meal_plan_id: string | null }[]>();
   const live = liveGens?.[0];
   if (live) {
     const startedMs = Date.parse(live.started_at);
-    const ageMin = Number.isNaN(startedMs)
-      ? Infinity
-      : (Date.now() - startedMs) / 60_000;
-    if (ageMin < STALE_GENERATION_MIN) return { ok: false, kind: "busy" };
+    const ageMs = Number.isNaN(startedMs) ? Infinity : Date.now() - startedMs;
+    const ageMin = ageMs / 60_000;
+
+    // A run the worker never acknowledged is already known dead, and holding its
+    // lock for the full stale window strands the user in a contradiction: the
+    // plan surfaces «لم تبدأ عملية إنشاء الخطة. حاولي مرة ثانية» after
+    // WORKER_ACK_LIMIT_MS, and then every retry for the next fourteen minutes
+    // comes back 409 «خطتك قيد التجهيز الآن» — an error whose only instruction
+    // the app itself refuses. Both ends read workerAckedFromPlanData, so the
+    // read path and the lock cannot disagree about whether a run is alive.
+    let deadWithoutAck = false;
+    if (ageMs >= WORKER_ACK_LIMIT_MS && ageMin < STALE_GENERATION_MIN && live.meal_plan_id) {
+      const { data: planRow } = await supabase
+        .from("meal_plans")
+        .select("status, plan_data")
+        .eq("id", live.meal_plan_id)
+        .maybeSingle();
+      // Only a still-'generating' row with nothing written qualifies. A 'ready'
+      // shell filling in day by day is alive and must keep its lock.
+      deadWithoutAck =
+        !!planRow &&
+        planRow.status === "generating" &&
+        !workerAckedFromPlanData(planRow.plan_data);
+      if (deadWithoutAck) {
+        console.warn("[triggerPlanGeneration] releasing lock for a run that never started", {
+          userId,
+          generationId: live.id,
+        });
+      }
+    }
+
+    if (ageMin < STALE_GENERATION_MIN && !deadWithoutAck) {
+      return { ok: false, kind: "busy" };
+    }
     // Stale 'started' (the bg worker was hard-killed at its budget and its catch
     // never ran) → reclassify so the guard can't deadlock 'busy' forever.
     //
@@ -187,7 +221,9 @@ export async function triggerPlanGeneration(params: {
       .from("plan_generations")
       .update({
         status: "failed",
-        error_message: "stale generation reclassified",
+        error_message: deadWithoutAck
+          ? "run never started (no worker ACK)"
+          : "stale generation reclassified",
         completed_at: new Date().toISOString(),
       })
       .eq("id", live.id);
@@ -376,6 +412,12 @@ export async function triggerPlanGeneration(params: {
         // leaves the caller's UI waiting on a reply that never comes. See
         // DISPATCH_ENQUEUE_TIMEOUT_MS for why a timeout is not a failure.
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
+        // Never follow a redirect. If the function is not deployed, this URL
+        // falls through to the Next handler and the middleware bounces it — and
+        // a followed redirect lands on a 200, which reads exactly like success.
+        // Surfacing the 3xx instead names the real problem: nothing is serving
+        // this path.
+        redirect: "manual",
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getInternalFunctionSecret(),
@@ -399,12 +441,18 @@ export async function triggerPlanGeneration(params: {
         }),
       },
     );
-    if (!res.ok && res.status !== 202) {
+    // A deployed `*-background` function ALWAYS answers 202 — Netlify enqueues
+    // it and replies before the handler runs. So any other status, 2xx included,
+    // means the POST was served by something that is not our worker (site
+    // routing, a redirect, an error page) and no generation was enqueued.
+    // Accepting any `res.ok` here would report that as success and leave the
+    // plan row generating forever with nobody working on it.
+    if (res.status !== 202) {
       // Include the status + a body snippet so a misconfig (e.g. missing
       // ANTHROPIC_API_KEY → 500 "Server misconfigured") is diagnosable.
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
       throw new Error(
-        `background fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`,
+        `background fn returned ${res.status} (expected 202)${snippet ? `: ${snippet}` : ""}`,
       );
     }
   } catch (err) {
@@ -420,6 +468,20 @@ export async function triggerPlanGeneration(params: {
     // wrote, the next dispatch clears the stale row instead of deadlocking on
     // 'busy'. Every other dispatch error keeps the old fail-fast behaviour.
     if (err instanceof Error && err.name === "TimeoutError") {
+      // Report it as generating (see above) but LEAVE A TRACE. This was the one
+      // error path that recorded nothing anywhere: every other one writes
+      // 'failed' below, while this returned ok:true and the run's absence became
+      // indistinguishable from a worker that simply hadn't finished. Service-role
+      // because plan_generations lost its user UPDATE policy in 00024.
+      try {
+        await createAdminClient()
+          .from("plan_generations")
+          .update({ error_message: "enqueue unconfirmed (timeout)" })
+          .eq("meal_plan_id", mealPlanId)
+          .eq("status", "started");
+      } catch (noteErr) {
+        console.error("[triggerPlanGeneration] could not note unconfirmed enqueue", noteErr);
+      }
       return { ok: true, mealPlanId, status: "generating" };
     }
     const errorMessage =
@@ -549,6 +611,12 @@ export async function triggerPlanTranslation(params: {
       {
         method: "POST",
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
+        // Never follow a redirect. If the function is not deployed, this URL
+        // falls through to the Next handler and the middleware bounces it — and
+        // a followed redirect lands on a 200, which reads exactly like success.
+        // Surfacing the 3xx instead names the real problem: nothing is serving
+        // this path.
+        redirect: "manual",
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getInternalFunctionSecret(),
@@ -558,9 +626,12 @@ export async function triggerPlanTranslation(params: {
         body: JSON.stringify({ mode: "translate", userId, mealPlanId, locale }),
       },
     );
-    if (!res.ok && res.status !== 202) {
+    // 202 exactly — see the note in triggerPlanGeneration.
+    if (res.status !== 202) {
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
-      throw new Error(`translate bg fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`);
+      throw new Error(
+        `translate bg fn returned ${res.status} (expected 202)${snippet ? `: ${snippet}` : ""}`,
+      );
     }
   } catch (err) {
     // Non-fatal: the maid view falls back to Arabic until a successful translate.
@@ -677,6 +748,12 @@ export async function triggerWorkoutGeneration(params: {
       {
         method: "POST",
         signal: AbortSignal.timeout(DISPATCH_ENQUEUE_TIMEOUT_MS),
+        // Never follow a redirect. If the function is not deployed, this URL
+        // falls through to the Next handler and the middleware bounces it — and
+        // a followed redirect lands on a 200, which reads exactly like success.
+        // Surfacing the 3xx instead names the real problem: nothing is serving
+        // this path.
+        redirect: "manual",
         headers: {
           "content-type": "application/json",
           "x-internal-secret": getInternalFunctionSecret(),
@@ -684,10 +761,11 @@ export async function triggerWorkoutGeneration(params: {
         body: JSON.stringify({ mode: "workout", userId, workoutPlanId, weekStartDate }),
       },
     );
-    if (!res.ok && res.status !== 202) {
+    // 202 exactly — see the note in triggerPlanGeneration.
+    if (res.status !== 202) {
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
       throw new Error(
-        `background fn returned ${res.status}${snippet ? `: ${snippet}` : ""}`,
+        `background fn returned ${res.status} (expected 202)${snippet ? `: ${snippet}` : ""}`,
       );
     }
     return { ok: true, workoutPlanId, status: "started" };

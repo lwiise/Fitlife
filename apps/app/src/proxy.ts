@@ -13,6 +13,25 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Netlify's own endpoints are NOT application routes, and must never be
+  // treated as one.
+  //
+  // This is what stopped plan generation entirely. The app dispatches to
+  // /.netlify/functions/generate-plan-background as a SERVER-TO-SERVER fetch: it
+  // carries no session cookies by design and authenticates with the
+  // x-internal-secret header instead. So `user` below resolves to null, the
+  // unauthenticated branch redirected the dispatch to /auth/login, and fetch
+  // followed that redirect to a 200 HTML page — which is indistinguishable from
+  // a successful enqueue. Netlify never saw the request, the worker never ran,
+  // and the plan sat 'generating' forever with nothing in any log.
+  //
+  // The matcher below also excludes this prefix, so ordinarily we are not even
+  // invoked for it. This stays as defence in depth: the cost of being wrong here
+  // is silent, total, and took a long time to find.
+  if (pathname.startsWith("/.netlify/")) {
+    return NextResponse.next();
+  }
+
   const isAuthRoute = pathname.startsWith("/auth");
   const isApiRoute = pathname.startsWith("/api");
   // A real asset-extension test, not "contains a dot". `includes(".")` matched
@@ -103,6 +122,10 @@ function withSessionCookies(
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // `.netlify` is excluded because Netlify's function endpoints are platform
+    // infrastructure, not app routes — running auth middleware over them
+    // redirected the internal background-function dispatch to /auth/login and
+    // killed plan generation outright. See the guard at the top of proxy().
+    "/((?!_next/static|_next/image|favicon.ico|\\.netlify|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
