@@ -18,8 +18,27 @@ import { dailyCapMessage } from "@/lib/chat/capMessage";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Conservative per-user daily message cap (see migration 00006 rationale).
-const DAILY_CAP = 30;
+/**
+ * Per-ACCOUNT rolling-24h message cap — shared by the whole household, since one
+ * subscription serves everyone.
+ *
+ * Was 30, which measured out at roughly $0.35/day of protection: 30 advisor
+ * messages cost $0.352 in production, about $0.012 each. That is not what a
+ * six-person household costs — it is what stops one from using the advisor at
+ * all. A single tester exercising one feature exhausted an entire family's daily
+ * allowance during the live run, and at six people the old cap works out to five
+ * messages each.
+ *
+ * 100 keeps the runaway protection the cap exists for (~$1.2/day/account worst
+ * case) without rationing the product's flagship feature at the household size
+ * it is sold to. Env-overridable so it can be tuned without a deploy, matching
+ * PLAN_DAY_CONCURRENCY / PLAN_RUN_BUDGET_MS.
+ */
+const DEFAULT_DAILY_CAP = 100;
+function dailyCap(): number {
+  const n = Number(process.env.CHAT_DAILY_CAP?.trim());
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_DAILY_CAP;
+}
 // Cap turns sent to the model (token budget); keep the most recent.
 const MAX_HISTORY = 20;
 
@@ -77,7 +96,7 @@ export async function POST(request: Request) {
       .gte("created_at", since)
       .order("created_at", { ascending: true })
       .returns<{ created_at: string }[]>();
-    if (!error && (recent?.length ?? 0) >= DAILY_CAP) {
+    if (!error && (recent?.length ?? 0) >= dailyCap()) {
       return NextResponse.json(
         { error: dailyCapMessage(recent?.[0]?.created_at ?? null) },
         { status: 429 },
