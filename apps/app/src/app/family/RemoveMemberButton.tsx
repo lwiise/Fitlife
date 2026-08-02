@@ -51,7 +51,19 @@ export function RemoveMemberButton({
       <ConfirmDialog
         open={confirmOpen}
         title={`حذف ${name}`}
-        body={g("بنعيد تنسيق خطط العائلة بعد الحذف. تأكدين؟", "بنعيد تنسيق خطط العائلة بعد الحذف. تأكد؟")}
+        // The old body said only «بنعيد تنسيق خطط العائلة بعد الحذف» — it read
+        // like a scheduling note. Deleting a member is immediate, permanent, and
+        // takes their records with them: removeFamilyMember purges meal_checkins,
+        // meal_verdicts, workout_checkins, meal_absences and body_logs. Someone
+        // with months of private weight history could lose it to a confirmation
+        // that never mentioned it, and there is no undo anywhere in the flow.
+        body={
+          `سيُحذف ${name} نهائياً مع كل سجلاته: الوزن والقياسات والتسجيلات. لا يمكن التراجع. ` +
+          g(
+            "وبنعيد تنسيق خطط العائلة بعد الحذف. تأكدين؟",
+            "وبنعيد تنسيق خطط العائلة بعد الحذف. تأكد؟",
+          )
+        }
         confirmLabel="حذف"
         cancelLabel="إلغاء"
         isPending={isPending}
