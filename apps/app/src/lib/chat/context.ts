@@ -15,6 +15,7 @@ import {
   labelList,
   measurements,
   todayLine,
+  ageOrderLine,
 } from "./contextFormat";
 
 /** Render a jsonb-ish value (usually a string[]) as a compact comma list. */
@@ -161,6 +162,14 @@ export async function buildHouseholdContext(userId: string): Promise<string> {
     });
     sections.push(["أفراد الأسرة:", ...roster].join("\n"));
   }
+
+  // Superlatives and ordinals ("الأصغر", "الأكبر", "الثاني") were being answered
+  // by picking, not comparing. Precompute the order so there is nothing to infer.
+  const ageOrder = ageOrderLine([
+    ...(profile ? [{ name: profile.display_name ?? "صاحبة الحساب", birth_year: profile.birth_year }] : []),
+    ...beneficiaries.map((m) => ({ name: m.name, birth_year: m.birth_year })),
+  ]);
+  if (ageOrder) sections.push(ageOrder);
 
   if (latest?.status === "ready" && latest.plan_data) {
     // Overlay current roster names so the advisor never refers to a member by a

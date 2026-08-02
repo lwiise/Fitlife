@@ -99,6 +99,46 @@ export function todayLine(now = new Date()): string {
 }
 
 /**
+ * Everyone in the household, ordered youngest → oldest.
+ *
+ * The ages were already in the roster, and the advisor could recite them — asked
+ * about twins it correctly answered «لمى (10 سنوات) وسعود (16 سنة)». But asked
+ * «الأصغر وش ياكل اليوم؟» it answered سعود (16), and «والأكبر؟» it answered لمى
+ * (10) — the youngest, given as the oldest. Having the numbers is not the same
+ * as comparing them, so the comparison is precomputed here rather than left to
+ * the model. Anyone with no birth year is listed separately instead of being
+ * silently sorted to an end.
+ */
+export function ageOrderLine(
+  people: Array<{ name: string; birth_year?: number | null }>,
+  now = new Date(),
+): string {
+  const known: Array<{ name: string; age: number }> = [];
+  const unknown: string[] = [];
+  for (const p of people) {
+    const age = ageFromBirthYear(p.birth_year, now);
+    if (age == null) unknown.push(p.name);
+    else known.push({ name: p.name, age });
+  }
+  if (known.length === 0 && unknown.length === 0) return "";
+  known.sort((a, b) => a.age - b.age);
+  const parts: string[] = [];
+  if (known.length) {
+    parts.push(
+      `ترتيب أفراد البيت من الأصغر إلى الأكبر: ${known
+        .map((k) => `${k.name} (${k.age})`)
+        .join(" ثم ")}. الأصغر هو ${known[0]!.name} والأكبر هو ${
+        known[known.length - 1]!.name
+      }.`,
+    );
+  }
+  if (unknown.length) {
+    parts.push(`بلا سنة ميلاد مسجّلة: ${unknown.join("، ")}.`);
+  }
+  return parts.join(" ");
+}
+
+/**
  * The physical numbers every calorie question needs.
  *
  * These were absent from the context entirely, so the advisor could not answer

@@ -8,6 +8,7 @@ import {
   labelList,
   measurements,
   todayLine,
+  ageOrderLine,
 } from "./contextFormat";
 
 /**
@@ -120,5 +121,54 @@ describe("label / labelList", () => {
     expect(labelList(RESTRICTION_AR, [])).toBe("لا شيء");
     expect(labelList(RESTRICTION_AR, null)).toBe("لا شيء");
     expect(label(GOAL_AR, null)).toBe("غير محدد");
+  });
+});
+
+describe("ageOrderLine", () => {
+  const NOW = new Date("2026-08-02T12:00:00Z");
+  const HOUSE = [
+    { name: "هند", birth_year: 1990 },   // 36
+    { name: "فيصل", birth_year: 1985 },  // 41
+    { name: "لمى", birth_year: 2016 },   // 10
+    { name: "سعود", birth_year: 2010 },  // 16
+    { name: "نورة", birth_year: 1964 },  // 62
+  ];
+
+  it("names the youngest and the oldest outright", () => {
+    // Asked «الأصغر» the advisor answered سعود (16) and «الأكبر» لمى (10) — the
+    // youngest given as the oldest — while being able to recite both ages.
+    const line = ageOrderLine(HOUSE, NOW);
+    expect(line).toContain("الأصغر هو لمى");
+    expect(line).toContain("والأكبر هو نورة");
+  });
+
+  it("orders the whole household youngest first", () => {
+    const line = ageOrderLine(HOUSE, NOW);
+    const order = ["لمى", "سعود", "هند", "فيصل", "نورة"].map((n) => line.indexOf(n));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(Math.min(...order)).toBeGreaterThan(-1);
+  });
+
+  it("shows each age so an ordinal question can be answered too", () => {
+    const line = ageOrderLine(HOUSE, NOW);
+    for (const age of ["(10)", "(16)", "(36)", "(41)", "(62)"]) {
+      expect(line).toContain(age);
+    }
+  });
+
+  it("lists members with no birth year separately rather than sorting them to an end", () => {
+    const line = ageOrderLine([...HOUSE, { name: "ضيف", birth_year: null }], NOW);
+    expect(line).toContain("بلا سنة ميلاد مسجّلة: ضيف");
+    expect(line).toContain("الأصغر هو لمى");
+  });
+
+  it("returns nothing for an empty household", () => {
+    expect(ageOrderLine([], NOW)).toBe("");
+  });
+
+  it("handles a single person without claiming a comparison", () => {
+    const line = ageOrderLine([{ name: "هند", birth_year: 1990 }], NOW);
+    expect(line).toContain("هند");
+    expect(line).toContain("الأصغر هو هند");
   });
 });
