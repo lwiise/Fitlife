@@ -645,10 +645,16 @@ export async function drainDeferredMembers(): Promise<{
     getLatestPlan(user.id),
     supabase
       .from("family_members")
-      .select("id, role, display_order, meal_mode")
+      .select("id, role, display_order, meal_mode, preferred_language")
       .eq("user_id", user.id)
       .returns<
-        { id: string; role: string; display_order: number; meal_mode: string }[]
+        {
+          id: string;
+          role: string;
+          display_order: number;
+          meal_mode: string;
+          preferred_language: string | null;
+        }[]
       >(),
   ]);
 
@@ -670,7 +676,35 @@ export async function drainDeferredMembers(): Promise<{
     members: membersRes.data ?? [],
     additionOrder,
   });
-  if (!nextId) return { fired: false, busy: false };
+
+  // Nobody left to generate — but the housekeeper may still be waiting on her
+  // cooking instructions, and nothing else will ever retry them.
+  //
+  // Two paths hand this off to each other and both can decline. Adding a maid
+  // fires triggerPlanTranslation, which no-ops while a generation is live on the
+  // stated assumption that "the freshly-generated plan lands already
+  // translated" — but the generation only translates if budget REMAINS after its
+  // day loop, and at five beneficiaries the loop routinely spends the whole box.
+  // Observed on a real household: maid added mid-generation, plan finished
+  // ready, no translation, no housekeeper view, and no signal that the product's
+  // headline feature had silently not happened.
+  if (!nextId) {
+    const hk = (membersRes.data ?? []).find((m) => m.role === "housekeeper");
+    const locale = hk?.preferred_language;
+    if (
+      hk &&
+      locale &&
+      locale !== "ar" &&
+      isLocaleCode(locale) &&
+      !planIsTranslated(latest.plan_data, locale)
+    ) {
+      await triggerPlanTranslation({ supabase, userId: user.id, locale });
+      // Not "fired": this writes the same plan row in place rather than starting
+      // a generation, so the caller should keep polling, not stop.
+      return { fired: false, busy: false };
+    }
+    return { fired: false, busy: false };
+  }
 
   // An already-in-plan member only missing a failed day is finished alone (no
   // shared-meal impact). An ABSENT (new) member that SHARES the family menu rebuilds
@@ -690,6 +724,20 @@ export async function drainDeferredMembers(): Promise<{
         : await runFamilyGeneration(supabase, user.id, { regenerateSharedGroup: true });
   }
   return { fired: gen.ok, busy: !gen.ok && gen.kind === "busy" };
+}
+
+
+/**
+ * Has this plan already been translated for `locale`? Checked against the meals
+ * themselves rather than a plan-level flag, so a half-written translation still
+ * counts as pending and gets finished.
+ */
+function planIsTranslated(plan: MealPlan, locale: string): boolean {
+  const meals = plan.members.flatMap((m) => m.days.flatMap((d) => d.meals));
+  if (meals.length === 0) return true; // nothing to translate yet
+  return meals.every(
+    (meal) => meal.prep_steps_translated_locale === locale,
+  );
 }
 
 /**
