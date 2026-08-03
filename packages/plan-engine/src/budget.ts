@@ -32,14 +32,22 @@ export const DEFAULT_PLAN_RUN_BUDGET_MS = 15 * 60_000;
 export const FINALIZE_RESERVE_MS = 45_000;
 
 /**
- * The housekeeper translation pass runs AFTER the day loop and is itself several
- * sequential model calls over the whole week, so the day loop has to stop that
- * much earlier or it eats the translation's budget and the maid gets an
- * untranslated plan. Generous on purpose — translation is already non-fatal, so
- * over-reserving costs at most a deferred day, while under-reserving costs the
- * whole pass.
+ * Room after the day loop for the housekeeper translation pass.
+ *
+ * Was 180s, "generous on purpose" because over-reserving supposedly cost "at
+ * most a deferred day" while under-reserving cost the whole pass. Both halves of
+ * that stopped being true. Translation is no longer last-chance: it runs on a
+ * PARTIAL plan now, her page re-triggers it, the drain finishes it, and
+ * `runMealPlanTranslation` takes the generation lock so a later pass cannot race
+ * a run — so a skipped end-of-run pass costs a few minutes, not the feature.
+ * Meanwhile a deferred day is exactly what a six-person household cannot afford:
+ * 180s is a quarter of the day loop's entire budget, and that budget was
+ * delivering one day of seven.
+ *
+ * 60s still lets a run that finishes early translate a day or two on its way
+ * out, which is the case worth keeping.
  */
-export const TRANSLATION_RESERVE_MS = 180_000;
+export const TRANSLATION_RESERVE_MS = 60_000;
 
 /**
  * Optional prod override (no deploy needed), matching the `PLAN_DAY_CONCURRENCY`
@@ -95,6 +103,26 @@ export function canFit(
  * normal one fits and let the timeout clamp handle the tail.
  */
 export const DAY_CALL_ESTIMATE_MS = 150_000;
+
+/**
+ * What the WHOLE day loop needs, in waves — the reserve phase 1 has to leave.
+ *
+ * `DAY_CALL_ESTIMATE_MS` is what ONE day costs, and reserving one day was the
+ * mistake: it guarantees a single day call could theoretically start, not that
+ * a week can be built. Days run `concurrency` at a time, so the loop's real
+ * wall-clock is `ceil(days / concurrency)` waves, and phase 1 must leave that
+ * much or the household gets a fraction of its week no matter how healthy the
+ * run looks.
+ *
+ * This is deliberately an ESTIMATE of a typical wave, not `bigCallTimeoutMs`'s
+ * worst-case abort bound — reserving the worst case at five members would
+ * exceed the entire function budget and leave the skeleton nothing, which is
+ * the same failure pointing the other way.
+ */
+export function dayLoopReserveMs(dayCount: number, concurrency: number): number {
+  const waves = Math.ceil(Math.max(1, dayCount) / Math.max(1, concurrency));
+  return waves * DAY_CALL_ESTIMATE_MS;
+}
 
 /**
  * The floor under which starting anything is pointless. A call given less than

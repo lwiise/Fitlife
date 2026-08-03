@@ -147,6 +147,28 @@ export function bigCallTimeoutMs(memberCount: number, hasTranslation: boolean): 
 }
 
 /**
+ * Wall-clock cap for the SKELETON call specifically.
+ *
+ * Phase 1 and phase 2 do very different amounts of writing, and sharing
+ * `bigCallTimeoutMs` gave the skeleton a ceiling sized for a day of full
+ * recipes. A ceiling is what a slow call expands to fill: measured on a
+ * 5-beneficiary household, the run spent most of an 11-minute day-loop budget
+ * before the first day call started, and six of seven days then died at a
+ * ~200s clamp against work that needs ~450s. One usable day for $2.81.
+ *
+ * The skeleton emits per member a target block and a week of dish NAMES —
+ * roughly 4k tokens at five members, against the 25k a day of recipes runs to.
+ * `skeletonMaxTokens` is deliberately generous (a truncated skeleton fails the
+ * whole run), but the TIMEOUT should track the work, not the cap.
+ */
+/** Days in a generated plan week — the skeleton prompt asks for exactly this. */
+export const PLAN_WEEK_DAYS = 7;
+
+export function skeletonTimeoutMs(memberCount: number): number {
+  return Math.min(360_000, 120_000 + 30_000 * Math.max(1, memberCount));
+}
+
+/**
  * Day-loop concurrency scaled to the workload. Small families keep the calm
  * ordered 1→7 fill (DAY_CONCURRENCY). Large families make each day's call big and
  * slow; running 7 strictly in sequence would exceed the 15-min function budget,

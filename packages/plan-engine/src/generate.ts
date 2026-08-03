@@ -7,6 +7,8 @@ import {
   MAX_OUTPUT_TOKENS,
   DAY_MAX_TOKENS,
   skeletonMaxTokens,
+  skeletonTimeoutMs,
+  PLAN_WEEK_DAYS,
   dayMaxTokens,
   bigCallTimeoutMs,
   dayConcurrency,
@@ -18,10 +20,17 @@ import {
   planRunBudgetMs,
   FINALIZE_RESERVE_MS,
   DAY_CALL_ESTIMATE_MS,
+  dayLoopReserveMs,
   MIN_VIABLE_CALL_MS,
 } from "./budget";
 import { z } from "zod";
-import { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
+import {
+  streamAnthropic,
+  stripMarkdownFence,
+  salvageTruncatedJson,
+  computeCostUsd,
+  type StreamResult,
+} from "./anthropic";
 import { applyCalorieFloor, type CalorieFloorSubject } from "./calorieFloor";
 import {
   STATIC_SYSTEM,
@@ -421,6 +430,50 @@ export interface DayCalorieDeviation {
   got: number;
   target: number;
   allowed: number; // ± band in kcal
+}
+
+/**
+ * Recover the finished members from a day call that died mid-stream.
+ *
+ * Keeps ONLY members whose meal count matches what the skeleton planned for
+ * them that day. That strictness is the whole safety argument: a member cut off
+ * with two of four meals would otherwise be handed to the calorie rescale, which
+ * would scale two meals up to a full day's target and produce absurd portions.
+ * A member who cannot be verified complete is dropped and the drain refills
+ * their day, which is exactly what would have happened to all of them anyway.
+ *
+ * Returns null when nothing whole survived, so the caller fails the day exactly
+ * as it did before. Pure — exported for unit tests.
+ */
+export function rescueDaySlice(
+  partialText: string,
+  skeleton: PlanSkeleton,
+  dayIndex: number,
+): DaySlice | null {
+  const repaired = salvageTruncatedJson(partialText);
+  if (!repaired) return null;
+
+  let parsed: DaySlice;
+  try {
+    const r = DaySliceSchema.safeParse(
+      expandTerseDaySlice(JSON.parse(repaired)),
+    );
+    if (!r.success) return null;
+    parsed = r.data;
+  } catch {
+    return null;
+  }
+
+  const expected = new Map<string, number>();
+  for (const sm of skeleton.members) {
+    const day = sm.days.find((d) => d.day_index === dayIndex);
+    if (day && day.meals.length > 0) expected.set(sm.member_id, day.meals.length);
+  }
+
+  const complete = parsed.members.filter(
+    (m) => m.meals.length > 0 && m.meals.length === expected.get(m.member_id),
+  );
+  return complete.length > 0 ? { ...parsed, members: complete } : null;
 }
 
 /**
@@ -1552,8 +1605,16 @@ export async function generateMealPlan(params: {
     // hand the day loop nothing. Measured in production on a 3-member household
     // (Sentry bfda604f), twice, 430ms apart: 856s spent, zero days, every one of
     // the 7 deferred with "run budget spent before this day started (no model
-    // call made)". So the reserve is one DAY call, not zero — a budget the first
-    // phase can spend entirely is not a budget.
+    // call made)".
+    //
+    // Reserving ONE day call fixed that and was still wrong: it guarantees a
+    // single day could start, not that a WEEK can be built. Measured again at 5
+    // beneficiaries — one usable day for $2.81, six dying at a ~200s clamp
+    // against work that needs ~450s — because the skeleton was allowed to run
+    // until 150s remained. Two changes: the reserve is now the day loop's real
+    // shape (waves × a typical day), and the ceiling is sized to what a SKELETON
+    // writes rather than to a day of full recipes, since a ceiling is what a
+    // slow call expands to fill.
     //
     // Re-evaluated per attempt, so the truncation retry gets what is left rather
     // than a stale figure computed before the first call.
@@ -1561,8 +1622,19 @@ export async function generateMealPlan(params: {
       Math.max(
         MIN_VIABLE_CALL_MS,
         Math.min(
-          bigCallTimeoutMs(needsSkeleton.length, false),
-          remainingMs(deadlineMs) - DAY_CALL_ESTIMATE_MS,
+          skeletonTimeoutMs(needsSkeleton.length),
+          remainingMs(deadlineMs) -
+            // The day grid is the carried family's when there is one, else the
+            // week the skeleton is about to lay out.
+            dayLoopReserveMs(
+              familyDayIndices.length > 0 ? familyDayIndices.length : PLAN_WEEK_DAYS,
+              // Phase 2's own concurrency, recomputed here rather than read from
+              // `dayLoopConcurrency` — that is declared after this block, and a
+              // reserve computed from the wrong wave count is the bug this is
+              // fixing. `context.housekeeper_locale` is the same input phase 2
+              // derives `hasTranslation` from.
+              dayConcurrency(beneficiaries.length, !!context.housekeeper_locale),
+            ),
         ),
       );
     const runSkeleton = (maxTokens: number) =>
@@ -1957,16 +2029,35 @@ export async function generateMealPlan(params: {
     let bandAttempt = 0; // re-rolls (with corrective note) for out-of-band day calories/protein
     let bestOffBand: { slice: DaySlice; totalDev: number } | null = null;
     let tokensRetried = false; // one doubled-cap retry on truncation
+    // A day rescued from a timed-out stream, waiting to go through the SAME
+    // validation, band and assembly path a live response does. One attempt only:
+    // if the rescued payload cannot be made into a day, nothing further will.
+    let salvagedSlice: DaySlice | null = null;
+    let salvageTried = false;
     for (;;) {
       try {
-        const res = await streamAnthropic({
-          apiKey: anthropicApiKey,
-          model: DAY_MODEL,
-          maxTokens: dayCap,
-          systemStatic: STATIC_SYSTEM,
-          systemPrompt: prompt,
-          timeoutMs: callTimeout(),
-        });
+        // A day rescued from a timed-out stream re-enters here as if the model
+        // had just returned it, so it goes through the SAME parse, band,
+        // rescale and assembly path — which is the point: a salvaged day is
+        // enforced exactly like a live one, it just costs no second call.
+        // Tokens read 0 because an aborted stream never delivers the usage
+        // event; the real spend was already billed on the call that died.
+        const res: StreamResult = salvagedSlice
+          ? {
+              text: JSON.stringify(salvagedSlice),
+              tokensIn: 0,
+              tokensOut: 0,
+              stopReason: "salvaged",
+            }
+          : await streamAnthropic({
+              apiKey: anthropicApiKey,
+              model: DAY_MODEL,
+              maxTokens: dayCap,
+              systemStatic: STATIC_SYSTEM,
+              systemPrompt: prompt,
+              timeoutMs: callTimeout(),
+            });
+        salvagedSlice = null;
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;
         totalCost += computeCostUsd(res.tokensIn, res.tokensOut, DAY_MODEL);
@@ -2363,6 +2454,23 @@ export async function generateMealPlan(params: {
           if (canFit(deadlineMs, wait + MIN_VIABLE_CALL_MS)) {
             contentAttempt++;
             await sleep(wait);
+            continue;
+          }
+        }
+        // (3) Out of retries. Before losing the day entirely, see whether the
+        // stream that died had already written whole members. Six day calls
+        // streamed ~25k tokens apiece and were discarded whole on the run that
+        // motivated this — the tokens are paid for either way, and most of them
+        // describe finished recipes.
+        if (!salvageTried && err instanceof AnthropicCallError && err.partialText) {
+          salvageTried = true;
+          const rescued = rescueDaySlice(err.partialText, daySkeleton, dayIndex);
+          if (rescued) {
+            console.warn(
+              `[plan-generate] day ${dayIndex} rescued from a timed-out stream:`,
+              rescued.members.map((m) => m.member_id).join(", "),
+            );
+            salvagedSlice = rescued;
             continue;
           }
         }

@@ -521,6 +521,59 @@ partial-scope fixtures in `generate.test.ts` were rebalanced to be genuinely in 
 
 ---
 
+## One day of seven for $2.81 — the day-loop budget (08/2026)
+
+Measured on production, a 5-beneficiary household, twice: 11.3 minutes, ~178k OUTPUT
+tokens, and **one usable day**, with the rest lost to `Anthropic stream timeout after
+202876ms`. Three separate causes, all arithmetic.
+
+**The reserve was one day call; it needed to be the loop's shape.** The clamp added in
+"Phase 1 must leave room for phase 2" (below) let the skeleton run until
+`DAY_CALL_ESTIMATE_MS` remained — which guarantees a single day *could start*, not that a
+WEEK can be built. `dayLoopReserveMs(days, concurrency)` = `ceil(days/concurrency)` waves
+× a typical day. Deliberately the ESTIMATE, not `bigCallTimeoutMs`'s worst-case bound:
+reserving the worst case at five members exceeds the whole function budget and starves
+phase 1, which is the same bug pointing the other way.
+
+**The skeleton borrowed the day loop's ceiling.** Both phases used
+`bigCallTimeoutMs`, sized for a day of full recipes (450s at 5 members) — but the
+skeleton emits dish NAMES and one target block per member, a few thousand tokens. A
+ceiling is what a slow call expands to fill. `skeletonTimeoutMs(memberCount)` now tracks
+phase 1's own work (270s at five members, capped 360s).
+
+**`TRANSLATION_RESERVE_MS` 180s → 60s.** Its own comment said over-reserving cost "at
+most a deferred day" while under-reserving cost the whole pass. Both halves stopped being
+true: translation now runs on a PARTIAL plan, her page re-triggers it, the drain finishes
+it, and `runMealPlanTranslation` takes the lock — so a skipped end-of-run pass costs
+minutes, not the feature. Meanwhile 180s was a quarter of a day loop that was delivering
+one day of seven.
+
+**A call cut off at 95% cost 100%.** Six day calls streamed ~25k tokens apiece and were
+discarded whole — about $2.40 of the $2.81. `AnthropicCallError` now carries
+`partialText` on a mid-stream abort; `salvageTruncatedJson` (anthropic.ts) walks it once
+(string/escape aware, so a `{` in a recipe name is not structure), cuts after the last
+element that CLOSED while still nested, and appends the open closers. `rescueDaySlice`
+(generate.ts) then keeps **only members whose meal count matches what the skeleton planned
+for that day** — that strictness is the safety argument, because a member cut off with two
+of four meals would be handed to the calorie rescale and scaled to a full day's target,
+producing absurd portions. Unverifiable members are dropped and the drain refills them,
+which is what would have happened to all of them anyway. The rescued slice re-enters the
+day loop as if the model had just returned it, so it gets the same band, rescale and
+assembly enforcement as a live one; its token counts read 0 because an aborted stream
+never delivers the usage event (the spend was already billed on the call that died).
+
+Guarded by `dayBudget.test.ts`, which asserts the BEFORE/AFTER directly: at five members
+the old arithmetic left the day loop less than one wave, the new leaves it more.
+
+**Still true and unfixed:** at five members, skeleton + two waves is ~20 minutes of work
+against a 15-minute platform budget, so one run cannot build a whole week — the drain
+continues it, but the drain works per MEMBER and cannot say "finish days 5-7 for
+everyone". `PLAN_DAY_CONCURRENCY=7` (env, no deploy) would collapse two waves into one and
+is the cheapest next experiment; the default stays at 4/5 because 7 simultaneous calls
+tripped 429s when the day model was Haiku, and that has not been retested on Sonnet.
+
+---
+
 ## Phase 1 must leave room for phase 2 (08/2026)
 
 Sentry bfda604f, production, a 3-member household: `PlanValidationError: All 7 day

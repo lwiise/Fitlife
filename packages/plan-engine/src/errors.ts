@@ -28,10 +28,17 @@ export class AnthropicCallError extends Error {
   // retryAfterMs: when the failure is a 429/529 carrying a Retry-After header, the
   // server-advised wait (ms). The retry loop honors it so we wait out the actual
   // rate-limit window instead of a much shorter exponential backoff.
+  //
+  // partialText: whatever had streamed in before the failure. A day call aborted
+  // at its timeout used to discard everything it had written — measured at five
+  // beneficiaries, six day calls streamed to roughly 25k tokens each and were
+  // thrown away whole, about $2.40 of a $2.81 run. A day cut off at 95% should
+  // not cost 100%.
   constructor(
     message: string,
     public cause?: unknown,
     public readonly retryAfterMs?: number,
+    public readonly partialText?: string,
   ) {
     super(message);
     this.name = "AnthropicCallError";

@@ -89,6 +89,7 @@ export async function streamAnthropic(params: {
         signal: controller.signal,
       });
     } catch (err) {
+      // Aborted before the body existed — nothing streamed, nothing to salvage.
       if (controller.signal.aborted) {
         throw new AnthropicCallError(
           `Anthropic stream timeout after ${timeoutMs}ms`,
@@ -181,9 +182,13 @@ export async function streamAnthropic(params: {
       }
     } catch (err) {
       if (controller.signal.aborted) {
+        // Hand back what streamed before the abort so the caller can salvage the
+        // complete parts of a nearly-finished payload.
         throw new AnthropicCallError(
           `Anthropic stream timeout after ${timeoutMs}ms`,
           err,
+          undefined,
+          text,
         );
       }
       throw err;
@@ -239,6 +244,72 @@ export function stripMarkdownFence(text: string): string {
   const close = trimmed.lastIndexOf(isArray ? "]" : "}");
   if (open !== -1 && close > open) return trimmed.slice(open, close + 1);
   return trimmed;
+}
+
+/**
+ * Close off a payload that stopped mid-stream, keeping every element that had
+ * finished.
+ *
+ * A day call aborted at its timeout threw away everything it had written.
+ * Measured at five beneficiaries: six day calls streamed to roughly 25k tokens
+ * apiece and were discarded whole — about $2.40 of a $2.81 run, for one usable
+ * day. The tokens were already paid for; most of them describe complete recipes.
+ *
+ * Walks the text once, tracking string/escape state so a `{` inside a recipe
+ * name is not mistaken for structure, and remembers the last position where a
+ * bracket closed while still NESTED — that is the end of a finished element.
+ * Cutting there and appending the still-open closers yields valid JSON holding
+ * every complete member/meal and none of the half-written one. Returns null when
+ * nothing whole made it out, so the caller fails exactly as it did before.
+ *
+ * Deliberately generic: it makes no assumption about the shape, so it works on
+ * the terse day slice, the skeleton, and the translation arrays alike. The
+ * CALLER decides whether what survived is worth keeping — this only refuses to
+ * throw away tokens that already describe finished work.
+ */
+export function salvageTruncatedJson(text: string): string | null {
+  const trimmed = text.trim();
+  const objOpen = trimmed.indexOf("{");
+  const arrOpen = trimmed.indexOf("[");
+  const start =
+    objOpen === -1 ? arrOpen : arrOpen === -1 ? objOpen : Math.min(objOpen, arrOpen);
+  if (start === -1) return null;
+
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  let cut = -1;
+  let closers = "";
+
+  for (let i = start; i < trimmed.length; i++) {
+    const ch = trimmed[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch === "{" ? "}" : "]");
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      stack.pop();
+      // Still inside something → this closed a nested element, and everything up
+      // to here is whole. (At depth 0 the payload is complete and the caller
+      // never needed us.)
+      if (stack.length > 0) {
+        cut = i + 1;
+        closers = stack.slice().reverse().join("");
+      }
+    }
+  }
+
+  return cut === -1 ? null : trimmed.slice(start, cut) + closers;
 }
 
 export function computeCostUsd(
