@@ -839,6 +839,7 @@ export function PlanViewer({
                 memberId={activeMember.member_id}
                 memberName={activeMember.member_name_ar}
                 hasSharedMeals={activeMemberHasShared}
+                memberCount={plan.members.length}
                 locale={locale}
                 ownerSex={ownerSex}
               />
@@ -1301,6 +1302,7 @@ export function PlanViewer({
                   memberId={activeMember.member_id}
                   memberName={activeMember.member_name_ar}
                   hasSharedMeals={activeMemberHasShared}
+                  memberCount={plan.members.length}
                   locale={locale}
                   ownerSex={ownerSex}
                 />

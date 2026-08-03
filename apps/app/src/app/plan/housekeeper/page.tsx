@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import {
-  getCurrentUserLatestPlan,
+  getCurrentUserCookablePlan,
   getCurrentUserFamilyMembers,
   getCurrentUserProfile,
 } from "@/lib/supabase/queries";
@@ -21,14 +21,19 @@ export const metadata = {
 };
 
 export default async function HousekeeperPage() {
-  const [latest, familyMembers, profile] = await Promise.all([
-    getCurrentUserLatestPlan(),
+  const [cookable, familyMembers, profile] = await Promise.all([
+    getCurrentUserCookablePlan(),
     getCurrentUserFamilyMembers(),
     getCurrentUserProfile(),
   ]);
 
   // No plan at all → there's nothing for her page yet; /plan owns the empty state.
-  if (!latest) redirect("/plan");
+  if (!cookable) redirect("/plan");
+  // A regeneration inserts an EMPTY plan row that supersedes her translated
+  // week, so without this she loses tonight's dinner for the whole run — with no
+  // Arabic view and no readable history to fall back on. `superseded` means she
+  // is looking at the previous week while a new one is being built.
+  const { plan: latest, superseded } = cookable;
 
   // Need a housekeeper.
   const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
@@ -128,6 +133,7 @@ export default async function HousekeeperPage() {
       needsTranslation={needsTranslation}
       preparing={preparing}
       partialWeek={partialWeek}
+      superseded={superseded}
       allergyEntries={allergyEntries}
     />
   );

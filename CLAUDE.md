@@ -446,6 +446,43 @@ deploy.
 
 ---
 
+## Three things a household could not do (08/2026)
+
+All found by using the app as a customer, all in the regeneration path.
+
+**There was no way to ask for a fresh week for the FAMILY.** Both `RegenerateButton`
+mounts in PlanViewer pass the viewed member's id, and the dashboard's «أنشئي خطة جديدة
+لأسبوع جديد» is a plain `<Link href="/plan">`. `/api/plans/generate` has always treated a
+missing `memberId` as a full regen — nothing ever sent one, so a customer could
+regenerate people one at a time and never the household. The scope chooser gained a
+fourth option, **«البيت كله»**, which is simply the ABSENCE of a member scope in the POST
+body; the dialog title follows the choice so it stops saying «لـ سعود» once the household
+is selected. The chooser now shows whenever `memberId && memberCount > 1` (it was
+`memberId && hasSharedMeals`, so a member with no shared meals had no chooser at all);
+on a solo plan there is still none, because the only member IS the household.
+
+**A busy regeneration was silently swallowed.** `DeferredMemberDrain` mounts on /plan AND
+/dashboard and dispatches IMMEDIATELY, taking the per-kind lock for the whole 5-15 minute
+run. So on a household whose week never fills — the state the drain exists for — the
+user's own «إنشاء خطة جديدة» reliably 409s, and the handler did `closeDialog();
+router.refresh()`: the tap did nothing and said nothing. It now keeps the dialog open,
+states that a run is in progress, and leaves the confirm button live to retry (the page
+is already polling, so the retry succeeds as soon as the run ends). **The underlying
+contention is NOT fixed** — one meal run at a time is a real constraint and a background
+function cannot be preempted; what changed is that the product no longer lies about it.
+
+**A regeneration took the cook's plan away.** `triggerPlanGeneration` inserts an EMPTY
+`meal_plans` row that immediately supersedes the translated week, so from the moment
+anyone taps regenerate the housekeeper loses the plan entirely for the length of the run —
+with no Arabic view and no readable history to fall back on. `getCookablePlan`
+(getLatestPlan.ts) returns the newest plan that actually has meals in it, plus a
+`superseded` flag; her page reads THAT (`getCurrentUserCookablePlan`) and shows the new
+`previous_week` line above the week she can still cook from. Deliberately scoped to her
+page: for the owner a generating screen is the right answer, because she asked for it and
+the progress is the information. Guarded by `regenScope.test.ts`.
+
+---
+
 ## A scoped regen skipped the calorie band entirely (08/2026)
 
 Found by regenerating one member on production and reading the result. `«إنشاء خطة

@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { createClient, getAuthUser } from "./server";
 import type { Database } from "./database.types";
-import { getLatestPlan, type LatestPlanSummary } from "@/lib/plans/getLatestPlan";
+import { getCookablePlan, getLatestPlan, type LatestPlanSummary } from "@/lib/plans/getLatestPlan";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
@@ -58,6 +58,19 @@ export const getCurrentUserLatestPlan = cache(
     const user = await getAuthUser();
     if (!user) return null;
     return getLatestPlan(user.id);
+  },
+);
+
+/**
+ * The newest plan that actually has meals in it — see getCookablePlan. Used by
+ * the housekeeper view, which must not lose tonight's dinner to a regeneration
+ * she did not start and cannot read the progress of.
+ */
+export const getCurrentUserCookablePlan = cache(
+  async (): Promise<{ plan: LatestPlanSummary; superseded: boolean } | null> => {
+    const user = await getAuthUser();
+    if (!user) return null;
+    return getCookablePlan(user.id);
   },
 );
 

@@ -56,6 +56,9 @@ export interface PlanStrings {
   // Part of the household is still generating, but what she can see is
   // cookable — rendered ABOVE the plan, never instead of it.
   partial_week: string;
+  // A NEW week is being built and the row below is the previous one. Without
+  // this she would be reading last week's recipes with no way to tell.
+  previous_week: string;
   translation_queued: string;
   preparing_title: string;
   // Honest per-day process lines, cycled while a day generates (one atomic call,
@@ -109,6 +112,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "نجهّز الوصفات بلغتك… تظهر خلال لحظات",
     awaiting_family: "خطط العائلة قيد الإعداد — أول وصفة تظهر لك بلغتك فور جهوزها",
     partial_week: "باقي أيام العائلة لسه تُجهّز — الوصفات الظاهرة هنا جاهزة للطبخ",
+    previous_week: "يُجهَّز أسبوع جديد الآن — الوصفات هنا هي أسبوعك الحالي حتى يكتمل",
     translation_queued: "وصفاتك في الطابور — نترجم من قبلك أولاً",
     preparing_title: "نجهّز خطتك",
     preparing_steps: [
@@ -158,6 +162,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "Preparing the recipes in your language… ready shortly",
     awaiting_family: "The family's plans are being prepared. The first recipes will appear here in your language as soon as they are ready.",
     partial_week: "The rest of the family's days are still being prepared. What you see here is ready to cook.",
+    previous_week: "A new week is being prepared. These are the current recipes until it is ready.",
     translation_queued: "Queued — the earlier members are being translated first",
     preparing_title: "Preparing your plan",
     preparing_steps: [
@@ -207,6 +212,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "Inihahanda ang mga recipe sa iyong wika… handa na sa ilang sandali",
     awaiting_family: "Inihahanda ang mga plano ng pamilya. Lalabas dito ang mga unang recipe sa iyong wika sa oras na handa na ang mga ito.",
     partial_week: "Inihahanda pa ang natitirang mga araw ng pamilya. Handa nang lutuin ang nakikita mo rito.",
+    previous_week: "Inihahanda ang bagong linggo. Ito ang kasalukuyang mga recipe hanggang matapos ito.",
     translation_queued: "Naka-queue — isinasalin muna ang mga naunang miyembro",
     preparing_title: "Inihahanda ang iyong plano",
     preparing_steps: [
@@ -256,6 +262,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "Menyiapkan resep dalam bahasa Anda… segera siap",
     awaiting_family: "Rencana keluarga sedang disiapkan. Resep pertama akan muncul di sini dalam bahasa Anda begitu siap.",
     partial_week: "Sisa hari keluarga masih disiapkan. Yang Anda lihat di sini sudah siap dimasak.",
+    previous_week: "Rencana pekan baru sedang disiapkan. Ini resep yang berlaku sampai selesai.",
     translation_queued: "Dalam antrean — anggota sebelumnya diterjemahkan lebih dulu",
     preparing_title: "Menyiapkan rencana Anda",
     preparing_steps: [
@@ -305,6 +312,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "আপনার ভাষায় রেসিপি প্রস্তুত হচ্ছে… শীঘ্রই দেখা যাবে",
     awaiting_family: "পরিবারের পরিকল্পনা প্রস্তুত হচ্ছে। প্রথম রেসিপিগুলো প্রস্তুত হওয়ামাত্র আপনার ভাষায় এখানে দেখা যাবে।",
     partial_week: "পরিবারের বাকি দিনগুলো এখনও প্রস্তুত হচ্ছে। এখানে যা দেখছেন তা রান্নার জন্য প্রস্তুত।",
+    previous_week: "নতুন সপ্তাহের পরিকল্পনা তৈরি হচ্ছে। প্রস্তুত না হওয়া পর্যন্ত এগুলোই বর্তমান রেসিপি।",
     translation_queued: "অপেক্ষমাণ — আগের সদস্যদের আগে অনুবাদ করা হচ্ছে",
     preparing_title: "আপনার পরিকল্পনা প্রস্তুত হচ্ছে",
     preparing_steps: [
@@ -354,6 +362,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "የምግብ አዘገጃጀቶቹ በቋንቋዎ እየተዘጋጁ ነው… በቅርቡ ይታያል",
     awaiting_family: "የቤተሰቡ ዕቅዶች እየተዘጋጁ ናቸው። የመጀመሪያዎቹ የምግብ አዘገጃጀቶች እንደተዘጋጁ ወዲያውኑ በቋንቋዎ እዚህ ይታያሉ።",
     partial_week: "የቤተሰቡ ቀሪ ቀናት አሁንም እየተዘጋጁ ናቸው። እዚህ የሚያዩት ለማብሰል ዝግጁ ነው።",
+    previous_week: "አዲስ ሳምንት እየተዘጋጀ ነው። እስኪጠናቀቅ ድረስ የአሁኑ የምግብ አዘገጃጀቶች እነዚህ ናቸው።",
     translation_queued: "በመጠባበቅ ላይ — የቀደሙት ግለሰቦች መጀመሪያ ይተረጎማሉ",
     preparing_title: "ዕቅድዎን እያዘጋጀን ነው",
     preparing_steps: [
@@ -403,6 +412,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     translating: "ترکیبیں آپ کی زبان میں تیار ہو رہی ہیں… تھوڑی دیر میں ظاہر ہوں گی",
     awaiting_family: "خاندان کے منصوبے تیار ہو رہے ہیں۔ پہلی ترکیبیں تیار ہوتے ہی آپ کی زبان میں یہاں نظر آئیں گی۔",
     partial_week: "خاندان کے باقی دن ابھی تیار ہو رہے ہیں۔ یہاں جو نظر آ رہا ہے وہ پکانے کے لیے تیار ہے۔",
+    previous_week: "نیا ہفتہ تیار ہو رہا ہے۔ جب تک وہ تیار نہ ہو، موجودہ ترکیبیں یہی ہیں۔",
     translation_queued: "قطار میں — پہلے کے افراد کا ترجمہ پہلے ہو رہا ہے",
     preparing_title: "آپ کا پلان تیار ہو رہا ہے",
     preparing_steps: [
@@ -466,6 +476,11 @@ export interface PlanActionStrings {
   regen_scope_shared_hint: string;
   regen_scope_individual: string;
   regen_scope_individual_hint: string;
+  // Drops the member scope entirely — a fresh week for everyone. There was no
+  // way to ask for one before: every regenerate control is bound to the viewed
+  // member.
+  regen_scope_household: string;
+  regen_scope_household_hint: string;
 }
 
 export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
@@ -486,6 +501,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "نجدد الأطباق اللي يشاركها مع العائلة — وتنعكس على بقية المشاركين",
     regen_scope_individual: "الأطباق الخاصة به",
     regen_scope_individual_hint: "نجدد وجباته الفردية فقط، والمشتركة تبقى كما هي",
+    regen_scope_household: "البيت كله",
+    regen_scope_household_hint: "نعيد إنشاء خطة الأسبوع لكل أفراد البيت — تستغرق وقتاً أطول",
   },
   en: {
     meal_mode_label: "Meal type",
@@ -504,6 +521,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "Regenerate the dishes shared with the family — co-sharers update too",
     regen_scope_individual: "Their own dishes",
     regen_scope_individual_hint: "Regenerate only their individual meals; shared meals stay",
+    regen_scope_household: "The whole household",
+    regen_scope_household_hint: "Rebuild the week for everyone — this takes longer",
   },
   tl: {
     meal_mode_label: "Uri ng pagkain",
@@ -522,6 +541,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "Gawing bago ang mga pagkaing kasalo ng pamilya — maa-update din sila",
     regen_scope_individual: "Sariling pagkain niya",
     regen_scope_individual_hint: "Gawing bago lang ang indibidwal na pagkain; mananatili ang magkakasama",
+    regen_scope_household: "Ang buong sambahayan",
+    regen_scope_household_hint: "Muling gawin ang linggo para sa lahat — mas matagal ito",
   },
   id: {
     meal_mode_label: "Jenis makanan",
@@ -540,6 +561,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "Buat ulang hidangan yang dibagi dengan keluarga — yang lain ikut diperbarui",
     regen_scope_individual: "Hidangan sendiri",
     regen_scope_individual_hint: "Buat ulang hanya makanan individunya; yang bersama tetap",
+    regen_scope_household: "Seluruh anggota rumah",
+    regen_scope_household_hint: "Buat ulang rencana sepekan untuk semua orang — perlu waktu lebih lama",
   },
   bn: {
     meal_mode_label: "খাবারের ধরন",
@@ -558,6 +581,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "পরিবারের সাথে ভাগ করা খাবার নতুন করা — অন্যরাও হালনাগাদ হবে",
     regen_scope_individual: "তার নিজের খাবার",
     regen_scope_individual_hint: "শুধু তার একক খাবার নতুন করা; ভাগ করা খাবার অপরিবর্তিত থাকে",
+    regen_scope_household: "পুরো পরিবার",
+    regen_scope_household_hint: "সবার জন্য সপ্তাহের পরিকল্পনা নতুন করে তৈরি — এতে বেশি সময় লাগে",
   },
   am: {
     meal_mode_label: "የምግብ ዓይነት",
@@ -576,6 +601,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "ከቤተሰብ ጋር የሚጋሩ ምግቦችን እናድሳለን — ሌሎቹም ይዘምናሉ",
     regen_scope_individual: "የራሱ ምግቦች",
     regen_scope_individual_hint: "የግል ምግቦቹን ብቻ እናድሳለን፤ የጋራዎቹ እንዳሉ ይቆያሉ",
+    regen_scope_household: "መላው ቤተሰብ",
+    regen_scope_household_hint: "ለሁሉም ሰው የሳምንቱን ዕቅድ እንደገና እንሠራለን — ረዘም ያለ ጊዜ ይወስዳል",
   },
   ur: {
     meal_mode_label: "کھانے کی قسم",
@@ -594,6 +621,8 @@ export const PLAN_ACTION_STRINGS: Record<LocaleCode, PlanActionStrings> = {
     regen_scope_shared_hint: "خاندان کے ساتھ مشترکہ کھانے دوبارہ بنائیں — باقی بھی اپ ڈیٹ ہوں گے",
     regen_scope_individual: "ان کے اپنے کھانے",
     regen_scope_individual_hint: "صرف ان کے انفرادی کھانے دوبارہ بنائیں؛ مشترکہ ویسے ہی رہیں گے",
+    regen_scope_household: "پورا گھرانہ",
+    regen_scope_household_hint: "سب کے لیے ہفتے کا منصوبہ دوبارہ بنائیں — اس میں زیادہ وقت لگتا ہے",
   },
 };
 

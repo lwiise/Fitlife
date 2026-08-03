@@ -8,13 +8,21 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getPlanActionStrings } from "@/lib/plans/locales";
 import { genderPick } from "@/lib/copy/gender";
 
-type RegenScope = "both" | "shared" | "individual";
+/**
+ * "household" is not a partial scope — it drops the memberId entirely and asks
+ * for a fresh week for everyone. It exists because there was NO way to request
+ * one: both mounts of this button pass the viewed member's id, and the
+ * dashboard's «أنشئي خطة جديدة لأسبوع جديد» is a plain link to /plan. A customer
+ * could regenerate people one at a time and never the family.
+ */
+type RegenScope = "both" | "shared" | "individual" | "household";
 
 export function RegenerateButton({
   className = "",
   memberId,
   memberName,
   hasSharedMeals = false,
+  memberCount = 1,
   locale,
   ownerSex,
 }: {
@@ -25,6 +33,9 @@ export function RegenerateButton({
   // When the member shares meals, offer a scope chooser (individual / shared /
   // both). When false, a plain confirm (nothing to scope).
   hasSharedMeals?: boolean;
+  // Beneficiaries in the plan. More than one → the household option is a real
+  // choice; on a solo plan regenerating the only member IS the household.
+  memberCount?: number;
   locale?: LocaleCode;
   // Account owner's sex → owner-directed Arabic copy (the one tapping regen).
   ownerSex?: string | null;
@@ -63,9 +74,11 @@ export function RegenerateButton({
           body: JSON.stringify({
             issues: issues.trim(),
             improvements: improvements.trim(),
-            ...(memberId ? { memberId } : {}),
+            // "household" is the absence of a memberId — the route reads no
+            // memberId as a full regen, so it must not send one.
+            ...(memberId && scope !== "household" ? { memberId } : {}),
             // Only meaningful when the member has shared meals to scope.
-            ...(memberId && hasSharedMeals ? { scope } : {}),
+            ...(memberId && hasSharedMeals && scope !== "household" ? { scope } : {}),
           }),
         });
         if (res.ok) {
@@ -77,10 +90,24 @@ export function RegenerateButton({
           error?: string;
           busy?: boolean;
         };
-        // Already generating → nothing to fix; close and let the page show it.
+        // A run is already in flight — usually the automatic drain, which fires
+        // on every /plan and /dashboard visit and holds the per-kind lock for
+        // the whole run. This used to close the dialog and refresh, so the tap
+        // did NOTHING and said nothing: on a household whose week never fills,
+        // the drain restarts on every visit and «إنشاء خطة جديدة» simply never
+        // worked. Keep the dialog open, say what is happening, and leave the
+        // confirm button live so it can be retried the moment the run ends (the
+        // page is already polling).
         if (res.status === 409 || body.busy) {
-          closeDialog();
           router.refresh();
+          setErrorMessage(
+            body.error
+              ? `${body.error}. ${g("أعيدي المحاولة بعد أن تنتهي.", "أعِد المحاولة بعد أن تنتهي.")}`
+              : g(
+                  "خطتك قيد التجهيز الآن. أعيدي المحاولة بعد أن تنتهي.",
+                  "خطتك قيد التجهيز الآن. أعِد المحاولة بعد أن تنتهي.",
+                ),
+          );
           return;
         }
         // Keep the dialog open and surface the error inside it.
@@ -91,15 +118,31 @@ export function RegenerateButton({
     });
   }
 
+  const householdOption = {
+    value: "household" as const,
+    label: t.regen_scope_household,
+    hint: t.regen_scope_household_hint,
+  };
   const scopeOptions: { value: RegenScope; label: string; hint: string }[] = [
     { value: "both", label: t.regen_scope_both, hint: t.regen_scope_both_hint },
-    { value: "shared", label: t.regen_scope_shared, hint: t.regen_scope_shared_hint },
-    {
-      value: "individual",
-      label: t.regen_scope_individual,
-      hint: t.regen_scope_individual_hint,
-    },
+    ...(hasSharedMeals
+      ? [
+          { value: "shared" as const, label: t.regen_scope_shared, hint: t.regen_scope_shared_hint },
+          {
+            value: "individual" as const,
+            label: t.regen_scope_individual,
+            hint: t.regen_scope_individual_hint,
+          },
+        ]
+      : []),
+    householdOption,
   ];
+  // Offer the chooser whenever there is more than one way to answer: with
+  // shared meals that is the three per-member scopes plus the household; without
+  // them it is just "this member" vs "everyone". A solo plan has neither — the
+  // only member IS the household.
+  const showScopeChooser = !!memberId && memberCount > 1;
+  const household = scope === "household";
 
   return (
     <div className={className}>
@@ -125,7 +168,15 @@ export function RegenerateButton({
 
       <ConfirmDialog
         open={confirmOpen}
-        title={memberName ? `إنشاء خطة جديدة لـ ${memberName}` : "إنشاء خطة جديدة"}
+        // The title follows the CHOICE, so a dialog opened from سعود's tab does
+        // not still say «لـ سعود» once «البيت كله» is selected.
+        title={
+          household
+            ? "إنشاء خطة جديدة للبيت كله"
+            : memberName
+              ? `إنشاء خطة جديدة لـ ${memberName}`
+              : "إنشاء خطة جديدة"
+        }
         body={
           /* فصحى, per the Coach Sara directive: this is questionnaire copy —
              the two fields below feed the plan engine — and it was written in
@@ -134,7 +185,7 @@ export function RegenerateButton({
           /* «فقط», never «وحدها»: memberName is the VIEWED member, who can be
              the husband or a son, and g() here follows the OWNER's sex — so a
              gendered word about the member would be wrong half the time. */
-          memberName
+          memberName && !household
             ? `ننشئ خطة جديدة لـ ${memberName} فقط. خطط بقية الأفراد لا تتغيّر، والخطة الحالية تُحفظ في السجل. ${g("أخبرينا ما الذي تودّين تغييره.", "أخبرنا ما الذي تودّ تغييره.")}`
             : g(
                 "لنصمّم لكِ خطة أنسب، أخبرينا ما الذي تودّين تغييره. الخطة الحالية تُحفظ في السجل.",
@@ -152,7 +203,7 @@ export function RegenerateButton({
         }}
       >
         <div className="space-y-4">
-          {memberId && hasSharedMeals && (
+          {showScopeChooser && (
             <fieldset>
               <legend className="block text-sm font-bold text-brand-ink mb-2">
                 {t.regen_scope_title}

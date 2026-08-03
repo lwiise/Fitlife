@@ -177,3 +177,64 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     updated_at: row.updated_at,
   };
 }
+
+/**
+ * The most recent plan the household can actually COOK FROM — the newest one if
+ * it has meals in it, otherwise the last week that did.
+ *
+ * For the account owner, a plan being regenerated is worth showing as a
+ * generating screen: she asked for it and the progress is the answer. For the
+ * HOUSEKEEPER it is not. A regeneration inserts an empty `meal_plans` row that
+ * immediately supersedes the translated week, so from the moment anyone taps
+ * «إنشاء خطة جديدة» she loses the plan entirely — for the eight to fifteen
+ * minutes the run takes — while a complete, translated, perfectly cookable week
+ * sits in the previous row. She has no Arabic view to fall back to and no
+ * history page she can read, so the fallback IS her only path to tonight's
+ * dinner.
+ *
+ * `superseded` says which case it is, so her page can tell her a new week is on
+ * the way instead of silently serving an older one.
+ */
+export async function getCookablePlan(
+  userId: string,
+): Promise<{ plan: LatestPlanSummary; superseded: boolean } | null> {
+  const latest = await getLatestPlan(userId);
+  if (!latest) return null;
+  if (latest.plan_data && planHasContent(latest.plan_data)) {
+    return { plan: latest, superseded: false };
+  }
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("meal_plans")
+    .select("id, status, plan_data, generated_at, error_message, updated_at")
+    .eq("user_id", userId)
+    .eq("status", "ready")
+    .neq("id", latest.id)
+    .order("created_at", { ascending: false })
+    .limit(5)
+    .returns<MealPlanRow[]>();
+
+  for (const prev of data ?? []) {
+    const parsed = MealPlanSchema.safeParse(prev.plan_data);
+    if (!parsed.success || !planHasContent(parsed.data)) continue;
+    return {
+      superseded: true,
+      plan: {
+        id: prev.id,
+        status: "ready",
+        plan_data: parsed.data,
+        week_start_date: parsed.data.week_start_date ?? null,
+        member_count: parsed.data.members.length,
+        member_ids: parsed.data.members.map((m) => m.member_id),
+        // The older week is finished by definition; the run in flight belongs to
+        // the newer row, which this deliberately is not.
+        in_progress: false,
+        worker_acked: workerAckedFromPlanData(prev.plan_data),
+        error_message: null,
+        updated_at: prev.updated_at,
+      },
+    };
+  }
+  return { plan: latest, superseded: false };
+}

@@ -26,6 +26,7 @@ export function HousekeeperPlanView({
   needsTranslation = false,
   preparing = false,
   partialWeek = false,
+  superseded = false,
   allergyEntries = [],
 }: {
   plan: MealPlan | null;
@@ -40,6 +41,10 @@ export function HousekeeperPlanView({
   // way — this only adds a line saying more is coming, so a half-filled week
   // does not read as the finished article.
   partialWeek?: boolean;
+  // The plan below is the PREVIOUS week, served because a regeneration is in
+  // flight and its row has no meals yet. Serving it silently would have her
+  // cooking from a superseded week with no way to tell.
+  superseded?: boolean;
   allergyEntries?: AllergyEntry[];
 }) {
   const router = useRouter();
@@ -78,10 +83,10 @@ export function HousekeeperPlanView({
   // usable while days are still arriving, and those days should appear on their
   // own rather than on a manual reload.
   useEffect(() => {
-    if (!preparing && !needsTranslation && !partialWeek) return;
+    if (!preparing && !needsTranslation && !partialWeek && !superseded) return;
     const id = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(id);
-  }, [preparing, needsTranslation, partialWeek, router]);
+  }, [preparing, needsTranslation, partialWeek, superseded, router]);
 
   return (
     <main dir={info.direction} lang={locale} className="min-h-screen bg-brand-surface">
@@ -137,6 +142,19 @@ export function HousekeeperPlanView({
             />
             <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
               {t.translating}
+            </p>
+          </div>
+        ) : superseded ? (
+          // A new week is being built; the plan below is the current one. Said
+          // plainly, because the alternative is her cooking from a week that is
+          // about to be replaced without knowing it.
+          <div
+            role="status"
+            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
+          >
+            <Clock className="size-4 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
+            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
+              {t.previous_week}
             </p>
           </div>
         ) : partialWeek ? (
