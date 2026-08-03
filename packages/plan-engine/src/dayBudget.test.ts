@@ -21,11 +21,13 @@ import {
   dayLoopReserveMs,
   dayLoopDeadline,
   planRunBudgetMs,
+  boundedCallTimeoutMs,
 } from "./budget";
 import {
   bigCallTimeoutMs,
   skeletonTimeoutMs,
   dayConcurrency,
+  TRANSLATE_CALL_TIMEOUT_MS,
   PLAN_WEEK_DAYS,
 } from "./constants";
 import { salvageTruncatedJson } from "./anthropic";
@@ -236,5 +238,50 @@ describe("rescueDaySlice", () => {
     expect(rescueDaySlice('{"day_index":0,"members":[{"mem', skeletonWith({ mom: 2 }), 0))
       .toBeNull();
     expect(rescueDaySlice("", skeletonWith({ mom: 2 }), 0)).toBeNull();
+  });
+});
+
+/**
+ * The regression the smaller translation reserve created.
+ *
+ * Cutting TRANSLATION_RESERVE_MS from 180s to 60s was right for the day loop,
+ * but the end-of-run translation was only ever gated on having MIN_VIABLE_CALL_MS
+ * (45s) to START — after which it ran a sequential member × day loop of
+ * 240s-default calls with no bound at all. With 180s of slack that was survivable;
+ * with 60s it is not. Measured: a run at 1001s against a 900s budget, still
+ * 'started', one day written, the plan's last write three minutes earlier — the
+ * function hard-killed before its terminal write, which leaves plan_generations
+ * stuck 'started' and, under 00014's per-kind unique index, blocks EVERY future
+ * meal generation for that user until the staleness sweep clears it.
+ */
+describe("the translation pass cannot outlive the invocation", () => {
+  it("has a per-call ceiling far below a day call's", () => {
+    expect(TRANSLATE_CALL_TIMEOUT_MS).toBeLessThan(bigCallTimeoutMs(5, true));
+  });
+
+  it("never lets a call run past the deadline, however little is left", () => {
+    const now = 1_000_000;
+    // Plenty of budget → the ceiling applies.
+    expect(boundedCallTimeoutMs(TRANSLATE_CALL_TIMEOUT_MS, now + 600_000, now)).toBe(
+      TRANSLATE_CALL_TIMEOUT_MS,
+    );
+    // Little budget → the budget applies, and nothing floors it back up. A floor
+    // is exactly how the overrun happened: given 10s, a 45s floor spends 35s the
+    // finalize reserve was holding.
+    expect(boundedCallTimeoutMs(TRANSLATE_CALL_TIMEOUT_MS, now + 10_000, now)).toBe(10_000);
+    expect(boundedCallTimeoutMs(TRANSLATE_CALL_TIMEOUT_MS, now - 5_000, now)).toBe(0);
+  });
+
+  it("is unbounded only for a caller that owns its whole invocation", () => {
+    expect(boundedCallTimeoutMs(TRANSLATE_CALL_TIMEOUT_MS, undefined)).toBe(
+      TRANSLATE_CALL_TIMEOUT_MS,
+    );
+  });
+
+  it("leaves room to write the terminal row after the last call", () => {
+    // Whatever translation spends, FINALIZE_RESERVE_MS is still outside the
+    // deadline it is handed (hardDeadlineMs = budget - FINALIZE_RESERVE_MS).
+    expect(planRunBudgetMs() - FINALIZE_RESERVE_MS).toBeLessThan(planRunBudgetMs());
+    expect(FINALIZE_RESERVE_MS).toBeGreaterThan(0);
   });
 });

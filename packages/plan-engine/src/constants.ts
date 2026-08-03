@@ -164,6 +164,13 @@ export function bigCallTimeoutMs(memberCount: number, hasTranslation: boolean): 
 /** Days in a generated plan week — the skeleton prompt asks for exactly this. */
 export const PLAN_WEEK_DAYS = 7;
 
+/**
+ * Ceiling for ONE translation call (a member's name, or a day's meals). The
+ * pass is many small sequential calls, so this is nothing like a day-expansion
+ * budget — it exists so a stalled stream cannot hold the loop open.
+ */
+export const TRANSLATE_CALL_TIMEOUT_MS = 120_000;
+
 export function skeletonTimeoutMs(memberCount: number): number {
   return Math.min(360_000, 120_000 + 30_000 * Math.max(1, memberCount));
 }

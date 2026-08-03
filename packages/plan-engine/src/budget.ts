@@ -147,6 +147,24 @@ export function dayLoopReserveMs(dayCount: number, concurrency: number): number 
 }
 
 /**
+ * A call's timeout, clamped so it cannot outlive the run.
+ *
+ * The caller must already have checked `canFit(deadlineMs, MIN_VIABLE_CALL_MS)`
+ * — this deliberately does NOT floor the result, because flooring is exactly how
+ * a call overshoots: given 10s of budget, a 45s floor spends 35s that the
+ * finalize reserve was holding. Refusing to start is the caller's job; this only
+ * decides how long a call that IS starting may take.
+ */
+export function boundedCallTimeoutMs(
+  ceilingMs: number,
+  deadlineMs: number | undefined,
+  now = Date.now(),
+): number {
+  if (deadlineMs == null) return ceilingMs;
+  return Math.min(ceilingMs, remainingMs(deadlineMs, now));
+}
+
+/**
  * The floor under which starting anything is pointless. A call given less than
  * this cannot produce a parseable day, so spending tokens on it is pure waste.
  */

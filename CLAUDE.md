@@ -602,6 +602,24 @@ skeleton emits dish NAMES and one target block per member, a few thousand tokens
 ceiling is what a slow call expands to fill. `skeletonTimeoutMs(memberCount)` now tracks
 phase 1's own work (270s at five members, capped 360s).
 
+**The smaller translation reserve created a hard-kill window — fixed.** The end-of-run
+translation pass was gated ONLY on having `MIN_VIABLE_CALL_MS` (45s) to START, after
+which it ran a sequential member × day loop of 240s-default calls with no bound at all.
+With the old 180s reserve that was survivable; with 60s it was not. Measured immediately
+after the change: a run at **1001s against a 900s budget**, still `'started'`, one day
+written, the plan's last write three minutes earlier — the function hard-killed before its
+terminal write. That leaves `plan_generations` stuck at `'started'`, and under 00014's
+`(user_id, plan_kind) where status='started'` unique index it **blocks every future meal
+generation for that user** until the staleness sweep clears it fifteen minutes later.
+`translateMealPlan` now takes `deadlineMs`: it breaks out of the member and day loops when
+`!canFit(deadlineMs, MIN_VIABLE_CALL_MS)`, and each call's timeout is
+`boundedCallTimeoutMs(TRANSLATE_CALL_TIMEOUT_MS, deadlineMs)`. That helper deliberately
+does NOT floor its result — flooring is exactly how a call overshoots (given 10s of
+budget, a 45s floor spends 35s the finalize reserve was holding); refusing to start is the
+caller's job. Both call sites pass a deadline, including the standalone
+`runMealPlanTranslation`, whose own row would otherwise wedge the household's next MEAL
+run.
+
 **`TRANSLATION_RESERVE_MS` 180s → 60s.** Its own comment said over-reserving cost "at
 most a deferred day" while under-reserving cost the whole pass. Both halves stopped being
 true: translation now runs on a PARTIAL plan, her page re-triggers it, the drain finishes

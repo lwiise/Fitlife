@@ -8,6 +8,7 @@ import {
   DAY_MAX_TOKENS,
   skeletonMaxTokens,
   skeletonTimeoutMs,
+  TRANSLATE_CALL_TIMEOUT_MS,
   PLAN_WEEK_DAYS,
   dayMaxTokens,
   bigCallTimeoutMs,
@@ -21,6 +22,7 @@ import {
   FINALIZE_RESERVE_MS,
   DAY_CALL_ESTIMATE_MS,
   dayCallEstimateMs,
+  boundedCallTimeoutMs,
   dayLoopReserveMs,
   MIN_VIABLE_CALL_MS,
 } from "./budget";
@@ -2849,6 +2851,10 @@ export async function runMealPlanGeneration(params: {
         anthropicApiKey,
         plan,
         locale: endLocale,
+        // The run's own hard deadline. Without it this pass could start with the
+        // 45s the gate below checks for and then run for minutes, taking the
+        // terminal write with it when the platform killed the function.
+        deadlineMs: hardDeadlineMs,
         onDayTranslated: async (p) => {
           await supabase.from("meal_plans").update({ plan_data: p }).eq("id", mealPlanId);
         },
@@ -3002,8 +3008,28 @@ export async function translateMealPlan(params: {
   // plan so far. Lets callers persist progressively (today-first) so the maid
   // sees recipes within seconds instead of waiting for all 7 days. Non-fatal.
   onDayTranslated?: (plan: MealPlan) => void | Promise<void>;
+  /**
+   * Absolute epoch ms this pass must be finished by.
+   *
+   * Without it the pass was bounded only by a check that 45s remained before it
+   * STARTED, after which it ran a sequential member × day loop of 240s-default
+   * calls — so it could begin with a minute left and run for several more,
+   * overshooting the platform ceiling. The function is then hard-killed before
+   * its terminal write, which leaves `plan_generations` stuck at 'started' and,
+   * under 00014's per-kind unique index, blocks every future meal generation for
+   * that user until the staleness sweep clears it fifteen minutes later.
+   *
+   * Measured: a run at 1001s (the budget is 900s) still 'started', one day
+   * written, the plan's last write three minutes earlier. Undefined = unbounded,
+   * which is correct only for a caller that owns its own whole invocation.
+   */
+  deadlineMs?: number;
 }): Promise<{ plan: MealPlan; usage: { input_tokens: number; output_tokens: number; cost_usd: number; model: string } }> {
-  const { anthropicApiKey, plan, locale, onDayTranslated } = params;
+  const { anthropicApiKey, plan, locale, onDayTranslated, deadlineMs } = params;
+  // Each call gets what is left, never more than its own sane ceiling. Falls
+  // back to the ceiling when there is no deadline at all.
+  const translateCallTimeout = (): number =>
+    boundedCallTimeoutMs(TRANSLATE_CALL_TIMEOUT_MS, deadlineMs);
   let totalIn = 0;
   let totalOut = 0;
 
@@ -3039,6 +3065,10 @@ export async function translateMealPlan(params: {
   for (const member of members) {
     // (a) Member name → locale (its own small call). Folding it into the member's
     // block means the member is *fully* localized before the next one begins.
+    // Out of budget → stop cleanly with what is already translated. The pass is
+    // non-fatal by design and every caller re-triggers it, so stopping costs a
+    // later pass; overrunning costs the whole invocation's terminal write.
+    if (!canFit(deadlineMs, MIN_VIABLE_CALL_MS)) break;
     if (member.member_name_translated_locale !== locale) {
       let nameAttempt = 0;
       for (;;) {
@@ -3047,6 +3077,7 @@ export async function translateMealPlan(params: {
             apiKey: anthropicApiKey,
             model: TRANSLATE_MODEL,
             maxTokens: DAY_MAX_TOKENS,
+            timeoutMs: translateCallTimeout(),
             systemPrompt: buildNameTranslatePrompt(
               [{ i: 0, name_ar: member.member_name_ar }],
               locale,
@@ -3101,6 +3132,7 @@ export async function translateMealPlan(params: {
 
     // (b) This member's days, today-first, fully sequential.
     for (const dayIndex of order) {
+      if (!canFit(deadlineMs, MIN_VIABLE_CALL_MS)) break;
       const day = member.days.find((d) => d.day_index === dayIndex);
       if (!day) continue;
       const refs: Meal[] = day.meals.filter(
@@ -3126,6 +3158,7 @@ export async function translateMealPlan(params: {
             apiKey: anthropicApiKey,
             model: TRANSLATE_MODEL,
             maxTokens: DAY_MAX_TOKENS,
+            timeoutMs: translateCallTimeout(),
             systemPrompt: buildTranslatePrompt(items, locale),
             userMessage: "ترجمي الآن.",
           });
@@ -3287,6 +3320,10 @@ export async function runMealPlanTranslation(params: {
       anthropicApiKey,
       plan,
       locale,
+      // A standalone pass owns its whole invocation, but the platform ceiling is
+      // the same — and leaving its plan_generations row 'started' would block the
+      // household's next MEAL run, since the lock is per (user, kind).
+      deadlineMs: startMs + planRunBudgetMs() - FINALIZE_RESERVE_MS,
       // Persist each day as it lands (today-first) so the maid sees recipes within
       // seconds instead of waiting for all 7 days. The final update below is the
       // complete, last-write snapshot.
