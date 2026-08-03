@@ -94,7 +94,11 @@ export default async function EditMemberPage({
     return (
       <HousekeeperForm
         editing
-        initial={{ name: m.name, preferred_language: m.preferred_language }}
+        initial={{
+          name: m.name,
+          preferred_language: m.preferred_language,
+          sex: m.sex,
+        }}
       />
     );
   }

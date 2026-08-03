@@ -150,7 +150,7 @@ Before building ANY section, you must:
 
 **Workout location/equipment fit (07/2026, owner directive)**: a program must match the trainee's declared location + tools 100% — gym plans were coming out near-identical to home plans. Three layers, all in `packages/plan-engine/src/workout/`: (1) the catalog grew a real gym tier (72 ids: barbell squat/deadlift/hip thrust, machine chest/shoulder press, hip abduction, cable glute kickback/lateral raise/biceps curl, reverse pec deck, seated calf raise, rowing machine, elliptical — each with an in-repo Lottie pose) plus `towel_row`/`superman` so a no-equipment home user has a legal pull/back pattern; (2) prompts state the rules (methodology «المكان والأدوات» is now mandatory-worded: gym plans must put ≥half of strength work on gym gear; the phase-2 member prompt embeds the trainee's exact allowed `exercise_id` list for home, and the allowed `home_variant_id` list for both); (3) `equipment.ts` ENFORCES it post-parse via `enforceWorkoutProfileFit` called from generate.ts — home: only `home_ok` + declared tools (wall/box/bench count as furniture; home «أجهزة منزلية» = treadmill/bike cardio ONLY, label clarified in onboarding); gym/both: `GYM_GEAR_SHARE_FLOOR` (0.5 of strength patterns on machine/barbell, waived for pregnant/≤3-mo-postpartum); both: every gym-gear exercise must carry a home-legal `home_variant_id`; stray variants on non-both members are stripped (kills the phantom «نسخة المنزل» toggle for gym users). Violations re-roll the member call (within MAX_RETRIES); the FINAL attempt applies deterministic repairs from `HOME_SUBSTITUTE`/`PATTERN_STAPLES`/`GYM_UPGRADE` (pregnancy-safe filtered) and logs — a member is never dropped over equipment fit. Tables are integrity-tested (`equipment.test.ts`): every id resolves a no-equipment home substitute, pregnant or not.
 
-**Generated plan text follows the reader's gender (07/2026)**: the React UI already inflected via `genderPick`, but the AI PROMPTS still hard-defaulted to feminine, so a male owner's *plan content* — recipe steps, notes, workout cues — came back addressed to a woman. Fixed at the prompt layer in `packages/plan-engine`: (1) MEALS — the phase-2 day prompt's «صيغة المؤنث» line is now derived from the owner's answered الجنس via `ownerG(context)` (`systemPrompt.ts`), which also genders the «العميلة/العميل» questionnaire headers and the name-less-owner fallback in `buildContext.getBeneficiaries`; the methodology's safe-calorie floors, which were stated for «المرأة البالغة» only, now say explicitly that they are FEMALE limits and point a man at the relative-deficit rule + his own BMR as the floor (**pending Coach Sara sign-off — the only clinical wording added**). (2) WORKOUTS — `WORKOUT_ROLE` no longer advertises a women-only specialty; the cached methodology's feminine-plural trainee nouns (المبتدئات/المتوسطات/المتقدمات) became inclusive masculine-plural per the house convention, and «اعتبارات خاصة بالنساء» is now «اعتبارات حسب الجنس والحالة» with postpartum scoped to women and an explicit bar on pregnancy/postpartum content in a man's program; the roster line follows each TRAINEE's own sex (`traineeIsMale`) instead of labelling everyone «العميلة (الأم)»/«متدرب»; and the phase-2 member prompt carries a mandatory «صيغة الخطاب» block keyed to that trainee. Voice for meals = the OWNER (the plan's reader); voice for workouts = the TRAINEE (each program is read by its own person). Feminine stays the fallback for an unanswered/legacy `sex`, matching `lib/copy/gender.ts` — it is no longer a blanket default. Changing `WORKOUT_ROLE`/methodology/`SARA_METHODOLOGY` invalidates the cached static prompt block once on deploy. Known remaining default: the HOUSEKEEPER is assumed female (no sex step in her wizard — `MemberWizard` falls back to `"female"`, and the translation prompts say «طبّاخة»); closing it needs a new intake question.
+**Generated plan text follows the reader's gender (07/2026)**: the React UI already inflected via `genderPick`, but the AI PROMPTS still hard-defaulted to feminine, so a male owner's *plan content* — recipe steps, notes, workout cues — came back addressed to a woman. Fixed at the prompt layer in `packages/plan-engine`: (1) MEALS — the phase-2 day prompt's «صيغة المؤنث» line is now derived from the owner's answered الجنس via `ownerG(context)` (`systemPrompt.ts`), which also genders the «العميلة/العميل» questionnaire headers and the name-less-owner fallback in `buildContext.getBeneficiaries`; the methodology's safe-calorie floors, which were stated for «المرأة البالغة» only, now say explicitly that they are FEMALE limits and point a man at the relative-deficit rule + his own BMR as the floor (**pending Coach Sara sign-off — the only clinical wording added**). (2) WORKOUTS — `WORKOUT_ROLE` no longer advertises a women-only specialty; the cached methodology's feminine-plural trainee nouns (المبتدئات/المتوسطات/المتقدمات) became inclusive masculine-plural per the house convention, and «اعتبارات خاصة بالنساء» is now «اعتبارات حسب الجنس والحالة» with postpartum scoped to women and an explicit bar on pregnancy/postpartum content in a man's program; the roster line follows each TRAINEE's own sex (`traineeIsMale`) instead of labelling everyone «العميلة (الأم)»/«متدرب»; and the phase-2 member prompt carries a mandatory «صيغة الخطاب» block keyed to that trainee. Voice for meals = the OWNER (the plan's reader); voice for workouts = the TRAINEE (each program is read by its own person). Feminine stays the fallback for an unanswered/legacy `sex`, matching `lib/copy/gender.ts` — it is no longer a blanket default. Changing `WORKOUT_ROLE`/methodology/`SARA_METHODOLOGY` invalidates the cached static prompt block once on deploy. The HOUSEKEEPER's own sex is now ASKED (08/2026): an optional «هل من يطبخ رجل أم امرأة؟» on `HousekeeperForm`, stored on her `family_members.sex`, threaded into `buildTranslatePrompt`/`buildNameTranslatePrompt` via `cookNoun()` so the instructions say طبّاخ or طبّاخة to match. Optional on purpose — unanswered keeps the feminine fallback the rest of the product uses, rather than guessing. The edit path only writes the column when answered, so renaming her cannot blank an answer she already gave.
 
 **AI generation**: Day-by-day streaming, incremental per-member updates that don't wipe existing family plans when adding/editing one member.
 
@@ -521,6 +521,33 @@ partial-scope fixtures in `generate.test.ts` were rebalanced to be genuinely in 
 
 ---
 
+## The background function was a SECOND copy, and it had drifted (08/2026)
+
+Found while adding the housekeeper's sex question. `apps/app/netlify/functions/
+generate-plan-background.mts` imports `generateMealPlan` from the engine — so the day
+loop, the calorie band, the budget clamps and the salvage are genuinely shared — but it
+MIRRORS `runMealPlanGeneration`'s orchestration, and translate mode had its own copy of
+the translation logic entirely. Consequences, all live in production while the engine
+looked fixed:
+
+- **The end-of-run pass still waited for the whole household.** The `!stillGenerating`
+  gate was removed from the engine (so the cook stops being last in the queue) and left
+  in place here, which is the path production actually takes.
+- **Neither translation path was bounded by the run deadline**, so the hard-kill window
+  described above was never actually closed for production.
+- **Translate mode never took the generation lock** — `runMealPlanTranslation` opens a
+  `'started'` row, but this branch inserted its own `'completed'` row at the end, so the
+  race that lock exists to prevent was still reachable.
+
+Translate mode now CALLS `runMealPlanTranslation` instead of reimplementing it, which
+took extending the SDK-free `makeFetchSupabase` shim with `insert().select().maybeSingle()`
+(carrying PostgREST's `code` through, since `23505` is what tells the caller someone else
+holds the lock). The end-of-run branch keeps its own shape — it is inside the run — but
+now passes `deadlineMs` and drops the household gate, matching the engine. **When changing
+`runMealPlanGeneration`, check this file: it is the production path.**
+
+---
+
 ## The regeneration that was deferred to nobody (08/2026)
 
 Found while verifying the July audit's three unverified leads. **Two do not reproduce**:
@@ -883,10 +910,12 @@ It falls back to the service-role key while unset, so setting it is what stops t
 `NEXT_PUBLIC_FREE_ACCESS_MODE` makes `getTierLimit` return null for everyone, so the whole
 tier-limit cluster above is bypassed and untestable while it is on.
 
-**Known remaining (audited, not fixed).** Housekeeper identity is keyed off `role` in ~40
+**Housekeeper identity (closed 08/2026 by migration 00025).** Keyed off `role` in ~40
 places and `member_type` in 5 — `familyMemberInputSchema` now rejects `role: "housekeeper"`
-(that was a tier-limit bypass), but the dual key itself stands; a DB CHECK enforcing
-`(role = 'housekeeper') = (member_type = 'housekeeper')` would close it. Plus three
+(that was a tier-limit bypass), but the dual key itself stands; **00025 adds exactly that CHECK**, and repairs both directions first so it cannot reject
+on apply (the single write path in `addHousekeeper` already sets both, so the repairs are
+no-ops on a healthy table). NOT YET APPLIED to prod — apply it and re-run
+`scripts/verify-migrations.sql`, which now covers it. Plus three
 low-severity leads not independently verified: feminine-only copy for a male owner through the
 member wizards, the claim that member edits auto-regenerate via `memberEdit.ts` being
 UI-reachable, and housekeeper-language sold as `family`-tier-only while reachable on every tier.

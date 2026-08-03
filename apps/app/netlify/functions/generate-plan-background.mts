@@ -11,7 +11,7 @@
 import {
   generateMealPlan,
   translateMealPlan,
-  hasPendingGeneration,
+  runMealPlanTranslation,
   generationAlreadySettled,
   prepareSharedGroupRegen,
 } from "../../../../packages/plan-engine/src/generate";
@@ -21,7 +21,6 @@ import {
 } from "../../../../packages/plan-engine/src/workout/generate";
 import { WorkoutProfileSchema } from "../../../../packages/plan-engine/src/workout/schema";
 import { summarizeWorkoutFeedback } from "../../../../packages/plan-engine/src/workout/feedback";
-import { MEMBER_GEN_MAX_ATTEMPTS } from "../../../../packages/plan-engine/src/constants";
 import {
   dayLoopDeadline,
   planRunBudgetMs,
@@ -137,10 +136,41 @@ function parseWorkoutProfileLoose(v: unknown) {
  * second .eq) over the existing PostgREST fetch helpers. Keeps the function
  * bundle free of @supabase/supabase-js like the rest of this file.
  */
+/**
+ * A minimal PostgREST stand-in shaped like the supabase-js calls the engine
+ * makes, so engine functions can run inside this SDK-free bundle.
+ *
+ * It grew `insert().select().maybeSingle()` when translate mode stopped having
+ * its own copy of the translation logic. That copy was the problem: the lock,
+ * the run deadline and the cook's gender were all added to
+ * `runMealPlanTranslation` while PRODUCTION went through a duplicate here that
+ * had none of them — the exact "same rule implemented twice, one copy drifted"
+ * pattern this codebase has been bitten by repeatedly. One implementation now.
+ */
 function makeFetchSupabase(base: string, serviceKey: string) {
   return {
     from(table: string) {
       return {
+        insert(values: Record<string, unknown>) {
+          return {
+            select() {
+              return {
+                async maybeSingle() {
+                  try {
+                    const row = await sbInsertReturning(base, serviceKey, table, values);
+                    return { data: row, error: null };
+                  } catch (e) {
+                    // The unique-violation code is what the caller keys off to
+                    // decide "someone else holds the lock" rather than "broken".
+                    const code =
+                      e instanceof PostgrestInsertError ? e.code : undefined;
+                    return { data: null, error: { code, message: String(e) } };
+                  }
+                },
+              };
+            },
+          };
+        },
         update(values: Record<string, unknown>) {
           const filters: string[] = [];
           const runner = {
@@ -164,22 +194,50 @@ function makeFetchSupabase(base: string, serviceKey: string) {
   } as never;
 }
 
-async function sbInsert(
+/** Carries PostgREST's error code (23505 = unique violation) to the caller. */
+class PostgrestInsertError extends Error {
+  constructor(
+    message: string,
+    public readonly code?: string,
+  ) {
+    super(message);
+    this.name = "PostgrestInsertError";
+  }
+}
+
+/** Insert and return the created row, so a caller can keep its id. */
+async function sbInsertReturning(
   base: string,
   serviceKey: string,
   table: string,
   row: Record<string, unknown>,
-): Promise<void> {
+): Promise<Record<string, unknown> | null> {
   const res = await fetch(`${base}/rest/v1/${table}`, {
     method: "POST",
-    headers: { ...sbHeaders(serviceKey), prefer: "return=minimal" },
+    headers: { ...sbHeaders(serviceKey), prefer: "return=representation" },
     body: JSON.stringify(row),
   });
+  const text = await res.text().catch(() => "");
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`PostgREST insert ${table} → ${res.status} ${text}`);
+    let code: string | undefined;
+    try {
+      code = (JSON.parse(text) as { code?: string }).code;
+    } catch {
+      /* non-JSON body — the message alone has to do */
+    }
+    throw new PostgrestInsertError(
+      `PostgREST insert ${table} → ${res.status} ${text}`,
+      code,
+    );
+  }
+  try {
+    const rows = JSON.parse(text) as Record<string, unknown>[];
+    return rows[0] ?? null;
+  } catch {
+    return null;
   }
 }
+
 
 // Read a single plan_data row by id and validate it. Returns the parsed MealPlan
 // or null (no row / unparseable). Used by translate mode so the whole plan no
@@ -689,46 +747,29 @@ const handler = async (req: Request): Promise<Response> => {
       // the maid view falls back to Arabic and re-triggers on her next visit.
       return new Response("No plan to translate", { status: 200 });
     }
-    const translateStartMs = Date.now();
+    // The cook's reading language is on her row; so is her answered الجنس, which
+    // decides whether the instructions address a طبّاخ or a طبّاخة.
+    const hkRow = await sbSelectOne(
+      supabaseUrl,
+      serviceKey,
+      "family_members",
+      `user_id=eq.${userId}&role=eq.housekeeper&select=sex&limit=1`,
+    );
     try {
-      const { plan: translated, usage } = await translateMealPlan({
+      // ONE implementation. This branch used to carry its own copy of the
+      // translation logic, which is how it ended up without the generation lock,
+      // without a run deadline and without the cook's gender while all three
+      // were added to runMealPlanTranslation — production going through the
+      // drifted copy.
+      await runMealPlanTranslation({
+        supabase: makeFetchSupabase(supabaseUrl, serviceKey),
         anthropicApiKey: anthropicKey,
+        userId,
+        mealPlanId,
         plan: planToTranslate,
         locale: body.locale,
-        // Persist each day as it lands (today-first) so the maid sees recipes
-        // within seconds. The final update below is the complete snapshot.
-        onDayTranslated: async (p) => {
-          await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
-            plan_data: p,
-          });
-        },
+        cookSex: (hkRow?.sex as string | null) ?? null,
       });
-      await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
-        plan_data: translated,
-      });
-      // Audit the translation's token spend (see runMealPlanTranslation). The
-      // weekly rate limit counts DISTINCT meal_plan_id, so this extra row
-      // sharing the plan's id never consumes a generation slot.
-      try {
-        const completedAt = new Date().toISOString();
-        await sbInsert(supabaseUrl, serviceKey, "plan_generations", {
-          user_id: userId,
-          meal_plan_id: mealPlanId,
-          model: usage.model,
-          status: "completed",
-          tokens_in: usage.input_tokens,
-          tokens_out: usage.output_tokens,
-          cost_usd: usage.cost_usd,
-          duration_ms: Date.now() - translateStartMs,
-          started_at: new Date(translateStartMs).toISOString(),
-          completed_at: completedAt,
-        });
-      } catch (auditErr) {
-        console.error(
-          "[generate-plan-background] translate audit row failed",
-          auditErr,
-        );
-      }
       return new Response("OK", { status: 200 });
     } catch (err) {
       console.error("[generate-plan-background] translate failed", err);
@@ -983,49 +1024,42 @@ const handler = async (req: Request): Promise<Response> => {
             d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
           ),
         );
-      // Only translate once the WHOLE family is fully generated — every member,
-      // day 1 → last day. Skip while any member is absent OR still has an unfilled
-      // day (under the retry cap): the drain finishes them one at a time and a
-      // later run translates the complete plan. Translating earlier would localize
-      // a partial plan (and hold this run's 'started' lock through translation).
-      const memberRows = await sbSelectMany(
-        supabaseUrl,
-        serviceKey,
-        "family_members",
-        `user_id=eq.${userId}&select=id,role`,
-      );
-      let familyMemberIds = memberRows
-        .filter((m) => m.role !== "housekeeper")
-        .map((m) => m.id as string);
-      // Tier-capped run: only mom + the allow-listed members are in this plan, so
-      // gate translation on THAT set — otherwise the deferred (tier-blocked) members
-      // would keep it "still generating" forever and the maid never gets translated.
-      if (body.limitMemberIds) {
-        const keep = new Set(body.limitMemberIds);
-        familyMemberIds = familyMemberIds.filter((id) => keep.has(id));
-      }
-      const stillGenerating = hasPendingGeneration({
-        plan,
-        familyMemberIds,
-        maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
-      });
-      // Budget gate. `hasPendingGeneration` already defers translation while any
-      // day is unfilled, which covers a budget-trimmed run — but a run that
-      // filled every day right up to its deadline could still start a multi-call
-      // translation with nothing left, and be killed mid-pass. Skipping is free:
-      // the pass is non-fatal, the maid view falls back to Arabic, and her next
-      // visit re-triggers it.
+      // Translate WHAT THIS RUN PRODUCED. This branch is a mirror of
+      // runMealPlanGeneration's end-of-run pass and it had drifted: the engine
+      // stopped waiting for the whole household (at the 6-member cap a run yields
+      // ~2 of 7 days, so the cook — the only person who cannot read the Arabic
+      // view — was last in the queue by construction) while PRODUCTION, which
+      // comes through here, still waited. translateMealPlan skips meals already
+      // carrying the locale, so a partial pass costs the same in total; only the
+      // number of passes grows.
+      const hkSex = (
+        await sbSelectOne(
+          supabaseUrl,
+          serviceKey,
+          "family_members",
+          `user_id=eq.${userId}&role=eq.housekeeper&select=sex&limit=1`,
+        )
+      )?.sex as string | null | undefined;
+      // Budget gate: a run that filled days right up to its deadline could still
+      // start a multi-call translation with nothing left. Skipping is free — the
+      // pass is non-fatal and her page re-triggers it.
       const roomToTranslate = canFit(hardDeadlineMs, MIN_VIABLE_CALL_MS);
-      if (endLocale && needsTranslate && !stillGenerating && !roomToTranslate) {
+      if (endLocale && needsTranslate && !roomToTranslate) {
         console.warn(
           "[generate-plan-background] skipping housekeeper translation (run budget spent)",
         );
       }
-      if (endLocale && needsTranslate && !stillGenerating && roomToTranslate) {
+      if (endLocale && needsTranslate && roomToTranslate) {
         const { plan: translated, usage: tUsage } = await translateMealPlan({
           anthropicApiKey: anthropicKey,
           plan,
           locale: endLocale,
+          // Bounded by the run, not just gated on 45s to start. Without this the
+          // pass could begin with a minute left and run for several more, and the
+          // hard kill takes the terminal write with it — leaving the audit row
+          // 'started', which blocks the household's NEXT generation for 15 min.
+          deadlineMs: hardDeadlineMs,
+          cookSex: hkSex ?? null,
           onDayTranslated: async (p) => {
             await sbUpdate(supabaseUrl, serviceKey, "meal_plans", `id=eq.${mealPlanId}`, {
               plan_data: p,

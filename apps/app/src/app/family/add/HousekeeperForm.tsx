@@ -21,7 +21,7 @@ export function HousekeeperForm({
   // hatch so she can generate the plan now and add the maid later.
   onSkip?: () => void;
   // Edit mode: prefill the maid's existing name + reading language.
-  initial?: { name?: string; preferred_language?: string };
+  initial?: { name?: string; preferred_language?: string; sex?: string | null };
   editing?: boolean;
 }) {
   const router = useRouter();
@@ -29,11 +29,21 @@ export function HousekeeperForm({
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState(initial?.name ?? "");
   const [lang, setLang] = useState(initial?.preferred_language ?? "tl");
+  // Asked, not assumed. Her wizard had no sex step, so the column stayed null
+  // and every surface that needed one treated her as a woman — including the
+  // translation prompts, which told the model it was writing for «طبّاخة».
+  // Optional: an unanswered value keeps the previous behaviour rather than
+  // blocking the form on a question the household may not want to answer.
+  const [sex, setSex] = useState(initial?.sex ?? "");
 
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      const result = await addHousekeeper({ name: name.trim(), preferred_language: lang });
+      const result = await addHousekeeper({
+        name: name.trim(),
+        preferred_language: lang,
+        ...(sex ? { sex } : {}),
+      });
       if (!result.ok) return setError(result.error);
       // Driven by a parent sequence (onboarding family builder) → hand control back.
       if (onComplete) {
@@ -88,6 +98,39 @@ export function HousekeeperForm({
             className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
           />
         </div>
+
+        <fieldset>
+          <legend className="block text-sm font-bold text-brand-ink mb-2">
+            هل من يطبخ رجل أم امرأة؟{" "}
+            <span className="text-brand-ink-muted font-medium">(اختياري)</span>
+          </legend>
+          <div className="flex gap-2">
+            {(
+              [
+                ["female", "امرأة"],
+                ["male", "رجل"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSex(sex === value ? "" : value)}
+                aria-pressed={sex === value}
+                disabled={isPending}
+                className={`flex-1 min-h-11 px-4 rounded-xl border text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+                  sex === value
+                    ? "border-brand-purple-900 bg-brand-lavender/20 text-brand-purple-900"
+                    : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-ink/20"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
+            نكتب تعليمات الطبخ بصيغة تناسبه.
+          </p>
+        </fieldset>
 
         <div>
           <label htmlFor="hk-lang" className="block text-sm font-bold text-brand-ink mb-2">

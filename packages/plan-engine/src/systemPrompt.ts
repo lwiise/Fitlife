@@ -14,6 +14,19 @@ import { conditionLabels } from "./medicalConditionLabels";
  * housekeeper's language (no generation). Names/amounts/units come from the
  * source; only the human-readable strings are translated.
  */
+/**
+ * How to refer to the person these instructions are FOR.
+ *
+ * Her wizard had no sex step, so `family_members.sex` was null for every
+ * housekeeper and both prompts said «طبّاخة» outright — a male cook was handed
+ * recipes written for someone else. The question is asked now and optional, so
+ * an unanswered value keeps the previous wording rather than guessing: feminine
+ * is the fallback, exactly as it is everywhere else in the product.
+ */
+function cookNoun(sex?: string | null): string {
+  return sex === "male" ? "طبّاخ" : "طبّاخة";
+}
+
 export function buildTranslatePrompt(
   items: {
     i: number;
@@ -22,10 +35,12 @@ export function buildTranslatePrompt(
     prep_steps_ar: string[];
   }[],
   locale: LocaleCode,
+  cookSex?: string | null,
 ): string {
   const name = HK_LANG_NAMES[locale] ?? locale;
+  const cook = cookNoun(cookSex);
   return `# دورك
-أنتِ مترجمة محترفة لوصفات الطبخ. تترجمين من العربية إلى ${name} ترجمة طبيعية عملية — كأنك تكتبين لطبّاخة تقرأ ${name} كلغة أم. تجنّبي الترجمة الحرفية، وحافظي على نفس المعنى والمقادير.
+أنتِ مترجمة محترفة لوصفات الطبخ. تترجمين من العربية إلى ${name} ترجمة طبيعية عملية — كأنك تكتبين لـ${cook} يقرأ ${name} كلغة أم. خاطبي القارئ بالصيغة المناسبة لـ${cook}. تجنّبي الترجمة الحرفية، وحافظي على نفس المعنى والمقادير.
 
 # العناصر المطلوب ترجمتها
 \`\`\`json
@@ -52,10 +67,12 @@ type Out = Array<{
 export function buildNameTranslatePrompt(
   names: { i: number; name_ar: string }[],
   locale: LocaleCode,
+  cookSex?: string | null,
 ): string {
   const name = HK_LANG_NAMES[locale] ?? locale;
+  const cook = cookNoun(cookSex);
   return `# دورك
-أنتِ مساعدة تكتب أسماء الأشخاص بحروف لغة أخرى. حوّلي كل اسم شخص من العربية إلى كتابته بـ ${name} كما يُنطق (نقل صوتي/transliteration) — وليس ترجمة معناه. اكتبي الاسم بحروف ${name} كما تقرؤه طبّاخة تعرف ${name} فقط.
+أنتِ مساعدة تكتب أسماء الأشخاص بحروف لغة أخرى. حوّلي كل اسم شخص من العربية إلى كتابته بـ ${name} كما يُنطق (نقل صوتي/transliteration) — وليس ترجمة معناه. اكتبي الاسم بحروف ${name} كما يقرؤه ${cook} يعرف ${name} فقط.
 
 # الأسماء
 \`\`\`json

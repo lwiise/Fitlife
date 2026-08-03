@@ -1240,6 +1240,11 @@ export async function addFamilyMember(
 export async function addHousekeeper(input: {
   name: string;
   preferred_language: string;
+  // Asked since 08/2026. Before that her wizard had no sex step at all and the
+  // column was left null, so every surface that needed one assumed a woman —
+  // including the translation prompts, which told the model it was writing for
+  // «طبّاخة». A male cook read instructions addressed to someone else.
+  sex?: string;
 }): Promise<{ ok: true; plan_generation_id: string | null } | { ok: false; error: string }> {
   const supabase = await createClient();
   const {
@@ -1271,6 +1276,9 @@ export async function addHousekeeper(input: {
     const updateRow = {
       name: hkName,
       preferred_language: input.preferred_language,
+      // Only written when answered, so editing her name or language cannot
+      // silently blank a sex she already gave.
+      ...(input.sex === "male" || input.sex === "female" ? { sex: input.sex } : {}),
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase
@@ -1292,6 +1300,7 @@ export async function addHousekeeper(input: {
       role: "housekeeper",
       member_type: "housekeeper",
       preferred_language: input.preferred_language,
+      sex: input.sex === "male" || input.sex === "female" ? input.sex : null,
       consulted_doctor: false,
       display_order: nextOrder,
     };

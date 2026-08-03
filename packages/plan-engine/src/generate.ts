@@ -2810,12 +2810,13 @@ export async function runMealPlanGeneration(params: {
   try {
     const { data: hkRows } = await supabase
       .from("family_members")
-      .select("preferred_language")
+      .select("preferred_language, sex")
       .eq("user_id", context.mom.id)
       .eq("role", "housekeeper")
       .limit(1)
-      .returns<{ preferred_language: string | null }[]>();
+      .returns<{ preferred_language: string | null; sex: string | null }[]>();
     const hkLang = hkRows?.[0]?.preferred_language ?? undefined;
+    const hkSex = hkRows?.[0]?.sex ?? null;
     const endLocale =
       hkLang && hkLang !== "ar" && (LOCALE_CODES as readonly string[]).includes(hkLang)
         ? (hkLang as LocaleCode)
@@ -2855,6 +2856,7 @@ export async function runMealPlanGeneration(params: {
         // 45s the gate below checks for and then run for minutes, taking the
         // terminal write with it when the platform killed the function.
         deadlineMs: hardDeadlineMs,
+        cookSex: hkSex,
         onDayTranslated: async (p) => {
           await supabase.from("meal_plans").update({ plan_data: p }).eq("id", mealPlanId);
         },
@@ -3024,8 +3026,14 @@ export async function translateMealPlan(params: {
    * which is correct only for a caller that owns its own whole invocation.
    */
   deadlineMs?: number;
+  /**
+   * The cook's answered الجنس, so the instructions address the person actually
+   * reading them. Undefined/null keeps the feminine wording the product uses
+   * everywhere an answer is missing.
+   */
+  cookSex?: string | null;
 }): Promise<{ plan: MealPlan; usage: { input_tokens: number; output_tokens: number; cost_usd: number; model: string } }> {
-  const { anthropicApiKey, plan, locale, onDayTranslated, deadlineMs } = params;
+  const { anthropicApiKey, plan, locale, onDayTranslated, deadlineMs, cookSex } = params;
   // Each call gets what is left, never more than its own sane ceiling. Falls
   // back to the ceiling when there is no deadline at all.
   const translateCallTimeout = (): number =>
@@ -3081,6 +3089,7 @@ export async function translateMealPlan(params: {
             systemPrompt: buildNameTranslatePrompt(
               [{ i: 0, name_ar: member.member_name_ar }],
               locale,
+              cookSex,
             ),
             userMessage: "ترجمي الآن.",
           });
@@ -3159,7 +3168,7 @@ export async function translateMealPlan(params: {
             model: TRANSLATE_MODEL,
             maxTokens: DAY_MAX_TOKENS,
             timeoutMs: translateCallTimeout(),
-            systemPrompt: buildTranslatePrompt(items, locale),
+            systemPrompt: buildTranslatePrompt(items, locale, cookSex),
             userMessage: "ترجمي الآن.",
           });
           totalIn += res.tokensIn;
@@ -3249,8 +3258,10 @@ export async function runMealPlanTranslation(params: {
   mealPlanId: string;
   plan: MealPlan;
   locale: LocaleCode;
+  /** The cook's answered الجنس; null keeps the feminine fallback. */
+  cookSex?: string | null;
 }): Promise<void> {
-  const { supabase, anthropicApiKey, userId, mealPlanId, plan, locale } = params;
+  const { supabase, anthropicApiKey, userId, mealPlanId, plan, locale, cookSex } = params;
   const startMs = Date.now();
 
   // Take the SAME lock a generation takes, before touching plan_data.
@@ -3324,6 +3335,7 @@ export async function runMealPlanTranslation(params: {
       // the same — and leaving its plan_generations row 'started' would block the
       // household's next MEAL run, since the lock is per (user, kind).
       deadlineMs: startMs + planRunBudgetMs() - FINALIZE_RESERVE_MS,
+      cookSex,
       // Persist each day as it lands (today-first) so the maid sees recipes within
       // seconds instead of waiting for all 7 days. The final update below is the
       // complete, last-write snapshot.

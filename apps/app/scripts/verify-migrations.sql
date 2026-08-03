@@ -156,6 +156,12 @@ select * from (values
     (select case when exists (select 1 from pg_indexes where schemaname='public'
       and indexname='subscriptions_one_per_user')
       then 'APPLIED' else 'MISSING' end)),
+  ('00025 family_members.housekeeper keys agree (CHECK)',
+    (select case when exists (
+      select 1 from pg_constraint
+      where conname='family_members_housekeeper_keys_agree'
+        and conrelid='public.family_members'::regclass)
+      then 'APPLIED' else 'MISSING' end)),
   -- ── Class guard ───────────────────────────────────────────────────────────
   -- Every RLS-enabled table the app DELETEs from must carry a DELETE policy.
   -- Without one, Postgres filters the statement to zero rows and returns NO
