@@ -38,14 +38,15 @@ export default async function HousekeeperPage() {
   const locale = housekeeper.preferred_language;
   if (!isLocaleCode(locale) || locale === "ar") redirect("/plan");
 
-  // The family plan is "fully uploaded" only when EVERY member is fully generated
-  // (day 1 → last day) and none is still absent/queued. Until then keep her on the
-  // waiting state rather than translate/show a partial plan (a member still
-  // mid-generation, or a newly-added member, must finish completely first).
+  // Whether anyone in the household is still queued or missing a day. This used
+  // to force her waiting state, which meant the person who does the COOKING was
+  // the last one in the house to see anything: four members could have complete,
+  // translated weeks and she would still be looking at a spinner, because a
+  // fifth had not been generated. It is now a NOTICE above a usable plan.
   const familyMemberIds = familyMembers
     .filter((m) => m.role !== "housekeeper")
     .map((m) => m.id);
-  const stillGenerating =
+  const partialWeek =
     !!latest.plan_data &&
     hasPendingGeneration({
       plan: latest.plan_data,
@@ -53,17 +54,14 @@ export default async function HousekeeperPage() {
       maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
     });
 
-  // A plan exists but isn't ready+cookable yet (status still generating, a
-  // 'ready' shell with empty days while a member's generation is in flight, or a
-  // member still queued to be generated). Do NOT bounce her to the Arabic /plan
-  // view — that's the "appears → disappears → comes back" flicker. Keep her on her
-  // own page in a localized waiting state; the poll resolves it once the plan is
-  // fully generated and translated.
+  // Nothing cookable exists yet — the row is still generating, or it is a 'ready'
+  // shell with no meals in it. Do NOT bounce her to the Arabic /plan view; that
+  // is the "appears → disappears → comes back" flicker. Keep her on her own page
+  // in a localized waiting state, and let the poll resolve it.
   const preparing =
     latest.status !== "ready" ||
     !latest.plan_data ||
-    !planHasContent(latest.plan_data) ||
-    stillGenerating;
+    !planHasContent(latest.plan_data);
 
   // Any meal not yet translated to her locale → the view self-heals (trigger +
   // poll). The locale stamp is set whenever recipe/ingredients/steps translate.
@@ -129,6 +127,7 @@ export default async function HousekeeperPage() {
       locale={locale}
       needsTranslation={needsTranslation}
       preparing={preparing}
+      partialWeek={partialWeek}
       allergyEntries={allergyEntries}
     />
   );

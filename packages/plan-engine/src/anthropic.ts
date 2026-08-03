@@ -210,18 +210,33 @@ export async function streamAnthropic(params: {
  *   - an Arabic prose preamble before the object ("أولاً سأحسب…")
  *   - a ```json fence that was opened and never closed
  *
- * So when the reply is not cleanly fenced, fall back to the outermost {…} span.
- * Callers all expect a single JSON OBJECT (day slice, skeleton, translation), so
- * brace-matching is the right bracket. If there is no plausible object the text
- * is returned unchanged and the caller's parse fails exactly as it did before —
- * this only ever widens what can be recovered.
+ * So when the reply is not cleanly fenced, fall back to the outermost JSON span.
+ *
+ * That span is NOT always braces. The comment here used to assert "callers all
+ * expect a single JSON OBJECT (day slice, skeleton, translation)" — and the
+ * first two do, but BOTH translation schemas are arrays. So an unfenced
+ * `[{…},{…}]` was sliced from its first `{` to its last `}`, yielding
+ * `{…},{…}` — not JSON at all — and an unfenced single-element `[{…}]` became a
+ * bare object that then failed the array schema. Either way the day was left
+ * untranslated behind a console.warn, so whether the housekeeper got her recipes
+ * came down to whether the model happened to fence that particular reply.
+ *
+ * Pick the bracket that actually opens the payload, and close with its match. If
+ * there is no plausible JSON the text is returned unchanged and the caller's
+ * parse fails exactly as it did before — this only ever widens what can be
+ * recovered.
  */
 export function stripMarkdownFence(text: string): string {
   const trimmed = text.trim();
   const fence = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
   if (fence && fence[1]) return fence[1];
-  const open = trimmed.indexOf("{");
-  const close = trimmed.lastIndexOf("}");
+  const objOpen = trimmed.indexOf("{");
+  const arrOpen = trimmed.indexOf("[");
+  // Whichever comes first is the outer value; an object whose fields hold arrays
+  // still starts with `{`, so object payloads behave exactly as before.
+  const isArray = arrOpen !== -1 && (objOpen === -1 || arrOpen < objOpen);
+  const open = isArray ? arrOpen : objOpen;
+  const close = trimmed.lastIndexOf(isArray ? "]" : "}");
   if (open !== -1 && close > open) return trimmed.slice(open, close + 1);
   return trimmed;
 }

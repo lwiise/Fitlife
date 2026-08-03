@@ -10,7 +10,6 @@ import {
   dayMaxTokens,
   bigCallTimeoutMs,
   dayConcurrency,
-  MEMBER_GEN_MAX_ATTEMPTS,
 } from "./constants";
 import {
   canFit,
@@ -2581,36 +2580,26 @@ export async function runMealPlanGeneration(params: {
           d.meals.some((meal) => meal.prep_steps_translated_locale !== endLocale),
         ),
       );
-    // Only translate once the WHOLE family is fully generated — every member, day
-    // 1 → last day. Skip while any member is absent OR still has an unfilled day
-    // (under the retry cap); the drain finishes them first and a later run
-    // translates the complete plan. (Also keeps this run's 'started' lock from
-    // being held through translation while members are still pending.)
-    const { data: memberRows } = await supabase
-      .from("family_members")
-      .select("id, role")
-      .eq("user_id", context.mom.id)
-      .returns<{ id: string; role: string }[]>();
-    const familyMemberIds = (memberRows ?? [])
-      .filter((m) => m.role !== "housekeeper")
-      .map((m) => m.id);
-    const stillGenerating = hasPendingGeneration({
-      plan,
-      familyMemberIds,
-      maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
-    });
-    // Budget gate. `hasPendingGeneration` already defers translation while any
-    // day is unfilled — which covers a budget-trimmed run — but a run that
-    // filled every day right up to its deadline could still start a multi-call
-    // translation with nothing left. Skipping is free: the pass is non-fatal,
-    // the maid view falls back to Arabic, and her next visit re-triggers it.
+    // Translate WHAT THIS RUN PRODUCED, not what the household will eventually
+    // have. This used to defer until every member had every day — which at the
+    // 6-member cap, where a run yields about two days of seven, meant the cook
+    // was the last person in the house to be served: she waited on data she does
+    // not need to make tonight's dinner. translateMealPlan skips meals that
+    // already carry the locale, so translating a partial week costs exactly the
+    // same in total as translating it all at the end; only the number of passes
+    // grows.
+    //
+    // Budget gate: a run that filled days right up to its deadline could still
+    // start a multi-call translation with nothing left. Skipping is free — the
+    // pass is non-fatal, the maid view falls back to Arabic, and her page
+    // re-triggers it.
     const roomToTranslate = canFit(hardDeadlineMs, MIN_VIABLE_CALL_MS);
-    if (!roomToTranslate && endLocale && needsTranslate && !stillGenerating) {
+    if (!roomToTranslate && endLocale && needsTranslate) {
       console.warn(
         "[runMealPlanGeneration] skipping housekeeper translation (run budget spent)",
       );
     }
-    if (endLocale && needsTranslate && !stillGenerating && roomToTranslate) {
+    if (endLocale && needsTranslate && roomToTranslate) {
       const { plan: translated, usage: tUsage } = await translateMealPlan({
         anthropicApiKey,
         plan,
@@ -2985,47 +2974,117 @@ export async function runMealPlanTranslation(params: {
 }): Promise<void> {
   const { supabase, anthropicApiKey, userId, mealPlanId, plan, locale } = params;
   const startMs = Date.now();
-  const { plan: translated, usage } = await translateMealPlan({
-    anthropicApiKey,
-    plan,
-    locale,
-    // Persist each day as it lands (today-first) so the maid sees recipes within
-    // seconds instead of waiting for all 7 days. The final update below is the
-    // complete, last-write snapshot.
-    onDayTranslated: async (p) => {
-      await supabase.from("meal_plans").update({ plan_data: p }).eq("id", mealPlanId);
-    },
-  });
+
+  // Take the SAME lock a generation takes, before touching plan_data.
+  //
+  // Generation and translation both persist the WHOLE plan_data blob from their
+  // own in-memory copy, so if they interleave each erases the other's writes —
+  // a translated day vanishes, or a freshly generated one does. Until now they
+  // were kept apart only by translation refusing to start until the household
+  // was completely generated; with translation running on a partial week (so the
+  // cook is not the last person served) that separation is gone and the race is
+  // reachable.
+  //
+  // 00014's `plan_generations (user_id, plan_kind) where status = 'started'`
+  // unique index IS a mutex, so opening the audit row as 'started' up front —
+  // rather than inserting it 'completed' at the end — makes the database refuse
+  // the overlap instead of us hoping to detect it. A conflict means someone else
+  // holds it: skip, and let the caller's next poll retry. A stale row from a
+  // hard-killed worker is swept by the existing staleness path, same as a
+  // generation's.
+  const startedAt = new Date(startMs).toISOString();
+  const { data: auditRow, error: lockError } = await supabase
+    .from("plan_generations")
+    .insert({
+      user_id: userId,
+      meal_plan_id: mealPlanId,
+      status: "started",
+      started_at: startedAt,
+    })
+    .select("id")
+    .maybeSingle();
+  if (lockError?.code === "23505") {
+    console.warn(
+      "[runMealPlanTranslation] another run holds the lock — skipping this pass",
+    );
+    return;
+  }
+  // Any OTHER insert failure is an audit problem, not a concurrency one. The
+  // translation itself is what the maid is waiting on, so it proceeds unlocked
+  // exactly as it always did rather than failing on a bookkeeping row.
+  const auditId = (auditRow as { id: string } | null)?.id ?? null;
+  if (lockError) {
+    console.error(
+      "[runMealPlanTranslation] could not open the audit row:",
+      lockError.message,
+    );
+  }
+
+  const settle = async (fields: Record<string, unknown>) => {
+    if (!auditId) return;
+    const { error } = await supabase
+      .from("plan_generations")
+      .update(fields)
+      .eq("id", auditId);
+    // Leaving a row 'started' would hold the mutex until the staleness sweep,
+    // so this is worth naming even though it is non-fatal.
+    if (error)
+      console.error(
+        "[runMealPlanTranslation] failed to close the audit row:",
+        error.message,
+      );
+  };
+
+  let translated: MealPlan;
+  let usage: { model: string; input_tokens: number; output_tokens: number; cost_usd: number };
+  try {
+    const out = await translateMealPlan({
+      anthropicApiKey,
+      plan,
+      locale,
+      // Persist each day as it lands (today-first) so the maid sees recipes within
+      // seconds instead of waiting for all 7 days. The final update below is the
+      // complete, last-write snapshot.
+      onDayTranslated: async (p) => {
+        await supabase.from("meal_plans").update({ plan_data: p }).eq("id", mealPlanId);
+      },
+    });
+    translated = out.plan;
+    usage = out.usage;
+  } catch (err) {
+    await settle({
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      duration_ms: Date.now() - startMs,
+      error_message: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+
   const { error } = await supabase
     .from("meal_plans")
     .update({ plan_data: translated })
     .eq("id", mealPlanId);
   if (error) {
+    await settle({
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      duration_ms: Date.now() - startMs,
+      error_message: error.message,
+    });
     throw new Error(`Failed to update meal_plan (translate): ${error.message}`);
   }
 
-  // Audit the translation's token spend. A separate plan_generations row (status
-  // 'completed' — the only valid value besides started/failed) sharing this
-  // plan's meal_plan_id; the weekly rate limit counts DISTINCT meal_plan_id so
-  // this row never consumes a generation slot.
-  const completedAt = new Date().toISOString();
-  const { error: auditError } = await supabase.from("plan_generations").insert({
-    user_id: userId,
-    meal_plan_id: mealPlanId,
-    model: usage.model,
+  // Close the row with the pass's token spend. It shares this plan's
+  // meal_plan_id; the weekly rate limit counts DISTINCT meal_plan_id, so it
+  // never consumes a generation slot.
+  await settle({
     status: "completed",
+    model: usage.model,
     tokens_in: usage.input_tokens,
     tokens_out: usage.output_tokens,
     cost_usd: usage.cost_usd,
     duration_ms: Date.now() - startMs,
-    started_at: new Date(startMs).toISOString(),
-    completed_at: completedAt,
+    completed_at: new Date().toISOString(),
   });
-  if (auditError) {
-    // Non-fatal: the translation itself succeeded; only the audit row failed.
-    console.error(
-      "[runMealPlanTranslation] failed to write translation audit row:",
-      auditError.message,
-    );
-  }
 }

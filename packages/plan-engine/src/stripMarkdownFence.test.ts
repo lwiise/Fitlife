@@ -59,3 +59,45 @@ describe("stripMarkdownFence", () => {
     expect(() => parses('```json\n{"day_index":6,"meals":[')).toThrow();
   });
 });
+
+/**
+ * The two TRANSLATION schemas are arrays, not objects — the only array-shaped
+ * payloads in the codebase, and the case this helper's own comment said did not
+ * exist ("callers all expect a single JSON OBJECT"). Slicing an unfenced
+ * `[{…},{…}]` from its first brace to its last produced `{…},{…}`, which is not
+ * JSON; a single-element array became a bare object that then failed the array
+ * schema. Both left the day untranslated behind a console.warn, so whether the
+ * housekeeper got her recipes depended on whether the model fenced that reply.
+ */
+describe("stripMarkdownFence — array payloads (translation)", () => {
+  it("passes through a bare JSON array", () => {
+    expect(parses('[{"i":0,"name":"Hind"}]')).toEqual([{ i: 0, name: "Hind" }]);
+  });
+
+  it("keeps every element of a multi-item array", () => {
+    const out = parses('[{"i":0,"recipe_name":"Eggs"},{"i":1,"recipe_name":"Rice"}]');
+    expect(out).toHaveLength(2);
+    expect(out[1].recipe_name).toBe("Rice");
+  });
+
+  it("recovers an array from an UNCLOSED fence", () => {
+    expect(parses('```json\n[{"i":0,"name":"Hind"}]')).toEqual([{ i: 0, name: "Hind" }]);
+  });
+
+  it("recovers an array after a prose preamble", () => {
+    expect(parses('Here are the translations:\n[{"i":0,"name":"Hind"}]')).toEqual([
+      { i: 0, name: "Hind" },
+    ]);
+  });
+
+  it("keeps arrays nested INSIDE an object working as before", () => {
+    // The object opens first, so this must still take the brace path.
+    expect(parses('preamble {"meals":[{"a":1},{"b":2}]} trailing')).toEqual({
+      meals: [{ a: 1 }, { b: 2 }],
+    });
+  });
+
+  it("does not invent an array from a truncated reply", () => {
+    expect(() => parses('[{"i":0,"name":"Hin')).toThrow();
+  });
+});

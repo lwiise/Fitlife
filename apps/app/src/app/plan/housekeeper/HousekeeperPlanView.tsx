@@ -25,16 +25,21 @@ export function HousekeeperPlanView({
   locale,
   needsTranslation = false,
   preparing = false,
+  partialWeek = false,
   allergyEntries = [],
 }: {
   plan: MealPlan | null;
   planId: string;
   locale: LocaleCode;
   needsTranslation?: boolean;
-  // The family plan exists but isn't ready/translated yet (e.g. a member's
-  // generation is still in flight). Show a localized waiting state on HER page
-  // instead of bouncing to the Arabic /plan view — the poll resolves it.
+  // NOTHING is cookable yet — no plan content at all. Show a localized waiting
+  // state on HER page instead of bouncing to the Arabic /plan view; the poll
+  // resolves it.
   preparing?: boolean;
+  // Some of the household is still being generated. She sees the plan either
+  // way — this only adds a line saying more is coming, so a half-filled week
+  // does not read as the finished article.
+  partialWeek?: boolean;
   allergyEntries?: AllergyEntry[];
 }) {
   const router = useRouter();
@@ -66,14 +71,17 @@ export function HousekeeperPlanView({
     return () => clearInterval(id);
   }, [needsTranslation]);
 
-  // While the plan is preparing OR translations are missing, poll the server
-  // component for updated plan_data; once everything lands the next render has
-  // preparing=false and needsTranslation=false and the poll stops.
+  // While anything is still landing — no content yet, missing translations, or
+  // the rest of the household still generating — poll the server component for
+  // updated plan_data. Once it is all in, the next render clears all three and
+  // the poll stops. partialWeek is in the list because her page can now be fully
+  // usable while days are still arriving, and those days should appear on their
+  // own rather than on a manual reload.
   useEffect(() => {
-    if (!preparing && !needsTranslation) return;
+    if (!preparing && !needsTranslation && !partialWeek) return;
     const id = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(id);
-  }, [preparing, needsTranslation, router]);
+  }, [preparing, needsTranslation, partialWeek, router]);
 
   return (
     <main dir={info.direction} lang={locale} className="min-h-screen bg-brand-surface">
@@ -106,9 +114,9 @@ export function HousekeeperPlanView({
         )}
         <AllergyBackstop entries={allergyEntries} locale={locale} />
         {preparing ? (
-          // Family plans still generating (incl. members queued) — translation is
-          // gated until they finish, so DON'T imply it's loading. Just inform her
-          // it'll start once the plans are ready; the poll flips this when done.
+          // Nothing exists to cook or translate yet. Not a spinner — the wait is
+          // on the family's plans being written, which is not her doing and not
+          // something she can hurry.
           <div
             role="status"
             className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
@@ -129,6 +137,19 @@ export function HousekeeperPlanView({
             />
             <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
               {t.translating}
+            </p>
+          </div>
+        ) : partialWeek ? (
+          // Usable, but not the whole week yet. Said plainly and once, above a
+          // plan she can actually cook from — the old behaviour replaced the
+          // plan with this message.
+          <div
+            role="status"
+            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
+          >
+            <Clock className="size-4 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
+            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
+              {t.partial_week}
             </p>
           </div>
         ) : null}

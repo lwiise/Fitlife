@@ -10,9 +10,7 @@ import {
   GenerationInFlightError,
   runMealPlanGeneration,
   runMealPlanTranslation,
-  hasPendingGeneration,
   prepareSharedGroupRegen,
-  MEMBER_GEN_MAX_ATTEMPTS,
   OnboardingIncompleteError,
   MedicalGateError,
   PlanValidationError,
@@ -542,47 +540,31 @@ export async function triggerPlanTranslation(params: {
     // Stale 'started' (bg worker hard-killed) → nothing is writing; fall through.
   }
 
-  // Only translate once the WHOLE family is fully generated — every member, day
-  // 1 → last day. Skip while any member is absent OR still has an unfilled day
-  // (under the retry cap): the one-at-a-time drain finishes them first and a later
-  // run self-translates the complete plan. Translating earlier would localize a
-  // partial plan, then a later run would re-translate.
-  const { data: memberRows } = await supabase
-    .from("family_members")
-    .select("id, role")
-    .eq("user_id", userId)
-    .returns<{ id: string; role: string }[]>();
-  const familyMemberIds = (memberRows ?? [])
-    .filter((m) => m.role !== "housekeeper")
-    .map((m) => m.id);
-  if (
-    hasPendingGeneration({
-      plan,
-      familyMemberIds,
-      maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
-    })
-  )
-    return;
-
-  // Skip if a translation INTO THIS LOCALE is already actively in progress: some
-  // meals already carry this locale (a pass has started writing) AND the row was
-  // updated very recently (progressive per-day writes are still landing). The
-  // maid view re-triggers on a throttled cadence to self-heal a stuck last day;
-  // this stops those re-triggers from stacking concurrent background functions.
-  // A genuinely-stuck pass goes quiet (updated_at stops advancing) → re-dispatch
-  // is allowed and translateMealPlan idempotently fills only the missing day(s).
-  // The first trigger is never blocked (no meals carry the locale yet).
-  const TRANSLATE_INFLIGHT_SEC = 25;
-  const someTranslated = plan.members.some((m) =>
-    m.days.some((d) =>
-      d.meals.some((meal) => meal.prep_steps_translated_locale === locale),
-    ),
-  );
-  const lastWriteMs = Date.parse(latest.updated_at);
-  const writeAgeSec = Number.isNaN(lastWriteMs)
-    ? Infinity
-    : (Date.now() - lastWriteMs) / 1000;
-  if (someTranslated && writeAgeSec < TRANSLATE_INFLIGHT_SEC) return;
+  // Translate WHATEVER EXISTS, rather than waiting for the household to finish.
+  //
+  // This used to bail while any member was absent or still missing a day, on the
+  // reasoning that translating a partial plan would only be re-translated later.
+  // It wouldn't: translateMealPlan skips meals already carrying the locale, so
+  // the total token cost is identical either way — only the number of passes
+  // grows. What the gate actually bought was the cook being the last person in
+  // the house to receive anything. At the 6-member cap a run yields roughly two
+  // days of seven, so she waited through five more rounds — for other people's
+  // weeks, none of which she needs to cook tonight's dinner.
+  //
+  // Nothing is translated twice and nothing shows half-done: PlanViewer renders a
+  // day only once every recipe in it carries her locale, and an ungenerated day
+  // already has its own waiting state.
+  //
+  // Concurrency is handled where it belongs — runMealPlanTranslation opens a
+  // 'started' plan_generations row, so 00014's unique index refuses an overlap
+  // with a generation outright. The live-generation check above stays as a cheap
+  // pre-check that saves dispatching a background function that would only find
+  // the lock taken.
+  //
+  // Nothing to say in her language yet — an empty plan is the generation's
+  // waiting state, not a translation.
+  const anyMeals = plan.members.some((m) => m.days.some((d) => d.meals.length > 0));
+  if (!anyMeals) return;
 
   // Development: run inline.
   if (process.env.NODE_ENV === "development") {

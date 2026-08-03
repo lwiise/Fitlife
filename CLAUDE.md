@@ -357,9 +357,48 @@ live on the stated assumption that "the freshly-generated plan lands already tra
 and the generation only translates if budget remains after its day loop, which at five
 beneficiaries it routinely does not. `drainDeferredMembers` now finishes a pending
 translation once no member needs generating, judging "pending" from the meals themselves
-so a half-translated week is seen as unfinished. **Known limitation: translation is last
-in that queue, so at the 6-member cap — where a run yields ~2 of 7 days — it waits a long
-time.** The maid view says so honestly in Tagalog, but she still waits.
+so a half-translated week is seen as unfinished.
+
+**Then: the cook stopped being last in the queue (08/2026).** The retry above still
+waited for the WHOLE household — three separate gates, all `hasPendingGeneration`:
+`triggerPlanTranslation` would not start, the generation's end-of-run pass would not run,
+and `housekeeper/page.tsx` rendered her waiting card INSTEAD of the plan. At the 6-member
+cap, where a run yields ~2 of 7 days, that meant four members could have complete
+translated weeks while the one person who cannot read the Arabic view — and who does the
+actual cooking — saw a spinner, waiting on other people's days that she does not need to
+make tonight's dinner. All three gates are gone. Translation now runs on whatever exists:
+`translateMealPlan` skips meals already carrying the locale, so the token total is
+IDENTICAL either way and only the number of passes grows. `preparing` now means "nothing
+cookable exists at all"; `partialWeek` is a NOTICE above a usable plan (new `partial_week`
+string in all 7 locales; `awaiting_family` was reworded — it promised translation would
+begin "once they're ready", which stopped being true). PlanViewer already renders partial
+data correctly (a day appears only once every recipe in it carries her locale), so nothing
+shows half-done. Guarded by `housekeeperWaiting.test.ts`.
+
+**That made a latent race reachable, so translation now takes the lock.** Generation and
+translation each persist the WHOLE `plan_data` blob from their own in-memory copy, so
+interleaved they erase each other — a translated day vanishes, or a freshly generated one
+does. They were previously kept apart only by translation refusing to start until
+generation was completely finished. `runMealPlanTranslation` now opens its
+`plan_generations` row as **`'started'` BEFORE touching plan_data** and closes it
+`completed`/`failed`, instead of inserting it `'completed'` at the end — so 00014's
+`(user_id, plan_kind) where status='started'` unique index refuses the overlap at the
+DATABASE rather than us hoping to detect it. A `23505` conflict means someone else holds
+it: skip the pass entirely (no model call, no write). A non-concurrency insert failure
+still translates unlocked — a broken audit row must not block the maid. The 25-second
+`TRANSLATE_INFLIGHT_SEC` heuristic it replaces is deleted; a hard-killed pass is recovered
+by the existing staleness sweep. Guarded by `translationLock.test.ts`.
+
+**`stripMarkdownFence` corrupted every unfenced translation reply.** Found while writing
+the test above. Its own comment asserted "callers all expect a single JSON OBJECT (day
+slice, skeleton, translation)" — but BOTH translation schemas are arrays, the only
+array-shaped payloads in the codebase. The unfenced fallback sliced from the first `{` to
+the last `}`, so `[{…},{…}]` became `{…},{…}` (not JSON at all) and a single-element
+`[{…}]` became a bare object that then failed the array schema. Either way the day was
+left untranslated behind a `console.warn`, so whether the housekeeper got her recipes came
+down to whether the model happened to fence that particular reply. It now picks whichever
+bracket opens the payload and closes with its match; object payloads (which start with `{`
+even when they contain arrays) are byte-for-byte unchanged.
 
 **The advisor cap was 30/day for a WHOLE HOUSEHOLD.** Measured: 30 messages cost $0.352,
 about $0.012 each. So it bought ~35 cents/day of protection while rationing the flagship
