@@ -935,6 +935,16 @@ function makeMixedExistingPlan(): MealPlan {
 
 // Fresh day per requested member: a new breakfast + a NEW shared lunch name (same
 // for everyone, so co-sharers re-form one batch).
+//
+// The calorie/protein numbers are chosen so mom's PROJECTED day — the fresh
+// IN-SCOPE meals plus the carried out-of-scope ones — lands exactly on her stored
+// 1800 kcal / 120 g targets under BOTH scopes: 'individual' carries her 500-kcal
+// shared lunch and regenerates breakfast (1300 + 500), 'shared' carries her
+// 300-kcal breakfast and regenerates lunch (1500 + 300). Note the mock returns a
+// WHOLE day either way — the out-of-scope half of it is discarded by the splice,
+// which is exactly why the band check has to project rather than sum the slice.
+// These tests are about the splice, so they should not be spending corrective
+// re-rolls; the band behaviour itself is pinned separately below.
 function mixedStreamReturns(systemPrompt: string): {
   text: string;
   tokensIn: number;
@@ -949,8 +959,8 @@ function mixedStreamReturns(systemPrompt: string): {
     recipe_name_ar: `${id}-fresh-bf-${day}`,
     ingredients: [{ name_ar: "شوفان", amount: 50, unit: "g" }],
     prep_steps_ar: ["جهّزي الشوفان"],
-    calories: 250,
-    macros: { protein_g: 10, carbs_g: 30, fat_g: 8 },
+    calories: 1300,
+    macros: { protein_g: 90, carbs_g: 110, fat_g: 40 },
   });
   const freshLunch = (): Meal => ({
     slot: "lunch",
@@ -958,8 +968,8 @@ function mixedStreamReturns(systemPrompt: string): {
     recipe_name_ar: "كبسة-جديدة",
     ingredients: [{ name_ar: "دجاج", amount: 100, unit: "g" }],
     prep_steps_ar: ["جهّزي الكبسة الجديدة"],
-    calories: 550,
-    macros: { protein_g: 35, carbs_g: 50, fat_g: 15 },
+    calories: 1500,
+    macros: { protein_g: 100, carbs_g: 130, fat_g: 45 },
   });
   let text: string;
   if (!dayMatch) {

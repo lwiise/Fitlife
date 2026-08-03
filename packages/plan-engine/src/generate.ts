@@ -424,6 +424,13 @@ export interface DayCalorieDeviation {
 }
 
 /**
+ * Per member, the calories and protein of the day that this run is NOT
+ * rewriting — the out-of-scope meals a partial regen splices back from the
+ * stored plan. Empty for a full regen, where the slice IS the whole day.
+ */
+export type CarriedDayTotals = Map<string, { calories: number; protein_g: number }>;
+
+/**
  * Out-of-band adults in a parsed day slice. Children are exempt (portion-based,
  * no calorie math per the methodology); members missing from the skeleton or
  * with a non-positive target are skipped. Defaults to the HARD band; pass the
@@ -436,6 +443,7 @@ export function dayCalorieDeviations(
   context: PlanPromptContext,
   bandPct: number = DAY_CALORIE_BAND_PCT,
   bandMinKcal: number = DAY_CALORIE_BAND_MIN_KCAL,
+  carried: CarriedDayTotals = new Map(),
 ): DayCalorieDeviation[] {
   const out: DayCalorieDeviation[] = [];
   for (const m of slice.members) {
@@ -449,7 +457,10 @@ export function dayCalorieDeviations(
     const target = sk.daily_calories_target;
     if (!Number.isFinite(target) || target <= 0) continue;
     const allowed = Math.max(bandMinKcal, Math.round(target * bandPct));
-    const got = sumDayTotal(m.meals).calories;
+    // A scoped regen re-writes only part of the day; the rest is spliced back
+    // from the stored plan. Add it in, or the member reads as starving on the
+    // strength of the half we happen to be holding.
+    const got = sumDayTotal(m.meals).calories + (carried.get(m.member_id)?.calories ?? 0);
     if (Math.abs(got - target) > allowed) {
       out.push({ member_id: m.member_id, got, target, allowed });
     }
@@ -468,6 +479,7 @@ export function dayProteinDeviations(
   slice: DaySlice,
   skeleton: PlanSkeleton,
   context: PlanPromptContext,
+  carried: CarriedDayTotals = new Map(),
 ): DayCalorieDeviation[] {
   const out: DayCalorieDeviation[] = [];
   for (const m of slice.members) {
@@ -484,7 +496,8 @@ export function dayProteinDeviations(
       DAY_PROTEIN_BAND_MIN_G,
       Math.round(target * DAY_PROTEIN_BAND_PCT),
     );
-    const got = sumDayTotal(m.meals).protein_g;
+    const got =
+      sumDayTotal(m.meals).protein_g + (carried.get(m.member_id)?.protein_g ?? 0);
     if (Math.abs(got - target) > allowed) {
       out.push({ member_id: m.member_id, got, target, allowed });
     }
@@ -1986,17 +1999,89 @@ export async function generateMealPlan(params: {
           );
         let slice = r.data;
 
-        // Per-day calorie + protein band enforcement (adults only). Skipped for
-        // a partial scope: there the slice is spliced into a carried frame, so
-        // the slice's own sum isn't the member's full day. Out of band on
-        // either measure → re-roll WITH a corrective note stating the previous
+        // The day each member will actually END UP with, reconstructed the same
+        // way the splice below does it: the out-of-scope meals carried verbatim
+        // from the stored plan, plus only those fresh meals that land in an
+        // in-scope position. Both halves matter — the model is asked for a whole
+        // day even under a partial scope, so the slice holds meals that will be
+        // thrown away, and the stored plan holds meals that will survive.
+        // Empty for a full regen, where the slice already IS the whole day.
+        const scopeFrames = new Map<string, { flags: boolean[]; frame: Meal[] }>();
+        const carriedTotals: CarriedDayTotals = new Map();
+        if (partialScope) {
+          for (const m of slice.members) {
+            const flags = partialScope.inScopeByMemberDay
+              .get(m.member_id)
+              ?.get(dayIndex);
+            const frame = priorById
+              .get(m.member_id)
+              ?.days.find((d) => d.day_index === dayIndex)?.meals;
+            // No frame → spliced as a plain full regen below, so nothing carries
+            // and every fresh meal survives.
+            if (!flags || !frame) continue;
+            scopeFrames.set(m.member_id, { flags, frame });
+            const t = sumDayTotal(frame.filter((_, i) => !flags[i]));
+            carriedTotals.set(m.member_id, {
+              calories: t.calories,
+              protein_g: t.protein_g,
+            });
+          }
+        }
+        // The slice as it will be after the splice, for band purposes only —
+        // paired with `carriedTotals`, which supplies the other half of the day.
+        // A function because the rescale below reassigns `slice`, and the
+        // residual protein check has to read the rescaled version. The rescale
+        // itself still operates on the real `slice`: scaling a meal that gets
+        // discarded costs nothing, and the ones that survive carry the same
+        // factor, so the spliced day lands exactly on target.
+        const projectedSlice = (): DaySlice =>
+          scopeFrames.size === 0
+            ? slice
+            : {
+                ...slice,
+                members: slice.members.map((m) => {
+                  const sc = scopeFrames.get(m.member_id);
+                  if (!sc) return m;
+                  return {
+                    ...m,
+                    meals: extractInScopeFresh(sc.frame, sc.flags, m.meals).filter(
+                      (x): x is Meal => x != null,
+                    ),
+                  };
+                }),
+              };
+
+        // Per-day calorie + protein band enforcement (adults only). Out of band
+        // on either measure → re-roll WITH a corrective note stating the previous
         // totals and bands; exhausted → accept the attempt with the smallest
         // COMBINED normalized deviation — the deterministic calorie rescale
         // below then pulls calories onto the target (repairing protein too
         // when the whole day ran small).
-        if (!partialScope) {
-          const calorieDevs = dayCalorieDeviations(slice, daySkeleton, context);
-          const proteinDevs = dayProteinDeviations(slice, daySkeleton, context);
+        //
+        // This whole block used to be SKIPPED for a partial scope, reasoning that
+        // "the slice's own sum isn't the member's full day". The premise is right
+        // and the conclusion was wrong: the answer is to add the carried half
+        // back, not to stop checking. Measured on production — one tap of
+        // «إنشاء خطة جديدة» on a member (the dialog defaults to scope "both",
+        // which puts every co-sharer in scope too) rewrote five of seven days
+        // with NO band check and NO rescale, and the household came out at
+        // roughly half its targets: a 3865-kcal adult landed on 1880-2230 while
+        // the two days the run did not touch stayed at 3785-4045.
+        {
+          const calorieDevs = dayCalorieDeviations(
+            projectedSlice(),
+            daySkeleton,
+            context,
+            DAY_CALORIE_BAND_PCT,
+            DAY_CALORIE_BAND_MIN_KCAL,
+            carriedTotals,
+          );
+          const proteinDevs = dayProteinDeviations(
+            projectedSlice(),
+            daySkeleton,
+            context,
+            carriedTotals,
+          );
           if (calorieDevs.length > 0 || proteinDevs.length > 0) {
             const totalDev = normalizedDayDeviation(calorieDevs, proteinDevs);
             if (!bestOffBand || totalDev < bestOffBand.totalDev) {
@@ -2036,25 +2121,53 @@ export async function generateMealPlan(params: {
           // re-rolls only make the rescale rare, they no longer decide the
           // outcome.
           const offAim = dayCalorieDeviations(
-            slice,
+            projectedSlice(),
             daySkeleton,
             context,
             DAY_CALORIE_AIM_PCT,
             DAY_CALORIE_AIM_MIN_KCAL,
+            carriedTotals,
           );
           if (offAim.length > 0) {
-            slice = rescaleDayCalories(slice, offAim);
+            // The rescale can only touch the meals this run wrote, so the gap it
+            // has to close is the whole-day miss MINUS what the carried meals
+            // already contribute. `rescaleDayCalories` scales by target/got, so
+            // shifting both into fresh-meal space is all it needs.
+            const unfixable: DayCalorieDeviation[] = [];
+            const freshSpace: DayCalorieDeviation[] = [];
+            for (const d of offAim) {
+              const c = carriedTotals.get(d.member_id)?.calories ?? 0;
+              // `d.got` is the projected whole day; strip the carried part so the
+              // factor is computed against the meals the rescale can move.
+              const got = d.got - c;
+              const target = d.target - c;
+              // The untouched meals alone already meet or exceed the day's
+              // target — no factor on the rest can fix that, so say so instead
+              // of scaling to a nonsense number.
+              if (got > 0 && target > 0) freshSpace.push({ ...d, got, target });
+              else unfixable.push(d);
+            }
+            if (freshSpace.length > 0) slice = rescaleDayCalories(slice, freshSpace);
             console.warn(
               `[plan-generate] day ${dayIndex} rescaled onto calorie targets:`,
-              offAim
-                .map((d) => `${d.member_id}: ${d.got}→${d.target}`)
-                .join(", "),
+              freshSpace.map((d) => `${d.member_id}: ${d.got}→${d.target}`).join(", "),
             );
+            if (unfixable.length > 0) {
+              console.warn(
+                `[plan-generate] day ${dayIndex} out of band but unfixable by rescale (carried meals alone reach the target):`,
+                unfixable.map((d) => `${d.member_id}: ${d.got}/${d.target}`).join(", "),
+              );
+            }
           }
           // Protein has no honest code-side fix at correct calories — if a
           // compositional miss survived the re-rolls (and the rescale above),
           // surface it in logs so prompt/band tuning has a signal.
-          const residualProtein = dayProteinDeviations(slice, daySkeleton, context);
+          const residualProtein = dayProteinDeviations(
+            projectedSlice(),
+            daySkeleton,
+            context,
+            carriedTotals,
+          );
           if (residualProtein.length > 0) {
             console.warn(
               `[plan-generate] day ${dayIndex} protein still off target (accepted):`,

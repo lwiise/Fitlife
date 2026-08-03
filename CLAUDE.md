@@ -446,6 +446,35 @@ deploy.
 
 ---
 
+## A scoped regen skipped the calorie band entirely (08/2026)
+
+Found by regenerating one member on production and reading the result. `«إنشاء خطة
+جديدة»` on a member tab rewrote five of seven days, and the whole household came out at
+roughly HALF its targets — a 3865-kcal adult on 1880-2230, a 1472-kcal adult on 720-940 —
+while the two days that run did not touch stayed at 3785-4045 and 1190-1230. Both the
+per-day band re-roll AND the deterministic rescale were behind `if (!partialScope)`, so a
+scoped regen wrote whatever the model returned.
+
+The comment's premise was right and its conclusion backwards: under a partial scope the
+slice's own sum genuinely is not the member's day — but the answer is to add the other
+half in, not to stop checking. **The band now runs on the PROJECTED day**: the
+out-of-scope meals carried verbatim from the stored plan (`carriedTotals`) plus only
+those fresh meals that land in an in-scope position (`projectedSlice()`, rebuilt with the
+same `extractInScopeFresh` the splice itself uses — the model returns a WHOLE day even
+under a partial scope, so part of the slice is discarded and must not be counted). The
+rescale still scales the real slice, with the factor computed in fresh-meal space
+(`target − carried`) so the spliced day lands exactly on target; when the carried meals
+alone already reach the target no factor can help, and that is logged rather than scaled
+to a nonsense number.
+
+Note the reach: the regenerate dialog **defaults to scope `"both"`**, and `"both"`/
+`"shared"` pull in every co-sharer, so on a shared-meal household one tap put nearly
+everyone through the unchecked path. Guarded by `partialScopeBand.test.ts`; the two
+partial-scope fixtures in `generate.test.ts` were rebalanced to be genuinely in band
+(they never were — the skip is why nobody noticed).
+
+---
+
 ## Phase 1 must leave room for phase 2 (08/2026)
 
 Sentry bfda604f, production, a 3-member household: `PlanValidationError: All 7 day
