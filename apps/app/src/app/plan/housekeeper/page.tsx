@@ -1,4 +1,8 @@
 import { redirect } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+import { addDaysISO } from "@/lib/plans/dayMapping";
+import { isISODate } from "@/lib/engagement/seasonMath";
 import {
   getCurrentUserCookablePlan,
   getCurrentUserFamilyMembers,
@@ -79,6 +83,42 @@ export default async function HousekeeperPage() {
       ),
     );
 
+  // Shared-meal absences (00021). The cook is the one who has to get the
+  // QUANTITY right, and her view rendered the stored batch unscaled: mom marks
+  // سعود out of tonight's dinner, /plan shows the adjusted amounts, and the
+  // kitchen still cooks for five. Read calendar-keyed exactly like /plan does —
+  // every dispatch mints a new meal_plans row, so a plan-id read goes empty
+  // mid-week — and degrade to [] on a pre-apply prod or any error, which just
+  // restores the previous (unscaled) behaviour.
+  const absences = await (async (): Promise<
+    Array<{ day_index: number; slot: string; member_id: string }>
+  > => {
+    if (!latest.plan_data) return [];
+    try {
+      const supabase = (await createClient()) as unknown as SupabaseClient;
+      const anchor = isISODate(latest.plan_data.week_start_date)
+        ? latest.plan_data.week_start_date
+        : null;
+      const base = supabase.from("meal_absences").select("*");
+      const { data } = await (anchor
+        ? base
+            .eq("user_id", profile?.id ?? "")
+            .gte("local_date", anchor)
+            .lte("local_date", addDaysISO(anchor, 6))
+        : base.eq("meal_plan_id", latest.id)
+      ).limit(400);
+      return ((data ?? []) as Array<Record<string, unknown>>)
+        .map((r) => ({
+          day_index: Number(r.day_index),
+          slot: String(r.slot),
+          member_id: String(r.member_id),
+        }))
+        .filter((r) => Number.isFinite(r.day_index));
+    } catch {
+      return [];
+    }
+  })();
+
   // Overlay live-roster names so a rename shows immediately. When a member's
   // Arabic name changed this drops the stale transliteration, so the maid view
   // falls back to the live Arabic name until the next translation pass rebuilds
@@ -134,6 +174,7 @@ export default async function HousekeeperPage() {
       preparing={preparing}
       partialWeek={partialWeek}
       superseded={superseded}
+      absences={absences}
       allergyEntries={allergyEntries}
     />
   );

@@ -27,6 +27,7 @@ export function HousekeeperPlanView({
   preparing = false,
   partialWeek = false,
   superseded = false,
+  absences = [],
   allergyEntries = [],
 }: {
   plan: MealPlan | null;
@@ -45,6 +46,10 @@ export function HousekeeperPlanView({
   // flight and its row has no meals yet. Serving it silently would have her
   // cooking from a superseded week with no way to tell.
   superseded?: boolean;
+  // Shared-meal absences (00021). She cannot toggle them — PlanViewer gates the
+  // control on `!readOnly` — but she MUST see the adjusted batch, because she is
+  // the one measuring it out.
+  absences?: Array<{ day_index: number; slot: string; member_id: string }>;
   allergyEntries?: AllergyEntry[];
 }) {
   const router = useRouter();
@@ -172,7 +177,13 @@ export function HousekeeperPlanView({
           </div>
         ) : null}
         {!preparing && plan && (
-          <PlanViewer plan={plan} planId={planId} readOnly locale={locale} />
+          <PlanViewer
+            plan={plan}
+            planId={planId}
+            readOnly
+            locale={locale}
+            absences={absences}
+          />
         )}
       </div>
     </main>

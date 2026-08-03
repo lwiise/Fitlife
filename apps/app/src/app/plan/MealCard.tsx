@@ -409,11 +409,19 @@ export function MealCard({
                   )}
                 </h4>
                 {/* The adjustment is stated where the numbers changed, so the
-                    cook never wonders why today's amounts differ from the plan. */}
-                {hasAbsence && !translated && (
+                    cook never wonders why today's amounts differ from the plan.
+                    It used to be gated on `!translated` — which excluded the one
+                    reader who is literally measuring the ingredients. */}
+                {hasAbsence && (
                   <p className="mb-2 rounded-xl bg-brand-lavender/25 px-3 py-2 text-brand-purple-900 text-xs font-bold leading-relaxed">
-                    عدّلنا المقادير لبقية أفراد البيت — {absentNames} خارج هذه
-                    الوجبة.
+                    {translated ? (
+                      `${t.meal_adjusted_for} ${absentNames}`
+                    ) : (
+                      <>
+                        عدّلنا المقادير لبقية أفراد البيت — {absentNames} خارج هذه
+                        الوجبة.
+                      </>
+                    )}
                   </p>
                 )}
                 <IngredientList items={displayIngredients} units={t.units} />

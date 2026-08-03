@@ -521,6 +521,27 @@ partial-scope fixtures in `generate.test.ts` were rebalanced to be genuinely in 
 
 ---
 
+## The cook was measuring the wrong amounts (08/2026)
+
+When a sharer is marked out of one occurrence, the batch scales down to the remaining
+sharers — deterministic display math over `per_member_portions`, the stored plan
+untouched. `MealCard` applies it only when given `absentMemberIds`, and
+`housekeeper/page.tsx` never read `meal_absences`. So mom saw the adjusted amounts on
+/plan and the kitchen went on cooking for the full household. The housekeeper page now
+does the same calendar-keyed read /plan does (a plan-id read goes empty mid-week, since
+every dispatch mints a new `meal_plans` row) and passes `absences` through; she gets the
+scaling but not the toggle, because `canToggleAbsence` already requires `!readOnly`.
+Degrades to `[]` on any error, which is exactly the previous behaviour.
+
+The explanation line beneath the numbers was gated on `!translated` — excluding the one
+reader actually measuring the ingredients — under a comment saying it existed "so the
+cook never wonders why today's amounts differ from the plan". New `meal_adjusted_for`
+string in all 7 locales; the Arabic view is unchanged. Guarded by
+`housekeeperAbsence.test.ts`. **Still unscaled: /plan/history (a record of what was
+planned, arguably correct) and the PDF export.**
+
+---
+
 ## One day of seven for $2.81 — the day-loop budget (08/2026)
 
 Measured on production, a 5-beneficiary household, twice: 11.3 minutes, ~178k OUTPUT

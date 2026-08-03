@@ -74,6 +74,10 @@ export interface PlanStrings {
   family_recipe: string;
   shared_meal_with: string;
   shared_meal_tagline: string;
+  // Shown on a shared dish whose batch was scaled down because someone is out
+  // of this occurrence. The Arabic view has always had this line; the cook —
+  // the person actually measuring the ingredients — did not.
+  meal_adjusted_for: string;
   your_portion: string;
   ingredients: string;
   base_recipe: string;
@@ -131,6 +135,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "وصفة العائلة",
     shared_meal_with: "وجبة مشتركة",
     shared_meal_tagline: "تُطبخ مرة واحدة وتُقسَّم على المشاركين",
+    meal_adjusted_for: "عدّلنا المقادير — خارج هذه الوجبة:",
     your_portion: "حصتك",
     ingredients: "المكونات",
     base_recipe: "الوصفة الأساس",
@@ -181,6 +186,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "Family recipe",
     shared_meal_with: "Shared meal",
     shared_meal_tagline: "Cooked once, split between everyone",
+    meal_adjusted_for: "Amounts adjusted — not eating this meal:",
     your_portion: "Your portion",
     ingredients: "Ingredients",
     base_recipe: "base recipe",
@@ -231,6 +237,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "Recipe ng pamilya",
     shared_meal_with: "Pinagsasaluhang pagkain",
     shared_meal_tagline: "Niluluto nang isang beses, hinahati sa lahat",
+    meal_adjusted_for: "Inayos ang dami — hindi kakain sa pagkaing ito:",
     your_portion: "Bahagi mo",
     ingredients: "Mga sangkap",
     base_recipe: "batayang recipe",
@@ -281,6 +288,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "Resep keluarga",
     shared_meal_with: "Makanan bersama",
     shared_meal_tagline: "Dimasak sekali, dibagi untuk semua",
+    meal_adjusted_for: "Takaran disesuaikan — tidak ikut makan ini:",
     your_portion: "Porsi Anda",
     ingredients: "Bahan",
     base_recipe: "resep dasar",
@@ -331,6 +339,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "পরিবারের রেসিপি",
     shared_meal_with: "ভাগ করা খাবার",
     shared_meal_tagline: "একবার রান্না, সবার মধ্যে ভাগ",
+    meal_adjusted_for: "পরিমাণ সমন্বয় করা হয়েছে — এই খাবারে নেই:",
     your_portion: "আপনার ভাগ",
     ingredients: "উপকরণ",
     base_recipe: "মূল রেসিপি",
@@ -381,6 +390,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "የቤተሰብ የምግብ አዘገጃጀት",
     shared_meal_with: "የጋራ ምግብ",
     shared_meal_tagline: "አንድ ጊዜ ይበስላል፣ ለሁሉም ይከፋፈላል",
+    meal_adjusted_for: "መጠኑ ተስተካክሏል — በዚህ ምግብ ውስጥ የሉም:",
     your_portion: "የእርስዎ ድርሻ",
     ingredients: "ግብዓቶች",
     base_recipe: "መሰረታዊ አዘገጃጀት",
@@ -431,6 +441,7 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     family_recipe: "خاندانی ترکیب",
     shared_meal_with: "مشترکہ کھانا",
     shared_meal_tagline: "ایک بار پکائی جاتی ہے، سب میں تقسیم",
+    meal_adjusted_for: "مقدار ایڈجسٹ کی گئی — اس کھانے میں شامل نہیں:",
     your_portion: "آپ کا حصہ",
     ingredients: "اجزاء",
     base_recipe: "بنیادی ترکیب",
