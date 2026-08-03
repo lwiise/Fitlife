@@ -434,13 +434,22 @@ step1Schema's signup floor), not a nutrition cliff: the clause carries the real 
 twelve-year-old is scaled to twelve either way. Verified on production against the same
 household: the five days regenerated after the fix put سعود at 1260-1500 kcal against
 لمى's 780-880 off the SAME dishes, while the two days carried from before it still show
-the old shape (الثلاثاء: سعود 705, لمى 880 — the sixteen-year-old eating less). **Still
-open for Coach Sara, and now measurable**: with the ages finally distinguished, both
-minors still land near half of the intake general references give for their age and
-weight (لمى 881, سعود 1279), while the adults in the same run hit their computed targets
-to within 5%. That is the portions path itself, not the age labelling, and it is the
-question to put in front of her — along with whether an adolescent belongs in that model
-at all. Guarded by `minorStage.test.ts`.
+the old shape (الثلاثاء: سعود 705, لمى 880 — the sixteen-year-old eating less). Guarded
+by `minorStage.test.ts`.
+
+**CORRECTION (08/2026).** This section previously closed by saying both minors still
+landed near HALF the intake general references give, and that "that is the portions path
+itself, not the age labelling". **That was measured on runs that went through the
+scoped-regen path, which skipped the calorie band entirely** (see the section below), so
+the whole pot was low and the children's shares with it. On the first clean
+full-household run after that fix, سعود came out at **1950** (from 985) and لمى at
+**1035**, with all three adults exactly on target. Minors are exempt from the band, so
+the correction reached them the only way it could: their portions are shares of the same
+batch, and the batch was wrong. **What remains for Coach Sara is a smaller, honest
+question** — 1950 for a 16-year-old boy at 58 kg and 1035 for a 10-year-old girl at 33 kg
+are still on the low side of general references — plus whether an adolescent belongs in
+the portions model at all. It is no longer a claim that the model under-feeds every minor
+by half.
 Note this edits `SARA_METHODOLOGY`, so the cached static prompt block invalidates once on
 deploy.
 
