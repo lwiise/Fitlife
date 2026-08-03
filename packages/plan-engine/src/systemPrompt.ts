@@ -6,7 +6,7 @@ import {
 import type { PlanSkeleton, LocaleCode } from "./schema";
 import { DAY_NAMES_AR } from "./dates";
 import { engagementText } from "./engagementDigest";
-import { isChildByAge } from "./childRule";
+import { isChildByAge, minorStage } from "./childRule";
 import { conditionLabels } from "./medicalConditionLabels";
 
 /**
@@ -236,6 +236,45 @@ function ownerG(context: PlanPromptContext) {
   return (feminine: string, masculine: string): string => (male ? masculine : feminine);
 }
 
+/** Arabic year count — 3-10 take the plural, everything else the singular. */
+function yearsAr(age: number): string {
+  if (age === 1) return "سنة واحدة";
+  if (age === 2) return "سنتان";
+  if (age >= 3 && age <= 10) return `${age} سنوات`;
+  return `${age} سنة`;
+}
+
+/**
+ * How a minor is described to the model — the ONE wording, shared by the owner
+ * roster line, the member roster line and the day prompt.
+ *
+ * Found by driving the deployed app: سعود (16, 58 kg) and لمى (10, 33 kg) were
+ * handed the IDENTICAL 985 kcal estimate, across four separate regenerations.
+ * Nothing was wrong with the portions rule — the problem was that "طفل — بالحصص،
+ * بدون هدف سعرات" was the entire description of both of them. The roster carries
+ * each one's age and weight two clauses earlier, but the only sentence that said
+ * anything about how to FEED them erased the difference, so the model had one
+ * bucket for every under-18 in the house and used it.
+ *
+ * So the stage and the age are stated, and the portion is pointed at them. This
+ * sets no calorie number and keeps the no-BMR/TDEE rule exactly as it was: a
+ * minor of any age is still planned by portions.
+ */
+function minorClauseAr(age: number | null | undefined, male: boolean): string {
+  const g = (f: string, m: string) => (male ? m : f);
+  const adolescent = minorStage(age) === "adolescent";
+  const noun = adolescent ? g("مراهقة", "مراهق") : g("طفلة", "طفل");
+  const head = age != null ? `${noun}، ${yearsAr(age)}` : noun;
+  const scale = g(
+    "قدّري حصتها حسب عمرها ووزنها ونشاطها ومرحلة نموّها",
+    "قدّري حصته حسب عمره ووزنه ونشاطه ومرحلة نموّه",
+  );
+  const stageNote = adolescent
+    ? ` حاجة ${g("المراهقة", "المراهق")} في طور النمو أعلى بوضوح من حاجة الطفل الصغير — لا تساوي بينهما.`
+    : "";
+  return ` (${head} — استخدمي حصص الهرم الغذائي الصحي، و${scale}، بدون معادلات BMR/TDEE ولا حد سعرات.${stageNote})`;
+}
+
 function describeMom(c: PlanPromptContext): string {
   const m = c.mom;
   // The account owner is female by default; a male owner (الجنس asked at
@@ -254,7 +293,7 @@ function describeMom(c: PlanPromptContext): string {
     `${g("العميلة (الأم)", "العميل (رب الأسرة)")}: ${m.display_name ?? "غير معروف"}`,
   );
   parts.push(g("أنثى", "ذكر — استخدمي معادلة BMR للذكر"));
-  if (m.age != null) parts.push(`${m.age} سنة`);
+  if (m.age != null) parts.push(yearsAr(m.age));
   if (m.height_cm != null) parts.push(`${g("طولها", "طوله")} ${m.height_cm} سم`);
   if (m.weight_kg != null) parts.push(`${g("وزنها", "وزنه")} ${m.weight_kg} كيلو`);
   parts.push(`${g("نشاطها", "نشاطه")} ${labeled(ACTIVITY_LABELS_AR, m.activity_level)}`);
@@ -341,8 +380,7 @@ function describeMom(c: PlanPromptContext): string {
   line += ` ${g("تفضل", "يفضل")} مطبخ ${labeled(CUISINE_LABELS_AR, m.cuisine_preference)}.`;
   // Same clause the member roster uses — keeps the two paths identical.
   if (isChild) {
-    line +=
-      " (طفل — استخدمي حصص الهرم الغذائي الصحي للأطفال، بدون معادلات BMR/TDEE ولا حد سعرات.)";
+    line += minorClauseAr(m.age, male);
   }
   // meal_mode is discretionary: 'shared' is the default (cook once, split), so it
   // needs no instruction. Only flag 'independent' — and it must be surfaced HERE,
@@ -364,7 +402,10 @@ function describeMember(member: PlanPromptContextMember): string {
   const roleLabel = labeled(ROLE_LABELS_AR, member.role);
   const parts: string[] = [];
   parts.push(`${roleLabel}: ${member.name}`);
-  if (member.age != null) parts.push(`${member.age} سنة`);
+  // Arabic counts 3-10 in the plural. The roster said «10 سنة» while the minor
+  // clause three fields later said «10 سنوات» — one line disagreeing with itself
+  // is exactly the sloppiness the model imitates in the plan it writes back.
+  if (member.age != null) parts.push(yearsAr(member.age));
   if (member.height_cm != null) parts.push(`طوله ${member.height_cm} سم`);
   if (member.weight_kg != null) parts.push(`وزنه ${member.weight_kg} كيلو`);
   if (member.activity_level)
@@ -432,14 +473,14 @@ function describeMember(member: PlanPromptContextMember): string {
   if (member.sleep_hours != null) {
     line += ` ينام نحو ${member.sleep_hours} ساعات.`;
   }
-  // Children: portion-based planning only — never BMR/TDEE.
+  // Minors: portion-based planning only — never BMR/TDEE. The clause names the
+  // stage and the age, so a 16-year-old and a 10-year-old stop being one bucket.
   if (member.is_child) {
     if (member.school_meal_handling) {
       line += ` وجبات المدرسة: ${SCHOOL_MEAL_LABELS_AR[member.school_meal_handling] ?? member.school_meal_handling}.`;
     }
     if (member.picky_eater) line += " صعب في الأكل — اختاري أطباق مألوفة ومحبّبة.";
-    line +=
-      " (طفل — استخدمي حصص الهرم الغذائي الصحي للأطفال، بدون معادلات BMR/TDEE ولا حد سعرات.)";
+    line += minorClauseAr(member.age, member.sex === "male");
   }
   // meal_mode is discretionary: 'shared' is the default family behavior (cook once,
   // split), so it needs no extra instruction. Only flag 'independent' as the exception.
@@ -491,6 +532,7 @@ const SARA_METHODOLOGY = `## معادلة السعرات (Mifflin-St Jeor للب
 
 ## الأطفال تحت 18
 لا تستخدمي معادلات BMR/TDEE للأطفال إطلاقاً. استخدمي حصص الهرم الغذائي لوزارة الصحة السعودية، وخطّطي حول الحصص المعيارية المتوازنة وليس على هدف سعرات.
+والحصة تتبع العمر ومرحلة النمو، لا مجرد كون الفرد قاصراً: حصة المراهق (13-17) أكبر بوضوح من حصة الطفل الصغير — كما في مثال تقسيم القِدر أدناه (المراهق 30٪ مقابل الطفل 10٪). لا تعطي قاصرَين مختلفَي العمر نفس الحصة ولا نفس التقدير.
 
 ## الأهداف المعتمدة (8)
 نزول الوزن، زيادة العضل، إعادة تركيب الجسم، الأداء الرياضي (تحمل/قوة/سرعة/لياقة)، الصحة الأيضية (سكري/مقاومة إنسولين/ضغط/غدة/تكيس مبايض/كبد دهني/دهون الدم)، صحة الجهاز الهضمي (قولون/انتفاخ/إمساك/حساسية طعام/ارتجاع)، الحمل والرضاعة، القوام/تكوين الجسم مع التدريب.
@@ -950,7 +992,7 @@ export function buildSkeletonPrompt(
 ${buildRoster(context, targetMemberIds)}${deepDiveText(context)}${momNotesText(context)}${feedbackText(context)}${skeletonEngagementText(context)}
 
 # المطلوب (المرحلة 1: الهيكل فقط)
-احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). الأطفال: ضعي daily_calories_target تقديرياً (الخطة لهم بالحصص).
+احسبي لكل بالغ هدفه اليومي (سعرات + ماكروز) حسب منهجيتك (Mifflin-St Jeor + النشاط + الهدف + توزيع الماكروز). مَن هو دون 18: ضعي daily_calories_target تقديرياً فقط (الخطة له بالحصص لا بالسعرات)، ويكون التقدير مبنياً على عمره ووزنه وجنسه ونشاطه ومرحلة نموّه. لا تعطي قاصرَين مختلفَي العمر نفس الرقم — تقدير المراهق (13-17) أعلى بوضوح من تقدير الطفل الصغير.
 ثم خطّطي **أسبوعاً كاملاً (7 أيام متتالية)** من **أسماء الأطباق الخليجية فقط** لكل فرد — متنوّعة عبر الأيام، بدون مكونات أو خطوات. ${sharedNote}
 التنويع يكون في **الأطباق والنكهات فقط، لا في كمية البروتين**. حافظي على **ثبات البروتين اليومي (والسعرات) عبر الأيام السبعة** لكل فرد — نفس هدفه اليومي في كل يوم، بلا أيام «خفيفة» بروتيناً وأخرى «ثقيلة». وزّعي الأطباق الغنية بالبروتين على جميع الأيام بالتساوي حتى يقع بروتين كل يوم قرب الهدف نفسه.
 
@@ -1006,6 +1048,9 @@ export function buildDayPrompt(
         sm.member_id === "mom"
           ? isChildByAge(context.mom.member_type, context.mom.age)
           : (ctxMember?.is_child ?? false);
+      const minorAge = sm.member_id === "mom" ? context.mom.age : (ctxMember?.age ?? null);
+      const minorIsMale =
+        (sm.member_id === "mom" ? context.mom.sex : ctxMember?.sex) === "male";
 
       const constraints: string[] = [];
       const allergies =
@@ -1057,8 +1102,13 @@ export function buildDayPrompt(
         15,
         Math.round(sm.macros_target.protein_g * 0.07),
       );
+      // A minor's line carries the stage and the age too: this prompt is the one
+      // that sizes the actual food, and «طفل — بالحصص» alone was how a
+      // sixteen-year-old ended up eating a ten-year-old's portions.
       const target = isChild
-        ? "طفل — بالحصص، بدون هدف سعرات"
+        ? `${minorStage(minorAge) === "adolescent" ? (minorIsMale ? "مراهق" : "مراهقة") : minorIsMale ? "طفل" : "طفلة"}${
+            minorAge != null ? ` (${yearsAr(minorAge)})` : ""
+          } — بالحصص حسب العمر والوزن ومرحلة النمو، بدون هدف سعرات`
         : `الهدف: ${sm.daily_calories_target} سعرة (مجموع اليوم المقبول: من ${sm.daily_calories_target - aimBand} إلى ${sm.daily_calories_target + aimBand})، بروتين ${sm.macros_target.protein_g} جم (مجموع بروتين اليوم المقبول: من ${sm.macros_target.protein_g - proteinBand} إلى ${sm.macros_target.protein_g + proteinBand}) / كارب ${sm.macros_target.carbs_g} / دهون ${sm.macros_target.fat_g} (جم)`;
 
       // No preset dishes for this member today (the skeleton omitted this day, and
@@ -1080,7 +1130,7 @@ export function buildDayPrompt(
     ? "كل وجبة مخصصة لها فقط (لا مشاركة)."
     : "اكتبي لكل فرد وجبته بمقادير **حصته الفردية فقط** (ما يأكله هو وحده)، مع سعراته وماكروزه لحصته. " +
       "حين يناسب نفس الطبق أكثر من فرد، أعطيهم **نفس اسم الطبق ونفس قائمة المكوّنات بالضبط** (نفس الأصناف ونفس الوحدات)، ويختلفون فقط في **كمية** كل مكوّن حسب هدف كل فرد. النظام يجمع حصص المشاركين تلقائياً في وصفة عائلية واحدة بإجمالي الكميات ويحسب التوزيع — لذلك **لا** تكتبي shared_recipe ولا batch_finished_weight_g ولا per_member_portions، و**لا** تضعي الكمية الإجمالية في ingredients (ضعي حصة الفرد فقط). " +
-      "شاركي الطبق فقط حين يناسب الجميع فعلاً (لا حساسية متعارضة ولا قيد غذائي/كره قوي ولا اختلاف ماكروز/حالة طبية يمنع ذلك). مَن لا يناسبه الطبق — أو مَن وُسم بـ(وجبات مستقلة) — أعطيه طبقاً مختلفاً **باسم مختلف** لتلك الوجبة. للأطفال: حصة مناسبة للعمر بدون معادلات سعرات.";
+      "شاركي الطبق فقط حين يناسب الجميع فعلاً (لا حساسية متعارضة ولا قيد غذائي/كره قوي ولا اختلاف ماكروز/حالة طبية يمنع ذلك). مَن لا يناسبه الطبق — أو مَن وُسم بـ(وجبات مستقلة) — أعطيه طبقاً مختلفاً **باسم مختلف** لتلك الوجبة. للقاصرين: حصة مناسبة للعمر ومرحلة النمو بدون معادلات سعرات — حصة المراهق أكبر بوضوح من حصة الطفل الصغير.";
 
   return `# المطلوب (المرحلة 2: توسيع يوم واحد)
 وسّعي وجبات **${dayName}** (day_index=${dayIndex}) فقط، لكل فرد، إلى وصفات كاملة تحقق هدف كل فرد. **قيد إلزامي**: مجموع سعرات اليوم **ومجموع بروتين اليوم** لكل بالغ يجب أن يقعا داخل النطاقين المقبولين المذكورين بجانب هدفه — اجمعي سعرات وبروتين وجبات كل فرد قبل الإخراج؛ إن خرجت السعرات عن نطاقها فعدّلي أحجام الحصص والمقادير، وإن خرج البروتين عن نطاقه فعدّلي تركيبة المكونات (زيدي أو بدّلي مصادر البروتين ومقابلها أنقصي الكارب أو الدهون) لأن تغيير حجم الحصة وحده لا يصلح البروتين دون كسر السعرات. أسماء الأطباق المعطاة لكل فرد هي خطة العائلة لهذا اليوم: التزمي بها **بنفس الاسم تماماً** حين تناسب الفرد (حتى تبقى وجبة عائلية واحدة تُطبخ مرة واحدة وتُقسَّم). أما إذا كان الطبق لا يناسب فرداً فعلاً — حساسية أو حالة طبية أو اختلاف هدف/ماكروز جذري أو طفل/حمل/رضاعة — فأعطيه بدلاً منه طبقاً مناسباً له **باسم مختلف بوضوح** لتلك الوجبة (سيُعامل تلقائياً كوجبة فردية). الأولوية لملاءمة الفرد، لا لتوحيد الطبق. وإن لم تُعطَ أطباق لفردٍ ما (مكتوب: «لا أطباق محددة»)، فصمّمي له يوماً كاملاً مناسباً لهدفه — ولا تتركي وجباته فارغة أبداً.

@@ -248,10 +248,14 @@ describe("FIXED — under-18 account owner is planned as a child", () => {
       0,
     );
 
-    // The skeleton roster now carries the same child clause a member gets…
+    // The skeleton roster now carries the same minor clause a member gets…
     expect(hasChildClause).toBe(true);
     // …and the day prompt asks for portions instead of an adult calorie target.
-    expect(day.includes("طفل — بالحصص")).toBe(true);
+    // A 14-year-old is described as an adolescent, not a young child (see
+    // plan-engine/minorStage.test.ts) — what matters here is that neither one
+    // is handed a calorie goal.
+    expect(day.includes("بالحصص حسب العمر والوزن ومرحلة النمو")).toBe(true);
+    expect(day.includes("مراهقة (14 سنة)")).toBe(true);
     expect(day.includes("الهدف: 1900 سعرة")).toBe(false);
   });
 

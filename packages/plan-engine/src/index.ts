@@ -11,9 +11,12 @@ export type { OwnerMedicalFacts, MemberMedicalFacts } from "./medicalGate";
 
 export {
   CHILD_AGE_CUTOFF,
+  ADOLESCENT_AGE_MIN,
   isChildByAge,
   isChildByBirthYear,
+  minorStage,
 } from "./childRule";
+export type { MinorStage } from "./childRule";
 
 export {
   GATE_CONDITIONS,

@@ -16,6 +16,35 @@
 export const CHILD_AGE_CUTOFF = 18;
 
 /**
+ * From this age a minor is DESCRIBED as «مراهق» rather than «طفل».
+ *
+ * This changes no rule — an adolescent is still planned by portions, still gets
+ * no BMR/TDEE, still has no calorie ceiling. It exists because "planned by
+ * portions" was the ONLY thing the prompts said about anyone under 18, so a
+ * sixteen-year-old and a ten-year-old arrived at the model as the same word and
+ * came back with the same food. The methodology already distinguishes them (its
+ * family-portion example splits «المراهق: 540 جم» from «الطفل: 180 جم» of one
+ * pot); it just had no way to tell which one it was looking at.
+ *
+ * 13 is a labelling boundary, not a nutrition cliff, and it matches the age the
+ * product already treats as an independent user (step1Schema's signup floor).
+ * Nothing hinges on it being exactly right: the clauses state the ACTUAL age
+ * alongside the stage, so a twelve-year-old is scaled to twelve either way.
+ */
+export const ADOLESCENT_AGE_MIN = 13;
+
+export type MinorStage = "child" | "adolescent";
+
+/**
+ * Which stage a minor is at. An unknown age reads as "child" — the more
+ * conservative portion, and the same permissive-to-the-younger stance the rest
+ * of this module takes when data is missing.
+ */
+export function minorStage(age: number | null | undefined): MinorStage {
+  return age != null && age >= ADOLESCENT_AGE_MIN ? "adolescent" : "child";
+}
+
+/**
  * By resolved age. `member_type === "child"` wins outright; an unknown age
  * cannot be fabricated, so it reads as an adult (the same permissive stance
  * the workout age gate takes).

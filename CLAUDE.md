@@ -375,13 +375,27 @@ purges the member's `meal_checkins`, `meal_verdicts`, `workout_checkins`, `meal_
 and `body_logs`. Verified: no undo, no toast, no grace period. The dialog now says
 permanent, and says the records go too.
 
-**Open, deliberately NOT changed — needs Coach Sara.** `CHILD_AGE_CUTOFF = 18` puts a
-16-year-old in the same portions bucket as a 10-year-old. Measured across four
-regenerations, the 16-year-old boy (58 kg, 168 cm) came out at 994, then 875, then 560,
-and finally **985 kcal — the exact same target as his 10-year-old sister (33 kg)**. The
-methodology's «لا تستخدمي معادلات BMR/TDEE للأطفال إطلاقاً» is being followed literally
-and is right for a child, but it systematically under-feeds an adolescent. Where
-adolescence stops being "child portions" is a clinical decision, not an engineering one.
+**A 16-year-old was described to the model as a 10-year-old.** `CHILD_AGE_CUTOFF = 18`
+puts both in one portions bucket, and measured across four regenerations the 16-year-old
+boy (58 kg, 168 cm) came out at 994, then 875, then 560, and finally **985 kcal — the
+exact same figure as his 10-year-old sister (33 kg)**. Their ages and weights were in the
+roster; the only sentence that said how to FEED either of them was «طفل — بالحصص، بدون
+هدف سعرات», identical for both, so the model had one bucket and used it. The
+methodology already distinguishes them — its own family-portion example splits «المراهق:
+540 جم (30٪)» from «الطفل: 180 جم (10٪)» of one pot — it just had no way to tell which
+one it was looking at. So `minorStage` (childRule.ts, `ADOLESCENT_AGE_MIN = 13`) now
+drives one shared clause (`minorClauseAr` in systemPrompt.ts) used by the owner roster
+line, the member roster line and the day prompt: it states the stage AND the actual age,
+and points the portion at that person's own age/weight/activity/growth stage. The
+skeleton instruction additionally forbids giving two minors of different ages the same
+estimate. **This sets no calorie number and does not touch the no-BMR/TDEE rule** — a
+minor of any age is still planned by portions; what changed is that a sixteen-year-old
+stops being described as a ten-year-old. The 13 boundary is a LABEL boundary (it matches
+step1Schema's signup floor), not a nutrition cliff: the clause carries the real age, so a
+twelve-year-old is scaled to twelve either way. **Still open for Coach Sara**: whether an
+adolescent should leave the portions model altogether. Guarded by `minorStage.test.ts`.
+Note this edits `SARA_METHODOLOGY`, so the cached static prompt block invalidates once on
+deploy.
 
 ---
 
