@@ -586,6 +586,25 @@ never delivers the usage event (the spend was already billed on the call that di
 Guarded by `dayBudget.test.ts`, which asserts the BEFORE/AFTER directly: at five members
 the old arithmetic left the day loop less than one wave, the new leaves it more.
 
+**Measured after the above: 4 of 7 days for $3.28** (was 1 for $2.81) — 4× the output for
+17% more spend, cost per usable day $2.81 → $0.82, and every adult on target on every day
+written. Two follow-ups from that run: (a) the three days still lost were 1, 3 and 6 — NOT
+a contiguous second wave, because `mapWithConcurrency` is a rolling pool, so whichever
+days start late inherit whatever budget is left. The start gate was a flat
+`DAY_CALL_ESTIMATE_MS` (150s, measured on 4-member runs and the optimistic end of that
+range), so a 5-member day was allowed to begin with 205s against ~450s of work; it
+streamed ~25k tokens and died, three times, ~$1.13 of the run. `dayCallEstimateMs`
+(budget.ts) now sizes that gate to the day's OWN ceiling (0.6×, floored at the flat
+figure so small households are untouched) — a doomed call is worse than no call, since a
+deferred day costs nothing and the drain refills it. Deliberately NOT applied to
+`dayLoopReserveMs`: the reserve answers "how much must phase 1 leave", and making that
+pessimistic too would starve the skeleton. (b) **The salvage did not visibly fire** — all
+four days that landed carried the full member set, so `rescueDaySlice` returned null every
+time. Whether that is "nothing whole had streamed" or "the strict meal-count match rejected
+it" was unanswerable from the database, so the recorded day error now says which
+(`(no partial output)` vs `(salvage: no complete member)`); `plan_generations.error_message`
+is the only diagnostic that leaves the function.
+
 **Still true and unfixed:** at five members, skeleton + two waves is ~20 minutes of work
 against a 15-minute platform budget, so one run cannot build a whole week — the drain
 continues it, but the drain works per MEMBER and cannot say "finish days 5-7 for

@@ -105,6 +105,28 @@ export function canFit(
 export const DAY_CALL_ESTIMATE_MS = 150_000;
 
 /**
+ * What starting one more day call ACTUALLY costs at this household size — the
+ * gate that decides whether to spend tokens on it.
+ *
+ * `DAY_CALL_ESTIMATE_MS` is a flat 150s taken from 4-member runs, and it is the
+ * optimistic end of that measurement (days landed anywhere from 147s to 516s).
+ * Used as a start gate it let a 5-member day begin with 205s of budget against
+ * work that needs ~450s: measured on production, three days did exactly that,
+ * streamed ~25k tokens apiece, and died — about $1.13 of a $3.28 run spent on
+ * calls that could never have finished. A day not started costs nothing and
+ * lands in `missingDays`, which the drain refills with a fresh budget.
+ *
+ * Anchored to the call's own ceiling rather than a second hand-tuned curve, and
+ * floored at the flat estimate so small households behave exactly as before.
+ * Deliberately NOT used for `dayLoopReserveMs`: the reserve answers "how much
+ * must phase 1 leave", and making that pessimistic too would starve the skeleton
+ * — the same failure pointing the other way.
+ */
+export function dayCallEstimateMs(perCallCeilingMs: number): number {
+  return Math.max(DAY_CALL_ESTIMATE_MS, Math.round(perCallCeilingMs * 0.6));
+}
+
+/**
  * What the WHOLE day loop needs, in waves — the reserve phase 1 has to leave.
  *
  * `DAY_CALL_ESTIMATE_MS` is what ONE day costs, and reserving one day was the

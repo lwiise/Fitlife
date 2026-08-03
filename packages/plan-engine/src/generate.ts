@@ -20,6 +20,7 @@ import {
   planRunBudgetMs,
   FINALIZE_RESERVE_MS,
   DAY_CALL_ESTIMATE_MS,
+  dayCallEstimateMs,
   dayLoopReserveMs,
   MIN_VIABLE_CALL_MS,
 } from "./budget";
@@ -1977,12 +1978,29 @@ export async function generateMealPlan(params: {
     hasTranslation,
   );
   const generateDay = async (dayIndex: number): Promise<void> => {
+    const dayMemberIds = new Set(
+      membersToGenerate
+        .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
+        .map((b) => b.member_id),
+    );
     // Budget gate. A day started with no room to finish is worse than a day not
     // started: it spends tokens, produces nothing, and the hard kill that lands
     // mid-stream takes the whole run's terminal write with it. Deferring instead
     // lands the day in `missingDays`, which the caller's drain refills in a
     // fresh invocation with a fresh budget.
-    if (!canFit(deadlineMs, DAY_CALL_ESTIMATE_MS)) {
+    //
+    // Sized to THIS day's call — the members actually missing it, at this
+    // household's translation setting — rather than a flat figure measured on a
+    // smaller family. The days run as a rolling pool, so whichever start late
+    // inherit whatever budget is left; on the measured run three of them began
+    // with ~205s against work needing ~450s, streamed ~25k tokens apiece and
+    // died. Deferring costs nothing and the drain refills them.
+    if (
+      !canFit(
+        deadlineMs,
+        dayCallEstimateMs(bigCallTimeoutMs(dayMemberIds.size, hasTranslation)),
+      )
+    ) {
       console.warn(
         "[plan-generate] deferring day (run budget spent)",
         dayIndex,
@@ -1993,11 +2011,6 @@ export async function generateMealPlan(params: {
       emit();
       return;
     }
-    const dayMemberIds = new Set(
-      membersToGenerate
-        .filter((b) => missingByMember.get(b.member_id)!.includes(dayIndex))
-        .map((b) => b.member_id),
-    );
     const daySkeleton: PlanSkeleton = {
       ...workingSkeleton,
       members: workingSkeleton.members.filter((m) =>
@@ -2474,7 +2487,18 @@ export async function generateMealPlan(params: {
             continue;
           }
         }
-        const msg = err instanceof Error ? err.message : String(err);
+        // The recorded error is the only diagnostic that reaches the database
+        // (console output lives in the function logs), so say whether the
+        // rescue was tried and what it found. Without this, "did the salvage
+        // help?" is unanswerable from the outside.
+        const base = err instanceof Error ? err.message : String(err);
+        const msg = !(err instanceof AnthropicCallError)
+          ? base
+          : !err.partialText
+            ? `${base} (no partial output)`
+            : salvageTried
+              ? `${base} (salvage: no complete member)`
+              : base;
         console.error("[plan-generate] day failed (omitting)", dayIndex, msg);
         dayErrors.push(msg);
         failedDays.add(dayIndex);

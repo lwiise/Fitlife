@@ -15,6 +15,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DAY_CALL_ESTIMATE_MS,
+  dayCallEstimateMs,
   TRANSLATION_RESERVE_MS,
   FINALIZE_RESERVE_MS,
   dayLoopReserveMs,
@@ -99,6 +100,36 @@ describe("the translation reserve stopped costing a quarter of the day loop", ()
     const before = planRunBudgetMs() - FINALIZE_RESERVE_MS - 180_000;
     const after = dayLoopDeadline(0, true);
     expect(after - before).toBe(120_000);
+  });
+});
+
+describe("a day is not started unless it can plausibly finish", () => {
+  it("scales the start gate with the household, not a flat 4-member figure", () => {
+    // Measured: three 5-member days began with ~205s against ~450s of work and
+    // died having streamed ~25k tokens each — about $1.13 of a $3.28 run.
+    const gate5 = dayCallEstimateMs(bigCallTimeoutMs(5, true));
+    expect(gate5).toBeGreaterThan(205_000);
+    expect(DAY_CALL_ESTIMATE_MS).toBeLessThan(205_000); // …the old gate let them in
+  });
+
+  it("never demands the full worst-case ceiling, which would defer good days", () => {
+    for (const n of [2, 4, 5, 6]) {
+      expect(dayCallEstimateMs(bigCallTimeoutMs(n, true)), `n=${n}`).toBeLessThan(
+        bigCallTimeoutMs(n, true),
+      );
+    }
+  });
+
+  it("leaves a small household exactly as it was", () => {
+    // 1-2 members: 0.6 × 240s is below the flat floor, so nothing changes.
+    expect(dayCallEstimateMs(bigCallTimeoutMs(1, false))).toBe(DAY_CALL_ESTIMATE_MS);
+    expect(dayCallEstimateMs(bigCallTimeoutMs(2, false))).toBe(DAY_CALL_ESTIMATE_MS);
+  });
+
+  it("does not make the phase-1 reserve pessimistic too", () => {
+    // The reserve answers a different question — how much phase 1 must LEAVE —
+    // and inflating it would starve the skeleton, the same bug reversed.
+    expect(dayLoopReserveMs(7, 5)).toBe(2 * DAY_CALL_ESTIMATE_MS);
   });
 });
 
