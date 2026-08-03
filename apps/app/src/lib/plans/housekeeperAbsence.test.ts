@@ -79,3 +79,49 @@ describe("and she is told why the numbers moved", () => {
     }
   });
 });
+
+/**
+ * The printed sheet goes to the kitchen too. Its per-meal ingredient amounts are
+ * already the member's OWN portion, so those are right either way — but the
+ * batch total and the list of who is sharing were rendered straight from the
+ * stored plan, which overstates the amount and names someone who is not eating.
+ */
+describe("the printed sheet", () => {
+  const dayIndex = 2;
+  const absentKeys = new Set([`${dayIndex}|lunch|saud`]);
+
+  /** Mirrors MemberPlanPDF: absentees for THIS occurrence only. */
+  const absentFor = (slot: string) =>
+    new Set(
+      HOUSEHOLD.map((p) => p.member_id).filter((id) =>
+        absentKeys.has(`${dayIndex}|${slot}|${id}`),
+      ),
+    );
+
+  it("scales the printed batch to the people still eating it", () => {
+    const absent = absentFor("lunch");
+    expect(absent.size).toBe(1);
+    const batch = adjustedBatchWeight(
+      1800,
+      HOUSEHOLD,
+      absent,
+      absenceScaleFactor(HOUSEHOLD, absent),
+    );
+    expect(batch).toBeCloseTo(1260, 0);
+  });
+
+  it("leaves a different slot on the same day untouched", () => {
+    // The absence is keyed to one occurrence, not the whole day.
+    expect(absentFor("dinner").size).toBe(0);
+    expect(absenceScaleFactor(HOUSEHOLD, absentFor("dinner"))).toBe(1);
+  });
+
+  it("drops the absent sharer from the participant list", () => {
+    const absent = absentFor("lunch");
+    const present = HOUSEHOLD.filter((p) => !absent.has(p.member_id)).map(
+      (p) => p.member_id,
+    );
+    expect(present).not.toContain("saud");
+    expect(present).toHaveLength(3);
+  });
+});

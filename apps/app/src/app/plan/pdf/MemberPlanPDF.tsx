@@ -11,6 +11,10 @@ import {
 import type { MemberPlan } from "@fitlife/plan-engine";
 import { formatNameList } from "@/lib/plans/formatNames";
 import { orderDayMeals } from "@/lib/plans/mealOrder";
+import {
+  absenceScaleFactor,
+  adjustedBatchWeight,
+} from "@/lib/plans/sharedMealAbsence";
 
 // Tajawal Arabic font from Google's font mirror. .ttf is required by @react-pdf.
 Font.register({
@@ -143,6 +147,10 @@ export interface MemberPlanPDFProps {
   planMetadata: { week_start_date: string };
   // member_id → display name, for labelling who a shared meal is split between.
   memberNames?: Record<string, string>;
+  // `day|slot|member` for sharers excluded from that occurrence. The printed
+  // sheet is taken to the kitchen, so an unscaled batch is an instruction to
+  // cook the wrong amount.
+  absentKeys?: ReadonlySet<string>;
 }
 
 function Footer({ pageNum, total }: { pageNum: number; total: number }) {
@@ -160,6 +168,7 @@ export function MemberPlanPDF({
   memberPlan,
   planMetadata,
   memberNames,
+  absentKeys,
 }: MemberPlanPDFProps) {
   const totalPages = 1 + memberPlan.days.length;
 
@@ -221,12 +230,40 @@ export function MemberPlanPDF({
                 : null;
             const sharedBits: string[] = [];
             let participants = "";
+            let adjustedFor = "";
             if (sharedSplit) {
-              participants = formatNameList(
-                sharedSplit.map((p) => memberNames?.[p.member_id] ?? p.member_id),
+              // Someone out of THIS occurrence: the batch shrinks to the people
+              // still eating it, and they are not one of them. Same deterministic
+              // display math /plan and the housekeeper view use — the stored plan
+              // is never touched.
+              const absent = new Set(
+                sharedSplit
+                  .map((p) => p.member_id)
+                  .filter((id) =>
+                    absentKeys?.has(`${day.day_index}|${meal.slot}|${id}`),
+                  ),
               );
-              if (meal.batch_finished_weight_g != null)
-                sharedBits.push(`إجمالي الكمية ${meal.batch_finished_weight_g} جم`);
+              const present = sharedSplit.filter((p) => !absent.has(p.member_id));
+              const adjust = absent.size > 0 && present.length > 0;
+              participants = formatNameList(
+                (adjust ? present : sharedSplit).map(
+                  (p) => memberNames?.[p.member_id] ?? p.member_id,
+                ),
+              );
+              if (adjust) {
+                adjustedFor = formatNameList(
+                  [...absent].map((id) => memberNames?.[id] ?? id),
+                );
+              }
+              const batch = adjust
+                ? adjustedBatchWeight(
+                    meal.batch_finished_weight_g ?? null,
+                    sharedSplit,
+                    absent,
+                    absenceScaleFactor(sharedSplit, absent),
+                  )
+                : (meal.batch_finished_weight_g ?? null);
+              if (batch != null) sharedBits.push(`إجمالي الكمية ${batch} جم`);
             }
             return (
             <View key={mealIdx} style={styles.meal} wrap={false}>
@@ -248,6 +285,7 @@ export function MemberPlanPDF({
                 <Text style={styles.macros}>
                   وجبة مشتركة{participants ? `: ${participants}` : ""}
                   {sharedBits.length ? ` · ${sharedBits.join(" · ")}` : ""}
+                  {adjustedFor ? ` · عدّلنا المقادير — ${adjustedFor} خارج هذه الوجبة` : ""}
                 </Text>
               )}
 

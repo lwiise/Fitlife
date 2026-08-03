@@ -577,8 +577,12 @@ The explanation line beneath the numbers was gated on `!translated` — excludin
 reader actually measuring the ingredients — under a comment saying it existed "so the
 cook never wonders why today's amounts differ from the plan". New `meal_adjusted_for`
 string in all 7 locales; the Arabic view is unchanged. Guarded by
-`housekeeperAbsence.test.ts`. **Still unscaled: /plan/history (a record of what was
-planned, arguably correct) and the PDF export.**
+`housekeeperAbsence.test.ts`. The PDF export now scales too: its per-meal ingredient
+amounts were always the member's OWN portion and so were never wrong, but the batch total
+and the list of who is sharing came straight from the stored plan — a printed sheet that
+overstates the amount and names someone who is not eating. `PlanViewer` passes its
+`absenceSet` through `DownloadPDFButton`. **Still unscaled: /plan/history, deliberately —
+it is a record of what was planned, not an instruction to cook.**
 
 ---
 
