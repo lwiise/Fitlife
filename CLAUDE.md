@@ -645,12 +645,24 @@ it" was unanswerable from the database, so the recorded day error now says which
 (`(no partial output)` vs `(salvage: no complete member)`); `plan_generations.error_message`
 is the only diagnostic that leaves the function.
 
-**Still true and unfixed:** at five members, skeleton + two waves is ~20 minutes of work
-against a 15-minute platform budget, so one run cannot build a whole week — the drain
-continues it, but the drain works per MEMBER and cannot say "finish days 5-7 for
-everyone". `PLAN_DAY_CONCURRENCY=7` (env, no deploy) would collapse two waves into one and
-is the cheapest next experiment; the default stays at 4/5 because 7 simultaneous calls
-tripped 429s when the day model was Haiku, and that has not been retested on Sonnet.
+**The drain now finishes the week in ONE round, not one per member.** At five members,
+skeleton + two waves is ~20 minutes of work against a 15-minute platform budget, so a
+single run cannot build a whole week — that part is structural and stands. What was
+fixable is what happened next: `pickNextMemberId` returns ONE member and the run targeted
+only them, so a week that stopped at 4/7 for the whole household needed five separate
+invocations, each waiting on a page visit to dispatch and each holding the generation
+lock. The engine has always supported the better shape — `membersToGenerate` is
+`beneficiaries.filter((b) => !isComplete(b))` whenever no `onlyMemberId` is given, so a
+carry-over run with no member scope fills EVERY incomplete member — and because members
+already in the plan carry their targets from it, such a run makes no skeleton call at all:
+day calls only, same total tokens, one invocation instead of five. `incompleteInPlanMemberIds`
+(drainScope.ts) is the predicate; the drain uses the wide run only when >1 member is short
+AND all of them are already in the plan (an ABSENT member still needs a skeleton, and a
+shared newcomer still needs `regenerateSharedGroup`). Guarded by `drainScope.test.ts`.
+
+`PLAN_DAY_CONCURRENCY=7` (env, no deploy) would collapse the two waves into one and
+remains the cheapest untried experiment; the default stays at 4/5 because 7 simultaneous
+calls tripped 429s when the day model was Haiku, and that has not been retested on Sonnet.
 
 ---
 

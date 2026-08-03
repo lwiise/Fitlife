@@ -21,6 +21,7 @@ import {
 } from "@/lib/subscription/access";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { memberEditIsSubstantive, staleMemberIds } from "@/lib/plans/memberEdit";
+import { incompleteInPlanMemberIds } from "@/lib/plans/drainScope";
 import {
   planHasContent,
   MEMBER_GEN_MAX_ATTEMPTS,
@@ -734,7 +735,23 @@ export async function drainDeferredMembers(): Promise<{
   const inPlan = latest.plan_data.members.some((m) => m.member_id === nextId);
   let gen: FamilyGenResult;
   if (inPlan) {
-    gen = await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId });
+    // Several people missing days is the NORMAL state after a budget-trimmed
+    // run — and filling them one at a time meant one invocation per member,
+    // each waiting on a page visit and each holding the lock, so a week that
+    // stopped at 4/7 trickled in over five rounds. A carry-over run with no
+    // member scope fills every incomplete member at once (the engine's
+    // `membersToGenerate` has always done this when `onlyMemberId` is absent),
+    // and because members already in the plan carry their targets from it, the
+    // run skips phase 1 entirely — day calls only, same total tokens, one
+    // invocation instead of five.
+    const gaps = incompleteInPlanMemberIds({
+      plan: latest.plan_data,
+      maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
+    });
+    gen =
+      gaps.length > 1
+        ? await runFamilyGeneration(supabase, user.id, {})
+        : await runFamilyGeneration(supabase, user.id, { onlyMemberId: nextId });
   } else {
     const nextMode = (membersRes.data ?? []).find((m) => m.id === nextId)?.meal_mode;
     gen =
