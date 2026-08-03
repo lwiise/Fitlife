@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { memberEditIsSubstantive, sameFieldValue } from "./memberEdit";
+import { memberEditIsSubstantive, sameFieldValue, staleMemberIds } from "./memberEdit";
 
 /** A representative buildMemberRow() output. */
 function row(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -94,5 +94,64 @@ describe("sameFieldValue", () => {
     [false, null, false],
   ])("(%s, %s) → %s", (a, b, expected) => {
     expect(sameFieldValue(a, b)).toBe(expected);
+  });
+});
+
+/**
+ * The regeneration that was "deferred" to nobody.
+ *
+ * `updateFamilyMember` regenerates on a substantive edit — unless a run holds
+ * the lock, where it returned `{ ok: true, plan_generation_id: null }` under a
+ * comment saying "defer the regen". Nothing did: the drain only picks members
+ * with MISSING days, and an edited member still has all seven stale ones, so an
+ * allergy added during any live generation saved the row, left the old meals on
+ * screen, and the wizard's `if (!result.plan_generation_id) router.push("/plan")`
+ * sent her there as though it had worked — the exact failure this module was
+ * written to prevent, reachable again through a window every /plan visit opens.
+ */
+describe("staleMemberIds", () => {
+  const BUILT = "2026-08-03T12:00:00.000Z";
+  const m = (id: string, updated_at: string | null, role = "son") => ({
+    id,
+    role,
+    updated_at,
+  });
+
+  it("finds a member edited after the plan was built", () => {
+    expect(
+      staleMemberIds([m("saud", "2026-08-03T12:05:00.000Z")], BUILT),
+    ).toEqual(["saud"]);
+  });
+
+  it("ignores a member the plan already reflects", () => {
+    expect(staleMemberIds([m("saud", "2026-08-03T11:55:00.000Z")], BUILT)).toEqual([]);
+  });
+
+  it("never chases the housekeeper — she is not a beneficiary", () => {
+    expect(
+      staleMemberIds(
+        [m("rosa", "2026-08-03T12:05:00.000Z", "housekeeper")],
+        BUILT,
+      ),
+    ).toEqual([]);
+  });
+
+  it("does nothing while the plan has never finished building", () => {
+    // The run in flight will cover whatever changed; chasing it would collide
+    // with the lock for no reason.
+    expect(staleMemberIds([m("saud", "2026-08-03T12:05:00.000Z")], null)).toEqual([]);
+  });
+
+  it("degrades to nothing on unusable timestamps rather than looping", () => {
+    expect(staleMemberIds([m("saud", null)], BUILT)).toEqual([]);
+    expect(staleMemberIds([m("saud", "not-a-date")], BUILT)).toEqual([]);
+    expect(staleMemberIds([m("saud", "2026-08-03T12:05:00.000Z")], "nonsense")).toEqual([]);
+  });
+
+  it("clears once the regeneration lands, so it cannot loop forever", () => {
+    const edited = "2026-08-03T12:05:00.000Z";
+    expect(staleMemberIds([m("saud", edited)], BUILT)).toEqual(["saud"]);
+    // The new plan is now the newer of the two.
+    expect(staleMemberIds([m("saud", edited)], "2026-08-03T12:09:00.000Z")).toEqual([]);
   });
 });

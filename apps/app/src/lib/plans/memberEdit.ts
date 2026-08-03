@@ -55,3 +55,44 @@ export function memberEditIsSubstantive(
   }
   return false;
 }
+
+
+/**
+ * Members whose stored row is NEWER than the plan that was built from it.
+ *
+ * `updateFamilyMember` regenerates on a substantive edit — unless a run already
+ * holds the lock, in which case it returns `{ ok: true, plan_generation_id:
+ * null }` under a comment saying "defer the regen". Nothing deferred it. The
+ * drain only picks members with MISSING days, and an edited member still has
+ * all seven (stale) ones, so the regeneration was simply dropped: the row saved,
+ * the plan kept the old meals, and the wizard sent her to /plan as though it had
+ * worked. That is the exact failure `memberEditIsSubstantive` was written to
+ * prevent — «adding a nut allergy to a child saved the row and left the
+ * nut-containing plan on screen» — reachable again through a busy window, and
+ * the drain fires on every /plan and /dashboard visit, so busy is common.
+ *
+ * `updated_at` vs the plan's `generated_at` needs no new column and no marker:
+ * regenerating clears it by construction, since the new plan is then the newer
+ * of the two. A null `generated_at` means the plan has never finished building,
+ * so the run in flight will cover it — nothing to chase.
+ *
+ * Cost of being approximate: an edit made DURING a live run that turns out to be
+ * cosmetic (a rename) buys one extra regeneration. That is a rare, bounded
+ * price for never leaving an allergy edit unapplied.
+ */
+export function staleMemberIds(
+  members: Array<{ id: string; role: string; updated_at?: string | null }>,
+  planGeneratedAt: string | null | undefined,
+): string[] {
+  if (!planGeneratedAt) return [];
+  const builtMs = Date.parse(planGeneratedAt);
+  if (!Number.isFinite(builtMs)) return [];
+  return members
+    .filter((m) => {
+      if (m.role === "housekeeper") return false; // never a beneficiary
+      if (!m.updated_at) return false;
+      const editedMs = Date.parse(m.updated_at);
+      return Number.isFinite(editedMs) && editedMs > builtMs;
+    })
+    .map((m) => m.id);
+}

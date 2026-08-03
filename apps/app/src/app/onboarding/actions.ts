@@ -20,7 +20,7 @@ import {
   canGenerateForFamilyChange,
 } from "@/lib/subscription/access";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
-import { memberEditIsSubstantive } from "@/lib/plans/memberEdit";
+import { memberEditIsSubstantive, staleMemberIds } from "@/lib/plans/memberEdit";
 import {
   planHasContent,
   MEMBER_GEN_MAX_ATTEMPTS,
@@ -645,7 +645,7 @@ export async function drainDeferredMembers(): Promise<{
     getLatestPlan(user.id),
     supabase
       .from("family_members")
-      .select("id, role, display_order, meal_mode, preferred_language")
+      .select("id, role, display_order, meal_mode, preferred_language, updated_at")
       .eq("user_id", user.id)
       .returns<
         {
@@ -654,6 +654,7 @@ export async function drainDeferredMembers(): Promise<{
           display_order: number;
           meal_mode: string;
           preferred_language: string | null;
+          updated_at: string | null;
         }[]
       >(),
   ]);
@@ -688,7 +689,25 @@ export async function drainDeferredMembers(): Promise<{
   // Observed on a real household: maid added mid-generation, plan finished
   // ready, no translation, no housekeeper view, and no signal that the product's
   // headline feature had silently not happened.
+  // Nobody is missing a day — but somebody's DATA may have moved on without the
+  // plan. `updateFamilyMember` regenerates on a substantive edit unless a run
+  // holds the lock, and in that case it returned ok with no generation under a
+  // comment saying "defer the regen". Nothing deferred it: the drain only looks
+  // for missing days, and an edited member still has all seven stale ones. So an
+  // allergy added while any generation was in flight saved the row, left the
+  // old meals in place, and sent her to /plan as if it had worked — the exact
+  // failure memberEditIsSubstantive exists to prevent, reachable again through a
+  // busy window that every /plan visit opens.
   if (!nextId) {
+    const stale = staleMemberIds(membersRes.data ?? [], latest.generated_at);
+    if (stale.length > 0) {
+      const gen = await runFamilyGeneration(supabase, user.id, {
+        regenerateMemberId: stale[0]!,
+      });
+      // Busy again → the next tick retries; the staleness signal survives
+      // because only a completed regeneration can clear it.
+      return { fired: gen.ok, busy: !gen.ok && gen.kind === "busy" };
+    }
     const hk = (membersRes.data ?? []).find((m) => m.role === "housekeeper");
     const locale = hk?.preferred_language;
     if (

@@ -521,6 +521,46 @@ partial-scope fixtures in `generate.test.ts` were rebalanced to be genuinely in 
 
 ---
 
+## The regeneration that was deferred to nobody (08/2026)
+
+Found while verifying the July audit's three unverified leads. **Two do not reproduce**:
+the family/member wizards ARE gendered throughout (every feminine string sits inside a
+`genderPick` call), and member edits DO reach `runFamilyGeneration` from the edit UI. The
+third is real, and tracing it turned up a worse one.
+
+`updateFamilyMember` regenerates on a substantive edit — unless a run already holds the
+lock, where it returned `{ ok: true, plan_generation_id: null }` under a comment saying
+"Current plan still generating → edit is saved; defer the regen." **Nothing deferred it.**
+The drain only picks members with MISSING days, and an edited member still has all seven
+(stale) ones, so the regeneration was silently dropped; `MemberWizard`'s
+`if (!result.plan_generation_id) router.push("/plan")` — commented "(e.g. cosmetic edit)"
+— then sent her to the plan as though it had worked. That is precisely the failure
+`memberEditIsSubstantive` was written to prevent («adding a nut allergy to a child saved
+the row and left the nut-containing plan on screen»), reachable again through a busy
+window that every /plan and /dashboard visit opens, since `DeferredMemberDrain` dispatches
+on mount.
+
+`staleMemberIds` (memberEdit.ts) compares `family_members.updated_at` against the plan's
+`generated_at`, and the drain regenerates the first stale member once nobody is missing a
+day. No new column and no marker: a completed regeneration clears the signal by
+construction, because the new plan is then the newer of the two, which also makes it
+impossible to loop. A null `generated_at` means the plan has never finished building, so
+the run in flight covers it. The housekeeper is excluded (never a beneficiary). Cost of
+the approximation: a rename made DURING a live run buys one extra regeneration — a rare,
+bounded price for never leaving an allergy edit unapplied. `LatestPlanSummary` gained
+`generated_at` for this. Guarded by `memberEdit.test.ts`.
+
+**Still open from the same lead:** `«تعليمات طبخ بلغة الخدامة»` is listed as a `family`-tier
+feature (129 SAR/mo) in `packages/config/src/pricing.ts`, but the only gate on adding a
+housekeeper is `canAddHousekeeper={!housekeeper}` — no tier check anywhere, and she does
+not consume a beneficiary slot (`.neq("role", "housekeeper")`). So a `starter` subscriber
+gets the translated cooking view. `«لوحة موسم بيتنا للعائلة»` is listed family-only on the
+same page and is reachable on `pro` for the same reason. Whether to gate the features or
+move the lines is a PRICING decision, not an engineering one — left for the owner. Moot
+while free-access mode is on.
+
+---
+
 ## The cook was measuring the wrong amounts (08/2026)
 
 When a sharer is marked out of one occurrence, the batch scales down to the remaining

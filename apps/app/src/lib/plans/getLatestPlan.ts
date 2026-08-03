@@ -26,6 +26,8 @@ export interface LatestPlanSummary {
   worker_acked: boolean;
   error_message: string | null;
   updated_at: string;
+  /** When the run that built this plan FINISHED. Null while it never has. */
+  generated_at: string | null;
 }
 
 /**
@@ -156,6 +158,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
             in_progress: prevResolved.inProgress,
             error_message: prevResolved.errorMessage,
             updated_at: prev.updated_at,
+            generated_at: prev.generated_at,
             // The ACK belongs to the row being served, not the failed one.
             worker_acked: workerAckedFromPlanData(prev.plan_data),
           };
@@ -175,6 +178,7 @@ export async function getLatestPlan(userId: string): Promise<LatestPlanSummary |
     worker_acked: workerAcked,
     error_message: resolved.errorMessage,
     updated_at: row.updated_at,
+    generated_at: row.generated_at,
   };
 }
 
@@ -233,6 +237,7 @@ export async function getCookablePlan(
         worker_acked: workerAckedFromPlanData(prev.plan_data),
         error_message: null,
         updated_at: prev.updated_at,
+        generated_at: prev.generated_at,
       },
     };
   }
