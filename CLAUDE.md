@@ -392,8 +392,16 @@ estimate. **This sets no calorie number and does not touch the no-BMR/TDEE rule*
 minor of any age is still planned by portions; what changed is that a sixteen-year-old
 stops being described as a ten-year-old. The 13 boundary is a LABEL boundary (it matches
 step1Schema's signup floor), not a nutrition cliff: the clause carries the real age, so a
-twelve-year-old is scaled to twelve either way. **Still open for Coach Sara**: whether an
-adolescent should leave the portions model altogether. Guarded by `minorStage.test.ts`.
+twelve-year-old is scaled to twelve either way. Verified on production against the same
+household: the five days regenerated after the fix put سعود at 1260-1500 kcal against
+لمى's 780-880 off the SAME dishes, while the two days carried from before it still show
+the old shape (الثلاثاء: سعود 705, لمى 880 — the sixteen-year-old eating less). **Still
+open for Coach Sara, and now measurable**: with the ages finally distinguished, both
+minors still land near half of the intake general references give for their age and
+weight (لمى 881, سعود 1279), while the adults in the same run hit their computed targets
+to within 5%. That is the portions path itself, not the age labelling, and it is the
+question to put in front of her — along with whether an adolescent belongs in that model
+at all. Guarded by `minorStage.test.ts`.
 Note this edits `SARA_METHODOLOGY`, so the cached static prompt block invalidates once on
 deploy.
 
