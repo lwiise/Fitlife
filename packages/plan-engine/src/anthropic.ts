@@ -256,11 +256,20 @@ export function stripMarkdownFence(text: string): string {
  * day. The tokens were already paid for; most of them describe complete recipes.
  *
  * Walks the text once, tracking string/escape state so a `{` inside a recipe
- * name is not mistaken for structure, and remembers the last position where a
- * bracket closed while still NESTED — that is the end of a finished element.
- * Cutting there and appending the still-open closers yields valid JSON holding
- * every complete member/meal and none of the half-written one. Returns null when
- * nothing whole made it out, so the caller fails exactly as it did before.
+ * name is not mistaken for structure, and cuts after the last complete ELEMENT
+ * OF THE OUTERMOST ARRAY — the members list in a day slice, the items list in a
+ * translation reply.
+ *
+ * That boundary matters and the first version got it wrong: it cut after the
+ * last bracket that closed while merely nested, which in practice is an
+ * ingredient object deep inside a half-written meal. The result is
+ * structurally-valid JSON describing a meal with no steps, calories or macros —
+ * which then fails the schema, so the WHOLE rescue returned null and the day was
+ * lost anyway. Cutting at element boundaries means every element that survives
+ * is whole by construction.
+ *
+ * Returns null when nothing whole made it out, so the caller fails exactly as it
+ * did before.
  *
  * Deliberately generic: it makes no assumption about the shape, so it works on
  * the terse day slice, the skeleton, and the translation arrays alike. The
@@ -278,6 +287,9 @@ export function salvageTruncatedJson(text: string): string | null {
   const stack: string[] = [];
   let inString = false;
   let escaped = false;
+  // Depth of the outermost array — set when the first `[` is pushed. An element
+  // of THAT array is what we are willing to cut after.
+  let elementDepth = -1;
   let cut = -1;
   let closers = "";
 
@@ -295,14 +307,15 @@ export function salvageTruncatedJson(text: string): string | null {
     }
     if (ch === "{" || ch === "[") {
       stack.push(ch === "{" ? "}" : "]");
+      if (ch === "[" && elementDepth === -1) elementDepth = stack.length;
       continue;
     }
     if (ch === "}" || ch === "]") {
       stack.pop();
-      // Still inside something → this closed a nested element, and everything up
-      // to here is whole. (At depth 0 the payload is complete and the caller
-      // never needed us.)
-      if (stack.length > 0) {
+      // Back at the outermost array's depth → we just closed one of its
+      // elements, and everything up to here is whole. Deeper closes are the
+      // insides of a half-written element and must not be cut points.
+      if (stack.length > 0 && stack.length === elementDepth) {
         cut = i + 1;
         closers = stack.slice().reverse().join("");
       }

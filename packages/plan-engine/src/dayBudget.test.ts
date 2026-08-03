@@ -214,7 +214,35 @@ function truncatedStream() {
   return full.slice(0, full.indexOf('"د"') + 2);
 }
 
+/**
+ * The shape that actually killed the rescue in production: the stream died deep
+ * inside a half-written meal, not neatly between members. The first version cut
+ * after the last bracket that closed while merely nested — an INGREDIENT object
+ * — producing a meal with no steps, calories or macros, which failed the schema
+ * and took the whole rescue down with it.
+ */
+function truncatedMidMeal() {
+  const full = JSON.stringify({
+    day_index: 0,
+    members: [
+      { member_id: "mom", meals: [meal("أ"), meal("ب")] },
+      { member_id: "dad", meals: [meal("ج"), meal("د")] },
+    ],
+  });
+  // Cut just after dad's FIRST ingredient object closes — mid-meal, mid-member.
+  const dadAt = full.indexOf('"dad"');
+  const ingClose = full.indexOf("}", full.indexOf('"name_ar":"دجاج"', dadAt));
+  return full.slice(0, ingClose + 1);
+}
+
 describe("rescueDaySlice", () => {
+  it("recovers the finished member when the cut lands INSIDE a later meal", () => {
+    const out = rescueDaySlice(truncatedMidMeal(), skeletonWith({ mom: 2, dad: 2 }), 0);
+    expect(out).not.toBeNull();
+    expect(out!.members.map((m) => m.member_id)).toEqual(["mom"]);
+    expect(out!.members[0]!.meals).toHaveLength(2);
+  });
+
   it("keeps a member the skeleton says is complete", () => {
     const out = rescueDaySlice(truncatedStream(), skeletonWith({ mom: 2, dad: 2 }), 0);
     expect(out!.members.map((m) => m.member_id)).toEqual(["mom"]);

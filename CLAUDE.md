@@ -631,9 +631,15 @@ one day of seven.
 discarded whole — about $2.40 of the $2.81. `AnthropicCallError` now carries
 `partialText` on a mid-stream abort; `salvageTruncatedJson` (anthropic.ts) walks it once
 (string/escape aware, so a `{` in a recipe name is not structure), cuts after the last
-element that CLOSED while still nested, and appends the open closers. `rescueDaySlice`
-(generate.ts) then keeps **only members whose meal count matches what the skeleton planned
-for that day** — that strictness is the safety argument, because a member cut off with two
+element that CLOSED while still nested, and appends the open closers. **The cut point had to be an ELEMENT boundary, and the first version got it wrong** — it
+cut after the last bracket that closed while merely *nested*, which in practice is an
+ingredient object deep inside a half-written meal. That yields structurally-valid JSON
+describing a meal with no steps, calories or macros, which then fails the schema and takes
+the whole rescue down with it; measured on production, the rescue returned null on every
+one of six timed-out days. It now tracks the depth of the OUTERMOST array and cuts only
+when a direct element of it closes, so every element that survives is whole by
+construction. `rescueDaySlice` (generate.ts) then keeps **only members whose meal count
+matches what the skeleton planned for that day** — that strictness is the safety argument, because a member cut off with two
 of four meals would be handed to the calorie rescale and scaled to a full day's target,
 producing absurd portions. Unverifiable members are dropped and the drain refills them,
 which is what would have happened to all of them anyway. The rescued slice re-enters the
