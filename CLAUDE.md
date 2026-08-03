@@ -324,6 +324,67 @@ before it are ignored as replays / out-of-order delivery.
 
 ---
 
+## What a ten-step live test of a six-person household changed (08/2026)
+
+Driven as a real customer on production, one account grown from solo to the family cap
+(هند + husband, a 10-year-old, a 16-year-old, a grandmother, and a Tagalog-reading
+housekeeper). Everything below was found by using the product, not by reading it.
+
+**The advisor invented a day's menu.** Asked «الكبار بس — وش عندهم اليوم؟» during a
+regeneration it produced a full day of named dishes for two adults, none of which
+existed — while four other questions in the same two-minute window correctly answered
+that it had no meal details. The context was the invitation: `planSummary` SKIPPED empty
+days, so a week with nothing in it rendered as a member header with targets and no
+dishes, a shape that reads as "not mentioned" rather than "not generated". It now says
+when the plan is generating and NAMES the days that have no meals yet, so there is no
+silence to fill. Two related rules were added at the same time: a number is re-read from
+its own owner's line when the subject changes (it had carried سعود's 75g protein onto
+لمى across a «وأختـه؟» turn), and an uncomputed target means "not yet", not "no need"
+(a member mid-skeleton was reported as «هدف 0 سعرة» with advice to generate a plan,
+during a generation).
+
+**Superlatives were guesses.** On a six-person roster «الأصغر» returned the 16-year-old
+and «الأكبر» returned the 10-year-old — the youngest given as the oldest — while the same
+conversation could recite both ages correctly when asked about twins. Having the numbers
+and comparing them are different things. `ageOrderLine` (contextFormat.ts) now states the
+household youngest→oldest with ages and names the youngest and oldest outright; anyone
+without a birth year is listed separately rather than silently sorted to an end.
+
+**The housekeeper's translation had no retry.** A maid added with Tagalog mid-generation
+got nothing: no translated meal, no housekeeper view, no signal. Two paths hand this to
+each other and BOTH can decline — `triggerPlanTranslation` no-ops while a generation is
+live on the stated assumption that "the freshly-generated plan lands already translated",
+and the generation only translates if budget remains after its day loop, which at five
+beneficiaries it routinely does not. `drainDeferredMembers` now finishes a pending
+translation once no member needs generating, judging "pending" from the meals themselves
+so a half-translated week is seen as unfinished. **Known limitation: translation is last
+in that queue, so at the 6-member cap — where a run yields ~2 of 7 days — it waits a long
+time.** The maid view says so honestly in Tagalog, but she still waits.
+
+**The advisor cap was 30/day for a WHOLE HOUSEHOLD.** Measured: 30 messages cost $0.352,
+about $0.012 each. So it bought ~35 cents/day of protection while rationing the flagship
+feature — at six people that is five messages each, and a single tester exercising one
+feature exhausted a family's allowance. Now 100, env-overridable via `CHAT_DAILY_CAP`.
+The 429 body also used to say «يرجى المحاولة غداً», wrong twice: the window is ROLLING
+(the first slot returned 80 minutes later, not at midnight) and the pool is shared. It
+now names both and counts down to the next free slot.
+
+**Deleting a member said the wrong thing.** The confirmation read «بنعيد تنسيق خطط
+العائلة بعد الحذف» — a scheduling note — while the action is immediate, irreversible, and
+purges the member's `meal_checkins`, `meal_verdicts`, `workout_checkins`, `meal_absences`
+and `body_logs`. Verified: no undo, no toast, no grace period. The dialog now says
+permanent, and says the records go too.
+
+**Open, deliberately NOT changed — needs Coach Sara.** `CHILD_AGE_CUTOFF = 18` puts a
+16-year-old in the same portions bucket as a 10-year-old. Measured across four
+regenerations, the 16-year-old boy (58 kg, 168 cm) came out at 994, then 875, then 560,
+and finally **985 kcal — the exact same target as his 10-year-old sister (33 kg)**. The
+methodology's «لا تستخدمي معادلات BMR/TDEE للأطفال إطلاقاً» is being followed literally
+and is right for a child, but it systematically under-feeds an adolescent. Where
+adolescence stops being "child portions" is a clinical decision, not an engineering one.
+
+---
+
 ## Phase 1 must leave room for phase 2 (08/2026)
 
 Sentry bfda604f, production, a 3-member household: `PlanValidationError: All 7 day
@@ -344,10 +405,13 @@ third member triggers a full shared-group rebuild (`prepareSharedGroupRegen`), s
 is carried; when that run came back empty it was written `failed`, and being the NEWEST
 row it replaced a complete 7/7 week with an error screen on /plan and /dashboard. The
 good plan was never deleted, only shadowed — and since `DeferredMemberDrain` requires
-status "ready", the household could not self-heal either. `getLatestPlan` now reads TWO
-rows and, when the newest is failed-with-no-content, serves the previous ready plan
-instead. A stale week beats an error screen, and it keeps the drain's precondition
-satisfiable. Guarded by `previousPlanFallback.test.ts`.
+status "ready", the household could not self-heal either. `getLatestPlan` now reads a
+WINDOW of 5 rows and, when the newest is failed-with-no-content, scans back to the most
+recent ready plan that actually has meals. The window is 5 rather than 2 because failures
+STACK — the account this was found on had two consecutive empty runs (the original and
+the user's retry), which put the last good week third, so a one-row-back fallback found
+another failure and gave up. A stale week beats an error screen, and it keeps the drain's
+precondition satisfiable. Guarded by `previousPlanFallback.test.ts`.
 
 ---
 
