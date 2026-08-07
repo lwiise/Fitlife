@@ -22,6 +22,7 @@ import {
   dayLoopDeadline,
   planRunBudgetMs,
   boundedCallTimeoutMs,
+  MIN_VIABLE_CALL_MS,
 } from "./budget";
 import {
   bigCallTimeoutMs,
@@ -311,5 +312,30 @@ describe("the translation pass cannot outlive the invocation", () => {
     // deadline it is handed (hardDeadlineMs = budget - FINALIZE_RESERVE_MS).
     expect(planRunBudgetMs() - FINALIZE_RESERVE_MS).toBeLessThan(planRunBudgetMs());
     expect(FINALIZE_RESERVE_MS).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Fixing only the FIRST gate left the retries on a 45s floor.
+ *
+ * The start gate refuses a 5-member day below 270s — but a re-roll after a
+ * transient failure was gated on `wait + MIN_VIABLE_CALL_MS`, so it could begin
+ * with about fifty seconds against 450s of work. Measured: four days died at
+ * `Anthropic stream timeout after 75446ms`, roughly $2 of a $3.32 run, all of it
+ * spent by retries the start gate had already refused once.
+ */
+describe("a RETRY is held to the same bar as a first attempt", () => {
+  it("costs the same scaled figure, not the bare viable floor", () => {
+    const cost = dayCallEstimateMs(bigCallTimeoutMs(5, true));
+    // The gates now add `cost`; they used to add MIN_VIABLE_CALL_MS (45s) or a
+    // flat 150s, either of which admits the 75-second call that was observed.
+    expect(cost).toBeGreaterThan(75_446);
+    expect(MIN_VIABLE_CALL_MS).toBeLessThan(75_446);
+    expect(DAY_CALL_ESTIMATE_MS).toBeGreaterThan(75_446);
+  });
+
+  it("still lets a small household retry freely", () => {
+    // Two members: the scaled cost is the flat floor, so nothing tightened.
+    expect(dayCallEstimateMs(bigCallTimeoutMs(2, false))).toBe(DAY_CALL_ESTIMATE_MS);
   });
 });

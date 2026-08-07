@@ -1997,12 +1997,16 @@ export async function generateMealPlan(params: {
     // inherit whatever budget is left; on the measured run three of them began
     // with ~205s against work needing ~450s, streamed ~25k tokens apiece and
     // died. Deferring costs nothing and the drain refills them.
-    if (
-      !canFit(
-        deadlineMs,
-        dayCallEstimateMs(bigCallTimeoutMs(dayMemberIds.size, hasTranslation)),
-      )
-    ) {
+    //
+    // Every gate below uses THIS figure, not just the first one. Fixing only the
+    // initial gate left the retries on a 45s floor, so a re-roll could still
+    // start with ~50s against 450s of work: measured next run, four days died at
+    // `Anthropic stream timeout after 75446ms` — 75-second calls, ~$2 of a $3.32
+    // run, all of it spent by retries the start gate had already refused once.
+    const dayCallCost = dayCallEstimateMs(
+      bigCallTimeoutMs(dayMemberIds.size, hasTranslation),
+    );
+    if (!canFit(deadlineMs, dayCallCost)) {
       console.warn(
         "[plan-generate] deferring day (run budget spent)",
         dayIndex,
@@ -2200,7 +2204,7 @@ export async function generateMealPlan(params: {
             // few percent of calorie drift is not worth losing a day over.
             if (
               bandAttempt < CONTENT_MAX_RETRIES &&
-              canFit(deadlineMs, retryWaitMs(bandAttempt + 1) + DAY_CALL_ESTIMATE_MS)
+              canFit(deadlineMs, retryWaitMs(bandAttempt + 1) + dayCallCost)
             ) {
               bandAttempt++;
               prompt = `${basePrompt}\n\n${buildDayCorrectiveNote(calorieDevs, proteinDevs)}`;
@@ -2454,7 +2458,7 @@ export async function generateMealPlan(params: {
           const ra =
             err instanceof AnthropicCallError ? err.retryAfterMs : undefined;
           const wait = retryWaitMs(apiAttempt + 1, ra);
-          if (canFit(deadlineMs, wait + MIN_VIABLE_CALL_MS)) {
+          if (canFit(deadlineMs, wait + dayCallCost)) {
             apiAttempt++;
             await sleep(wait);
             continue;
@@ -2466,7 +2470,7 @@ export async function generateMealPlan(params: {
         // errors like a resync TypeError (deterministic → fail fast so they surface).
         if (isTransientContentError(err) && contentAttempt < CONTENT_MAX_RETRIES) {
           const wait = retryWaitMs(contentAttempt + 1);
-          if (canFit(deadlineMs, wait + MIN_VIABLE_CALL_MS)) {
+          if (canFit(deadlineMs, wait + dayCallCost)) {
             contentAttempt++;
             await sleep(wait);
             continue;
@@ -2494,13 +2498,19 @@ export async function generateMealPlan(params: {
         // rescue was tried and what it found. Without this, "did the salvage
         // help?" is unanswerable from the outside.
         const base = err instanceof Error ? err.message : String(err);
+        // Three distinct outcomes, and lumping them together made the first
+        // measurement unreadable: "no complete member" was also what a stream
+        // that never finished a single element reported, which points at a
+        // completely different fix (call length, not match strictness).
         const msg = !(err instanceof AnthropicCallError)
           ? base
           : !err.partialText
             ? `${base} (no partial output)`
-            : salvageTried
-              ? `${base} (salvage: no complete member)`
-              : base;
+            : !salvageTried
+              ? base
+              : salvageTruncatedJson(err.partialText) == null
+                ? `${base} (salvage: nothing whole streamed)`
+                : `${base} (salvage: no complete member)`;
         console.error("[plan-generate] day failed (omitting)", dayIndex, msg);
         dayErrors.push(msg);
         failedDays.add(dayIndex);

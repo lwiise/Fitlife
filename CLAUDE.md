@@ -690,14 +690,22 @@ days start late inherit whatever budget is left. The start gate was a flat
 range), so a 5-member day was allowed to begin with 205s against ~450s of work; it
 streamed ~25k tokens and died, three times, ~$1.13 of the run. `dayCallEstimateMs`
 (budget.ts) now sizes that gate to the day's OWN ceiling (0.6×, floored at the flat
-figure so small households are untouched) — a doomed call is worse than no call, since a
+figure so small households are untouched) — **and EVERY gate uses it, not just the first**.
+Fixing only the start gate left the three retry gates (API-transient, content re-roll,
+band re-roll) on `MIN_VIABLE_CALL_MS`/`DAY_CALL_ESTIMATE_MS`, so a re-roll could still
+begin with ~50s against 450s of work: measured on the next run, four days died at
+`Anthropic stream timeout after 75446ms` — 75-SECOND calls, ~$2 of a $3.32 run, all of it
+spent by retries the start gate had already refused once — a doomed call is worse than no call, since a
 deferred day costs nothing and the drain refills it. Deliberately NOT applied to
 `dayLoopReserveMs`: the reserve answers "how much must phase 1 leave", and making that
 pessimistic too would starve the skeleton. (b) **The salvage did not visibly fire** — all
 four days that landed carried the full member set, so `rescueDaySlice` returned null every
 time. Whether that is "nothing whole had streamed" or "the strict meal-count match rejected
-it" was unanswerable from the database, so the recorded day error now says which
-(`(no partial output)` vs `(salvage: no complete member)`); `plan_generations.error_message`
+it" was unanswerable from the database, so the recorded day error now says which —
+`(no partial output)`, `(salvage: nothing whole streamed)`, or `(salvage: no complete
+member)`. The first measurement reported the last of those while the real cause was the
+first, because two outcomes shared one message; they point at completely different fixes
+(call length vs match strictness), so they are now distinct; `plan_generations.error_message`
 is the only diagnostic that leaves the function.
 
 **The drain now finishes the week in ONE round, not one per member.** At five members,
