@@ -18,6 +18,7 @@ import {
   variantEnvVar,
 } from "@fitlife/config";
 import { genderPick } from "@/lib/copy/gender";
+import { checkoutReturnOrigin } from "@/lib/requestOrigin";
 
 export const runtime = "nodejs";
 
@@ -124,11 +125,8 @@ export async function POST(request: Request) {
 
   // Return to the EXACT origin the user is browsing (the same-origin POST sends
   // an Origin header), so the post-payment redirect carries the session cookie.
-  // Falling back on the request URL, then the configured app URL.
-  const origin =
-    request.headers.get("origin") ??
-    new URL(request.url).origin ??
-    env.NEXT_PUBLIC_APP_URL;
+  // Validated — see lib/requestOrigin.ts for the shapes that are trusted.
+  const origin = checkoutReturnOrigin(request, env.NEXT_PUBLIC_APP_URL);
 
   // NO email prefill: LS validates checkout_data.email far more strictly than
   // any local format check (it 422s the ENTIRE checkout on emails with

@@ -17,6 +17,7 @@ import {
 } from "@/lib/lemonsqueezy/client";
 import { changeLSSubscriptionTier } from "@/lib/lemonsqueezy/subscription";
 import { env, getLemonsqueezyStoreId } from "@/lib/env";
+import { checkoutReturnOrigin } from "@/lib/requestOrigin";
 
 export const runtime = "nodejs";
 
@@ -173,10 +174,8 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-  const origin =
-    request.headers.get("origin") ??
-    new URL(request.url).origin ??
-    env.NEXT_PUBLIC_APP_URL;
+  // Validated like /api/checkout — see lib/requestOrigin.ts.
+  const origin = checkoutReturnOrigin(request, env.NEXT_PUBLIC_APP_URL);
 
   try {
     const response = await createCheckout(storeId, variantId, {
