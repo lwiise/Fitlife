@@ -363,6 +363,19 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
   if (planError || !planRow) {
     return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
+  // Ownership gate for the member too — every other member-keyed action has
+  // one (setMealCheckin, setMealAbsence, logBodyWeight). Rows were always
+  // written under the caller's user_id, so nothing crossed tenants, but a
+  // crafted uuid produced an orphan mark that scored for nobody.
+  if (input.member_id !== "mom") {
+    const { data: member } = await supabase
+      .from("family_members")
+      .select("id")
+      .eq("id", input.member_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!member) return { ok: false as const, error: VALIDATION_ERROR_AR };
+  }
 
   // Derive the session's calendar date from its weekday, scanning back over the
   // whole current week (Sunday-anchored), with GRACE_DAYS as a floor so the tail
