@@ -43,7 +43,7 @@ export async function POST() {
   }
 
   const admin = createAdminClient();
-  await admin
+  const { error: mirrorError } = await admin
     .from("subscriptions")
     .update({
       cancel_at_period_end: true,
@@ -52,6 +52,15 @@ export async function POST() {
     })
     .eq("id", sub.id)
     .eq("user_id", user.id);
+  if (mirrorError) {
+    // LemonSqueezy has already cancelled, so this is still a success for the
+    // customer: the subscription_cancelled webhook is the source of truth and
+    // will land the same flag. What must not happen is the silence this write
+    // had before — pause and change read their errors, cancel discarded it.
+    Sentry.captureException(mirrorError, {
+      tags: { area: "subscription-cancel", step: "mirror", userId: user.id },
+    });
+  }
 
   return NextResponse.json({ success: true, ends_at }, { status: 200 });
 }
