@@ -18,9 +18,11 @@ regex = '''(?i)NEXT_SERVER_ACTIONS_ENCRYPTION_KEY['"]?\s*[:=]\s*['"]?([A-Za-z0-9
 keywords = ["next_server_actions_encryption_key"]
 
 # x-internal-secret — the internal header the app sends to the Netlify background
-# function; its value is the Supabase service-role key (a JWT). Flag the header
-# carrying an inline JWT or long token literal. The real code passes a function
-# call (getSupabaseServiceRoleKey()), which has no literal and won't match.
+# function; its value is INTERNAL_FUNCTION_SECRET (falling back to the Supabase
+# service-role JWT while that is unset). Flag the header carrying an inline JWT
+# or long token literal. The real code passes a function call
+# (getInternalFunctionSecret()), which has no literal and won't match.
+# Run in CI by the "secrets" job in .github/workflows/ci.yml (full history).
 [[rules]]
 id = "fitlife-x-internal-secret"
 description = "Hardcoded x-internal-secret value (service-role JWT / long token)"
