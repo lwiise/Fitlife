@@ -182,7 +182,9 @@ export function WeighInForm({
             type="number"
             inputMode="decimal"
             step="0.1"
-            min={20}
+            // A child may weigh under 20 kg (00027); the owner keeps the adult
+            // floor. The server applies the adult floor to adult members too.
+            min={memberId === "mom" ? 20 : 5}
             max={300}
             value={weight}
             onChange={(e) => setWeight(e.target.value)}

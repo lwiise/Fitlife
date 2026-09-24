@@ -8,11 +8,13 @@ import { canonicalRecipeKey } from "@fitlife/plan-engine";
 import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { createClient } from "@/lib/supabase/server";
 import {
+  isChildWeighInMember,
   isWeighInEligibleMember,
   isWeighInEligibleMom,
 } from "./eligibility";
 import { BODY_PHOTOS_BUCKET, HOUSEHOLD_CHECKIN_MEMBER } from "./types";
 import {
+  OWNER_WEIGHT_FLOOR_KG,
   closeDayInputSchema,
   logBodyWeightSchema,
   setMealAbsenceSchema,
@@ -1013,6 +1015,18 @@ export async function logBodyWeight(rawInput: LogBodyWeightInput) {
     } | null;
     if (!memberFields || !isWeighInEligibleMember(memberFields)) {
       return { ok: false as const, error: VALIDATION_ERROR_AR };
+    }
+    // The schema admits a child's weight (5 kg floor, 00027); an ADULT member
+    // keeps the adult floor so a slipped digit is refused with a reason rather
+    // than stored as a 7 kg weigh-in.
+    if (
+      !isChildWeighInMember(memberFields) &&
+      input.weight_kg < OWNER_WEIGHT_FLOOR_KG
+    ) {
+      return {
+        ok: false as const,
+        error: "الوزن المُدخل أقل من ٢٠ كجم، وهذا خارج النطاق المتوقع لشخص بالغ",
+      };
     }
   }
   const photoPath = input.photo_path ?? null;

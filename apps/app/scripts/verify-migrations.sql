@@ -173,6 +173,14 @@ select * from (values
         and tablename in ('meal_plans','workout_plans','plan_generations','chat_messages')
         and cmd <> 'SELECT')
       then 'APPLIED' else 'MISSING' end)),
+  -- Children joined the private journey; the 00017 CHECK still refused any
+  -- weigh-in under 20 kg.
+  ('00027 body_logs weight CHECK floor is 5 kg',
+    (select case when exists (select 1 from pg_constraint
+      where conname='body_logs_weight_kg_check'
+        and conrelid='public.body_logs'::regclass
+        and pg_get_constraintdef(oid) like '%(5)::numeric%')
+      then 'APPLIED' else 'MISSING' end)),
   -- ── Class guard ───────────────────────────────────────────────────────────
   -- Every RLS-enabled table the app DELETEs from must carry a DELETE policy.
   -- Without one, Postgres filters the statement to zero rows and returns NO

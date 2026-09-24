@@ -38,21 +38,32 @@ const exceptionEntry = z.object({
   slot: z.enum(CHECKIN_SLOTS),
 });
 
-// رحلتك الخاصة — weekly weigh-in, per eligible adult (member_id "mom" or a
+// رحلتك الخاصة — weekly weigh-in, per eligible member (member_id "mom" or a
 // family_members.id; eligibility is re-checked server-side in the action).
-// Ranges mirror the 00017 DB CHECKs. photo_path is the storage object path of
-// an already-uploaded progress photo — shape-checked here, OWNERSHIP-checked
-// in the action (it must sit inside the caller's own folder).
-export const logBodyWeightSchema = z.object({
-  member_id: memberId.default("mom"),
-  weight_kg: z.number().min(20).max(300),
-  waist_cm: z.number().min(30).max(250).nullish(),
-  photo_path: z
-    .string()
-    .max(300)
-    .regex(/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$/i)
-    .nullish(),
-});
+// Ranges mirror the DB CHECKs: body_logs is 5–300 since 00027 (children joined
+// the journey and a small child weighs under 20 kg), while the OWNER keeps the
+// adult floor because her scalar mirror, profiles.weight_kg, is CHECKed at
+// 20–300. An adult family member's floor is applied in the action, which is
+// where the member's age is known. photo_path is the storage object path of an
+// already-uploaded progress photo — shape-checked here, OWNERSHIP-checked in
+// the action (it must sit inside the caller's own folder).
+export const OWNER_WEIGHT_FLOOR_KG = 20;
+export const CHILD_WEIGHT_FLOOR_KG = 5;
+export const logBodyWeightSchema = z
+  .object({
+    member_id: memberId.default("mom"),
+    weight_kg: z.number().min(CHILD_WEIGHT_FLOOR_KG).max(300),
+    waist_cm: z.number().min(30).max(250).nullish(),
+    photo_path: z
+      .string()
+      .max(300)
+      .regex(/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$/i)
+      .nullish(),
+  })
+  .refine((v) => v.member_id !== "mom" || v.weight_kg >= OWNER_WEIGHT_FLOOR_KG, {
+    message: "owner weight below the adult floor",
+    path: ["weight_kg"],
+  });
 export type LogBodyWeightInput = z.infer<typeof logBodyWeightSchema>;
 
 // Inline per-meal marking on the plan page. status null = clear the mark
