@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { triggerPlanGeneration } from "@/lib/plans/dispatch";
 import {
@@ -13,6 +14,25 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const GENERIC_502 = "حدث خطأ في إنشاء الخطة. يرجى المحاولة مرة أخرى";
+
+// Capped. This text is interpolated into the generation prompt — the same
+// prompt that carries the methodology's calorie floors and medical rules —
+// and every generation is a paid Anthropic call. Unbounded, it was both an
+// uncapped cost vector and the largest surface for steering the model. The
+// cap is generous for real feedback and far below anything that could crowd
+// out the instructions it sits beside. Fenced as untrusted data below.
+const FEEDBACK_MAX_CHARS = 600;
+
+// This was the only body-taking route without a schema: memberId was any
+// string, and it selects WHICH quota applies, is stored in plan_data, and is
+// shipped to the worker. Over-long feedback is still truncated (not refused)
+// so a chatty customer is never bounced; only an absurd payload is.
+const bodySchema = z.object({
+  issues: z.string().max(5000).optional(),
+  improvements: z.string().max(5000).optional(),
+  memberId: z.union([z.literal("mom"), z.string().uuid(), z.literal("")]).optional(),
+  scope: z.enum(["individual", "shared", "both"]).optional(),
+});
 
 /**
  * POST /api/plans/generate — manual generation (the "إنشاء خطة جديدة" button).
@@ -47,21 +67,15 @@ async function handleGenerate(req: Request) {
   }
 
   // Optional regeneration feedback (the "what's wrong / what to improve" popup)
-  // + optional memberId to scope the regen to a single member.
+  // + optional memberId to scope the regen to a single member. An empty body
+  // (the dashboard's «خطة جديدة» sends none) is a full regeneration.
   let feedback: string | undefined;
-  const body = (await req.json().catch(() => ({}))) as {
-    issues?: string;
-    improvements?: string;
-    memberId?: string;
-    scope?: "individual" | "shared" | "both";
-  };
-  // Capped. This text is interpolated into the generation prompt — the same
-  // prompt that carries the methodology's calorie floors and medical rules —
-  // and every generation is a paid Anthropic call. Unbounded, it was both an
-  // uncapped cost vector and the largest surface for steering the model. The
-  // cap is generous for real feedback and far below anything that could crowd
-  // out the instructions it sits beside. Fenced as untrusted data below.
-  const FEEDBACK_MAX_CHARS = 600;
+  const rawBody: unknown = await req.json().catch(() => ({}));
+  const parsedBody = bodySchema.safeParse(rawBody ?? {});
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 });
+  }
+  const body = parsedBody.data;
   const issues = body.issues?.trim().slice(0, FEEDBACK_MAX_CHARS);
   const improvements = body.improvements?.trim().slice(0, FEEDBACK_MAX_CHARS);
   if (issues || improvements) {
@@ -79,13 +93,24 @@ async function handleGenerate(req: Request) {
       .join("\n");
   }
 
-  const memberId = body.memberId?.trim();
+  const memberId = body.memberId || undefined;
+  // A member id must name someone in THIS household. Every other member-keyed
+  // entry point checks this; here an arbitrary uuid used to be stored in
+  // plan_data, sent to the worker, and given its own regenerate quota.
+  if (memberId && memberId !== "mom") {
+    const { data: member } = await supabase
+      .from("family_members")
+      .select("id, role")
+      .eq("id", memberId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const row = member as { id: string; role: string } | null;
+    if (!row || row.role === "housekeeper") {
+      return NextResponse.json({ error: "هذا الفرد غير موجود في عائلتك" }, { status: 400 });
+    }
+  }
   // The regenerate-scope dialog (only meaningful for a member with shared meals).
-  const scope =
-    memberId &&
-    (body.scope === "individual" || body.scope === "shared" || body.scope === "both")
-      ? body.scope
-      : undefined;
+  const scope = memberId ? body.scope : undefined;
 
   const result = await triggerPlanGeneration({
     supabase,
