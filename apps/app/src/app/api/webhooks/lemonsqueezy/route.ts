@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getLemonsqueezyWebhookSecret } from "@/lib/env";
-import { getTierCadenceByVariantId } from "@fitlife/config";
+import { getLemonsqueezyWebhookSecret, getLemonsqueezyStoreId } from "@/lib/env";
+import { getTierCadenceByVariantId, type Cadence, type Tier } from "@fitlife/config";
 import { mapLemonsqueezyStatus } from "./mapping";
 
 export const runtime = "nodejs";
@@ -14,11 +14,25 @@ interface WebhookCustomData {
   cadence?: string;
 }
 
+// custom_data is whatever the checkout carried. /api/checkout sets it
+// server-side, but LemonSqueezy buy links also accept custom fields as query
+// parameters, so the fallback path validates the values instead of writing
+// them into CHECK-constrained columns verbatim.
+const KNOWN_TIERS: readonly Tier[] = ["starter", "pro", "family", "premium"];
+const KNOWN_CADENCES: readonly Cadence[] = ["monthly", "annual"];
+function knownTier(v: unknown): Tier | undefined {
+  return KNOWN_TIERS.find((t) => t === v);
+}
+function knownCadence(v: unknown): Cadence | undefined {
+  return KNOWN_CADENCES.find((c) => c === v);
+}
+
 interface WebhookData {
   id: string;
   type: string;
   attributes: {
     status?: string;
+    store_id?: number | string;
     customer_id?: number | string;
     variant_id?: number | string;
     renews_at?: string | null;
@@ -91,6 +105,30 @@ export async function POST(request: Request) {
 
   if (!eventName || !payload.data || !attrs) {
     console.error("[lemonsqueezy-webhook] malformed payload", { eventName });
+    return new NextResponse(null, { status: 200 });
+  }
+
+  // The signature proves the event came from OUR LemonSqueezy account's
+  // webhook, but a signed event about another store is still not ours to
+  // apply — every subscription and invoice object names its store. Acked with
+  // 200 (a retry cannot make it ours) and reported, since it should never
+  // happen. Skipped, with a warning, when the store id is not configured —
+  // a missing env var must not silently drop real billing events.
+  let expectedStoreId: string | null = null;
+  try {
+    expectedStoreId = getLemonsqueezyStoreId();
+  } catch {
+    console.warn("[lemonsqueezy-webhook] LEMONSQUEEZY_STORE_ID not set — store check skipped");
+  }
+  if (expectedStoreId && attrs.store_id != null && String(attrs.store_id) !== expectedStoreId) {
+    console.warn("[lemonsqueezy-webhook] event for another store ignored", {
+      eventName,
+      store_id: String(attrs.store_id),
+    });
+    Sentry.captureMessage("lemonsqueezy webhook for another store", {
+      level: "warning",
+      tags: { area: "lemonsqueezy-webhook", event_name: eventName },
+    });
     return new NextResponse(null, { status: 200 });
   }
 
@@ -211,10 +249,41 @@ export async function POST(request: Request) {
     // the read path and the write path disagreed the moment a second row
     // existed. Keeping the scope explicit documents the invariant the guard
     // already relies on.
-    const q = admin.from("subscriptions").update(update);
-    return userId
-      ? await q.eq("user_id", userId)
-      : await q.eq("lemonsqueezy_subscription_id", lsSubscriptionId ?? "");
+    //
+    // The two guards above are read-then-write, so two deliveries in flight
+    // (LemonSqueezy retrying while the first still executes, or sibling
+    // events at checkout) could both pass the read. The same predicates are
+    // therefore part of the WRITE as well: the row must still be at an older
+    // event, and must still name no subscription or this one. Zero rows
+    // matched means stale, superseded, or a user with no row — logged, since
+    // this used to be a silent 200.
+    let q = admin.from("subscriptions").update(update);
+    q = userId
+      ? q.eq("user_id", userId)
+      : q.eq("lemonsqueezy_subscription_id", lsSubscriptionId ?? "");
+    if (userId && eventUpdatedAt) {
+      q = q.or(`last_event_at.is.null,last_event_at.lt.${eventUpdatedAt}`);
+    }
+    if (userId && lsSubscriptionId && !opts?.takeover) {
+      q = q.or(
+        `lemonsqueezy_subscription_id.is.null,lemonsqueezy_subscription_id.eq.${lsSubscriptionId}`,
+      );
+    }
+    const { data, error } = await q.select("id");
+    if (!error && (data?.length ?? 0) === 0) {
+      console.warn("[lemonsqueezy-webhook] event matched no subscription row", {
+        eventName,
+        lsSubscriptionId,
+        userId,
+        eventUpdatedAt,
+      });
+      Sentry.captureMessage("lemonsqueezy webhook matched no row", {
+        level: "warning",
+        tags: { area: "lemonsqueezy-webhook", event_name: eventName },
+        extra: { subscription_id: lsSubscriptionId, has_user_id: !!userId },
+      });
+    }
+    return { error };
   }
 
   try {
@@ -236,13 +305,9 @@ export async function POST(request: Request) {
           attrs.variant_id != null
             ? getTierCadenceByVariantId(attrs.variant_id)
             : null;
-        const tier = resolvedFromVariant?.tier ?? payload.meta.custom_data?.tier;
+        const tier = resolvedFromVariant?.tier ?? knownTier(payload.meta.custom_data?.tier);
         const cadence =
-          resolvedFromVariant?.cadence ??
-          (payload.meta.custom_data?.cadence as
-            | "monthly"
-            | "annual"
-            | undefined);
+          resolvedFromVariant?.cadence ?? knownCadence(payload.meta.custom_data?.cadence);
 
         const update: Record<string, unknown> = {
           status: "active",
