@@ -279,20 +279,28 @@ export async function saveHousekeeperLanguage(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  const { error } = await supabase
+  // Only the housekeeper's row: this is the language the COOKING view is
+  // translated into, and a translation is a paid pass. The id used to be any
+  // member of the household, and a miss still fired the translation.
+  const { data: updated, error } = await supabase
     .from("family_members")
     .update({
       preferred_language: parsed.data.preferred_language,
       updated_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.housekeeper_id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("role", "housekeeper")
+    .select("id");
 
   if (error) {
     Sentry.captureException(error, {
       tags: { area: "profile-edit-housekeeper-lang", userId: user.id },
     });
     return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
+  }
+  if (!updated || updated.length === 0) {
+    return { ok: false, error: "لم يتم العثور على الخدامة في عائلتك" };
   }
 
   // Re-translate the existing plan into the new language (in place, no regen).

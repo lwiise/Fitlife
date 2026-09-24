@@ -218,6 +218,20 @@ export const profileStepSchema = z
   .partial()
   .strict();
 
+// addHousekeeper was the one mutation without a schema: her name was
+// unbounded (family_members.name has no length CHECK), preferred_language was
+// any string (the DB CHECK rejected it with a raw English message), and sex
+// was any string. The seven codes are the housekeeper-view locales
+// (lib/plans/locales.ts); an empty name is allowed because the action
+// substitutes «الخدامة».
+export const HOUSEKEEPER_LOCALES = ["ar", "en", "tl", "id", "bn", "am", "ur"] as const;
+export const housekeeperInputSchema = z.object({
+  name: z.string().trim().max(60, "الاسم طويل جداً — 60 حرفاً كحد أقصى"),
+  preferred_language: z.enum(HOUSEKEEPER_LOCALES),
+  sex: z.enum(["male", "female"]).optional(),
+});
+export type HousekeeperInput = z.infer<typeof housekeeperInputSchema>;
+
 export const VALIDATION_ERROR_AR = "بيانات غير صالحة — يلزم التحقق من الحقول والمحاولة مرة أخرى";
 
 // Arabic block, so we can tell one of OUR messages from a zod default

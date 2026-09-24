@@ -15,10 +15,7 @@ import {
   hasLiveLemonsqueezySubscription,
 } from "@/lib/subscription/state";
 import { isFreeAccessMode } from "@/lib/subscription/freeAccess";
-import {
-  countBeneficiaries,
-  canGenerateForFamilyChange,
-} from "@/lib/subscription/access";
+import { countBeneficiaries } from "@/lib/subscription/access";
 import { shouldRegenerateFamilyOnActivation } from "@/lib/plans/familyCoverage";
 import { memberEditIsSubstantive, staleMemberIds } from "@/lib/plans/memberEdit";
 import { incompleteInPlanMemberIds } from "@/lib/plans/drainScope";
@@ -31,6 +28,7 @@ import {
   type MealPlan,
 } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
+import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import {
   activityLevelFrom,
@@ -43,6 +41,7 @@ import {
   familyMemberInputSchema,
   familyWideInputSchema,
   profileStepSchema,
+  housekeeperInputSchema,
   firstFieldErrorAr,
   VALIDATION_ERROR_AR,
 } from "./serverSchemas";
@@ -1266,7 +1265,7 @@ export async function addFamilyMember(
  * physical/medical fields). Triggers a FULL regen so every recipe gets
  * translated into her language. Can be added post-onboarding from /family.
  */
-export async function addHousekeeper(input: {
+export async function addHousekeeper(rawInput: {
   name: string;
   preferred_language: string;
   // Asked since 08/2026. Before that her wizard had no sex step at all and the
@@ -1281,6 +1280,14 @@ export async function addHousekeeper(input: {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
+
+  // Validated like every other mutation (serverSchemas.ts). Was the one path
+  // that wrote the raw input straight to the row.
+  const parsedInput = housekeeperInputSchema.safeParse(rawInput);
+  if (!parsedInput.success) {
+    return { ok: false, error: firstFieldErrorAr(parsedInput.error) };
+  }
+  const input = parsedInput.data;
 
   // One housekeeper per household — reuse the existing row if present.
   const { data: existingHk } = await supabase
@@ -1348,14 +1355,11 @@ export async function addHousekeeper(input: {
   // Do NOT regenerate the family's meals — just translate the EXISTING plan into
   // her language in place (fire-and-forget). The wife's plan is untouched.
   //
-  // Gated on the subscription. A translation is a full paid Anthropic pass over
-  // the plan, and this was the only path to one with no access check at all:
-  // an inactive account could drive real spend by re-saving the housekeeper's
-  // language. She is not a beneficiary, so the person-count limit does not
-  // apply — canGenerateForFamilyChange covers exactly the right ground.
-  const access = await canGenerateForFamilyChange(user.id);
+  // The subscription gate (a translation is a full paid Anthropic pass) lives
+  // INSIDE triggerPlanTranslation since the 09/2026 audit, so every caller
+  // shares it — it used to sit only here, and the two sibling callers
+  // (saveHousekeeperLanguage and the housekeeper page's retry) had none.
   if (
-    access.allowed &&
     isLocaleCode(input.preferred_language) &&
     input.preferred_language !== "ar"
   ) {
@@ -1402,6 +1406,32 @@ async function purgeMemberEngagementRows(
     "member_exceptions",
   ] as const;
 
+  // Progress photos FIRST, while the body_logs rows that name them still
+  // exist. Storage does not cascade (00018), and eraseUserAccount only clears
+  // the folder for a whole-account deletion — so a removed member's photos
+  // (possibly a child's) stayed in the private bucket after the dialog
+  // promised their records were gone. Only paths inside the caller's own
+  // folder are touched; the bucket policy would refuse anything else anyway.
+  const { data: photoRows } = await (supabase as unknown as SupabaseClient)
+    .from("body_logs")
+    .select("photo_path")
+    .eq("user_id", userId)
+    .eq("member_id", memberId)
+    .not("photo_path", "is", null);
+  const photoPaths = ((photoRows ?? []) as Array<{ photo_path: unknown }>)
+    .map((r) => r.photo_path)
+    .filter((p): p is string => typeof p === "string" && p.startsWith(`${userId}/`));
+  if (photoPaths.length > 0) {
+    const { error: photoError } = await supabase.storage
+      .from(BODY_PHOTOS_BUCKET)
+      .remove(photoPaths);
+    if (photoError) {
+      Sentry.captureException(photoError, {
+        tags: { area: "family", step: "removeFamilyMember.purge.photos", userId },
+      });
+    }
+  }
+
   for (const table of tables) {
     const { error } = await (supabase as unknown as SupabaseClient)
       .from(table)
@@ -1443,16 +1473,22 @@ export async function removeFamilyMember(
   } = await supabase.auth.getUser();
   if (authError || !user) return { ok: false, error: "يجب تسجيل الدخول" };
 
-  const { error } = await supabase
+  const { data: deleted, error } = await supabase
     .from("family_members")
     .delete()
     .eq("id", memberId)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id");
   if (error) {
     Sentry.captureException(error, {
       tags: { area: "family", step: "removeFamilyMember", userId: user.id },
     });
-    return { ok: false, error: error.message };
+    return { ok: false, error: "فشل الحذف. يرجى المحاولة مرة أخرى" };
+  }
+  // A foreign or already-deleted id matched nothing: say so instead of
+  // reporting success and dispatching a paid regeneration for nobody.
+  if (!deleted || deleted.length === 0) {
+    return { ok: false, error: "هذا الفرد غير موجود في عائلتك" };
   }
 
   await purgeMemberEngagementRows(supabase, user.id, memberId);
@@ -1507,13 +1543,31 @@ export async function updateFamilyMember(
     return { ok: false, error: DOCTOR_SIGN_OFF_REQUIRED_AR };
   }
 
-  const { data: beforeRow } = await supabase
+  const { data: beforeRow, error: beforeError } = await supabase
     .from("family_members")
     .select("*")
     .eq("id", memberId)
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
+  if (beforeError) {
+    Sentry.captureException(beforeError, {
+      tags: { area: "family", step: "updateFamilyMember.read", userId: user.id },
+    });
+    return { ok: false, error: "فشل الحفظ. يرجى المحاولة مرة أخرى" };
+  }
   const before = beforeRow as FamilyMemberRow | null;
+  // A foreign or deleted id used to sail through: the UPDATE matched zero rows
+  // without error, memberEditIsSubstantive(null, row) said "substantive", and a
+  // paid regeneration was dispatched for a member the engine could not find.
+  if (!before) {
+    return { ok: false, error: "هذا الفرد غير موجود في عائلتك" };
+  }
+  // The housekeeper has her own edit path (addHousekeeper). Rewriting her row
+  // with a member payload would turn the cook into a beneficiary — role and
+  // member_type move together, so 00025's CHECK would not catch it.
+  if (before.role === "housekeeper") {
+    return { ok: false, error: "هذا الفرد غير موجود في عائلتك" };
+  }
 
   const row = buildMemberRow(input, user.id);
   const { error } = await supabase
