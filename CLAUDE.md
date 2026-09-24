@@ -850,9 +850,20 @@ the stale reclassifiers, which could otherwise flip a live workout's audit row t
 
 **`plan_generations` is an AUDIT table.** 00024 dropped the user UPDATE policy (the browser
 could reset its own weekly quota, clear the in-flight lock, and rewrite the `cost_usd` columns
-the admin dashboards aggregate). INSERT stays — `createPlanRows` opens the row with the user's
-client. **Every UPDATE must use the service-role client**, including the dev-inline generation
-path, which now passes `createAdminClient()` exactly as the prod background function always did.
+the admin dashboards aggregate). **Every UPDATE must use the service-role client**, including
+the dev-inline generation path, which now passes `createAdminClient()` exactly as the prod
+background function always did. **Since migration 00026 (09/2026) the whole class is closed:
+`meal_plans`, `workout_plans`, `plan_generations` and `chat_messages` carry SELECT policies
+ONLY** — the browser could still UPDATE its own plan rows (rewrite `plan_data.gen_attempts`,
+the only cap on the drain/chain/sweeper, or `regenerated_for`, the weekly-quota counter, or
+the `ai_*` cost columns) and INSERT arbitrary `plan_generations`/`chat_messages` rows (forged
+`cost_usd`, or a fake `status='started'` row that wedges its own lock). So `createPlanRows` /
+`createWorkoutPlanRows` now open the placeholder rows with `createAdminClient()` (dispatch.ts
+passes it), the two dispatch-failure writes and the dev-inline translation use it too, and the
+chat usage row is inserted with it. A user-client write to any of these four tables is a silent
+zero-row no-op under RLS, so any NEW write path must take the admin client — the
+verify-migrations «00026» row asserts the policy set. Deploy order for 00026: app first, SQL
+second (the old user-client INSERT fails once the policy is gone).
 
 **Tier limits are enforced AT THE BOUNDARY (owner directive 07/2026).** `addFamilyMember`
 checks the person count BEFORE the insert and returns `upgrade_required` without writing;

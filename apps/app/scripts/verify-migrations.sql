@@ -7,7 +7,7 @@
 -- If anything shows MISSING: open apps/app/supabase/migrations/ and run the
 -- missing files in numeric order. Every migration from 00008 onward is
 -- idempotent (IF NOT EXISTS / guarded drops), so re-running an
--- already-applied file is a harmless no-op — when in doubt, run 00008→00014
+-- already-applied file is a harmless no-op — when in doubt, run 00008→00027
 -- in order.
 -- ============================================================================
 
@@ -161,6 +161,17 @@ select * from (values
       select 1 from pg_constraint
       where conname='family_members_housekeeper_keys_agree'
         and conrelid='public.family_members'::regclass)
+      then 'APPLIED' else 'MISSING' end)),
+  -- The four machinery/audit tables are read-only for the browser: every write
+  -- is service-role bookkeeping. A user INSERT/UPDATE policy here let the
+  -- browser rewrite plan_data (quota + drain caps), forge cost rows, or wedge
+  -- its own generation lock. Extends the 00024 plan_generations row to the
+  -- whole class — a SELECT policy is the only kind these tables may carry.
+  ('00026 machinery tables carry SELECT policies only',
+    (select case when not exists (select 1 from pg_policies
+      where schemaname='public'
+        and tablename in ('meal_plans','workout_plans','plan_generations','chat_messages')
+        and cmd <> 'SELECT')
       then 'APPLIED' else 'MISSING' end)),
   -- ── Class guard ───────────────────────────────────────────────────────────
   -- Every RLS-enabled table the app DELETEs from must carry a DELETE policy.

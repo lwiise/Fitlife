@@ -177,6 +177,11 @@ export function expandTerseDaySlice(raw: unknown): any {
 /**
  * Synchronously insert the placeholder rows so the polling UI has something to
  * watch. Fast (<1s). Returns the new meal_plan id.
+ *
+ * `supabase` must be the SERVICE-ROLE client: since migration 00026 the user
+ * client has no INSERT/UPDATE policy on meal_plans or plan_generations, so a
+ * user-scoped call here would fail the first insert. The caller authenticates
+ * `userId` before handing it over.
  */
 export async function createPlanRows(
   supabase: AnyClient,
@@ -208,8 +213,9 @@ export async function createPlanRows(
     // 23505 = the partial unique index from migration 00012: another 'started'
     // row already exists for this user, i.e. we lost a dispatch race. Archive
     // (NOT fail) our placeholder — a 'failed' row would become the user's
-    // latest plan and flash the failure UI over the healthy in-flight run,
-    // and DELETE has no RLS policy for the user-scoped client.
+    // latest plan and flash the failure UI over the healthy in-flight run.
+    // Archive rather than delete: an archived row is a visible trace of the
+    // lost race, a deleted one is not.
     if ((insertGenError as { code?: string }).code === "23505") {
       const { error: archiveError } = await supabase
         .from("meal_plans")

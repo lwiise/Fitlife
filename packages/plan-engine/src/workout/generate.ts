@@ -61,6 +61,9 @@ const WORKOUT_MEMBER_CALL_ESTIMATE_MS = 90_000;
  * with plan_kind='workout'. The composite unique index from 00014 makes the
  * lock authoritative per (user, kind) — a 23505 means another workout run is
  * live: archive our placeholder and surface the busy signal.
+ *
+ * `supabase` must be the SERVICE-ROLE client (00026 removed the user
+ * INSERT/UPDATE policies on workout_plans and plan_generations).
  */
 export async function createWorkoutPlanRows(
   supabase: AnyClient,

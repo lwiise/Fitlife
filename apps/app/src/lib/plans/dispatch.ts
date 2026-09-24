@@ -345,7 +345,10 @@ export async function triggerPlanGeneration(params: {
 
   let mealPlanId: string;
   try {
-    mealPlanId = await createPlanRows(supabase, userId);
+    // Service-role since 00026: the browser has no INSERT/UPDATE policy on
+    // meal_plans or plan_generations any more (a user-client write there is a
+    // silent zero-row no-op). `userId` was authenticated by the caller.
+    mealPlanId = await createPlanRows(createAdminClient(), userId);
   } catch (err) {
     // Lost a dispatch race: the 00012 unique index rejected a second live
     // 'started' row. Same outcome as the busy-guard above, discovered at
@@ -484,10 +487,12 @@ export async function triggerPlanGeneration(params: {
     }
     const errorMessage =
       err instanceof Error ? err.message : "failed to start generation";
-    await supabase
+    // Service-role: meal_plans lost its user UPDATE policy in 00026.
+    await createAdminClient()
       .from("meal_plans")
       .update({ status: "failed", error_message: errorMessage })
-      .eq("id", mealPlanId);
+      .eq("id", mealPlanId)
+      .eq("user_id", userId);
     return { ok: false, kind: "dispatch" };
   }
 
@@ -570,7 +575,10 @@ export async function triggerPlanTranslation(params: {
   if (process.env.NODE_ENV === "development") {
     try {
       await runMealPlanTranslation({
-        supabase,
+        // Service-role like the other two inline paths: the translation opens a
+        // plan_generations lock row and rewrites plan_data, neither of which the
+        // user client may do since 00026.
+        supabase: createAdminClient() as unknown as ServerClient,
         anthropicApiKey: getAnthropicKey(),
         userId,
         mealPlanId,
@@ -687,7 +695,8 @@ export async function triggerWorkoutGeneration(params: {
 
   let workoutPlanId: string;
   try {
-    workoutPlanId = await createWorkoutPlanRows(supabase, userId);
+    // Service-role since 00026 (see createPlanRows above).
+    workoutPlanId = await createWorkoutPlanRows(createAdminClient(), userId);
   } catch (err) {
     if (err instanceof GenerationInFlightError) return { ok: false, kind: "busy" };
     console.error("[triggerWorkoutGeneration] createWorkoutPlanRows failed", err);
@@ -762,10 +771,12 @@ export async function triggerWorkoutGeneration(params: {
     if (err instanceof Error && err.name === "TimeoutError") {
       return { ok: true, workoutPlanId, status: "started" };
     }
-    await supabase
+    // Service-role: workout_plans lost its user UPDATE policy in 00026.
+    await createAdminClient()
       .from("workout_plans")
       .update({ status: "failed", error_message: "dispatch failed" })
-      .eq("id", workoutPlanId);
+      .eq("id", workoutPlanId)
+      .eq("user_id", userId);
     // Service-role: audit-row bookkeeping (00024 removed the user UPDATE policy).
     await createAdminClient()
       .from("plan_generations")

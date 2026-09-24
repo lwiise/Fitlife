@@ -8,6 +8,7 @@ import {
 } from "@fitlife/plan-engine";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import { getAnthropicKey } from "@/lib/env";
 import { hasAdvisorAccess } from "@/lib/subscription/access";
@@ -138,8 +139,11 @@ export async function POST(request: Request) {
           onText: (delta) => controller.enqueue(encoder.encode(delta)),
         });
         // Audit-only write: rate-limit source + model-aware cost. No content.
+        // Service-role: chat_messages lost its user INSERT policy in 00026 (a
+        // browser could post rows with any cost_usd); user.id was authenticated
+        // above and is the only user this row may name.
         try {
-          await supabase.from("chat_messages").insert({
+          await createAdminClient().from("chat_messages").insert({
             user_id: user.id,
             model: PLAN_MODEL,
             tokens_in: result.tokensIn,
