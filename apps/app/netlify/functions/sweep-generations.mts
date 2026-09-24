@@ -125,6 +125,24 @@ const handler = async (req: Request): Promise<Response> => {
     });
     return new Response("misconfigured", { status: 500 });
   }
+  // This handler does no authentication of its own — it relies on the platform
+  // not serving scheduled functions over their public URL. Belt and braces:
+  // Netlify invokes a scheduled function with a JSON body carrying `next_run`,
+  // so that field is logged on every firing and, once the function log has
+  // confirmed the scheduler really sends it, SWEEP_REQUIRE_SCHEDULE=1 (env,
+  // no deploy) makes its absence a refusal. Not enforced by default: a wrong
+  // assumption here would silently switch off the last unattended self-heal.
+  let scheduled = false;
+  try {
+    const body = (await req.text().catch(() => "")).trim();
+    scheduled = body.length > 0 && typeof JSON.parse(body)?.next_run === "string";
+  } catch {
+    /* not JSON — not a scheduler invocation */
+  }
+  console.log("[sweep] invocation", { method: req.method, scheduled });
+  if (process.env.SWEEP_REQUIRE_SCHEDULE === "1" && !scheduled) {
+    return new Response("not a scheduled invocation", { status: 403 });
+  }
   // The worker lives beside this function on the same site — req.url is
   // correct by construction, never an env-derived URL (the documented
   // Functions-runtime env-scope hazard).
