@@ -181,6 +181,40 @@ select * from (values
         and conrelid='public.body_logs'::regclass
         and pg_get_constraintdef(oid) like '%(5)::numeric%')
       then 'APPLIED' else 'MISSING' end)),
+  -- ── Class guards (09/2026 pre-launch audit) ──────────────────────────────
+  -- The script asserted per-migration fingerprints only; nothing said whether
+  -- the invariants the app's security rests on still hold after a hand-run in
+  -- the SQL editor. One accidental `create policy` on an admin table, or an
+  -- `alter table … disable row level security`, would have gone unreported.
+  ('CLASS GUARD: RLS enabled on every public table',
+    (select case when not exists (
+      select 1 from pg_tables
+      where schemaname='public' and not rowsecurity
+    ) then 'APPLIED' else 'MISSING' end)),
+  -- admin_users / admin_audit_log are deny-all by construction (00008/00010):
+  -- RLS on, ZERO policies, read only through the service role.
+  ('CLASS GUARD: admin tables carry zero policies',
+    (select case when not exists (
+      select 1 from pg_policies
+      where schemaname='public' and tablename in ('admin_users','admin_audit_log')
+    ) then 'APPLIED' else 'MISSING' end)),
+  -- subscriptions is written only by the webhook / API routes (service role).
+  ('CLASS GUARD: subscriptions is SELECT-only for users',
+    (select case when not exists (
+      select 1 from pg_policies
+      where schemaname='public' and tablename='subscriptions' and cmd <> 'SELECT'
+    ) then 'APPLIED' else 'MISSING' end)),
+  -- 00018: the body-photos bucket must stay PRIVATE with its 5 MB cap, and
+  -- carry exactly the four owner-scoped policies (read/upload/update/delete).
+  ('00018 body-photos bucket private, 5 MB, four owner policies',
+    (select case when exists (
+      select 1 from storage.buckets
+      where id='body-photos' and public=false and file_size_limit=5242880
+    ) and (
+      select count(*) from pg_policies
+      where schemaname='storage' and tablename='objects'
+        and policyname like '%own body photos%'
+    ) = 4 then 'APPLIED' else 'MISSING' end)),
   -- ── Class guard ───────────────────────────────────────────────────────────
   -- Every RLS-enabled table the app DELETEs from must carry a DELETE policy.
   -- Without one, Postgres filters the statement to zero rows and returns NO
