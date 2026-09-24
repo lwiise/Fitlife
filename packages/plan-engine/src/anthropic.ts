@@ -59,6 +59,10 @@ export async function streamAnthropic(params: {
   // the API's constraints: additionalProperties:false on every object, no
   // min/max-style keywords (zod keeps enforcing those app-side).
   outputFormat?: Record<string, unknown>;
+  // Caller-owned abort (the chat route wires the client's disconnect to it).
+  // Without it a customer who closed the tab mid-reply left the upstream
+  // stream running to completion — billed in full, delivered to nobody.
+  signal?: AbortSignal;
 }): Promise<StreamResult> {
   const {
     apiKey,
@@ -71,6 +75,7 @@ export async function streamAnthropic(params: {
     onText,
     timeoutMs = 240_000,
     outputFormat,
+    signal,
   } = params;
 
   const requestMessages =
@@ -91,6 +96,8 @@ export async function streamAnthropic(params: {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener("abort", () => controller.abort(), { once: true });
   try {
     let res: Response;
     try {

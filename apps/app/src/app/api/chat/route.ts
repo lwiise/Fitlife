@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   streamAnthropic,
   computeCostUsd,
+  AnthropicCallError,
   PLAN_MODEL,
 } from "@fitlife/plan-engine";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -122,8 +123,17 @@ export async function POST(request: Request) {
   const systemPrompt = buildChatSystemPrompt(householdContext);
 
   const encoder = new TextEncoder();
+  // Wired to the client's disconnect (ReadableStream.cancel): a closed tab
+  // used to leave the upstream call running to completion — billed in full,
+  // delivered to nobody — and, because the usage row was written only after
+  // a COMPLETED stream, never counted against the daily cap either.
+  const upstream = new AbortController();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let tokensIn = 0;
+      let tokensOut = 0;
+      let cacheCreation: number | undefined;
+      let cacheRead: number | undefined;
       try {
         const result = await streamAnthropic({
           apiKey: getAnthropicKey(),
@@ -136,40 +146,63 @@ export async function POST(request: Request) {
           // default (240s) would let the platform kill a stalled stream with
           // the usage-audit row below never written.
           timeoutMs: 55_000,
-          onText: (delta) => controller.enqueue(encoder.encode(delta)),
+          signal: upstream.signal,
+          onText: (delta) => {
+            if (!upstream.signal.aborted) controller.enqueue(encoder.encode(delta));
+          },
         });
-        // Audit-only write: rate-limit source + model-aware cost. No content.
+        tokensIn = result.tokensIn;
+        tokensOut = result.tokensOut;
+        cacheCreation = result.cacheCreationTokens;
+        cacheRead = result.cacheReadTokens;
+      } catch (err) {
+        // A dead stream still cost money: the engine's error carries what was
+        // billed before the death (real input count, estimated output).
+        if (err instanceof AnthropicCallError) {
+          tokensIn = err.inputTokensAtFailure ?? 0;
+          tokensOut = err.estimatedOutputTokens ?? 0;
+        }
+        if (upstream.signal.aborted) {
+          // The customer left. Not an error — nothing to report or to say.
+        } else {
+          console.error("[chat] stream failed", err);
+          Sentry.captureException(err, {
+            tags: { area: "advisor-chat", userId: user.id },
+          });
+          try {
+            controller.enqueue(
+              encoder.encode("\n\nصار خطأ غير متوقع. يرجى المحاولة مرة أخرى."),
+            );
+          } catch {
+            // consumer already gone
+          }
+        }
+      } finally {
+        // Audit-only write on EVERY attempt — completed, failed or abandoned —
+        // so the daily cap counts what was actually spent. No content.
         // Service-role: chat_messages lost its user INSERT policy in 00026 (a
-        // browser could post rows with any cost_usd); user.id was authenticated
-        // above and is the only user this row may name.
+        // browser could post rows with any cost_usd); user.id was
+        // authenticated above and is the only user this row may name.
         try {
           await createAdminClient().from("chat_messages").insert({
             user_id: user.id,
             model: PLAN_MODEL,
-            tokens_in: result.tokensIn,
-            tokens_out: result.tokensOut,
-            cost_usd: computeCostUsd(
-              result.tokensIn,
-              result.tokensOut,
-              PLAN_MODEL,
-              result.cacheCreationTokens,
-              result.cacheReadTokens,
-            ),
+            tokens_in: tokensIn,
+            tokens_out: tokensOut,
+            cost_usd: computeCostUsd(tokensIn, tokensOut, PLAN_MODEL, cacheCreation, cacheRead),
           });
         } catch (logErr) {
           console.error("[chat] usage log failed", logErr);
         }
-      } catch (err) {
-        console.error("[chat] stream failed", err);
-        Sentry.captureException(err, {
-          tags: { area: "advisor-chat", userId: user.id },
-        });
-        controller.enqueue(
-          encoder.encode("\n\nصار خطأ غير متوقع. يرجى المحاولة مرة أخرى."),
-        );
-      } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // already closed by the cancel path
+        }
       }
+    },
+    cancel() {
+      upstream.abort();
     },
   });
 
