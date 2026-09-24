@@ -46,7 +46,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
       # Node 20 matches the Netlify deploy target (NODE_VERSION in apps/app/netlify.toml).
       - name: Install Node.js
         uses: actions/setup-node@v4
