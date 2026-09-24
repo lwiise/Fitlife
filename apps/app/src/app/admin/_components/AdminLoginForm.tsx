@@ -37,6 +37,9 @@ export function AdminLoginForm({
   async function signOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Hard navigation on purpose: the session cookie just changed and the
+    // server must re-evaluate it; a client-side push would keep stale RSC state.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/admin/login");
   }
 
@@ -79,6 +82,7 @@ export function AdminLoginForm({
     }
 
     // Hard navigation so the server picks up the freshly-set session cookie.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/admin");
   }
 

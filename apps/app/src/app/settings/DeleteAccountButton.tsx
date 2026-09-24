@@ -59,6 +59,10 @@ export function DeleteAccountButton({
     try {
       const res = await fetch("/api/account/delete", { method: "POST" });
       if (res.ok) {
+        // Hard navigation on purpose: the account no longer exists, so every
+        // piece of client state is stale and the server must see the cleared
+        // session.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.assign("/auth/login?deleted=1");
         return;
       }

@@ -47,6 +47,9 @@ export function UpdatePasswordForm() {
       return;
     }
 
+    // Hard navigation on purpose: the recovery session was just replaced by a
+    // normal one and the server must see the new cookie.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/dashboard");
   }
 
