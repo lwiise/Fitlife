@@ -1,5 +1,14 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { buildCsp } from "./src/lib/security/csp";
+
+// Built once at build time from the same public env Next inlines. Report-only
+// until the manual pass proves it clean — see src/lib/security/csp.ts.
+const cspReportOnly = buildCsp({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  posthogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+});
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -41,6 +50,11 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Applied by the Next server to every response it renders (pages, RSC, route
+  // handlers). netlify.toml carries the SAME set for the files the CDN serves
+  // directly (_next/static, public/), which never pass through here — keep the
+  // two lists in sync when changing one. HSTS was only in the toml before, so
+  // dynamic responses shipped without it.
   async headers() {
     return [
       {
@@ -53,6 +67,11 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
+          },
+          { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
         ],
       },
     ];

@@ -64,7 +64,9 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Security headers
+# Security headers for what the CDN serves directly (static assets, public/).
+# next.config.ts `headers()` carries the same set (+ the report-only CSP) for
+# every response the Next server renders — keep the two in sync.
 [[headers]]
   for = "/*"
   [headers.values]
