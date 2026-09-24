@@ -4,47 +4,48 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * GET /api/health
  *
- * Verifies Supabase connectivity + schema presence. Returns 200 if reachable.
- * Public endpoint — safe to keep in production.
+ * Verifies Supabase connectivity + schema presence. Returns 200 when
+ * reachable, 503 when degraded. Public endpoint — safe to keep in production
+ * for an uptime probe, which is why it answers with fixed status words only:
+ * it used to echo raw Supabase/PostgREST error messages to any anonymous
+ * caller, and those can name hosts, tables or configuration. The detail goes
+ * to the server log, where the operator reads it.
  */
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const { error: sessionError } = await supabase.auth.getSession();
     if (sessionError) {
+      console.error("[health] auth check failed", sessionError.message);
       return NextResponse.json(
-        {
-          status: "error",
-          message: "Supabase auth check failed",
-          error: sessionError.message,
-        },
-        { status: 500 }
+        { status: "degraded", supabase: "unreachable", auth: "error", schema: "unknown" },
+        { status: 503 },
       );
     }
 
-    // Schema check — count rows in profiles (RLS returns 0 if not auth'd, which is fine)
+    // Schema check — a HEAD count on profiles (RLS makes it 0 unauthenticated,
+    // which is fine; only the table's existence is being probed).
     const { error: schemaError } = await supabase
       .from("profiles")
       .select("*", { count: "exact", head: true });
+    if (schemaError) console.error("[health] schema check failed", schemaError.message);
 
-    return NextResponse.json({
-      status: "ok",
-      supabase: "connected",
-      auth: "ready",
-      schema: schemaError ? "missing" : "ready",
-      session: sessionData.session ? "active" : "none",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    const error = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(
       {
-        status: "error",
-        message: "Failed to initialize Supabase client",
-        error,
+        status: schemaError ? "degraded" : "ok",
+        supabase: "connected",
+        auth: "ready",
+        schema: schemaError ? "missing" : "ready",
+        timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: schemaError ? 503 : 200 },
+    );
+  } catch (err) {
+    console.error("[health] failed to initialise Supabase client", err);
+    return NextResponse.json(
+      { status: "degraded", supabase: "unreachable", auth: "unknown", schema: "unknown" },
+      { status: 503 },
     );
   }
 }
