@@ -31,6 +31,14 @@ keywords = ["x-internal-secret"]
 
 # The env template documents variable NAMES with empty values on purpose — never
 # a finding source. (Belt-and-suspenders; the rules above already require a value.)
+#
+# The first full-history scan (697 commits, every branch) found exactly one
+# thing: the CI build's NEXT_SERVER_ACTIONS_ENCRYPTION_KEY placeholder in
+# .github/workflows/ci.yml, flagged by the generic high-entropy rule. It is
+# base64 of the literal "CI-placeholder-key-not-a-secret-12345" — a throwaway
+# build-time value, not a key — so that exact string is allowlisted. Anything
+# else assigned to that variable still trips the rule above.
 [allowlist]
 description = "Repo-wide allowlist"
 paths = ['''apps/app/env\.example\.txt''']
+regexes = ['''Q0ktcGxhY2Vob2xkZXIta2V5LW5vdC1hLXNlY3JldC0xMjM0NQ==''']
