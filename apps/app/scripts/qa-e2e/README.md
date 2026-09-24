@@ -30,7 +30,9 @@ node run.mjs --only=solo-loss --email=you+qa1@gmail.com
 | `--only=<key>` | run a single account: `solo-loss`, `family-workout`, `pregnant` |
 | `--email=<addr>` | use a fixed address (requires `--only`); omit for a random one |
 
-Environment overrides: `FITLIFE_BASE_URL`, `FITLIFE_TEST_PASSWORD`,
+Environment: `FITLIFE_TEST_PASSWORD` is REQUIRED (12+ characters; every script
+refuses to start without it — the accounts are created on production and the
+password must never live in the repo). Optional overrides: `FITLIFE_BASE_URL`,
 `CHROMIUM_PATH`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
 
 Results are written to `results.json`.

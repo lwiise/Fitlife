@@ -21,7 +21,14 @@ import { ACCOUNTS } from "./accounts.mjs";
 
 const BASE = process.env.FITLIFE_BASE_URL ?? "https://fitlife-app-mvp.netlify.app";
 const CHROME = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
-const PASSWORD = process.env.FITLIFE_TEST_PASSWORD ?? "FitLifeQA!2026";
+// No default — see creds.mjs: the accounts this harness mints live on
+// production and must never share a password that is committed to the repo.
+const PASSWORD = process.env.FITLIFE_TEST_PASSWORD ?? "";
+if (PASSWORD.length < 12) {
+  throw new Error(
+    "FITLIFE_TEST_PASSWORD must be set to 12+ characters — QA accounts are created on production.",
+  );
+}
 const POLL_MS = 10_000;
 // 16 min, deliberately past the app's STALE_GENERATION_MIN (15). A generation
 // that dies mid-flight is reclassified "failed" by getLatestPlan's dead-man's

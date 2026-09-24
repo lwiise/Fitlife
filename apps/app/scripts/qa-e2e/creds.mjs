@@ -9,7 +9,25 @@ import { createClient } from "@supabase/supabase-js";
 
 export const BASE =
   process.env.FITLIFE_BASE_URL ?? "https://fitlife-app-mvp.netlify.app";
-export const PASSWORD = process.env.FITLIFE_TEST_PASSWORD ?? "FitLifeQA!2026";
+
+/**
+ * The QA accounts these scripts create live on PRODUCTION. This used to default
+ * to a literal committed here, so every QA household ever minted shared one
+ * password that anyone with repository access could read — and CLAUDE.md
+ * records QA households left live for days. No default: the operator sets it
+ * per session (12+ characters), and it never enters the repo.
+ */
+export const PASSWORD = requireTestPassword();
+
+function requireTestPassword() {
+  const value = process.env.FITLIFE_TEST_PASSWORD ?? "";
+  if (value.length < 12) {
+    throw new Error(
+      "FITLIFE_TEST_PASSWORD must be set to 12+ characters — QA accounts are created on production and must not share a password that lives in the repo.",
+    );
+  }
+  return value;
+}
 
 const URL_RE = /https:\/\/[a-z0-9-]+\.supabase\.co/;
 const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g;
