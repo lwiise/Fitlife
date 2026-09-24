@@ -1272,3 +1272,89 @@ double-counts the first wave's failures in `error_message`. The generated
 testing. The lesson this pass adds to the two before it: **a fix that reaches one of two
 prompts, one of two plan kinds, or one of two mount conditions is half a fix — grep for
 the sibling every time.**
+
+---
+
+## Pre-launch audit, Phases 0–2: orientation, green baseline, security and data (09/2026)
+
+Owner brief: «zero errors, no critical bugs, a codebase I'm comfortable shipping and
+maintaining — work in phases, report before fixing anything that changes behavior».
+Phase 0 mapped the repo with nine parallel readers + a synthesis + an adversarial critic
+(81 ranked findings, full list in the session's `phase0-findings-full.txt`), Phase 1 made
+the baseline green, Phase 2 closed the security and data findings. Everything shipped as
+one-concern commits on `claude/fitlife-test-brief-7wxrpf`, fast-forwarded to `main`.
+
+**Brief vs. repo, for the record.** The brief said Coolify/Hetzner — the code deploys to
+ONE Netlify site (+ the Vercel landing) and the whole generation design is
+Netlify-specific; owner confirmed Netlify. It said French/English/Arabic — the customer
+UI is Arabic-only and the seven locales are the housekeeper cooking view. It called the
+commercial flows placeholders — LemonSqueezy is live end to end; only the variant ids are
+test-mode.
+
+**Phase 1.** Next.js 16.2.6 carried two critical advisories (unauthenticated RCE in the
+Image Optimization API via AVIF, which next.config enables; a Windows-only RCE) and four
+high (a middleware/proxy bypass for Turbopack app-router sites — proxy.ts is the entire
+auth gate — DoS via Server Actions, two SSRFs); bumped to 16.3.6 with eslint-config-next
+in both apps. Its new rule flagged five deliberate `window.location.assign()` calls —
+four follow a session change the server must re-read, one starts a file download — each
+now carries a one-line disable saying why. posthog-js 1.373 → 1.434 dropped the DOMPurify
+XSS and protobufjs DoS chains. `pnpm audit` after both: 0 critical; every remaining high
+is a build-time/CLI chain (eslint, Sentry bundler plugin, Tailwind PostCSS, shadcn CLI).
+
+**Phase 2, by root cause.** (1) *RLS class closed* — migration 00026 (see the audit
+section above). (2) *Validation reached the last unvalidated inputs*: `/api/plans/generate`
+has a schema and requires `memberId` to name a non-housekeeper member of the caller's
+household; `addHousekeeper` safeParses (`housekeeperInputSchema`); `saveHousekeeperLanguage`
+is scoped to `role='housekeeper'` and refuses a miss instead of firing a paid translation;
+`updateFamilyMember`/`removeFamilyMember` answer «هذا الفرد غير موجود في عائلتك» for an id
+that matches no row (they used to report success and dispatch a paid regeneration), and
+the update refuses to rewrite the housekeeper's row into a beneficiary; `setWorkoutCheckin`
+verifies the member like its siblings. (3) *Paid triggers gate themselves*:
+`canGenerateForFamilyChange` runs INSIDE `triggerPlanTranslation` and
+`triggerWorkoutGeneration` (new result kind `access`), not in one of three callers. (4)
+*Spend that escaped the cap*: the chat usage row is written in a `finally` on every
+attempt (completed, failed, abandoned) with the engine's billed-at-death figures, and
+`streamAnthropic` takes a caller `AbortSignal` that the route wires to the client's
+disconnect — a closed tab used to leave the upstream call running and uncounted. (5)
+*Billing webhook*: a signed event about another store is acked and reported
+(`attrs.store_id` vs `LEMONSQUEEZY_STORE_ID`, skipped with a warning if the env is
+unset); the `last_event_at` and supersession guards are now predicates on the UPDATE
+itself (they were read-then-write); `custom_data.tier/cadence` fallbacks are validated
+against the known enums; a zero-row match is logged + Sentry'd instead of a silent 200;
+`/api/subscription/cancel` reports its mirror-write error. (6) *Trust boundaries*: the
+checkout return origin is validated (`lib/requestOrigin.ts` — the literal `null` Origin
+browsers send for opaque origins produced `null/dashboard`); `/api/health` answers with
+fixed status words and a 503 instead of echoing raw Supabase errors to anonymous callers;
+`/api/account/export` refuses (503, plain Arabic) when any table read fails instead of
+shipping a hollow file — its pre-apply tolerance is gone, everything through 00027 is
+applied. (7) *Storage*: removing a member now deletes their progress photos from the
+private bucket before the `body_logs` rows (storage never cascaded; the dialog promised
+the records were gone). (8) *Headers*: `next.config.ts` and `netlify.toml` carry the SAME
+set (the toml only reaches CDN-served static files; HSTS was missing from every dynamic
+response) plus a **report-only** CSP built by `lib/security/csp.ts` from the public env
+(exact Supabase project, PostHog + assets host, Sentry ingest, frames/objects/base locked,
+violations reported to Sentry's CSP endpoint derived from the DSN) — promote to enforcing
+once the manual pass runs clean. (9) *Unattended code*: the sweeper logs whether each
+firing carried Netlify's `next_run` body and `SWEEP_REQUIRE_SCHEDULE=1` (env) turns its
+absence into a 403 — off by default because a wrong assumption would silently switch off
+the last self-heal; flip it after the function log confirms the shape. (10) *CI*: a
+gitleaks job scans the full history on every PR/push (the config had existed for months
+with nothing running it), the token is `contents: read`, Dependabot watches the pinned
+actions. (11) *QA scripts* refuse to start without `FITLIFE_TEST_PASSWORD` (12+ chars)
+— they mint accounts on production and shared a committed default. (12)
+`verify-migrations.sql` gained class guards: RLS enabled on every public table, zero
+policies on the admin tables, `subscriptions` SELECT-only, the body-photos bucket private
+at 5 MB with its four owner policies.
+
+**Open, by owner decision (unchanged from the Phase 0 report):** branch protection on
+`main` (CI still runs AFTER the push Netlify deploys); the `X-Robots-Tag: noindex` on `/*`
+that de-indexes the homepage and /landing; Node 20 → 22; captcha/IP rate limiting before
+public testing (every cost gate is per-account and accounts are free); the 8 bracketed
+legal placeholders in /privacy and /terms; three Coach Sara sign-offs; the tier-gating
+pricing decision. **Documented boundaries, not defects:** `family_members` INSERT/UPDATE
+by a direct PostgREST call bypasses the tier count and doctor gate (the app is the
+enforcement layer); `/auth/update-password` accepts any live session (standard Supabase;
+«Secure password change» would add a reauth nonce); `generateSoloAndContinue` is mounted
+on /pricing and bypasses the weekly quota (bounded — a complete plan makes no model call);
+`handle_new_user` copies unvalidated signup metadata into a CHECK-constrained column (an
+attacker can only fail their own signup).
