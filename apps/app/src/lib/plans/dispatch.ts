@@ -512,6 +512,20 @@ export async function triggerPlanTranslation(params: {
   const { supabase, userId, locale } = params;
   if (locale === "ar") return; // Arabic is the source — nothing to translate.
 
+  // A translation is a full paid Anthropic pass over the plan. The
+  // subscription gate used to live in ONE of its three callers
+  // (addHousekeeper), so re-saving her language from /profile or the
+  // housekeeper page's retry could drive real spend on an inactive account.
+  // Same rule as every other paid trigger; free-access mode passes it.
+  const access = await canGenerateForFamilyChange(userId);
+  if (!access.allowed) {
+    console.warn("[triggerPlanTranslation] refused by the subscription gate", {
+      userId,
+      reason: access.reason,
+    });
+    return;
+  }
+
   const latest = await getLatestPlan(userId);
   if (!latest || latest.status !== "ready" || !latest.plan_data) return;
   const mealPlanId = latest.id;
@@ -636,21 +650,32 @@ export async function triggerPlanTranslation(params: {
 
 export type WorkoutDispatchResult =
   | { ok: true; workoutPlanId: string; status: "started" | "ready" }
-  | { ok: false; kind: "busy" | "no_trainees" | "dispatch" };
+  | { ok: false; kind: "busy" | "no_trainees" | "dispatch" | "access" };
 
 /**
  * Dispatch a workout generation for every opted-in adult (workout_profile
  * set). Mirrors triggerPlanGeneration's shape: per-kind busy-guard with the
  * 15-min stale reclassifier, placeholder rows via createWorkoutPlanRows (the
  * 00014 composite unique index is the authority), dev-inline / prod-bg fork.
- * Subscription access is the caller's responsibility (both callers sit behind
- * canGenerateForFamilyChange-gated meal flows).
+ * The subscription gate is applied HERE, not left to callers: the comment
+ * that used to say "both callers sit behind gated meal flows" was wrong for
+ * the post-onboarding opt-in and answer-edit paths, which dispatched a paid
+ * run with no access check at all.
  */
 export async function triggerWorkoutGeneration(params: {
   supabase: ServerClient;
   userId: string;
 }): Promise<WorkoutDispatchResult> {
   const { supabase, userId } = params;
+
+  const access = await canGenerateForFamilyChange(userId);
+  if (!access.allowed) {
+    console.warn("[triggerWorkoutGeneration] refused by the subscription gate", {
+      userId,
+      reason: access.reason,
+    });
+    return { ok: false, kind: "access" };
+  }
 
   const { data: liveGens } = await supabase
     .from("plan_generations")
