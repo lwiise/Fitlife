@@ -1,6 +1,11 @@
 import "server-only";
 
-import { DEMO_API_KEY, demoAiEmailList, isDemoEmail } from "@fitlife/plan-engine";
+import {
+  DEMO_API_KEY,
+  demoAiEmailList,
+  isDemoEmail,
+  isDemoForEveryone,
+} from "@fitlife/plan-engine";
 import { getAnthropicKey } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -21,7 +26,9 @@ export function anthropicKeyForEmail(email: string | null | undefined): string {
  * any real one rather than silently served demo content.
  */
 export async function anthropicKeyForUser(userId: string): Promise<string> {
-  if (demoAiEmailList().length === 0) return getAnthropicKey();
+  const list = demoAiEmailList();
+  if (list.length === 0) return getAnthropicKey();
+  if (isDemoForEveryone(list)) return DEMO_API_KEY;
   try {
     const { data } = await createAdminClient().auth.admin.getUserById(userId);
     return anthropicKeyForEmail(data.user?.email);

@@ -154,6 +154,14 @@ describe("demo account gate", () => {
     expect(isDemoEmail("x@notdemo.fitlife.sa.evil.com", list)).toBe(false);
   });
 
+  it("a bare * turns demo mode on for every account", () => {
+    const list = demoAiEmailList("*");
+    expect(isDemoEmail("anyone@gmail.com", list)).toBe(true);
+    expect(isDemoEmail(null, list)).toBe(true);
+    // A stray "*" token next to real addresses still means everyone.
+    expect(isDemoEmail("x@y.com", demoAiEmailList("demo@fit.test, *"))).toBe(true);
+  });
+
   it("is off for everyone when the list is empty", () => {
     expect(isDemoEmail("demo@fit.test", demoAiEmailList(""))).toBe(false);
     expect(isDemoEmail(null, ["demo@fit.test"])).toBe(false);

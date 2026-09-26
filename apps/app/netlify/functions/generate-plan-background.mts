@@ -60,6 +60,7 @@ import {
   DEMO_API_KEY,
   demoAiEmailList,
   isDemoEmail,
+  isDemoForEveryone,
 } from "../../../../packages/plan-engine/src/demo";
 import type {
   EngagementCheckinRow,
@@ -109,7 +110,10 @@ async function aiKeyForUser(
   userId: string,
   realKey: string,
 ): Promise<string> {
-  if (demoAiEmailList().length === 0) return realKey;
+  const list = demoAiEmailList();
+  if (list.length === 0) return realKey;
+  // `*` = every account; no lookup needed (or allowed to fail).
+  if (isDemoForEveryone(list)) return DEMO_API_KEY;
   try {
     const base = supabaseUrl.replace(/\/+$/, "");
     const res = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
@@ -117,7 +121,7 @@ async function aiKeyForUser(
     });
     if (!res.ok) return realKey;
     const user = (await res.json()) as { email?: string | null };
-    if (isDemoEmail(user.email)) {
+    if (isDemoEmail(user.email, list)) {
       console.log("[generate-plan-background] demo account: no model calls", { userId });
       return DEMO_API_KEY;
     }
