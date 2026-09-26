@@ -1365,7 +1365,9 @@ attacker can only fail their own signup).
 
 Owner directive: test the whole app on the live site with demo content, ahead of the
 move to OpenRouter. `DEMO_AI_EMAILS` (Netlify UI, **Functions scope**; comma/space list of
-exact addresses or `*@domain`) marks test accounts. For those accounts every AI call —
+exact addresses or `*@domain`) marks test accounts; a bare `*` marks EVERY account
+(owner directive 09/2026: the pre-launch testing setting — no account lookup is made,
+and real sign-ups get demo plans too, so remove it before launch). For those accounts every AI call —
 meal skeleton + days, the housekeeper translation, workout skeleton + programs, the
 advisor chat — is answered locally from `packages/plan-engine/src/demo/` at $0, in
 seconds (`DEMO_AI_DELAY_MS`, default 2500, paces the progress screens). Everyone else is

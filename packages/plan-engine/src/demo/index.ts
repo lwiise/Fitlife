@@ -31,18 +31,27 @@ export function isDemoApiKey(key: string | null | undefined): boolean {
   return key === DEMO_API_KEY;
 }
 
-/** Parsed `DEMO_AI_EMAILS`. Empty = demo mode off for everyone. */
+/**
+ * Parsed `DEMO_AI_EMAILS`. Empty = demo mode off for everyone. A bare `*`
+ * entry means EVERY account (the pre-launch "test the whole site" setting).
+ */
 export function demoAiEmailList(raw: string | undefined = process.env.DEMO_AI_EMAILS): string[] {
   return (raw ?? "")
     .split(/[\s,]+/)
     .map((s) => s.trim().toLowerCase())
-    .filter((s) => s.includes("@"));
+    .filter((s) => s === "*" || s.includes("@"));
+}
+
+/** True when `DEMO_AI_EMAILS` is `*`: every account is a demo account. */
+export function isDemoForEveryone(list: string[] = demoAiEmailList()): boolean {
+  return list.includes("*");
 }
 
 export function isDemoEmail(
   email: string | null | undefined,
   list: string[] = demoAiEmailList(),
 ): boolean {
+  if (isDemoForEveryone(list)) return true;
   if (!email || list.length === 0) return false;
   const e = email.trim().toLowerCase();
   return list.some((entry) =>

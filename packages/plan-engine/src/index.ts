@@ -59,6 +59,7 @@ export {
   DEMO_API_KEY,
   isDemoApiKey,
   isDemoEmail,
+  isDemoForEveryone,
   demoAiEmailList,
 } from "./demo";
 export type { DemoHint } from "./demo";
