@@ -245,6 +245,7 @@ export async function generateWorkoutPlan(params: {
         systemStatic: WORKOUT_STATIC,
         systemPrompt: skeletonPrompt,
         timeoutMs: workoutCallTimeoutMs(trainees.length),
+        demo: { kind: "workout-skeleton", trainees },
       });
       totalIn += res.tokensIn;
       totalOut += res.tokensOut;
@@ -307,6 +308,7 @@ export async function generateWorkoutPlan(params: {
           systemStatic: WORKOUT_STATIC,
           systemPrompt: buildWorkoutMemberPrompt(context, skeleton, trainee.member_id),
           timeoutMs: workoutCallTimeoutMs(1),
+          demo: { kind: "workout-member", trainee, flags: fitFlagsFor(trainee) },
         });
         totalIn += res.tokensIn;
         totalOut += res.tokensOut;

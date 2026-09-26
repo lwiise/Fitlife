@@ -1760,6 +1760,11 @@ export async function generateMealPlan(params: {
         systemStatic: STATIC_SYSTEM,
         systemPrompt: skeletonSystemPrompt,
         timeoutMs: skeletonTimeoutFor(),
+        demo: {
+          kind: "meal-skeleton",
+          context,
+          memberIds: needsSkeleton.map((b) => b.member_id),
+        },
       });
     // The skeleton is the run's single point of failure and it used to be the
     // only call with NO retry of any kind (except max_tokens): every day call
@@ -2331,6 +2336,7 @@ export async function generateMealPlan(params: {
               systemPrompt: prompt,
               timeoutMs: callTimeout(),
               outputFormat: dayOutputFormat,
+              demo: { kind: "meal-day", skeleton: daySkeleton, dayIndex },
             }));
         salvagedSlice = null;
         totalIn += res.tokensIn;
@@ -3515,6 +3521,10 @@ export async function translateMealPlan(params: {
               cookSex,
             ),
             userMessage: "ترجمي الآن.",
+            demo: {
+              kind: "translate-names",
+              names: [{ i: 0, name_ar: member.member_name_ar }],
+            },
           });
           totalIn += res.tokensIn;
           totalOut += res.tokensOut;
@@ -3595,6 +3605,7 @@ export async function translateMealPlan(params: {
             timeoutMs: translateCallTimeout(),
             systemPrompt: buildTranslatePrompt(items, locale, cookSex),
             userMessage: "ترجمي الآن.",
+            demo: { kind: "translate-meals", locale, items },
           });
           totalIn += res.tokensIn;
           totalOut += res.tokensOut;

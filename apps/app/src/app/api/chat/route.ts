@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import { getAnthropicKey } from "@/lib/env";
+import { anthropicKeyForEmail } from "@/lib/demo/aiKey";
 import { hasAdvisorAccess } from "@/lib/subscription/access";
 import { buildHouseholdContext } from "@/lib/chat/context";
 import { CHAT_SYSTEM_STATIC, buildChatSystemPrompt } from "@/lib/chat/systemRules";
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
       let cacheRead: number | undefined;
       try {
         const result = await streamAnthropic({
-          apiKey: getAnthropicKey(),
+          apiKey: anthropicKeyForEmail(user.email),
           model: PLAN_MODEL,
           maxTokens: 1500,
           systemStatic: CHAT_SYSTEM_STATIC,
@@ -147,6 +147,7 @@ export async function POST(request: Request) {
           // the usage-audit row below never written.
           timeoutMs: 55_000,
           signal: upstream.signal,
+          demo: { kind: "chat", messages: history },
           onText: (delta) => {
             if (!upstream.signal.aborted) controller.enqueue(encoder.encode(delta));
           },
