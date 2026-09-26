@@ -1358,3 +1358,40 @@ enforcement layer); `/auth/update-password` accepts any live session (standard S
 on /pricing and bypasses the weekly quota (bounded — a complete plan makes no model call);
 `handle_new_user` copies unvalidated signup metadata into a CHECK-constrained column (an
 attacker can only fail their own signup).
+
+---
+
+## Demo AI mode — UI/UX testing with no model calls (09/2026)
+
+Owner directive: test the whole app on the live site with demo content, ahead of the
+move to OpenRouter. `DEMO_AI_EMAILS` (Netlify UI, **Functions scope**; comma/space list of
+exact addresses or `*@domain`) marks test accounts. For those accounts every AI call —
+meal skeleton + days, the housekeeper translation, workout skeleton + programs, the
+advisor chat — is answered locally from `packages/plan-engine/src/demo/` at $0, in
+seconds (`DEMO_AI_DELAY_MS`, default 2500, paces the progress screens). Everyone else is
+untouched; unset the variable and demo mode is off for all.
+
+**How it plugs in (one choke point).** Every model call already went through
+`streamAnthropic`. A demo account is handed the sentinel `DEMO_API_KEY` instead of the
+real key, and `streamAnthropic` answers that key from `demoRespond` using a structured
+`demo` hint each call site now attaches (the day call passes its `daySkeleton`, the
+translate call its items, etc.). The replies go through the engine's REAL parsing, band
+check, rescale, shared-meal assembly, workout fit enforcement, persistence and UI —
+only the model is absent, so the flows being tested are the production ones. A demo
+key with no hint throws rather than guessing, so a NEW call site must add a hint.
+
+**Where the account is decided.** The background worker (`aiKeyForUser` in
+`generate-plan-background.mts`, a GoTrue admin lookup, only when the variable is set)
+— not the dispatcher, because the chain and the sweeper also invoke the worker and a
+demo account's continuation must stay demo. The chat route uses the session email;
+the dev-inline dispatch paths use `anthropicKeyForUser` (`apps/app/src/lib/demo/aiKey.ts`).
+Any lookup failure keeps the real key.
+
+**Demo content limits (by design).** A fixed library of 24 Gulf dishes; allergies,
+dislikes and restrictions are NOT applied; targets are a rough Mifflin-St Jeor estimate;
+the cook's translation is English for every locale; the chat reply is a labelled
+canned answer; `week_changes` are two labelled examples. Every demo plan says it is a
+demo in its methodology note and disclaimer. Demo plans are stored like real ones
+(cost $0), so delete demo accounts via /settings when done. Guarded by
+`src/demo/demo.test.ts`, which runs full generations through the real engine and fails
+on any engine warning (a re-roll or repair means the demo replies drifted).

@@ -56,6 +56,11 @@ import { isChildByAge } from "../../../../packages/plan-engine/src/childRule";
 // the function reported nothing at all: every failure died in the Netlify log.
 import { captureToSentry } from "../../../../packages/plan-engine/src/sentryReport";
 import { computeEngagementDigest } from "../../../../packages/plan-engine/src/engagementDigest";
+import {
+  DEMO_API_KEY,
+  demoAiEmailList,
+  isDemoEmail,
+} from "../../../../packages/plan-engine/src/demo";
 import type {
   EngagementCheckinRow,
   EngagementVerdictRow,
@@ -88,6 +93,38 @@ function sbHeaders(serviceKey: string): Record<string, string> {
     authorization: `Bearer ${serviceKey}`,
     "content-type": "application/json",
   };
+}
+
+/**
+ * The key this run's model calls use. Accounts listed in DEMO_AI_EMAILS get the
+ * demo sentinel (packages/plan-engine/src/demo), so their runs build the plan
+ * from demo content with no model call and no spend. Decided HERE rather than
+ * by the dispatcher because the chain and the sweeper also invoke this worker,
+ * and a demo account's continuation must stay demo. The account is only looked
+ * up when demo mode is configured; any lookup failure keeps the real key.
+ */
+async function aiKeyForUser(
+  supabaseUrl: string,
+  serviceKey: string,
+  userId: string,
+  realKey: string,
+): Promise<string> {
+  if (demoAiEmailList().length === 0) return realKey;
+  try {
+    const base = supabaseUrl.replace(/\/+$/, "");
+    const res = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    });
+    if (!res.ok) return realKey;
+    const user = (await res.json()) as { email?: string | null };
+    if (isDemoEmail(user.email)) {
+      console.log("[generate-plan-background] demo account: no model calls", { userId });
+      return DEMO_API_KEY;
+    }
+  } catch (err) {
+    console.warn("[generate-plan-background] demo lookup failed, using the real key", err);
+  }
+  return realKey;
 }
 
 async function sbSelectOne(
@@ -811,6 +848,7 @@ const handler = async (req: Request): Promise<Response> => {
   if (!userId || (body.mode === "workout" ? !body.workoutPlanId : !mealPlanId)) {
     return new Response("Missing userId or plan id", { status: 400 });
   }
+  const aiKey = await aiKeyForUser(supabaseUrl, serviceKey, userId, anthropicKey);
 
   // ── Workout mode: generate the opt-in exercise program ──
   if (body.mode === "workout") {
@@ -932,7 +970,7 @@ const handler = async (req: Request): Promise<Response> => {
       const sb = makeFetchSupabase(supabaseUrl, serviceKey);
       await runWorkoutPlanGeneration({
         supabase: sb,
-        anthropicApiKey: anthropicKey,
+        anthropicApiKey: aiKey,
         workoutPlanId,
         context,
         weekStartDate: body.weekStartDate ?? new Date().toISOString().slice(0, 10),
@@ -980,7 +1018,7 @@ const handler = async (req: Request): Promise<Response> => {
       // drifted copy.
       await runMealPlanTranslation({
         supabase: makeFetchSupabase(supabaseUrl, serviceKey),
-        anthropicApiKey: anthropicKey,
+        anthropicApiKey: aiKey,
         userId,
         mealPlanId,
         plan: planToTranslate,
@@ -1191,7 +1229,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { plan, usage, missingDays, missingDaysCause, daysCompleted } =
       await generateMealPlan({
-      anthropicApiKey: anthropicKey,
+      anthropicApiKey: aiKey,
       context,
       existingPlan: existingPlan ?? null,
       independentRegen: body.independentRegen,
@@ -1283,7 +1321,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
       if (endLocale && needsTranslate && roomToTranslate) {
         const { plan: translated, usage: tUsage } = await translateMealPlan({
-          anthropicApiKey: anthropicKey,
+          anthropicApiKey: aiKey,
           plan,
           locale: endLocale,
           // Bounded by the run, not just gated on 45s to start. Without this the

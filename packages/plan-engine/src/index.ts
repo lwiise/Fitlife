@@ -56,6 +56,13 @@ export {
 export { streamAnthropic, stripMarkdownFence, computeCostUsd } from "./anthropic";
 export type { StreamResult } from "./anthropic";
 export {
+  DEMO_API_KEY,
+  isDemoApiKey,
+  isDemoEmail,
+  demoAiEmailList,
+} from "./demo";
+export type { DemoHint } from "./demo";
+export {
   PLAN_CHAIN_MAX_HOPS,
   incompleteInPlanMemberIds,
   shouldChainContinuation,

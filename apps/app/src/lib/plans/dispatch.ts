@@ -32,11 +32,8 @@ import {
   canRegenerateMemberPlan,
   type AccessResult,
 } from "@/lib/subscription/access";
-import {
-  env,
-  getAnthropicKey,
-  getInternalFunctionSecret,
-} from "@/lib/env";
+import { env, getInternalFunctionSecret } from "@/lib/env";
+import { anthropicKeyForUser } from "@/lib/demo/aiKey";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -371,7 +368,7 @@ export async function triggerPlanGeneration(params: {
     try {
       await runMealPlanGeneration({
         supabase: createAdminClient() as unknown as ServerClient,
-        anthropicApiKey: getAnthropicKey(),
+        anthropicApiKey: await anthropicKeyForUser(userId),
         mealPlanId,
         context,
         existingPlan,
@@ -593,7 +590,7 @@ export async function triggerPlanTranslation(params: {
         // plan_generations lock row and rewrites plan_data, neither of which the
         // user client may do since 00026.
         supabase: createAdminClient() as unknown as ServerClient,
-        anthropicApiKey: getAnthropicKey(),
+        anthropicApiKey: await anthropicKeyForUser(userId),
         userId,
         mealPlanId,
         plan,
@@ -739,7 +736,7 @@ export async function triggerWorkoutGeneration(params: {
     try {
       await runWorkoutPlanGeneration({
         supabase: createAdminClient() as unknown as ServerClient,
-        anthropicApiKey: getAnthropicKey(),
+        anthropicApiKey: await anthropicKeyForUser(userId),
         workoutPlanId,
         context,
         weekStartDate,

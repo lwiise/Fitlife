@@ -1,5 +1,6 @@
 import { pricingForModel } from "./constants";
 import { AnthropicCallError } from "./errors";
+import { demoRespond, isDemoApiKey, type DemoHint } from "./demo";
 
 export interface StreamResult {
   text: string;
@@ -63,7 +64,16 @@ export async function streamAnthropic(params: {
   // Without it a customer who closed the tab mid-reply left the upstream
   // stream running to completion — billed in full, delivered to nobody.
   signal?: AbortSignal;
+  // What this call asks for, in structured form — used ONLY when apiKey is the
+  // demo sentinel (demo/index.ts), to build the reply without a model. Real
+  // calls ignore it.
+  demo?: DemoHint;
 }): Promise<StreamResult> {
+  // Demo accounts never reach the network: the sentinel key is answered
+  // locally and a real key never takes this branch.
+  if (isDemoApiKey(params.apiKey)) {
+    return demoRespond({ demo: params.demo, onText: params.onText, signal: params.signal });
+  }
   const {
     apiKey,
     model,
