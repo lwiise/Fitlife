@@ -71,7 +71,7 @@ export async function restorePlan(
     return { ok: false, error: "ما فيه خطة حالية لاستعادة الفرد فيها" };
   }
   if (current.id === planId) {
-    return { ok: false, error: "هذي خطة الفرد الحالية بالفعل" };
+    return { ok: false, error: "هذه هي خطة الفرد الحالية بالفعل" };
   }
 
   // Re-anchor the restored member's day names to the CURRENT plan's week so this

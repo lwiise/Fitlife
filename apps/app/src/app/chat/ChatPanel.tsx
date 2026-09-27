@@ -7,9 +7,9 @@ import { genderPick } from "@/lib/copy/gender";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const SUGGESTIONS = [
-  "هل هذي الوجبة مناسبة لطفلي اللي عنده حساسية مكسرات؟",
-  "وش أبدّل فيه عشاء اليوم بشيء أصح؟",
-  "وش الفطور الأنسب لهدفي؟",
+  "هل وجبة اليوم مناسبة لطفلي المصاب بحساسية المكسرات؟",
+  "بماذا أستبدل عشاء اليوم ليكون أصح؟",
+  "ما الفطور الأنسب لهدفي؟",
 ];
 
 export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {

@@ -86,8 +86,8 @@ export function PlanOnboardingBanner({
       <div className="flex-1">
         <p className="text-brand-ink text-sm font-medium leading-relaxed">
           {genderPick(ownerSex)(
-            "خطتك الشخصية جاهزة. شوفيها قبل ما تضيفي بقية العائلة",
-            "خطتك الشخصية جاهزة. شوفها قبل ما تضيف بقية العائلة",
+            "خطتكِ الشخصية جاهزة. اطّلعي عليها قبل أن تضيفي بقية العائلة.",
+            "خطتك الشخصية جاهزة. اطّلع عليها قبل أن تضيف بقية العائلة.",
           )}
         </p>
         <Link

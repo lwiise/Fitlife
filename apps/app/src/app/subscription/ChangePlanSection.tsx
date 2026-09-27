@@ -56,9 +56,9 @@ export function ChangePlanSection({
           router.refresh();
           return;
         }
-        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setError(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setError(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       } finally {
         setPendingTier(null);
       }
@@ -66,7 +66,12 @@ export function ChangePlanSection({
   }
 
   return (
-    <section className="bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7">
+    // The cancel flow's «شوفي الخطط الأصغر» links here (#change-plan); the
+    // anchor didn't exist, so that retention link went nowhere.
+    <section
+      id="change-plan"
+      className="scroll-mt-[calc(var(--app-header-h)+1rem)] bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="font-extrabold text-xl text-brand-ink leading-tight">
           {isTrial ? g("اختاري خطتك للاستمرار بعد التجربة", "اختر خطتك للاستمرار بعد التجربة") : "تغيير الخطة"}

@@ -68,8 +68,8 @@ export function CurrentPlanCard({
       {/* Renewal / status line */}
       <div className="mt-4">
         {sub.status === "past_due" ? (
-          <p className="text-red-700 text-sm font-bold leading-relaxed">
-            فيه مشكلة في تجديد اشتراكك
+          <p className="text-critical text-sm font-bold leading-relaxed">
+            تعذّر تجديد اشتراككم
           </p>
         ) : sub.cancel_at_period_end ? (
           <p className="text-brand-warm-orange text-sm font-bold leading-relaxed">

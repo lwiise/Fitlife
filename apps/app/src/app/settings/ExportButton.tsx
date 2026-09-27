@@ -22,7 +22,7 @@ export function ExportButton({ ownerSex }: { ownerSex?: string | null }) {
       setTimeout(() => setIsLoading(false), 2500);
     } catch {
       setIsLoading(false);
-      setError(g("ما قدرنا نجهّز الملف. حاولي مرة ثانية", "ما قدرنا نجهّز الملف. حاول مرة ثانية"));
+      setError(g("تعذّر تجهيز الملف. حاولي مرة أخرى.", "تعذّر تجهيز الملف. حاول مرة أخرى."));
     }
   }
 

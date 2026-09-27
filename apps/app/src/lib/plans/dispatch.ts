@@ -176,7 +176,7 @@ export async function triggerPlanGeneration(params: {
 
     // A run the worker never acknowledged is already known dead, and holding its
     // lock for the full stale window strands the user in a contradiction: the
-    // plan surfaces «لم تبدأ عملية إنشاء الخطة. حاولي مرة ثانية» after
+    // plan surfaces «لم تبدأ عملية إنشاء الخطة. حاولي مرة أخرى» after
     // WORKER_ACK_LIMIT_MS, and then every retry for the next fourteen minutes
     // comes back 409 «خطتك قيد التجهيز الآن» — an error whose only instruction
     // the app itself refuses. Both ends read workerAckedFromPlanData, so the

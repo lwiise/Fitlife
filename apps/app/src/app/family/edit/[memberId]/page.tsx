@@ -157,8 +157,8 @@ export default async function EditMemberPage({
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
             {g(
-              "اختاري القسم اللي تبين تعدّلينه.",
-              "اختر القسم اللي تبي تعدّله.",
+              "اختاري القسم الذي تريدين تعديله.",
+              "اختر القسم الذي تريد تعديله.",
             )}
           </p>
         </header>

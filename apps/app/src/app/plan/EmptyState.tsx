@@ -55,9 +55,9 @@ export function EmptyState({
           router.refresh();
           return;
         }
-        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       }
     });
   }
@@ -73,8 +73,8 @@ export function EmptyState({
         </h1>
         <p className="mt-3 text-brand-ink-muted text-base leading-relaxed">
           {g(
-            "نحتاج بعض المعلومات عشان نحضّر لكِ خطة على مقاسك.",
-            "نحتاج بعض المعلومات عشان نحضّر لك خطة على مقاسك.",
+            "نحتاج بعض المعلومات لنعدّ لكِ خطة تناسبكِ.",
+            "نحتاج بعض المعلومات لنعدّ لك خطة تناسبك.",
           )}
         </p>
         <a

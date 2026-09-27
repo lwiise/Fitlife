@@ -157,8 +157,8 @@ export function FamilyAddBuilder({
       <p className="font-bold text-brand-ink text-sm">إضافة أفراد جدد</p>
       <p className="mt-1 mb-4 text-brand-ink-muted text-xs leading-relaxed">
         {g(
-          "اختاري مين تضيفين، وكل فرد ياخذ خطته ضمن وجبات العائلة.",
-          "اختر مين تضيف، وكل فرد ياخذ خطته ضمن وجبات العائلة.",
+          "اختاري من تضيفين، ويأخذ كل فرد خطته ضمن وجبات العائلة.",
+          "اختر من تضيف، ويأخذ كل فرد خطته ضمن وجبات العائلة.",
         )}
       </p>
 

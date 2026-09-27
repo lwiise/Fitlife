@@ -98,7 +98,7 @@ export function resolveStaleness(input: StalenessInput): StalenessResult {
       planData: null,
       inProgress: false,
       errorMessage:
-        errorMessage ?? "لم تبدأ عملية إنشاء الخطة. حاولي مرة ثانية.",
+        errorMessage ?? "لم تبدأ عملية إنشاء الخطة. حاولي مرة أخرى.",
     };
   }
 
