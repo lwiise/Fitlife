@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock, LayoutDashboard, Loader2 } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import type { MealPlan, LocaleCode } from "@fitlife/plan-engine";
 import { Logo } from "@/components/Logo";
+import { ButtonLink } from "@/components/ui/button";
+import { Notice, type NoticeTone } from "@/components/ui/notice";
 import { getLocaleInfo, getPlanStrings } from "@/lib/plans/locales";
 import { PlanViewer } from "../PlanViewer";
 import { AllergyBackstop, type AllergyEntry } from "./AllergyBackstop";
@@ -13,8 +14,8 @@ import { requestHousekeeperTranslation } from "./actions";
 
 /**
  * Maid view = the SAME /plan UI (PlanViewer), fully localized into the
- * housekeeper's language, wrapped in a minimal kitchen header (Logo + language
- * chip + Arabic-view link + Print). Direction follows the locale.
+ * housekeeper's language, wrapped in a minimal kitchen header (compact logo +
+ * language chip + dashboard link). Direction follows the locale.
  *
  * Self-healing: when `needsTranslation`, kick off the translation pass once and
  * poll until the freshly-translated plan_data lands (no manual reload).
@@ -93,27 +94,49 @@ export function HousekeeperPlanView({
     return () => clearInterval(id);
   }, [preparing, needsTranslation, partialWeek, superseded, router]);
 
+  // One status line at a time, picked by priority: nothing to cook yet ›
+  // translation still landing › cooking from last week › more days coming.
+  // Tones follow the redesign's Notice vocabulary so the calm states read calm
+  // and the one that changes what she cooks (a superseded week) stands out.
+  const status: { tone: NoticeTone; text: string } | null = preparing
+    ? // Nothing exists to cook or translate yet. Not a spinner — the wait is on
+      // the family's plans being written, which is not her doing and not
+      // something she can hurry.
+      { tone: "info", text: t.awaiting_family }
+    : needsTranslation
+      ? { tone: "progress", text: t.translating }
+      : superseded
+        ? // A new week is being built; the plan below is the current one. Said
+          // plainly, because the alternative is her cooking from a week that is
+          // about to be replaced without knowing it.
+          { tone: "warning", text: t.previous_week }
+        : partialWeek
+          ? // Usable, but not the whole week yet. Said plainly and once, above a
+            // plan she can actually cook from — the old behaviour replaced the
+            // plan with this message.
+            { tone: "info", text: t.partial_week }
+          : null;
+
   return (
     <main dir={info.direction} lang={locale} className="min-h-screen bg-brand-surface">
-      <header className="bg-brand-card border-b border-brand-line sticky top-0 z-10 print:hidden">
-        <div className="container-app py-4 flex items-center justify-between gap-3">
-          <Logo className="h-9 w-auto" />
+      {/* A focus route: AppShell renders it bare, so the kitchen screen keeps
+          its own minimal bar — logo, her language, the way back. */}
+      <header className="sticky top-0 z-30 border-b border-brand-line bg-brand-card/95 backdrop-blur supports-[backdrop-filter]:bg-brand-card/85 print:hidden">
+        <div className="container-shell flex h-16 items-center justify-between gap-3">
+          <Logo variant="compact" className="h-9 w-auto" priority />
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-brand-lavender/30 px-3 py-1 text-xs font-bold text-brand-purple-900">
+            <span className="inline-flex min-h-8 items-center rounded-full bg-brand-tint px-3 text-meta font-bold text-brand-purple-900">
               {info.native_name}
             </span>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-full text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-            >
+            <ButtonLink href="/dashboard" variant="quiet" className="gap-1.5">
               <LayoutDashboard className="size-4" aria-hidden="true" />
               {t.back_to_dashboard}
-            </Link>
+            </ButtonLink>
           </div>
         </div>
       </header>
 
-      <div className="container-app py-6 md:py-10 space-y-4">
+      <div className="container-shell space-y-4 py-6 lg:py-10">
         {/* The plan itself carries the page's <h1> (PlanViewer's week range),
             but the preparing/translating states render instead of it — so
             those screens had no heading at all. Visually hidden because the
@@ -123,59 +146,11 @@ export function HousekeeperPlanView({
           <h1 className="sr-only">{t.preparing_title}</h1>
         )}
         <AllergyBackstop entries={allergyEntries} locale={locale} />
-        {preparing ? (
-          // Nothing exists to cook or translate yet. Not a spinner — the wait is
-          // on the family's plans being written, which is not her doing and not
-          // something she can hurry.
-          <div
-            role="status"
-            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
-          >
-            <Clock className="size-4 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
-            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
-              {t.awaiting_family}
-            </p>
-          </div>
-        ) : needsTranslation ? (
-          <div
-            role="status"
-            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
-          >
-            <Loader2
-              className="size-4 animate-spin motion-reduce:animate-none text-brand-purple-900 flex-shrink-0"
-              aria-hidden="true"
-            />
-            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
-              {t.translating}
-            </p>
-          </div>
-        ) : superseded ? (
-          // A new week is being built; the plan below is the current one. Said
-          // plainly, because the alternative is her cooking from a week that is
-          // about to be replaced without knowing it.
-          <div
-            role="status"
-            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
-          >
-            <Clock className="size-4 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
-            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
-              {t.previous_week}
-            </p>
-          </div>
-        ) : partialWeek ? (
-          // Usable, but not the whole week yet. Said plainly and once, above a
-          // plan she can actually cook from — the old behaviour replaced the
-          // plan with this message.
-          <div
-            role="status"
-            className="flex items-center gap-2.5 rounded-2xl bg-brand-lavender/30 border border-brand-purple-900/10 px-4 py-3"
-          >
-            <Clock className="size-4 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
-            <p className="text-brand-purple-900 text-sm font-bold leading-relaxed">
-              {t.partial_week}
-            </p>
-          </div>
-        ) : null}
+        {status && (
+          <Notice tone={status.tone}>
+            <p className="font-bold">{status.text}</p>
+          </Notice>
+        )}
         {!preparing && plan && (
           <PlanViewer
             plan={plan}

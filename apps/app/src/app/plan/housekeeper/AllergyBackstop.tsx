@@ -30,21 +30,25 @@ export function AllergyBackstop({
 
   const t = getPlanStrings(locale);
 
+  // Critical tone from the redesign's Notice palette, hand-built rather than a
+  // <Notice>: this is a standing kitchen rule, not a live alert — it keeps its
+  // `note` role and a real <h2> (Notice's title is a <p>, and its critical tone
+  // would announce as role="alert" on every poll-driven refresh).
   return (
     <section
       role="note"
       aria-label={t.allergy_title}
-      className="rounded-2xl border-2 border-brand-pink bg-brand-pink/5 p-4 md:p-5"
+      className="rounded-2xl border border-critical/25 bg-critical-soft px-4 py-3.5 md:px-5 md:py-4"
     >
-      <h2 className="flex items-center gap-2 text-brand-pink font-extrabold text-lg md:text-xl leading-tight">
-        <AlertTriangle className="size-5 flex-shrink-0" aria-hidden="true" />
+      <h2 className="flex items-center gap-2 text-app-section text-critical">
+        <AlertTriangle className="size-5 shrink-0" aria-hidden="true" />
         {t.allergy_title}
       </h2>
       <ul className="mt-3 space-y-3">
         {withAllergies.map((entry, i) => (
           <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            <span className="text-brand-ink font-bold">
-              <span className="text-brand-ink-muted font-medium">{t.allergy_for} </span>
+            <span className="font-bold text-brand-ink">
+              <span className="font-medium text-brand-ink-muted">{t.allergy_for} </span>
               {entry.nameTranslated ? (
                 <span>{entry.nameTranslated}</span>
               ) : (
@@ -56,7 +60,7 @@ export function AllergyBackstop({
                 key={j}
                 dir="rtl"
                 lang="ar"
-                className="inline-flex items-center rounded-lg border border-brand-pink/40 bg-brand-card px-2.5 py-1 text-sm font-bold text-brand-ink"
+                className="inline-flex items-center rounded-lg border border-critical/30 bg-brand-card px-2.5 py-1 text-[15px] font-bold text-brand-ink"
               >
                 {allergen}
               </span>
@@ -64,7 +68,7 @@ export function AllergyBackstop({
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-sm text-brand-ink-muted leading-relaxed">{t.allergy_disclaimer}</p>
+      <p className="mt-3 text-[15px] leading-relaxed text-brand-ink-muted">{t.allergy_disclaimer}</p>
     </section>
   );
 }
