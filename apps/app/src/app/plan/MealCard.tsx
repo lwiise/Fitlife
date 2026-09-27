@@ -324,28 +324,24 @@ export function MealCard({
         className="w-full text-start px-5 py-4 hover:bg-brand-ink/[0.03] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-[3.5rem]"
       >
         <div className="flex items-start gap-3">
-          <span
-            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold flex-shrink-0 ${slotStyle.bg} ${slotStyle.text}`}
-          >
-            {slotLabel}
-          </span>
           <div className="flex-1 min-w-0">
-            {isShared && (
-              <p className="flex items-start gap-1 mb-1 text-brand-purple-900 text-xs font-bold leading-relaxed">
-                <Users className="size-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                <span>
+            {/* Slot and sharers as one meta line ABOVE the name, so the dish
+                name gets the card's full width on a phone. */}
+            <p className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-meta">
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-bold ${slotStyle.bg} ${slotStyle.text}`}
+              >
+                {slotLabel}
+              </span>
+              {isShared && (
+                <span className="inline-flex items-center gap-1 font-bold text-brand-purple-900">
+                  <Users className="size-3.5 flex-shrink-0" aria-hidden="true" />
                   {t.shared_meal_with}
                   {participantNames ? `: ${participantNames}` : ""}
                 </span>
-              </p>
-            )}
-            <h3 className="font-bold text-brand-ink text-base leading-snug">
-              {recipeName}
-            </h3>
-            <p className="mt-1 text-brand-ink-muted text-xs leading-relaxed tabular-nums">
-              {meal.macros.protein_g} {t.protein} · {meal.macros.carbs_g} {t.carbs} ·{" "}
-              {meal.macros.fat_g} {t.fat} ({t.grams})
+              )}
             </p>
+            <h3 className="text-app-item text-brand-ink">{recipeName}</h3>
           </div>
           {checkin && (
             <span
@@ -364,10 +360,10 @@ export function MealCard({
             </span>
           )}
           <div className="flex flex-col items-end flex-shrink-0">
-            <span className="font-extrabold text-brand-ink text-xl tabular-nums">
+            <span className="font-bold text-brand-ink text-base tabular-nums">
               {meal.calories}
             </span>
-            <span className="text-brand-ink-muted text-xs">{t.calories_unit}</span>
+            <span className="text-meta text-brand-ink-muted">{t.calories_unit}</span>
           </div>
           <motion.span
             animate={{ rotate: expanded ? 180 : 0 }}
@@ -380,6 +376,29 @@ export function MealCard({
         </div>
       </button>
 
+      {/* The daily action, one tap from the list (09/2026 redesign): it used to
+          sit at the bottom of the expanded recipe. Only for a meal with no mark
+          yet; every other status, and un-marking, stay in the expanded card. */}
+      {onCheckin && !checkin && !viewerAbsent && !expanded && (
+        <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
+          <button
+            type="button"
+            onClick={() => onCheckin("cooked", null)}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border-[1.5px] border-brand-purple-900/25 bg-brand-card px-4 text-[15px] font-bold text-brand-purple-900 hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+          >
+            <Check className="size-4" aria-hidden="true" />
+            طبختها كما هي
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="inline-flex min-h-11 items-center rounded-full px-3 text-meta font-bold text-brand-ink-muted hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          >
+            بدّلتها أو تجاوزتها
+          </button>
+        </div>
+      )}
+
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
@@ -389,12 +408,15 @@ export function MealCard({
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 pt-1 border-t border-brand-ink/5 space-y-4">
-              {metaBits.length > 0 && (
-                <p className="text-brand-ink-muted text-xs tabular-nums">
-                  {metaBits.join(" · ")}
-                </p>
-              )}
+            <div className="px-5 pb-5 pt-3 border-t border-brand-ink/5 space-y-4">
+              <p className="text-meta text-brand-ink-muted tabular-nums">
+                {[
+                  `${meal.macros.protein_g} ${t.grams} ${t.protein}`,
+                  `${meal.macros.carbs_g} ${t.grams} ${t.carbs}`,
+                  `${meal.macros.fat_g} ${t.grams} ${t.fat}`,
+                  ...metaBits,
+                ].join(" · ")}
+              </p>
 
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2 flex items-center gap-2 flex-wrap">

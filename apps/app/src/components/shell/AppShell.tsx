@@ -54,7 +54,7 @@ export function AppShell({
       >
         تخطَّ إلى المحتوى
       </a>
-      <header className="sticky top-0 z-30 border-b border-brand-line bg-brand-card/95 backdrop-blur supports-[backdrop-filter]:bg-brand-card/85">
+      <header data-app-header="" className="sticky top-0 z-30 border-b border-brand-line bg-brand-card/95 backdrop-blur supports-[backdrop-filter]:bg-brand-card/85">
         <div className="container-shell flex h-16 items-center justify-between gap-4 lg:h-[4.5rem]">
           <div className="flex items-center gap-8">
             <Link

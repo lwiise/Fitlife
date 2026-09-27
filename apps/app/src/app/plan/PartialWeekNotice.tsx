@@ -1,3 +1,5 @@
+import { Notice } from "@/components/ui/notice";
+
 /**
  * «بقية أيام الأسبوع قيد التحضير» — shown when the week came back short.
  *
@@ -13,17 +15,8 @@
  */
 export function PartialWeekNotice() {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/20 px-4 py-3.5"
-    >
-      <p className="font-bold text-brand-ink text-sm leading-relaxed">
-        بقية أيام الأسبوع قيد التحضير الآن.
-      </p>
-      <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
-        ستظهر خلال دقائق دون أي إجراء منكِ.
-      </p>
-    </div>
+    <Notice tone="info" title="بقية أيام الأسبوع قيد التحضير الآن.">
+      تظهر خلال دقائق دون أي إجراء منكم.
+    </Notice>
   );
 }

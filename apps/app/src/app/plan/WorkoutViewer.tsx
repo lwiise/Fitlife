@@ -447,7 +447,7 @@ export function WorkoutViewer({
           sm+, where the parent's justify-between already pins the
           content-width cluster to the end). */}
       <div className="rounded-3xl bg-white border border-brand-ink/5 px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-brand-ink-muted text-xs">الأسبوع</p>
             {/* The page's <h1> — see the matching note in PlanViewer. /plan

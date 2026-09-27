@@ -757,3 +757,17 @@
     bottom: calc(4.5rem + env(safe-area-inset-bottom));
   }
 }
+
+/* Height of the AppShell's sticky header, for anything that sticks beneath
+   it (the plan's day switcher). 0 on focus routes, which have no header. */
+:root {
+  --app-header-h: 0px;
+}
+body:has([data-app-header]) {
+  --app-header-h: 4rem;
+}
+@media (width >= 64rem) {
+  body:has([data-app-header]) {
+    --app-header-h: 4.5rem;
+  }
+}
