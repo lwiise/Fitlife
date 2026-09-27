@@ -39,20 +39,26 @@ export interface ArabicCountForms {
  * one/two return their phrase alone, because Arabic states the count through
  * the noun's own form there; every other category is prefixed with the digits.
  */
-export function countAr(n: number, forms: ArabicCountForms): string {
+export function countAr(
+  n: number,
+  forms: ArabicCountForms,
+  /** How the numeral is written — Western digits by default; the signed-in
+   * app passes `arNum` for Arabic-Indic digits. */
+  fmt: (n: number) => string = String,
+): string {
   switch (AR_PLURAL_RULES.select(n)) {
     case "zero":
-      return `${n} ${forms.zero ?? forms.few}`;
+      return `${fmt(n)} ${forms.zero ?? forms.few}`;
     case "one":
       return forms.one;
     case "two":
       return forms.two;
     case "few":
-      return `${n} ${forms.few}`;
+      return `${fmt(n)} ${forms.few}`;
     case "many":
-      return `${n} ${forms.many}`;
+      return `${fmt(n)} ${forms.many}`;
     default:
-      return `${n} ${forms.other}`;
+      return `${fmt(n)} ${forms.other}`;
   }
 }
 
@@ -72,4 +78,31 @@ export const PERSON_FORMS: ArabicCountForms = {
   few: "أشخاص",
   many: "شخصاً",
   other: "شخص",
+};
+
+/** وجبة — meals cooked / left. */
+export const MEAL_FORMS: ArabicCountForms = {
+  one: "وجبة واحدة",
+  two: "وجبتين",
+  few: "وجبات",
+  many: "وجبة",
+  other: "وجبة",
+};
+
+/** تمرين — exercises in a session. */
+export const EXERCISE_FORMS: ArabicCountForms = {
+  one: "تمرين واحد",
+  two: "تمرينين",
+  few: "تمارين",
+  many: "تمريناً",
+  other: "تمرين",
+};
+
+/** دقيقة */
+export const MINUTE_FORMS: ArabicCountForms = {
+  one: "دقيقة واحدة",
+  two: "دقيقتين",
+  few: "دقائق",
+  many: "دقيقة",
+  other: "دقيقة",
 };

@@ -112,6 +112,26 @@ export function riyadhCurrentYear(): number {
   return Number(riyadhTodayISO().slice(0, 4));
 }
 
+/** The current hour (0-23) in Riyadh — the greeting's morning/evening. */
+export function riyadhHour(): number {
+  return new Date(Date.now() + RIYADH_OFFSET_MS).getUTCHours();
+}
+
+/** Today's weekday in Riyadh, 0 = Sunday — the WORKOUT day_index convention. */
+export function riyadhWeekday(): number {
+  return new Date(`${riyadhTodayISO()}T00:00:00Z`).getUTCDay();
+}
+
+/** «السبت، ٢٦ سبتمبر» for today in Riyadh (Gregorian, Arabic digits). */
+export function riyadhDateLabelAr(): string {
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(`${riyadhTodayISO()}T00:00:00Z`));
+}
+
 /** YYYY-MM-DD + n days → YYYY-MM-DD (pure calendar math, no TZ). */
 export function addDaysISO(dateISO: string, days: number): string {
   const d = new Date(`${dateISO}T00:00:00Z`);

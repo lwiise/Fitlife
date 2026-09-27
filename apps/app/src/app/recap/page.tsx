@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { CalendarDays, Lock, UtensilsCrossed, Users, Languages } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { fetchWeeklyRecap, type WeeklyRecap } from "@/lib/engagement/recap";
-import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
 import { ShareWeekButton } from "./ShareWeekButton";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -83,12 +81,6 @@ export default async function RecapPage() {
 
   return (
     <main dir="rtl" className="min-h-screen bg-brand-surface">
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-        <div className="container-app py-4 flex items-center justify-between">
-          <Logo />
-          <BackToDashboard />
-        </div>
-      </header>
 
       <div className="container-app max-w-2xl py-8 space-y-6">
         <h1 className="text-3xl font-extrabold text-brand-ink">رسالتك الأسبوعية</h1>

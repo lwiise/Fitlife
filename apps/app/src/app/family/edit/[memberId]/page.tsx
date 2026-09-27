@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, ChevronLeft } from "lucide-react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { genderPick } from "@/lib/copy/gender";
@@ -147,18 +146,9 @@ export default async function EditMemberPage({
 
   return (
     <main className="min-h-screen bg-brand-surface">
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-        <div className="container-app py-4 flex items-center justify-between">
-          <a
-            href="/dashboard"
-            aria-label="فت لايف — الرئيسية"
-            className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-          >
-            <Logo className="h-9 w-auto" />
-          </a>
-          <BackButton href="/family" />
-        </div>
-      </header>
+      <div className="container-app pt-3 -mb-4 md:-mb-6">
+        <BackButton className="-ms-2.5" href="/family" />
+      </div>
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>

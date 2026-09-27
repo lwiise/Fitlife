@@ -5,9 +5,6 @@ import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
-import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
-import { SettingsLink } from "@/components/SettingsLink";
 import { FamilyMemberCard } from "./FamilyMemberCard";
 import { HousekeeperCard } from "./HousekeeperCard";
 import { FamilyAddBuilder } from "./FamilyAddBuilder";
@@ -32,15 +29,6 @@ export default async function FamilyPage() {
 
   return (
     <main className="min-h-screen bg-brand-surface">
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-        <div className="container-app py-4 flex items-center justify-between">
-          <Logo className="h-9 w-auto" />
-          <div className="flex items-center gap-2">
-            <BackToDashboard />
-            <SettingsLink />
-          </div>
-        </div>
-      </header>
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>

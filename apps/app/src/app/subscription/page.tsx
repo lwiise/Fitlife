@@ -5,9 +5,6 @@ import { Loader2 } from "lucide-react";
 import { PRICING_TIERS, type Cadence } from "@fitlife/config";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
-import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
-import { SettingsLink } from "@/components/SettingsLink";
 import { BillingPortalButton } from "../dashboard/BillingPortalButton";
 import { CurrentPlanCard } from "./CurrentPlanCard";
 import { CardOnFile } from "./CardOnFile";
@@ -70,29 +67,10 @@ export default async function SubscriptionPage({
   const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
   const g = genderPick(ownerSex);
 
-  const header = (
-    <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-      <div className="container-app py-4 flex items-center justify-between">
-        <a
-          href="/dashboard"
-          aria-label="فت لايف — الرئيسية"
-          className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-        >
-          <Logo className="h-9 w-auto" />
-        </a>
-        <div className="flex items-center gap-2">
-          <BackToDashboard />
-          <SettingsLink />
-        </div>
-      </div>
-    </header>
-  );
-
   // No subscription at all → send to pricing.
   if (!sub) {
     return (
       <main className="min-h-screen bg-brand-surface">
-        {header}
         <div className="container-app py-8 md:py-12 max-w-2xl">
           <div className="bg-white rounded-3xl border border-brand-ink/5 p-6 text-center">
             <p className="font-bold text-brand-ink">ما عندك اشتراك بعد</p>
@@ -113,7 +91,6 @@ export default async function SubscriptionPage({
 
   return (
     <main className="min-h-screen bg-brand-surface">
-      {header}
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">

@@ -23,6 +23,7 @@ export function FreeAccessBadge() {
   return (
     <div
       dir="rtl"
+      data-float-bottom=""
       className="fixed bottom-2 end-2 z-40 pointer-events-none select-none rounded-full border border-brand-yellow/50 bg-brand-ink/85 px-3 py-1 text-[11px] font-bold leading-none text-brand-yellow shadow-lg"
     >
       {FREE_ACCESS_NOTICE_AR}

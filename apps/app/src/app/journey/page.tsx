@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
-import { BackToDashboard } from "@/components/BackToDashboard";
 import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
@@ -207,15 +205,9 @@ export default async function JourneyPage({
 
   return (
     <main dir="rtl" className="min-h-screen bg-brand-surface">
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-        <div className="container-app py-4 flex items-center justify-between">
-          <Logo />
-          <div className="flex items-center gap-2">
-            <BackButton href="/plan" />
-            <BackToDashboard />
-          </div>
-        </div>
-      </header>
+      <div className="container-app pt-3 -mb-4 md:-mb-6">
+        <BackButton className="-ms-2.5" href="/plan" />
+      </div>
 
       <div className="container-app max-w-2xl py-8 space-y-6">
         <h1 className="text-3xl font-extrabold text-brand-ink">
