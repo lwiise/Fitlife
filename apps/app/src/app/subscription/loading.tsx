@@ -1,16 +1,20 @@
 /**
  * Route skeleton shown during server-component navigation. Static RSC markup
  * only — no client JS; animate-pulse is disabled globally under
- * prefers-reduced-motion (globals.css). Root layout provides lang/dir.
+ * prefers-reduced-motion (globals.css). Mirrors page.tsx: header, current
+ * plan card, change-plan card, billing history.
  */
 export default function SubscriptionLoading() {
   return (
-    <main className="min-h-screen bg-brand-surface" aria-busy="true" aria-label="جارٍ التحميل">
-      <div className="container-app py-8 space-y-4 max-w-2xl">
-        <div className="h-7 w-40 animate-pulse rounded-lg bg-brand-card" />
-        <div className="h-36 animate-pulse rounded-2xl border border-brand-line bg-brand-card" />
-        <div className="h-36 animate-pulse rounded-2xl border border-brand-line bg-brand-card" />
-        <div className="h-24 animate-pulse rounded-2xl border border-brand-line bg-brand-card" />
+    <main className="container-shell py-6 lg:py-10" aria-busy="true" aria-label="جارٍ التحميل">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="space-y-2">
+          <div className="h-9 w-40 animate-pulse rounded-lg bg-brand-card" />
+          <div className="h-5 w-64 max-w-full animate-pulse rounded-lg bg-brand-card" />
+        </div>
+        <div className="h-56 animate-pulse rounded-[1.375rem] border border-brand-line bg-brand-card" />
+        <div className="h-72 animate-pulse rounded-[1.375rem] border border-brand-line bg-brand-card" />
+        <div className="h-32 animate-pulse rounded-[1.375rem] border border-brand-line bg-brand-card" />
       </div>
     </main>
   );

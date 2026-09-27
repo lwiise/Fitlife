@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { User, Baby, HeartPulse, Milk } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
+import { ButtonLink } from "@/components/ui/button";
 import { RemoveMemberButton } from "./RemoveMemberButton";
 
 const TYPE_META: Record<
@@ -27,45 +28,53 @@ const GOAL_LABELS: Record<string, string> = {
   general_health: "الصحة العامة",
 };
 
+/**
+ * One member's row inside the /family household list (an <li> of the grouped
+ * card). The avatar colour follows the ROSTER position (owner 0), so the
+ * person keeps the colour the home screen's season board gives them.
+ */
 export function FamilyMemberCard({
   id,
   name,
   memberType,
   primaryGoal,
+  rosterIndex,
   ownerSex,
 }: {
   id: string;
   name: string;
   memberType: string;
   primaryGoal: string | null;
+  rosterIndex: number;
   ownerSex?: string | null;
 }) {
   const meta = TYPE_META[memberType] ?? TYPE_META.adult!;
   const { Icon } = meta;
+  const goal = primaryGoal ? GOAL_LABELS[primaryGoal] : undefined;
 
   return (
-    <div className="flex items-center gap-3 bg-brand-card rounded-2xl p-4 border border-brand-line">
-      <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-        <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-brand-ink truncate">{name}</p>
-        <p className="text-brand-ink-muted text-xs mt-0.5">
-          {meta.label}
-          {primaryGoal && GOAL_LABELS[primaryGoal]
-            ? ` · ${GOAL_LABELS[primaryGoal]}`
-            : ""}
+    <li className="flex min-h-16 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5">
+      <Avatar name={name} rosterIndex={rosterIndex} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-bold text-brand-ink">{name}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-meta text-brand-ink-muted">
+          <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {meta.label}
+            {goal ? ` · ${goal}` : ""}
+          </span>
         </p>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <Link
+      <div className="flex shrink-0 items-center gap-1">
+        <ButtonLink
           href={`/family/edit/${id}`}
-          className="text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md px-1 min-h-11 inline-flex items-center"
+          variant="quiet"
+          aria-label={`تعديل ${name}`}
         >
           تعديل
-        </Link>
+        </ButtonLink>
         <RemoveMemberButton memberId={id} name={name} ownerSex={ownerSex} />
       </div>
-    </div>
+    </li>
   );
 }

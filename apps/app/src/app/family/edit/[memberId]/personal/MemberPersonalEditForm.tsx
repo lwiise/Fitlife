@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { updateMemberPersonal } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
 
 const currentYear = new Date().getFullYear();
 
@@ -84,14 +85,12 @@ export function MemberPersonalEditForm({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-app-title text-brand-ink">
-          المعلومات الشخصية
-        </h1>
-        <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          {g("عدّلي الاسم والبيانات الأساسية.", "عدّل الاسم والبيانات الأساسية.")}
-        </p>
-      </header>
+      <PageHeader
+        className="mb-0"
+        back={{ href: `/family/edit/${memberId}`, label: "بيانات الفرد" }}
+        title="المعلومات الشخصية"
+        description={g("عدّلي الاسم والبيانات الأساسية.", "عدّل الاسم والبيانات الأساسية.")}
+      />
 
       <div>
         <label htmlFor="m-name" className="block text-sm font-bold text-brand-ink mb-2">

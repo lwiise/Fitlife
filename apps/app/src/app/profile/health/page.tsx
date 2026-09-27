@@ -5,7 +5,6 @@ import {
   GATE_CONDITIONS,
   STABLE_CONDITIONS,
 } from "@/lib/plans/medicalConditions";
-import { BackButton } from "@/components/BackButton";
 import { asStringArray } from "../labels";
 import { HealthEditForm } from "./HealthEditForm";
 
@@ -36,12 +35,8 @@ export default async function HealthEditPage() {
     : undefined;
 
   return (
-    <main className="min-h-screen bg-brand-surface">
-      <div className="container-app pt-3 -mb-4 md:-mb-6">
-        <BackButton className="-ms-2.5" href="/profile" />
-      </div>
-
-      <div className="container-app py-8 md:py-12 max-w-2xl">
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl">
         <HealthEditForm
           initial={{
             activity_level: profile.activity_level,

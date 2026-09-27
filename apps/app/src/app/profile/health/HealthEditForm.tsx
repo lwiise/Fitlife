@@ -27,6 +27,7 @@ import {
 } from "@fitlife/plan-engine";
 import { saveMomHealthInfo } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
 
 type PregStatus = "none" | "pregnant" | "lactating";
 type ActivityValue = (typeof ACTIVITY_OPTIONS)[number]["value"];
@@ -238,14 +239,12 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-app-title text-brand-ink">
-          الصحة والأهداف
-        </h1>
-        <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          {g("عدّلي نشاطك وهدفك وحالتك الصحية.", "عدّل نشاطك وهدفك وحالتك الصحية.")}
-        </p>
-      </header>
+      <PageHeader
+        className="mb-0"
+        back={{ href: "/profile", label: "ملفي الشخصي" }}
+        title="الصحة والأهداف"
+        description={g("عدّلي نشاطك وهدفك وحالتك الصحية.", "عدّل نشاطك وهدفك وحالتك الصحية.")}
+      />
 
       {/* النشاط والهدف */}
       <section className="space-y-4">

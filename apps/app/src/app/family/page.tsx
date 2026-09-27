@@ -1,6 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { User } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { CardHeader } from "@/components/ui/card";
+import { Avatar } from "@/components/ui/avatar";
+import { ButtonLink } from "@/components/ui/button";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -27,65 +29,82 @@ export default async function FamilyPage() {
   const members = allMembers.filter((m) => m.role !== "housekeeper");
   const housekeeper = allMembers.find((m) => m.role === "housekeeper");
 
+  const ownerName = profile.display_name?.trim() || g("أنتِ", "أنتَ");
+
   return (
-    <main className="min-h-screen bg-brand-surface">
-
-      <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
-        <header>
-          <h1 className="text-app-title text-brand-ink">
-            عائلتك
-          </h1>
-          <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            {g(
-              "كل فرد تضيفينه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.",
-              "كل فرد تضيفه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.",
-            )}
-          </p>
-        </header>
-
-        <div className="space-y-3">
-          {/* Mom — edits via her own profile flow (/profile), not the member wizard. */}
-          <div className="flex items-center gap-3 bg-brand-card rounded-2xl p-4 border border-brand-line">
-            <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center flex-shrink-0">
-              <User className="size-5 text-brand-pink" aria-hidden="true" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-brand-ink truncate">
-                <span className="text-brand-pink">{g("أنتِ", "أنتَ")}</span>
-                {profile.display_name ? ` — ${profile.display_name}` : ""}
-              </p>
-              <p className="text-brand-ink-muted text-xs mt-0.5">
-                {g("صاحبة الحساب", "صاحب الحساب")}
-              </p>
-            </div>
-            <Link
-              href="/profile"
-              className="text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md px-1 min-h-11 inline-flex items-center flex-shrink-0"
-            >
-              تعديل
-            </Link>
-          </div>
-
-          {members.map((m) => (
-            <FamilyMemberCard
-              key={m.id}
-              id={m.id}
-              name={m.name}
-              memberType={m.member_type ?? "adult"}
-              primaryGoal={m.primary_goal}
-              ownerSex={profile.sex}
-            />
-          ))}
-
-          {housekeeper && (
-            <HousekeeperCard
-              id={housekeeper.id}
-              name={housekeeper.name}
-              preferredLanguage={housekeeper.preferred_language}
-              ownerSex={profile.sex}
-            />
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <PageHeader
+          className="mb-0"
+          title="عائلتك"
+          description={g(
+            "كل فرد تضيفينه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.",
+            "كل فرد تضيفه يأخذ خطته الخاصة ضمن وجبات منسقة للعائلة.",
           )}
-        </div>
+        />
+
+        <section
+          aria-labelledby="family-household"
+          className="overflow-hidden rounded-[1.375rem] border border-brand-line bg-brand-card"
+        >
+          <CardHeader
+            id="family-household"
+            title="أهل البيت"
+            className="mb-0 px-4 pt-4 pb-1 sm:px-5"
+          />
+          <ul className="divide-y divide-brand-line">
+            {/* The owner edits via her own profile flow (/profile), not the member wizard. */}
+            <li className="flex min-h-16 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5">
+              <Avatar name={ownerName} rosterIndex={0} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-bold text-brand-ink">
+                  {g("أنتِ", "أنتَ")}
+                  {profile.display_name ? ` · ${profile.display_name}` : ""}
+                </p>
+                <p className="mt-0.5 text-meta text-brand-ink-muted">
+                  {g("صاحبة الحساب", "صاحب الحساب")}
+                </p>
+              </div>
+              <ButtonLink href="/profile" variant="quiet" className="shrink-0">
+                تعديل
+              </ButtonLink>
+            </li>
+
+            {/* Roster index follows the season board: owner 0, members in list order. */}
+            {members.map((m, i) => (
+              <FamilyMemberCard
+                key={m.id}
+                id={m.id}
+                name={m.name}
+                memberType={m.member_type ?? "adult"}
+                primaryGoal={m.primary_goal}
+                rosterIndex={i + 1}
+                ownerSex={profile.sex}
+              />
+            ))}
+          </ul>
+        </section>
+
+        {housekeeper && (
+          <section
+            aria-labelledby="family-cook"
+            className="overflow-hidden rounded-[1.375rem] border border-brand-line bg-brand-card"
+          >
+            <CardHeader
+              id="family-cook"
+              title="من يطبخ"
+              className="mb-0 px-4 pt-4 pb-1 sm:px-5"
+            />
+            <ul>
+              <HousekeeperCard
+                id={housekeeper.id}
+                name={housekeeper.name}
+                preferredLanguage={housekeeper.preferred_language}
+                ownerSex={profile.sex}
+              />
+            </ul>
+          </section>
+        )}
 
         <FamilyAddBuilder
           canAddHusband={!members.some((m) => m.role === "dad")}

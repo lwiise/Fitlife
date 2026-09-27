@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
-import { BackButton } from "@/components/BackButton";
 import { asStringArray } from "../labels";
 import { DeepDiveForm } from "./DeepDiveForm";
 
@@ -15,12 +14,8 @@ export default async function DeepDivePage() {
   if (!profile) redirect("/onboarding");
 
   return (
-    <main className="min-h-screen bg-brand-surface">
-      <div className="container-app pt-3 -mb-4 md:-mb-6">
-        <BackButton className="-ms-2.5" href="/profile" />
-      </div>
-
-      <div className="container-app py-8 md:py-12 max-w-2xl">
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl">
         <DeepDiveForm
           initial={{
             waist_cm: profile.waist_cm,

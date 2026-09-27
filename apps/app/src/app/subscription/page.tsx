@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { PRICING_TIERS, type Cadence } from "@fitlife/config";
@@ -12,9 +11,12 @@ import { ChangePlanSection } from "./ChangePlanSection";
 import { BillingHistory } from "./BillingHistory";
 import { CancelSubscription, PausedNotice } from "./CancelSubscription";
 import { genderPick } from "@/lib/copy/gender";
+import { arNum } from "@/lib/copy/numbers";
+import { ButtonLink } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
 import { loadFamilyLedger } from "@/lib/engagement/ledger";
-
-const LEDGER_NUM = new Intl.NumberFormat("ar-SA", { useGrouping: false });
 
 /** «ذاكرة مائدتكم» in one factual sentence for the cancel dialog. */
 async function buildLedgerLine(
@@ -23,7 +25,7 @@ async function buildLedgerLine(
 ): Promise<string | null> {
   const ledger = await loadFamilyLedger(supabase, userId);
   if (ledger.planWeeks === 0) return null;
-  return `سجلّ بيتك حتى اليوم: ${LEDGER_NUM.format(ledger.planWeeks)} خطة أسبوعية لبيتٍ من ${LEDGER_NUM.format(ledger.membersServed)} — يبقى محفوظاً حتى نهاية اشتراكك.`;
+  return `سجلّ بيتك حتى اليوم: ${arNum(ledger.planWeeks)} خطة أسبوعية لبيتٍ من ${arNum(ledger.membersServed)} — يبقى محفوظاً حتى نهاية اشتراكك.`;
 }
 
 export const metadata = {
@@ -39,12 +41,10 @@ function SectionShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7">
-      <h2 className="font-extrabold text-xl text-brand-ink leading-tight mb-4">
-        {title}
-      </h2>
+    <Card>
+      <CardHeader title={title} className="mb-3" />
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -70,17 +70,13 @@ export default async function SubscriptionPage({
   // No subscription at all → send to pricing.
   if (!sub) {
     return (
-      <main className="min-h-screen bg-brand-surface">
-        <div className="container-app py-8 md:py-12 max-w-2xl">
-          <div className="bg-brand-card rounded-3xl border border-brand-line p-6 text-center">
-            <p className="font-bold text-brand-ink">لا يوجد اشتراك بعد</p>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center min-h-11 mt-4 px-5 rounded-full bg-brand-ink hover:bg-brand-purple-900 text-white text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-            >
-              {g("اختاري خطتك", "اختر خطتك")}
-            </Link>
-          </div>
+      <main className="container-shell py-6 lg:py-10">
+        <div className="mx-auto max-w-2xl space-y-6">
+          <PageHeader className="mb-0" title="اشتراكك" />
+          <Card className="space-y-4 text-center">
+            <p className="text-app-item text-brand-ink">لا يوجد اشتراك بعد</p>
+            <ButtonLink href="/pricing">{g("اختاري خطتك", "اختر خطتك")}</ButtonLink>
+          </Card>
         </div>
       </main>
     );
@@ -90,23 +86,15 @@ export default async function SubscriptionPage({
   const cadence: Cadence = sub.cadence === "annual" ? "annual" : "monthly";
 
   return (
-    <main className="min-h-screen bg-brand-surface">
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <PageHeader
+          className="mb-0"
+          title="اشتراكك"
+          description="الباقة، الفواتير، وطريقة الدفع."
+        />
 
-      <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
-        <h1 className="text-app-title text-brand-ink">
-          اشتراكك
-        </h1>
-
-        {changed === "success" && (
-          <div
-            role="status"
-            className="rounded-2xl bg-brand-emerald/10 border border-brand-emerald/20 px-4 py-3"
-          >
-            <p className="text-brand-emerald text-sm font-bold leading-relaxed">
-              تم تحديث اشتراكك
-            </p>
-          </div>
-        )}
+        {changed === "success" && <Notice tone="success" title="تم تحديث اشتراكك" />}
 
         {/* Section 1 — Current plan */}
         <CurrentPlanCard sub={sub}>
@@ -130,17 +118,17 @@ export default async function SubscriptionPage({
           {hasLSSub ? (
             <Suspense
               fallback={
-                <div className="flex items-center gap-2 text-brand-ink-muted text-sm py-4">
+                <div className="flex items-center gap-2 py-4 text-[15px] text-brand-ink-muted">
                   <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  جاري تحميل الفواتير…
+                  جارٍ تحميل الفواتير…
                 </div>
               }
             >
               <BillingHistory subId={sub.lemonsqueezy_subscription_id!} />
             </Suspense>
           ) : (
-            <p className="text-brand-ink-muted text-sm leading-relaxed">
-              {g("ما فيه فواتير بعد — أنتِ في الفترة التجريبية", "ما فيه فواتير بعد — أنتَ في الفترة التجريبية")}
+            <p className="text-[15px] leading-relaxed text-brand-ink-muted">
+              {g("لا توجد فواتير بعد، فأنتِ في الفترة التجريبية.", "لا توجد فواتير بعد، فأنتَ في الفترة التجريبية.")}
             </p>
           )}
         </SectionShell>
@@ -149,8 +137,8 @@ export default async function SubscriptionPage({
         {sub.lemonsqueezy_customer_id && (
           <SectionShell title="طريقة الدفع">
             <BillingPortalButton label="تحديث طريقة الدفع" variant="ghost" />
-            <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
-              تحديث البطاقة يتم عبر بوابة الدفع الآمنة
+            <p className="mt-2 text-meta leading-relaxed text-brand-ink-muted">
+              تحديث البطاقة يتم عبر بوابة الدفع الآمنة.
             </p>
           </SectionShell>
         )}
@@ -160,9 +148,9 @@ export default async function SubscriptionPage({
           sub.status === "active" &&
           !sub.cancel_at_period_end && (
             <SectionShell title="إلغاء الاشتراك">
-              <p className="text-brand-ink-muted text-sm leading-relaxed mb-4">
+              <p className="mb-4 text-[15px] leading-relaxed text-brand-ink-muted">
                 {g("يمكنكِ الإلغاء في أي وقت.", "يمكنك الإلغاء في أي وقت.")} الخدمة تستمر
-                حتى نهاية فترتك الحالية — وإن كان السبب سفراً أو انشغالاً،
+                حتى نهاية فترتك الحالية، وإن كان السبب سفراً أو انشغالاً
                 فالاستراحة المؤقتة متاحة أيضاً.
               </p>
               <CancelSubscription

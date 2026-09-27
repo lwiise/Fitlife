@@ -1,6 +1,7 @@
 import { LifeBuoy, Mail, MessageCircle, ChevronLeft } from "lucide-react";
 import { env } from "@/lib/env";
 import { genderPick } from "@/lib/copy/gender";
+import { Card, CardHeader } from "@/components/ui/card";
 
 function ContactRow({
   href,
@@ -16,19 +17,19 @@ function ContactRow({
   return (
     <a
       href={href}
-      className="flex items-center justify-between gap-3 min-h-11 py-3 border-b border-brand-line last:border-0 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
+      className="group -mx-2 flex min-h-12 items-center justify-between gap-3 rounded-xl border-b border-brand-line px-2 py-3 last:border-0 hover:bg-brand-tint/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-purple-900"
     >
       <span className="flex items-center gap-2.5">
-        <Icon className="size-4 text-brand-purple-900" aria-hidden="true" />
-        <span className="text-brand-ink font-bold text-sm group-hover:text-brand-purple-900 transition-colors">
+        <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
+        <span className="text-base font-bold text-brand-ink group-hover:text-brand-purple-900">
           {label}
         </span>
       </span>
-      <span className="flex items-center gap-1.5 text-brand-ink-muted text-xs">
-        <span dir="ltr" className="tabular-nums">
+      <span className="flex min-w-0 items-center gap-1.5 text-meta text-brand-ink-muted">
+        <span dir="ltr" className="truncate tabular-nums">
           {value}
         </span>
-        <ChevronLeft className="size-4 group-hover:text-brand-purple-900 transition-colors" aria-hidden="true" />
+        <ChevronLeft className="size-5 shrink-0 group-hover:text-brand-purple-900" aria-hidden="true" />
       </span>
     </a>
   );
@@ -41,13 +42,12 @@ export function SupportSection({ ownerSex }: { ownerSex?: string | null }) {
   const hasContact = Boolean(email || whatsapp);
 
   return (
-    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-          <LifeBuoy className="size-5 text-brand-purple-900" aria-hidden="true" />
-        </div>
-        <h2 className="font-bold text-lg text-brand-ink">{g("تواصلي معنا", "تواصل معنا")}</h2>
-      </div>
+    <Card aria-labelledby="support-section-title">
+      <CardHeader
+        id="support-section-title"
+        title={g("تواصلي معنا", "تواصل معنا")}
+        icon={<LifeBuoy className="size-5 text-brand-purple-900" aria-hidden="true" />}
+      />
 
       {hasContact ? (
         <div>
@@ -69,10 +69,10 @@ export function SupportSection({ ownerSex }: { ownerSex?: string | null }) {
           )}
         </div>
       ) : (
-        <p className="text-brand-ink-muted text-sm leading-relaxed">
-          فريق الدعم متواجد لمساعدتك. تفاصيل التواصل بتكون متوفرة هنا قريباً.
+        <p className="text-[15px] leading-relaxed text-brand-ink-muted">
+          فريق الدعم متواجد لمساعدتك، وستظهر تفاصيل التواصل هنا قريباً.
         </p>
       )}
-    </section>
+    </Card>
   );
 }

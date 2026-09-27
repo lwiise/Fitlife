@@ -5,6 +5,8 @@ import { UserRound, HeartPulse, Utensils, ClipboardList, Dumbbell, ChevronLeft }
 import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
+import { CardHeader } from "@/components/ui/card";
 import { ProfileEditedBanner } from "./ProfileEditedBanner";
 import { riyadhCurrentYear } from "@/lib/plans/dayMapping";
 import {
@@ -20,34 +22,51 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-function SectionCard({
-  href,
-  title,
-  summary,
-  icon: Icon,
-}: {
+type Row = {
   href: string;
   title: string;
   summary: string;
   icon: typeof UserRound;
-}) {
+};
+
+/** One tappable row of a grouped list — the settings page's row shape. */
+function SectionRow({ href, title, summary, icon: Icon }: Row) {
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-4 bg-brand-card rounded-2xl border border-brand-line p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+    <li>
+      <Link
+        href={href}
+        className="group flex min-h-16 items-center gap-4 px-4 py-3 hover:bg-brand-tint/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-purple-900 sm:px-5"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-tint">
+          <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-bold text-brand-ink">{title}</span>
+          <span className="mt-0.5 block truncate text-meta text-brand-ink-muted">{summary}</span>
+        </span>
+        <ChevronLeft
+          className="size-5 shrink-0 text-brand-ink-muted group-hover:text-brand-purple-900"
+          aria-hidden="true"
+        />
+      </Link>
+    </li>
+  );
+}
+
+function SectionGroup({ id, title, rows }: { id: string; title: string; rows: Row[] }) {
+  return (
+    // The Card surface without its padding: rows run edge to edge, as in /settings.
+    <section
+      aria-labelledby={id}
+      className="overflow-hidden rounded-[1.375rem] border border-brand-line bg-brand-card"
     >
-      <div className="size-11 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-        <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h2 className="font-bold text-brand-ink text-base">{title}</h2>
-        <p className="text-brand-ink-muted text-sm mt-0.5 truncate">{summary}</p>
-      </div>
-      <span className="inline-flex items-center gap-1 text-brand-purple-900 text-sm font-bold flex-shrink-0 group-hover:text-brand-purple-700 transition-colors">
-        تعديل
-        <ChevronLeft className="size-4" aria-hidden="true" />
-      </span>
-    </Link>
+      <CardHeader id={id} title={title} className="mb-0 px-4 pt-4 pb-1 sm:px-5" />
+      <ul className="divide-y divide-brand-line">
+        {rows.map((r) => (
+          <SectionRow key={r.href} {...r} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -97,70 +116,75 @@ export default async function ProfilePage() {
       .join("، ") || g("حددي تفضيلات عائلتك", "حدّد تفضيلات عائلتك");
 
   return (
-    <main className="min-h-screen bg-brand-surface">
-
-      <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
-        <header>
-          <h1 className="text-app-title text-brand-ink">
-            ملفي الشخصي
-          </h1>
-          <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            {g(
-              "عدّلي معلوماتكِ متى شئتِ. اختاري القسم الذي تريدين تعديله.",
-              "عدّل معلوماتك متى شئت. اختر القسم الذي تريد تعديله.",
-            )}
-          </p>
-        </header>
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <PageHeader
+          className="mb-0"
+          title="ملفي الشخصي"
+          description={g(
+            "عدّلي معلوماتكِ متى شئتِ. اختاري القسم الذي تريدين تعديله.",
+            "عدّل معلوماتك متى شئت. اختر القسم الذي تريد تعديله.",
+          )}
+        />
 
         <Suspense fallback={null}>
           <ProfileEditedBanner ownerSex={profile.sex} />
         </Suspense>
 
-        <div className="space-y-3">
-          <SectionCard
-            href="/profile/personal"
-            title="المعلومات الشخصية"
-            summary={personalSummary}
-            icon={UserRound}
-          />
-          <SectionCard
-            href="/profile/health"
-            title="الصحة والأهداف"
-            summary={healthSummary}
-            icon={HeartPulse}
-          />
-          <SectionCard
-            href="/onboarding/workout"
-            title="خطة التمارين"
-            summary="الأسئلة والإعدادات — تعديلها يعيد إنشاء البرنامج"
-            icon={Dumbbell}
-          />
-          <SectionCard
-            href="/profile/deep-dive"
-            title="أسئلة إضافية لخطة أدق"
-            summary="نمط يومك وعاداتك وتفضيلاتك — كلها اختيارية"
-            icon={ClipboardList}
-          />
-          <SectionCard
-            href="/profile/family-preferences"
-            title="تفضيلات العائلة"
-            summary={familySummary}
-            icon={Utensils}
-          />
-        </div>
+        <SectionGroup
+          id="profile-me"
+          title={g("عنكِ", "عنك")}
+          rows={[
+            {
+              href: "/profile/personal",
+              title: "المعلومات الشخصية",
+              summary: personalSummary,
+              icon: UserRound,
+            },
+            {
+              href: "/profile/health",
+              title: "الصحة والأهداف",
+              summary: healthSummary,
+              icon: HeartPulse,
+            },
+            {
+              href: "/profile/deep-dive",
+              title: "أسئلة إضافية لخطة أدق",
+              summary: "نمط يومك وعاداتك وتفضيلاتك، وكلها اختيارية",
+              icon: ClipboardList,
+            },
+          ]}
+        />
 
-        <div className="rounded-2xl bg-white/60 border border-brand-line px-4 py-3">
-          <p className="text-brand-ink-muted text-sm leading-relaxed">
-            أي تعديل لن يطبق على خطتك حتى {g("تنشئي", "تنشئ")}{" "}
-            <Link
-              href="/plan"
-              className="text-brand-purple-900 font-bold underline underline-offset-4 hover:text-brand-purple-700 transition-colors"
-            >
-              خطة جديدة من صفحة الخطة
-            </Link>
-            .
-          </p>
-        </div>
+        <SectionGroup
+          id="profile-plans"
+          title="الخطط والبيت"
+          rows={[
+            {
+              href: "/onboarding/workout",
+              title: "خطة التمارين",
+              summary: "الأسئلة والإعدادات. تعديلها يعيد إنشاء البرنامج",
+              icon: Dumbbell,
+            },
+            {
+              href: "/profile/family-preferences",
+              title: "تفضيلات العائلة",
+              summary: familySummary,
+              icon: Utensils,
+            },
+          ]}
+        />
+
+        <p className="text-meta leading-relaxed text-brand-ink-muted">
+          أي تعديل لن يُطبَّق على خطتك حتى {g("تنشئي", "تنشئ")}{" "}
+          <Link
+            href="/plan"
+            className="font-bold text-brand-purple-900 underline underline-offset-4 hover:text-brand-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          >
+            خطة جديدة من صفحة الخطة
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );

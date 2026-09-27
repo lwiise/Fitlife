@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { ChipInput } from "@/components/ChipInput";
 import { saveDeepDive, type DeepDiveInput } from "./actions";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
 
 // Option lists (فصحى). Values are the Zod-enforced slugs stored in 00013.
 const EXERCISE_DURATION = [
@@ -162,14 +163,15 @@ export function DeepDiveForm({
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-app-title text-brand-ink">
-          أسئلة إضافية لخطة أدق
-        </h1>
-        <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          كل الأسئلة اختيارية. كلما أجبتِ أكثر، صارت خطتك أدق وأقرب لنمط حياتك.
-        </p>
-      </header>
+      <PageHeader
+        className="mb-0"
+        back={{ href: "/profile", label: "ملفي الشخصي" }}
+        title="أسئلة إضافية لخطة أدق"
+        description={g(
+          "كل الأسئلة اختيارية. كلما أجبتِ أكثر، صارت خطتك أدق وأقرب لنمط حياتك.",
+          "كل الأسئلة اختيارية. كلما أجبت أكثر، صارت خطتك أدق وأقرب لنمط حياتك.",
+        )}
+      />
 
       <Group title="القياسات والحركة">
         <div className="grid grid-cols-2 gap-3">

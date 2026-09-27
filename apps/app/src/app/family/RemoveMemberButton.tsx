@@ -43,7 +43,7 @@ export function RemoveMemberButton({
           setConfirmOpen(true);
         }}
         disabled={isPending}
-        className="text-brand-ink-muted hover:text-red-600 text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md px-1 min-h-11"
+        className="text-brand-ink-muted hover:text-critical text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-full px-3 min-h-11 hover:bg-critical-soft"
       >
         {isPending ? "جاري الحذف…" : "حذف"}
       </button>

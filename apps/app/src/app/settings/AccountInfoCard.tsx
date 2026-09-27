@@ -1,4 +1,5 @@
 import { UserRound } from "lucide-react";
+import { Card, CardHeader } from "@/components/ui/card";
 import { genderPick } from "@/lib/copy/gender";
 import {
   getTrialDaysRemaining,
@@ -34,23 +35,23 @@ function statusBadge(status: SubscriptionRow["status"]): {
 } {
   switch (status) {
     case "active":
-      return { label: "نشط", className: "bg-brand-emerald/10 text-brand-emerald" };
+      return { label: "نشط", className: "bg-success-soft text-success" };
     case "trialing":
-      return { label: "فترة تجريبية", className: "bg-brand-lavender/30 text-brand-purple-900" };
+      return { label: "فترة تجريبية", className: "bg-brand-tint text-brand-purple-900" };
     case "past_due":
-      return { label: "تأخر السداد", className: "bg-red-50 text-red-700" };
+      return { label: "تأخر السداد", className: "bg-critical-soft text-critical" };
     case "cancelled":
-      return { label: "مُلغى", className: "bg-brand-ink/5 text-brand-ink-muted" };
+      return { label: "مُلغى", className: "bg-brand-tint text-brand-ink-muted" };
     default:
-      return { label: "منتهي", className: "bg-brand-ink/5 text-brand-ink-muted" };
+      return { label: "منتهي", className: "bg-brand-tint text-brand-ink-muted" };
   }
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-3 border-b border-brand-line last:border-0">
-      <span className="text-brand-ink-muted text-sm flex-shrink-0">{label}</span>
-      <span className="text-brand-ink font-bold text-sm text-end">{children}</span>
+    <div className="flex items-baseline justify-between gap-4 border-b border-brand-line py-3 last:border-0">
+      <span className="shrink-0 text-[15px] text-brand-ink-muted">{label}</span>
+      <span className="min-w-0 break-words text-end text-[15px] font-bold text-brand-ink">{children}</span>
     </div>
   );
 }
@@ -70,13 +71,12 @@ export function AccountInfoCard({
   const badge = subscription ? statusBadge(subscription.status) : null;
 
   return (
-    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-          <UserRound className="size-5 text-brand-purple-900" aria-hidden="true" />
-        </div>
-        <h2 className="font-bold text-lg text-brand-ink">معلومات الحساب</h2>
-      </div>
+    <Card aria-labelledby="account-info-title">
+      <CardHeader
+        id="account-info-title"
+        title="معلومات الحساب"
+        icon={<UserRound className="size-5 text-brand-purple-900" aria-hidden="true" />}
+      />
 
       <div>
         <Row label="البريد الإلكتروني">
@@ -91,7 +91,7 @@ export function AccountInfoCard({
             <Row label="الحالة">
               {badge && (
                 <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${badge.className}`}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-[13px] font-bold ${badge.className}`}
                 >
                   {badge.label}
                 </span>
@@ -102,6 +102,6 @@ export function AccountInfoCard({
           <Row label="الاشتراك">لا يوجد اشتراك نشط</Row>
         )}
       </div>
-    </section>
+    </Card>
   );
 }
