@@ -884,92 +884,13 @@ export function PlanViewer({
           </div>
         </div>
 
-        {/* Line 2: the household. A hairline separates context from people, and
-            the chips scroll horizontally on a phone rather than wrapping. A
-            solo plan has no chips — the row then carries «الوزن والمتابعة»
-            alone (it has nowhere else to live). */}
-        {(!isSolo || journeyLink) && (
+        {/* Line 2: the private weight record for the viewed member. The member
+            chips moved into the sticky switcher below (09/2026 redesign), so
+            «who» and «which day» stay reachable together at any scroll depth. */}
+        {journeyLink && (
           <>
-            <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
-            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
-              <div
-                className={`flex items-center gap-3 min-w-max ${
-                  isSolo ? "justify-end" : "justify-between"
-                }`}
-              >
-                {/* Member chips (hidden for a solo plan). «إضافة فرد» follows
-                    the last chip; «الوزن والمتابعة» takes the trailing (end)
-                    slot the add button used to occupy (owner directive
-                    07/2026). */}
-                {!isSolo && (
-                  <div className="flex items-center gap-2">
-                    {plan.members.map((m) => {
-                      const isActive = m.member_id === activeMemberId;
-                      const isMom = m.member_id === "mom";
-                      const transStatus = memberTranslationStatus(m);
-                      return (
-                        <button
-                          key={m.member_id}
-                          type="button"
-                          onClick={() => setActiveMemberId(m.member_id)}
-                          aria-pressed={isActive}
-                          className={`relative inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
-                            isActive
-                              ? "text-white"
-                              : "bg-brand-lavender/25 text-brand-purple-900 hover:bg-brand-lavender/40"
-                          }`}
-                        >
-                          {/* The selected pill slides between chips rather than
-                              cross-fading — the same single-element move the
-                              tab underline used to make. */}
-                          {isActive && (
-                            <motion.span
-                              layoutId="member-chip-fill"
-                              className="absolute inset-0 rounded-full bg-brand-purple-900"
-                            />
-                          )}
-                          <span className="relative">
-                            {/* «أنتِ» stays visible TEXT — the mom chip is never
-                                marked by color alone. It carries no pink dot:
-                                pink on the selected purple fill would vanish. */}
-                            {isMom && !translated && (
-                              <span className="me-1">
-                                {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                              </span>
-                            )}
-                            {memberLabel(m)}
-                            {translated && transStatus === "translating" && (
-                              <Loader2
-                                className={`inline-block ms-1.5 size-3 animate-spin motion-reduce:animate-none align-[-1px] ${
-                                  isActive ? "text-white" : "text-brand-purple-900"
-                                }`}
-                                aria-hidden="true"
-                              />
-                            )}
-                            {translated && transStatus === "queued" && (
-                              <Clock
-                                className="inline-block ms-1.5 size-3 align-[-1px] opacity-40"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    {!readOnly && (
-                      <Link
-                        href="/family"
-                        className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                      >
-                        <UserPlus className="size-4" aria-hidden="true" />
-                        إضافة فرد
-                      </Link>
-                    )}
-                  </div>
-                )}
-                {journeyLink}
-              </div>
-            </div>
+            <div className="h-px bg-brand-line my-4" aria-hidden="true" />
+            <div className="flex justify-end">{journeyLink}</div>
           </>
         )}
       </div>
@@ -1037,9 +958,79 @@ export function PlanViewer({
           thing — `generating` means days ARE still arriving in this run. */}
       {!translated && !readOnly && partialWeek && !generating && <PartialWeekNotice />}
 
-      {/* Day tabs — sticky under the app header so switching days never
-          means scrolling back up past a long day of recipes. */}
-      <div className="sticky top-[var(--app-header-h)] z-20 -mx-4 grid grid-cols-7 gap-1.5 bg-brand-surface/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-brand-surface/85 sm:mx-0 sm:px-0">
+      {/* The switcher — whose plan and which day — sticky under the app
+          header so neither means scrolling back up past a long day of
+          recipes. */}
+      <div className="sticky top-[var(--app-header-h)] z-20 -mx-4 space-y-2 bg-brand-surface/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-brand-surface/85 sm:mx-0 sm:px-0">
+        {!isSolo && (
+          <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+            <div className="flex min-w-max items-center gap-2">
+                {plan.members.map((m) => {
+                  const isActive = m.member_id === activeMemberId;
+                  const isMom = m.member_id === "mom";
+                  const transStatus = memberTranslationStatus(m);
+                  return (
+                    <button
+                      key={m.member_id}
+                      type="button"
+                      onClick={() => setActiveMemberId(m.member_id)}
+                      aria-pressed={isActive}
+                      className={`relative inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
+                        isActive
+                          ? "text-white"
+                          : "bg-brand-lavender/25 text-brand-purple-900 hover:bg-brand-lavender/40"
+                      }`}
+                    >
+                      {/* The selected pill slides between chips rather than
+                          cross-fading — the same single-element move the
+                          tab underline used to make. */}
+                      {isActive && (
+                        <motion.span
+                          layoutId="member-chip-fill"
+                          className="absolute inset-0 rounded-full bg-brand-purple-900"
+                        />
+                      )}
+                      <span className="relative">
+                        {/* «أنتِ» stays visible TEXT — the mom chip is never
+                            marked by color alone. It carries no pink dot:
+                            pink on the selected purple fill would vanish. */}
+                        {isMom && !translated && (
+                          <span className="me-1">
+                            {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
+                          </span>
+                        )}
+                        {memberLabel(m)}
+                        {translated && transStatus === "translating" && (
+                          <Loader2
+                            className={`inline-block ms-1.5 size-3 animate-spin motion-reduce:animate-none align-[-1px] ${
+                              isActive ? "text-white" : "text-brand-purple-900"
+                            }`}
+                            aria-hidden="true"
+                          />
+                        )}
+                        {translated && transStatus === "queued" && (
+                          <Clock
+                            className="inline-block ms-1.5 size-3 align-[-1px] opacity-40"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+                {!readOnly && (
+                  <Link
+                    href="/family"
+                    className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  >
+                    <UserPlus className="size-4" aria-hidden="true" />
+                    إضافة فرد
+                  </Link>
+                )}
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
           const label = translated
@@ -1073,6 +1064,7 @@ export function PlanViewer({
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* The day's numbers, ONCE (09/2026 redesign): the day's total against
