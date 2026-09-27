@@ -20,6 +20,22 @@
   --color-brand-emerald: #059669;
   --color-brand-warm-orange: #e89b5a;
 
+  /* ── App system (09/2026 redesign) ─────────────────────────────────────
+     Card = off-white (the surface rule: never pure white). One tint for
+     selected/notice fills instead of seven lavender opacities. Semantic
+     tones so an error never borrows the brand pink or a raw Tailwind red. */
+  --color-brand-card: #fcfbfe;
+  --color-brand-tint: #f1e7fd;
+  --color-brand-line: #1a102317;
+  --color-critical: #b42318;
+  --color-critical-soft: #fdeceb;
+  --color-success: #0b7a55;
+  --color-success-soft: #e2f4ec;
+  --color-warning: #8a5300;
+  --color-warning-soft: #fff3d4;
+  --color-gold-soft: #fff6da;
+  --color-gold-line: #efd27a;
+
   --font-tajawal: "Tajawal", system-ui, sans-serif;
 
   --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
@@ -294,6 +310,52 @@
     padding-inline: 1.5rem;
   }
 
+  @media (min-width: 1024px) {
+    padding-inline: 2rem;
+  }
+}
+
+/* ── App type scale (in-app pages; marketing keeps text-display/h1-h3) ──
+   Owner decision 09/2026: page titles 30px on phones → 40px on desktop,
+   sections 20-22px, list items 17px, body 16px, nothing under 13px. */
+@utility text-app-title {
+  font-size: 1.875rem;
+  font-weight: 800;
+  line-height: 1.15;
+  @media (min-width: 1024px) {
+    font-size: 2.5rem;
+  }
+}
+
+@utility text-app-section {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+  @media (min-width: 1024px) {
+    font-size: 1.375rem;
+  }
+}
+
+@utility text-app-item {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+@utility text-meta {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* The app page frame: content column + room for the phone tab bar. */
+@utility container-shell {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  max-width: 72.5rem;
+  @media (min-width: 640px) {
+    padding-inline: 1.5rem;
+  }
   @media (min-width: 1024px) {
     padding-inline: 2rem;
   }
@@ -679,4 +741,19 @@
 }
 @utility offer-rise {
   animation: offer-rise var(--dur-base) var(--ease-settle) backwards;
+}
+
+/* Signed-in app (09/2026): on phones the AppShell tab bar owns the bottom
+   band, so anything pinned to the viewport bottom (version notice, test-mode
+   badge, build stamp) sits above it instead of covering a tab. */
+@media (width < 64rem) {
+  /* Room for the tab bar at the end of the document — on body, not the
+     main wrapper, so in-flow blocks rendered after it (the consent bar)
+     are never hidden behind the tabs either. */
+  body:has([data-app-tabbar]) {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-app-tabbar]) [data-float-bottom] {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
 }

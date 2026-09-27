@@ -33,7 +33,7 @@ type FamilyMembers = Awaited<ReturnType<typeof getCurrentUserFamilyMembers>>;
 type LatestPlan = Awaited<ReturnType<typeof getCurrentUserLatestPlan>>;
 type WorkoutPlan = Awaited<ReturnType<typeof getLatestWorkoutPlan>>;
 
-/** Everything the «موسم بيتنا» leaderboard (`FamilySeasonCard`) needs. */
+/** Everything the «موسم بيتنا» leaderboard (the dashboard `SeasonBoard`) needs. */
 export interface FamilySeasonProps {
   members: Array<{ id: string; name: string; sex?: string | null }>;
   /** Calendar-collapsed meal marks (one row per date+slot+member, day_index
@@ -147,6 +147,9 @@ export async function getFamilySeasonProps(
   familyMembers: FamilyMembers,
   latestPlan: LatestPlan,
   workoutPlan: WorkoutPlan,
+  /** The dashboard's solo «أسبوعكِ» card reads the same numbers for a
+   * one-person roster; every other caller keeps the family-only contract. */
+  opts: { allowSolo?: boolean } = {},
 ): Promise<FamilySeasonProps | null> {
   if (!profile || latestPlan?.status !== "ready" || !latestPlan.plan_data) {
     return null;
@@ -166,8 +169,9 @@ export async function getFamilySeasonProps(
         sex: (m.sex as string | null) ?? null,
       })),
   ].filter((m) => inPlan.has(m.id));
-  // A solo household never sees a family board.
-  if (members.length < 2) return null;
+  // A solo household never sees a family board (the dashboard's personal
+  // week card opts in to the same numbers for one person).
+  if (members.length < (opts.allowSolo ? 1 : 2)) return null;
 
   // Per-member weekly plan totals — the % denominators (owner directive: the %
   // measures completion of the member's OWN plan). Meals from the meal plan;

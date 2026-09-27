@@ -17,6 +17,7 @@ export function BuildStamp() {
   return (
     <span
       aria-hidden="true"
+      data-float-bottom=""
       className="fixed bottom-2 start-2 z-40 pointer-events-none select-none text-[10px] leading-none text-brand-ink-muted/35 tabular-nums"
     >
       {BUILD_ID.slice(0, 7)}

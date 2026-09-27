@@ -1,5 +1,5 @@
 // «موسم بيتنا» — all season counting in one pure module, shared by the server
-// props builder (seasonProps.ts) and the leaderboard card (FamilySeasonCard).
+// props builder (seasonProps.ts) and the dashboard board (SeasonBoard).
 // Extracted so the ranking rules are unit-testable and can never fork between
 // the strip, the ring, and the per-member scores.
 //

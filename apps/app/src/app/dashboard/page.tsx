@@ -1,167 +1,129 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Sparkles, Users, AlertTriangle, MailOpen } from "lucide-react";
-import { AddFamilyBanner } from "./AddFamilyBanner";
-import { DeepDiveBanner } from "./DeepDiveBanner";
-import { PlanCTA, type PlanCTAState } from "./PlanCTA";
-import { WorkoutOptInBanner } from "./WorkoutOptInBanner";
-import { WorkoutPlanCard } from "./WorkoutPlanCard";
+import { Sparkles, UtensilsCrossed } from "lucide-react";
+import { planHasContent } from "@fitlife/plan-engine";
+import { ButtonLink } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
+import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { staleMemberIds } from "@/lib/plans/memberEdit";
-import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
-import { FamilySeasonCard } from "../plan/FamilySeasonCard";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
   getCurrentUserLatestPlan,
+  getCurrentUserCookablePlan,
 } from "@/lib/supabase/queries";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
-import { planHasContent } from "@fitlife/plan-engine";
+import {
+  dayIndexFromWeekStart,
+  riyadhDateLabelAr,
+  riyadhHour,
+  riyadhTodayISO,
+  riyadhWeekday,
+} from "@/lib/plans/dayMapping";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import {
   getCurrentSubscription,
   hasLiveLemonsqueezySubscription,
 } from "@/lib/subscription/state";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
-import { TrialBanner } from "@/components/subscription/TrialBanner";
-import { RenewalRecapCard } from "./RenewalRecapCard";
-import {
-  isWithinRenewalWindow,
-  loadFamilyLedger,
-} from "@/lib/engagement/ledger";
+import { isWithinRenewalWindow, loadFamilyLedger } from "@/lib/engagement/ledger";
 import { getFamilySeasonProps } from "@/lib/engagement/seasonProps";
-import { Logo } from "@/components/Logo";
-import { SettingsLink } from "@/components/SettingsLink";
-import { LogoutButton } from "./LogoutButton";
+import { computeSeasonStats } from "@/lib/engagement/seasonMath";
+import { buildTodayTable } from "@/lib/dashboard/todayTable";
+import { getTodayAbsences } from "@/lib/dashboard/todayAbsences";
+import { daysReady } from "@/lib/dashboard/planProgress";
+import { genderPick } from "@/lib/copy/gender";
+import { countAr, MEAL_FORMS } from "@/lib/copy/plural";
+import { arNum } from "@/lib/copy/numbers";
+import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
+import { RenewalRecapCard } from "./RenewalRecapCard";
 import { CheckoutSuccessHandler } from "./CheckoutSuccessHandler";
 import { RefreshOnFocus } from "./RefreshOnFocus";
 import { BillingPortalButton } from "./BillingPortalButton";
-import { genderPick } from "@/lib/copy/gender";
+import { EmptyPlanCTA } from "./EmptyPlanCTA";
+import { GeneratingPlanWatcher } from "./GeneratingPlanWatcher";
+import { TodayTimeline } from "./TodayTimeline";
+import { SeasonBoard } from "./SeasonBoard";
+import { SoloWeekCard } from "./SoloWeekCard";
+import { QuickTiles } from "./QuickTiles";
+import { NextStepCard } from "./NextStepCard";
+import { WorkoutTodayCard, type WorkoutToday } from "./WorkoutTodayCard";
+import { GenerationProgress } from "./GenerationProgress";
 
 export const metadata = {
-  title: "لوحة التحكم",
+  title: "الرئيسية",
 };
 
-/** «١٧ يوليو — ٢٣ يوليو» for the greeting sub-line (null on a bad date). */
-function formatWeekRange(weekStart: string): string | null {
-  try {
-    const start = new Date(`${weekStart}T00:00:00Z`);
-    if (Number.isNaN(start.getTime())) return null;
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 6);
-    const fmt = new Intl.DateTimeFormat("ar-SA", {
-      day: "numeric",
-      month: "long",
-      timeZone: "UTC",
-    });
-    return `${fmt.format(start)} — ${fmt.format(end)}`;
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * Home (09/2026 redesign, «سفرة اليوم»). Answers one question first — what
+ * are we eating today, and what needs me — then the week:
+ *   greeting + one-line summary → ONE notice (by priority) → today's table
+ *   (one-tap «طبختها كما هي») → today's workout → «موسم بيتنا» (or a solo
+ *   «أسبوعكِ») → quick tiles → ONE next-step suggestion.
+ * Desktop lays the same blocks in two asymmetric columns (7:5).
+ */
 export default async function DashboardPage() {
-  // Everything in this batch is independent — one parallel round-trip instead
-  // of a sequential waterfall (the auth lookup inside each helper is deduped
-  // per-request via React.cache).
-  const [profile, familyMembers, latestPlan, user, supabase] = await Promise.all([
+  // Independent reads in one round-trip (auth is deduped via React.cache).
+  const [profile, familyMembers, latestPlan, cookable, user, supabase] = await Promise.all([
     getCurrentUserProfile(),
     getCurrentUserFamilyMembers(),
     getCurrentUserLatestPlan(),
+    getCurrentUserCookablePlan(),
     getAuthUser(),
     createClient(),
   ]);
 
-  // A 'ready' plan with empty day shells isn't usable yet — treat it as still
-  // generating so downstream gates don't fire early.
-  const planHasMeals = latestPlan?.plan_data
-    ? planHasContent(latestPlan.plan_data)
-    : false;
-  const planIsReady = latestPlan?.status === "ready" && planHasMeals;
-
-  const [subscription, workoutPlan] = user
-    ? await Promise.all([
-        getCurrentSubscription(user.id),
-        getLatestWorkoutPlan(user.id),
-      ])
-    : [null, null];
-
   if (!profile) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-brand-surface px-4">
-        <div className="text-center">
-          <p className="text-brand-ink-muted">يتم تحضير حسابك...</p>
-        </div>
+      <main className="container-shell py-10">
+        <p className="text-base text-brand-ink-muted">نجهّز حسابكم…</p>
       </main>
     );
   }
 
   const g = genderPick(profile.sex);
   const onboardingDone = profile.onboarding_completed_at !== null;
-  const beneficiaryCount = familyMembers.filter(
-    (m) => m.role !== "housekeeper",
-  ).length;
-  // Plan doorway state — a 'ready' shell with no meals yet counts as generating.
-  const planCtaState: PlanCTAState = !latestPlan
-    ? "none"
-    : latestPlan.status === "failed"
-      ? "failed"
-      : planIsReady
-        ? "ready"
-        : "generating";
-  // Mom's plan exists but no other family members yet → nudge to add family.
-  const showAddFamily =
-    profile.mom_profile_completed_at !== null &&
-    planIsReady &&
-    !latestPlan?.in_progress &&
-    beneficiaryCount === 0;
 
-  // Meals-only user with a ready plan → nudge the workout opt-in. One banner at
-  // a time: family > workout > deep-dive.
-  const showWorkoutOptIn =
-    !showAddFamily &&
-    planIsReady &&
-    !latestPlan?.in_progress &&
-    profile.workout_profile === null &&
-    workoutPlan === null;
+  // A 'ready' row with empty day shells isn't usable yet — still generating.
+  const planHasMeals = latestPlan?.plan_data ? planHasContent(latestPlan.plan_data) : false;
+  const planIsReady = latestPlan?.status === "ready" && planHasMeals;
+  const generating =
+    !!latestPlan &&
+    (latestPlan.status === "generating" ||
+      (latestPlan.status === "ready" && !planHasMeals) ||
+      latestPlan.in_progress);
 
-  // First plan ready + the optional deep-dive questionnaire not done → nudge.
-  const showDeepDive =
-    !showAddFamily &&
-    !showWorkoutOptIn &&
-    planIsReady &&
-    !latestPlan?.in_progress &&
-    profile.deep_dive_completed_at === null;
+  // The week the table reads from: the latest plan once it has meals, else the
+  // previous complete week while a regeneration runs (a new run's empty row
+  // must not take today's dinner off the screen).
+  const tablePlan =
+    cookable?.plan.status === "ready" &&
+    cookable.plan.plan_data &&
+    planHasContent(cookable.plan.plan_data)
+      ? cookable.plan
+      : null;
 
-  // Members who exist but aren't in the current plan yet → auto-generate.
+  const [subscription, workoutPlan] = user
+    ? await Promise.all([getCurrentSubscription(user.id), getLatestWorkoutPlan(user.id)])
+    : [null, null];
+
+  const beneficiaries = familyMembers.filter((m) => m.role !== "housekeeper");
+  const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
+
+  // Members not in the current plan yet → the drain generates them.
   const planMemberIds = latestPlan?.member_ids ?? [];
-  const pendingMembers = familyMembers.filter(
-    (m) => m.role !== "housekeeper" && !planMemberIds.includes(m.id),
-  );
+  const pendingMembers = beneficiaries.filter((m) => !planMemberIds.includes(m.id));
   const needsFamilyPlan = planIsReady && pendingMembers.length > 0;
-  const pendingNames = pendingMembers.map((m) => m.name);
-  const pendingNamesText = pendingNames.join("، ");
-  // The drain also owns two states that are NOT "someone is missing": a member
-  // removed while a run held the lock (still in the plan, gone from the
-  // roster), and a member whose row was edited after the plan was built. Both
-  // used to be unreachable — the drain mounted only for pending members, so a
-  // lone weight edit never regenerated and a ghost tab never left.
+  const pendingNamesText = pendingMembers.map((m) => m.name).join("، ");
+  // The drain also aligns a plan with a removed member still in it (ghost) or
+  // a member edited after the plan was built (stale).
   const liveMemberIds = new Set(familyMembers.map((m) => m.id));
-  const hasGhostMember = planMemberIds.some(
-    (id) => id !== "mom" && !liveMemberIds.has(id),
-  );
+  const hasGhostMember = planMemberIds.some((id) => id !== "mom" && !liveMemberIds.has(id));
   const hasStaleMember =
     planIsReady && staleMemberIds(familyMembers, latestPlan?.generated_at).length > 0;
   const drainForAlignment = planIsReady && (hasGhostMember || hasStaleMember);
 
-  // Housekeeper recipe view existence — only used to add a step to the trial
-  // checklist (the dashboard shortcut link itself lives on /plan now).
-  const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
-  const showHousekeeperLink =
-    latestPlan?.status === "ready" &&
-    !!housekeeper &&
-    housekeeper.preferred_language !== "ar";
-
-  // Renewal-week recap — active paid subs within 7 days of period end.
   const showRenewalRecap =
     !!user &&
     subscription?.status === "active" &&
@@ -170,17 +132,18 @@ export default async function DashboardPage() {
     !!subscription.current_period_end &&
     isWithinRenewalWindow(subscription.current_period_end);
 
-  // The remaining reads are independent of each other — fetch them in one
-  // parallel batch instead of four sequential stages.
-  const [familyChangeAccess, seasonProps, renewalLedger, trialCounts] =
+  const todayISO = riyadhTodayISO();
+  const weekStart = tablePlan?.plan_data?.week_start_date ?? null;
+  const rawTodayIndex = weekStart ? dayIndexFromWeekStart(weekStart) : null;
+  const todayIndex =
+    rawTodayIndex !== null && rawTodayIndex >= 0 && rawTodayIndex <= 6 ? rawTodayIndex : null;
+
+  const [familyChangeAccess, seasonProps, renewalLedger, trialCounts, absences] =
     await Promise.all([
-      // Family-change access gate (only matters when members are pending).
       needsFamilyPlan && user ? canGenerateForFamilyChange(user.id) : null,
-      // «موسم بيتنا» leaderboard — the dashboard's centerpiece (first thing to
-      // see). Null for solo households or before a plan is ready.
-      getFamilySeasonProps(profile, familyMembers, latestPlan, workoutPlan),
+      // Same numbers for a solo household — its «أسبوعكِ» card reads them.
+      getFamilySeasonProps(profile, familyMembers, tablePlan, workoutPlan, { allowSolo: true }),
       showRenewalRecap && user ? loadFamilyLedger(supabase, user.id) : null,
-      // Day-3 trial activation checklist counts — only while trialing.
       user && subscription?.status === "trialing"
         ? Promise.all([
             supabase
@@ -195,222 +158,378 @@ export default async function DashboardPage() {
               .limit(1),
           ])
         : null,
+      tablePlan && todayIndex !== null
+        ? getTodayAbsences(profile.id, todayISO, todayIndex)
+        : [],
     ]);
 
   const pendingBlocked = familyChangeAccess?.allowed === false;
+  const isFamily = (seasonProps?.members.length ?? 0) >= 2;
+  const stats = seasonProps ? computeSeasonStats(seasonProps) : null;
 
-  const renewalRecap = renewalLedger
-    ? { ledger: renewalLedger, cadence: subscription?.cadence ?? null }
-    : null;
+  // ── Today's table ──────────────────────────────────────────────────────
+  const roster = seasonProps?.members ?? [];
+  const today =
+    tablePlan?.plan_data && todayIndex !== null
+      ? buildTodayTable({
+          // A member removed while a run held the lock stays in plan_data;
+          // they are nobody's dinner any more.
+          members: tablePlan.plan_data.members.filter(
+            (m) => m.member_id === "mom" || liveMemberIds.has(m.member_id),
+          ),
+          rosterOrder: roster.map((m) => m.id),
+          dayIndex: todayIndex,
+          checkins: (seasonProps?.checkins ?? []).map((c) => ({
+            day_index: c.day_index,
+            slot: c.slot,
+            member_id: c.member_id ?? null,
+            status: c.status ?? "",
+          })),
+          absences,
+        })
+      : null;
+  const people = roster.map((m, i) => ({ id: m.id, name: m.name, rosterIndex: i }));
 
-  let trialChecklist;
-  if (trialCounts) {
-    const [chatCount, weightCount] = trialCounts;
-    trialChecklist = {
-      planReady: planIsReady,
-      advisorTried: (chatCount.count ?? 0) > 0,
-      weightLogged: !weightCount.error && (weightCount.count ?? 0) > 0,
-      showHousekeeperStep: showHousekeeperLink,
+  // ── Today's workout (owner, once opted in) ─────────────────────────────
+  let workoutToday: WorkoutToday | null = null;
+  if (profile.workout_profile !== null && workoutPlan) {
+    if (workoutPlan.status === "generating") {
+      workoutToday = { kind: "generating", waitingForMeals: latestPlan?.in_progress ?? false };
+    } else if (workoutPlan.status === "failed") {
+      workoutToday = { kind: "failed" };
+    } else {
+      const mine = workoutPlan.plan_data?.members.find((m) => m.member_id === "mom");
+      if (mine) {
+        const weekday = riyadhWeekday();
+        const session = mine.weekly_sessions.find((s) => s.day_index === weekday);
+        if (session) {
+          const done = (seasonProps?.workoutCheckins ?? []).some(
+            (w) => w.member_id === "mom" && w.local_date === todayISO && w.status === "done",
+          );
+          workoutToday = {
+            kind: "session",
+            name: session.session_name_ar,
+            minutes: session.duration_min,
+            exercises: session.exercises.length,
+            done,
+          };
+        } else {
+          const sorted = [...mine.weekly_sessions].sort((a, b) => a.day_index - b.day_index);
+          const next = sorted.find((s) => s.day_index > weekday) ?? sorted[0];
+          workoutToday = { kind: "rest", nextName: next?.session_name_ar ?? null };
+        }
+      }
+    }
+  }
+
+  // ── Greeting + summary ─────────────────────────────────────────────────
+  const hello = riyadhHour() < 12 ? "صباح الخير" : "مساء الخير";
+  const greeting = profile.display_name
+    ? `${hello}، ${profile.display_name}`
+    : g("أهلاً بكِ", "أهلاً بك");
+  let summary: string | null = null;
+  if (today && today.rows.length > 0 && stats) {
+    const left = today.rows.length - today.marked;
+    const leftText =
+      left === 0
+        ? g("سجّلتِ وجبات اليوم كلها", "سجّلتَ وجبات اليوم كلها")
+        : `بقيت ${left === 2 ? "وجبتان" : countAr(left, MEAL_FORMS, arNum)} اليوم`;
+    const weekText = isFamily
+      ? `طبخ بيتكم ${countAr(stats.followedMeals, MEAL_FORMS, arNum)} من الخطة هذا الأسبوع`
+      : `${g("طبختِ", "طبختَ")} ${countAr(stats.ranked[0]?.mealsMarked ?? 0, MEAL_FORMS, arNum)} من ${g("خطتكِ", "خطتك")} هذا الأسبوع`;
+    summary = `${leftText}، و${weekText}.`;
+  } else if (!onboardingDone) {
+    summary = g(
+      "أسئلة قصيرة عنكِ وعن بيتكِ، ثم نجهّز خطة الأسبوع.",
+      "أسئلة قصيرة عنك وعن بيتك، ثم نجهّز خطة الأسبوع.",
+    );
+  } else if (generating && !tablePlan) {
+    summary = "نجهّز خطة أسبوعكم الأولى.";
+  }
+
+  // ── ONE notice, by priority ────────────────────────────────────────────
+  const liveSub = hasLiveLemonsqueezySubscription(subscription);
+  let notice: React.ReactNode = null;
+  if (subscription?.status === "past_due") {
+    notice = (
+      <Notice
+        tone="critical"
+        title="لم يتجدّد اشتراككم"
+        action={<BillingPortalButton label="تحديث الدفع" variant="ghost" />}
+      >
+        {g(
+          "حدّثي بيانات الدفع حتى لا تتوقف الخدمة.",
+          "حدّث بيانات الدفع حتى لا تتوقف الخدمة.",
+        )}
+      </Notice>
+    );
+  } else if (latestPlan?.masked_failure) {
+    notice = (
+      <Notice
+        tone="warning"
+        action={
+          <ButtonLink href="/plan" variant="secondary">
+            الخطة
+          </ButtonLink>
+        }
+      >
+        آخر محاولة لإنشاء خطة جديدة لم تكتمل، وخطتكم السابقة ما زالت كما هي.
+      </Notice>
+    );
+  } else if (needsFamilyPlan && pendingBlocked) {
+    notice = (
+      <Notice
+        tone="info"
+        action={
+          <ButtonLink href={liveSub ? "/subscription" : "/pricing"} variant="secondary">
+            {liveSub ? "إدارة الاشتراك" : "عرض الباقات"}
+          </ButtonLink>
+        }
+      >
+        {liveSub
+          ? `خطط ${pendingNamesText} تحتاج باقة أكبر. ${g("رقّي باقتكِ", "رقِّ باقتك")} ونجهّز خططهم مع وجبات البيت.`
+          : `خطط ${pendingNamesText} متاحة مع الاشتراك. ${g("اشتركي", "اشترك")} ونجهّز خططهم مع وجبات البيت.`}
+      </Notice>
+    );
+  } else if (needsFamilyPlan) {
+    notice = (
+      <Notice tone="progress">
+        {latestPlan?.in_progress
+          ? `أُضيف ${pendingNamesText}، ونبدأ خططهم بعد اكتمال الخطة الحالية.`
+          : `نجهّز خطة ${pendingNamesText} الآن، وتظهر وجباتهم هنا خلال دقائق.`}
+      </Notice>
+    );
+  } else if (generating && tablePlan) {
+    notice = (
+      <Notice tone="progress">
+        {cookable?.superseded
+          ? "نجهّز خطة أسبوع جديد، وتبقى خطتكم الحالية هنا حتى تجهز."
+          : "نكمل تجهيز بقية أيام الأسبوع، وتظهر هنا تباعاً."}
+        <GeneratingPlanWatcher />
+      </Notice>
+    );
+  } else if (subscription?.status === "trialing") {
+    const [chatCount, weightCount] = trialCounts ?? [];
+    notice = (
+      <TrialBanner
+        subscription={subscription}
+        checklist={
+          trialCounts
+            ? {
+                planReady: planIsReady,
+                advisorTried: (chatCount?.count ?? 0) > 0,
+                weightLogged: !weightCount?.error && (weightCount?.count ?? 0) > 0,
+                showHousekeeperStep:
+                  latestPlan?.status === "ready" &&
+                  !!housekeeper &&
+                  housekeeper.preferred_language !== "ar",
+              }
+            : undefined
+        }
+        ownerSex={profile.sex}
+      />
+    );
+  }
+
+  // ── ONE next step, by priority: family > workout > deep-dive ───────────
+  const settled = planIsReady && !latestPlan?.in_progress;
+  let nextStep: React.ComponentProps<typeof NextStepCard> | null = null;
+  if (settled && profile.mom_profile_completed_at !== null && beneficiaries.length === 0) {
+    nextStep = {
+      id: "family",
+      title: g("أضيفي أفراد بيتكِ إلى الخطة", "أضف أفراد بيتك إلى الخطة"),
+      body: "اشتراك واحد يخدم البيت كله: طبخة واحدة، وحصة محسوبة لكل فرد.",
+      href: "/family",
+      cta: g("أضيفي فرداً", "أضف فرداً"),
+    };
+  } else if (settled && profile.workout_profile === null && workoutPlan === null) {
+    nextStep = {
+      id: "workout",
+      title: g("أكملي خطتكِ ببرنامج تمارين", "أكمل خطتك ببرنامج تمارين"),
+      body: g(
+        "برنامج أسبوعي يوافق هدفكِ الغذائي، بعد بضع إجابات قصيرة.",
+        "برنامج أسبوعي يوافق هدفك الغذائي، بعد بضع إجابات قصيرة.",
+      ),
+      href: "/onboarding/workout",
+      cta: g("أضيفي التمارين", "أضف التمارين"),
+    };
+  } else if (settled && profile.deep_dive_completed_at === null) {
+    nextStep = {
+      id: "deep-dive",
+      title: g(
+        "أجيبي عن أسئلة التفضيلات لتكون الخطة أدق",
+        "أجب عن أسئلة التفضيلات لتكون الخطة أدق",
+      ),
+      body: "أسئلة اختيارية عن النوم والعادات والتفضيلات، في ثلاث دقائق تقريباً.",
+      href: "/profile/deep-dive",
+      cta: g("ابدئي", "ابدأ"),
     };
   }
 
-  return (
-    <main className="min-h-screen bg-brand-surface">
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-        <div className="container-app py-4 flex items-center justify-between">
-          <Logo className="h-9 w-auto" />
-          <div className="flex items-center gap-2">
-            <SettingsLink />
-            <LogoutButton />
-          </div>
+  // ── Today block ────────────────────────────────────────────────────────
+  let todayBlock: React.ReactNode;
+  if (!onboardingDone) {
+    todayBlock = (
+      <Card tone="feature" aria-labelledby="start-title">
+        <Sparkles className="size-6 text-brand-yellow" aria-hidden="true" />
+        <h2 id="start-title" className="mt-3 text-app-section">
+          خطتكم على بُعد دقائق
+        </h2>
+        <p className="mt-1 text-base leading-relaxed text-white/85">
+          {g(
+            "أجيبي عن أسئلة قصيرة عنكِ وعن بيتكِ، ونصمّم لكم خطة غذائية لكل فرد.",
+            "أجب عن أسئلة قصيرة عنك وعن بيتك، ونصمّم لكم خطة غذائية لكل فرد.",
+          )}
+        </p>
+        <Link
+          href="/onboarding"
+          className="mt-4 inline-flex min-h-12 items-center rounded-full bg-brand-card px-6 text-base font-bold text-brand-purple-900 hover:bg-brand-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900"
+        >
+          {g("ابدئي الآن", "ابدأ الآن")}
+        </Link>
+      </Card>
+    );
+  } else if (tablePlan && today && today.rows.length > 0) {
+    todayBlock = (
+      <Card aria-labelledby="today-title">
+        <CardHeader
+          id="today-title"
+          title="سفرة اليوم"
+          action={{ href: "/plan", label: "الأسبوع كاملاً" }}
+        />
+        <TodayTimeline
+          planId={tablePlan.id}
+          dayIndex={todayIndex!}
+          rows={today.rows}
+          people={people}
+          ownerSex={profile.sex ?? null}
+          householdSize={Math.max(1, roster.length)}
+        />
+        {today.ownerDay && (
+          <p className="mt-3 border-t border-brand-line pt-3 text-meta text-brand-ink-muted">
+            {g("مجموع يومكِ", "مجموع يومك")}{" "}
+            <b className="text-brand-ink">{arNum(today.ownerDay.calories)}</b> من{" "}
+            <b className="text-brand-ink">{arNum(today.ownerDay.target)}</b> سعرة
+          </p>
+        )}
+      </Card>
+    );
+  } else if (tablePlan && todayIndex === null) {
+    todayBlock = (
+      <Card aria-labelledby="today-title">
+        <CardHeader id="today-title" title="انتهى أسبوع خطتكم" />
+        <p className="text-base leading-relaxed text-brand-ink-muted">
+          {g(
+            "أنشئي خطة الأسبوع الجديد من صفحة الخطة، وتبقى الأسابيع السابقة في السجل.",
+            "أنشئ خطة الأسبوع الجديد من صفحة الخطة، وتبقى الأسابيع السابقة في السجل.",
+          )}
+        </p>
+        <ButtonLink href="/plan" className="mt-3">
+          إلى الخطة
+        </ButtonLink>
+      </Card>
+    );
+  } else if (tablePlan) {
+    todayBlock = (
+      <Card aria-labelledby="today-title">
+        <CardHeader
+          id="today-title"
+          title="سفرة اليوم"
+          action={{ href: "/plan", label: "الأسبوع كاملاً" }}
+        />
+        <p className="flex items-center gap-2 text-base text-brand-ink-muted">
+          <UtensilsCrossed className="size-5" aria-hidden="true" />
+          وجبات اليوم لم تُجهَّز بعد.
+        </p>
+      </Card>
+    );
+  } else if (generating) {
+    todayBlock = (
+      <GenerationProgress
+        daysReady={daysReady(latestPlan?.plan_data)}
+        ownerSex={profile.sex ?? null}
+        firstPlan={!cookable?.superseded}
+      />
+    );
+  } else if (latestPlan?.status === "failed") {
+    todayBlock = (
+      <Card aria-labelledby="today-title">
+        <CardHeader id="today-title" title="لم تكتمل خطتكم" />
+        <p className="text-base leading-relaxed text-brand-ink-muted">
+          حدث خطأ أثناء إعداد الخطة، ويمكن إعادة المحاولة الآن.
+        </p>
+        <div className="mt-3">
+          <EmptyPlanCTA isOnboarded variant="failed" ownerSex={profile.sex} />
         </div>
+      </Card>
+    );
+  } else {
+    todayBlock = (
+      <Card aria-labelledby="today-title">
+        <CardHeader id="today-title" title="لا توجد خطة بعد" />
+        <p className="text-base leading-relaxed text-brand-ink-muted">
+          {g(
+            "أنشئي خطتكِ الأولى لتظهر هنا وجبات اليوم.",
+            "أنشئ خطتك الأولى لتظهر هنا وجبات اليوم.",
+          )}
+        </p>
+        <div className="mt-3">
+          <EmptyPlanCTA isOnboarded ownerSex={profile.sex} />
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <main className="container-shell py-6 lg:py-10">
+      {/* Marks made on /plan or another device reach an open dashboard on the
+          next fetch — refresh when the tab wakes. */}
+      <RefreshOnFocus />
+      <Suspense fallback={null}>
+        <CheckoutSuccessHandler />
+      </Suspense>
+      {onboardingDone && ((needsFamilyPlan && !pendingBlocked) || drainForAlignment) && (
+        <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
+      )}
+
+      <header className="mb-5">
+        <p className="text-meta font-bold text-brand-ink-muted">{riyadhDateLabelAr()}</p>
+        <h1 className="mt-1 text-app-title text-brand-ink">{greeting}</h1>
+        {summary && (
+          <p className="mt-2 max-w-prose text-base leading-relaxed text-brand-ink">{summary}</p>
+        )}
       </header>
 
-      <div className="container-app py-8 md:py-12">
-        {/* Marks made on /plan (or another device) only reach an already-open
-            dashboard on the next fetch — refresh when the tab wakes so the
-            «موسم بيتنا» board is never a day stale. */}
-        <RefreshOnFocus />
-        <Suspense fallback={null}>
-          <CheckoutSuccessHandler />
-        </Suspense>
+      {notice && <div className="mb-5">{notice}</div>}
 
-        {subscription?.status === "past_due" && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="flex items-start sm:items-center gap-3 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 mb-6"
-          >
-            <AlertTriangle
-              className="size-5 flex-shrink-0 mt-0.5 sm:mt-0 text-red-600"
-              aria-hidden="true"
-            />
-            <p className="flex-1 text-brand-ink text-sm font-medium leading-relaxed">
-              فيه مشكلة في تجديد اشتراكك. حدّثي بياناتك الآن لتجنب توقف الخدمة
-            </p>
-            <div className="flex-shrink-0">
-              <BillingPortalButton label="تحديث الدفع" variant="ghost" />
-            </div>
-          </div>
-        )}
-
-        {subscription?.status === "trialing" && (
-          <TrialBanner
-            subscription={subscription}
-            checklist={trialChecklist}
-            ownerSex={profile.sex}
-          />
-        )}
-
-        {showAddFamily && <AddFamilyBanner ownerSex={profile.sex} />}
-
-        {showWorkoutOptIn && <WorkoutOptInBanner ownerSex={profile.sex} />}
-
-        {/* Once she has opted in, the banner is gone for good — and nothing
-            else on the dashboard showed the workout plan's state, so a
-            5-15 minute generation (or a failure) was invisible here. The
-            card was built for exactly this and never mounted. */}
-        {profile.workout_profile !== null && (
-          <div className="mb-6">
-            <WorkoutPlanCard
-              state={workoutPlan?.status ?? "optin"}
-              waitingForMeals={latestPlan?.in_progress ?? false}
-              ownerSex={profile.sex}
-            />
-          </div>
-        )}
-
-        {showDeepDive && <DeepDiveBanner ownerSex={profile.sex} />}
-
-        {onboardingDone && ((needsFamilyPlan && !pendingBlocked) || drainForAlignment) && (
-          <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
-        )}
-
-        {needsFamilyPlan && pendingBlocked && (
-          <div className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-4 mb-6">
-            <div className="flex items-start gap-3">
-              <Users
-                className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900"
-                aria-hidden="true"
-              />
-              <div className="flex-1">
-                <p className="text-brand-ink text-sm font-medium leading-relaxed">
-                  {/* An over-limit household already pays: /pricing 409s an
-                      existing subscriber, so route them to manage the plan. */}
-                  {hasLiveLemonsqueezySubscription(subscription)
-                    ? `خطط باقي أفراد العائلة (${pendingNamesText}) تحتاج ترقية الباقة. ${g("رقّي باقتك", "رقِّ باقتك")} ونجهّز خططهم دفعة واحدة مع وجبات العائلة المنسقة.`
-                    : `خطط باقي أفراد العائلة (${pendingNamesText}) متاحة مع الاشتراك. ${g("اشتركي", "اشترك")} ونجهّز خططهم دفعة واحدة مع وجبات العائلة المنسقة.`}
-                </p>
-                <Link
-                  href={hasLiveLemonsqueezySubscription(subscription) ? "/subscription" : "/pricing"}
-                  className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
-                >
-                  {hasLiveLemonsqueezySubscription(subscription) ? "إدارة الاشتراك" : "عرض الباقات"}
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {needsFamilyPlan && !pendingBlocked && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-3 mb-6 text-brand-ink text-sm font-medium leading-relaxed"
-          >
-            {latestPlan?.in_progress
-              ? `تمت إضافة ${pendingNamesText} — سيُنشأ بعد اكتمال الخطة الحالية`
-              : `تمت إضافة ${pendingNamesText} — ${
-                  pendingNames.length > 1 ? "جارٍ إنشاء خططهم" : "جارٍ إنشاء خطته"
-                } ضمن خطط العائلة المنسقة`}
-          </div>
-        )}
-
-        {/* Greeting row — the page's anchor: warm opener + week range on the
-            start side, the two promoted quick actions on the end side. */}
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
-          <div>
-            <h1 className="font-extrabold text-xl md:text-2xl text-brand-ink leading-tight">
-              {profile.display_name
-                ? `أهلاً، ${profile.display_name}`
-                : g("أهلاً بكِ", "أهلاً بك")}
-            </h1>
-            {seasonProps?.weekStartDate && (
-              <p className="text-brand-ink-muted text-xs mt-0.5 tabular-nums">
-                أسبوع {formatWeekRange(seasonProps.weekStartDate)}
-              </p>
-            )}
-          </div>
-          {onboardingDone && (
-            <div className="flex flex-wrap gap-2">
-              {/* Outline like its sibling — the PlanCTA band below is the page's
-                  single filled-purple action (one dark anchor above the fold). */}
-              <Link
-                href="/chat"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                <Sparkles className="size-4" aria-hidden="true" />
-                {g("اسألي المستشارة", "اسأل المستشارة")}
-              </Link>
-              <Link
-                href="/recap"
-                className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-              >
-                <MailOpen className="size-4" aria-hidden="true" />
-                رسالتك الأسبوعية
-              </Link>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+        <div className="space-y-4 lg:col-span-7">
+          {todayBlock}
+          {workoutToday && (
+            <WorkoutTodayCard today={workoutToday} ownerSex={profile.sex ?? null} />
           )}
         </div>
-
-        {/* Doorway to /plan — the page's primary action, in every plan state.
-            Pre-onboarding the «خطتك على بعد دقيقتين» block below is the CTA. */}
-        {onboardingDone && (
-          <div className="mb-5">
-            <PlanCTA
-              state={planCtaState}
-              isOnboarded={onboardingDone}
+        <div className="space-y-4 lg:col-span-5">
+          {seasonProps && stats && isFamily && <SeasonBoard props={seasonProps} stats={stats} />}
+          {seasonProps && stats && !isFamily && stats.ranked[0] && (
+            <SoloWeekCard me={stats.ranked[0]} ownerSex={profile.sex ?? null} />
+          )}
+          {renewalLedger && (
+            <RenewalRecapCard
+              ledger={renewalLedger}
+              cadence={subscription?.cadence ?? null}
               ownerSex={profile.sex}
-              memberCount={beneficiaryCount + 1}
             />
-          </div>
-        )}
-
-        {/* «موسم بيتنا» leaderboard — the dashboard's centerpiece. Hidden for
-            solo households / before a plan is ready (seasonProps is null then). */}
-        {seasonProps && <FamilySeasonCard {...seasonProps} />}
-
-        {/* Renewal-week recap — celebratory bookkeeping, never a countdown */}
-        {renewalRecap && (
-          <div className="mt-6">
-            <RenewalRecapCard {...renewalRecap} ownerSex={profile.sex} />
-          </div>
-        )}
-
-        {!onboardingDone && (
-          <div className="bg-brand-purple-900 text-white rounded-3xl p-6 md:p-8 mb-8">
-            <div className="flex items-start gap-3 mb-3">
-              <Sparkles className="size-6 text-brand-yellow flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-lg md:text-xl leading-tight">
-                  خطتك على بعد دقيقتين
-                </h3>
-                <p className="text-white/80 text-sm mt-2 leading-relaxed">
-                  {g(
-                    "جاوبي على أسئلة سريعة عنك وعن عائلتك عشان نصمم لكِ خطة غذائية شخصية.",
-                    "جاوب على أسئلة سريعة عنك وعن عائلتك عشان نصمم لك خطة غذائية شخصية.",
-                  )}
-                </p>
-              </div>
-            </div>
-            <a
-              href="/onboarding"
-              className="inline-flex items-center gap-2 min-h-11 bg-white text-brand-purple-900 hover:bg-brand-yellow font-bold text-sm px-5 py-2.5 rounded-full mt-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900"
-            >
-              {g("ابدئي الآن", "ابدأ الآن")}
-            </a>
-          </div>
-        )}
+          )}
+          {onboardingDone && (
+            <QuickTiles
+              ownerSex={profile.sex ?? null}
+              familySize={beneficiaries.length + 1}
+              hasHousekeeper={!!housekeeper}
+            />
+          )}
+          {nextStep && <NextStepCard {...nextStep} />}
+        </div>
       </div>
     </main>
   );

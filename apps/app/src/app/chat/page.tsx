@@ -6,9 +6,6 @@ import {
   getCurrentSubscription,
   hasLiveLemonsqueezySubscription,
 } from "@/lib/subscription/state";
-import { Logo } from "@/components/Logo";
-import { BackToDashboard } from "@/components/BackToDashboard";
-import { SettingsLink } from "@/components/SettingsLink";
 import { ChatPanel } from "./ChatPanel";
 import { genderPick } from "@/lib/copy/gender";
 
@@ -41,21 +38,6 @@ export default async function ChatPage() {
       lang="ar"
       className="min-h-screen bg-brand-surface flex flex-col"
     >
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10">
-        <div className="container-app py-4 flex items-center justify-between">
-          <a
-            href="/dashboard"
-            aria-label="فت لايف — الرئيسية"
-            className="inline-flex items-center rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-          >
-            <Logo className="h-9 w-auto" />
-          </a>
-          <div className="flex items-center gap-2">
-            <BackToDashboard />
-            <SettingsLink />
-          </div>
-        </div>
-      </header>
 
       {access.allowed ? (
         <ChatPanel ownerSex={ownerSex} />
