@@ -42,7 +42,7 @@ const bodySchema = z.object({
 export async function POST(req: Request) {
   // Safety net: any UNEXPECTED throw (transient DB latency, a serverless cold
   // start, etc.) must return a clean JSON error — not a bare 500 with no body,
-  // which surfaced to the user as the generic "حدث خطأ. حاولي مرة ثانية" fallback
+  // which surfaced to the user as the generic "حدث خطأ. حاولي مرة أخرى" fallback
   // with nothing logged. Capture the real cause so a recurrence is diagnosable.
   try {
     return await handleGenerate(req);

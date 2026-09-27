@@ -73,7 +73,7 @@ export default async function SubscriptionPage({
       <main className="min-h-screen bg-brand-surface">
         <div className="container-app py-8 md:py-12 max-w-2xl">
           <div className="bg-brand-card rounded-3xl border border-brand-line p-6 text-center">
-            <p className="font-bold text-brand-ink">ما عندك اشتراك بعد</p>
+            <p className="font-bold text-brand-ink">لا يوجد اشتراك بعد</p>
             <Link
               href="/pricing"
               className="inline-flex items-center justify-center min-h-11 mt-4 px-5 rounded-full bg-brand-ink hover:bg-brand-purple-900 text-white text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
@@ -161,7 +161,7 @@ export default async function SubscriptionPage({
           !sub.cancel_at_period_end && (
             <SectionShell title="إلغاء الاشتراك">
               <p className="text-brand-ink-muted text-sm leading-relaxed mb-4">
-                {g("تقدرين تلغين في أي وقت.", "تقدر تلغي في أي وقت.")} الخدمة تستمر
+                {g("يمكنكِ الإلغاء في أي وقت.", "يمكنك الإلغاء في أي وقت.")} الخدمة تستمر
                 حتى نهاية فترتك الحالية — وإن كان السبب سفراً أو انشغالاً،
                 فالاستراحة المؤقتة متاحة أيضاً.
               </p>

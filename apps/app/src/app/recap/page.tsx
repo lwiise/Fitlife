@@ -65,6 +65,15 @@ function letterLines(
   return lines;
 }
 
+/** The noun beside a figure shown on its own: 1 / 2 / 3-10 / 11+ agreement
+ * («لغتان» used to label three languages too). */
+function arCountLabel(n: number, [one, two, few, many]: [string, string, string, string]) {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n >= 3 && n <= 10) return few;
+  return many;
+}
+
 export default async function RecapPage() {
   const supabase = await createClient();
   const {
@@ -180,12 +189,12 @@ export default async function RecapPage() {
                 {
                   icon: Languages,
                   value: AR_NUM.format(recap.languages_count),
-                  label: recap.languages_count === 1 ? "لغة" : "لغتان",
+                  label: arCountLabel(recap.languages_count, ["لغة", "لغتان", "لغات", "لغة"]),
                 },
                 {
                   icon: CalendarDays,
                   value: AR_NUM.format(recap.logged_days),
-                  label: "أيام مسجلة",
+                  label: arCountLabel(recap.logged_days, ["يوم مسجّل", "يومان مسجّلان", "أيام مسجّلة", "يوماً مسجّلاً"]),
                 },
               ].map(({ icon: Icon, value, label }) => (
                 <div

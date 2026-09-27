@@ -20,8 +20,8 @@ export function PlanFailedState({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const bodyCopy = g(
-    "صار خطأ غير متوقع. حاولي مرة ثانية، وإذا تكرر تواصلي معنا.",
-    "صار خطأ غير متوقع. حاول مرة ثانية، وإذا تكرر تواصل معنا.",
+    "حدث خطأ غير متوقع. حاولي مرة أخرى، وإن تكرّر فتواصلي معنا.",
+    "حدث خطأ غير متوقع. حاول مرة أخرى، وإن تكرّر فتواصل معنا.",
   );
   // Only offer the disclosure when it ADDS something. The stale-plan fallback
   // used to be the body sentence itself, so expanding «تفاصيل تقنية» repeated
@@ -40,9 +40,9 @@ export function PlanFailedState({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       }
     });
   }
@@ -56,7 +56,7 @@ export function PlanFailedState({
         />
       </div>
       <h1 className="font-extrabold text-2xl text-brand-ink leading-tight">
-        ما قدرنا ننشئ خطتك
+        تعذّر إنشاء خطتكم
       </h1>
       <p className="mt-3 text-brand-ink-muted text-sm leading-relaxed">
         {bodyCopy}

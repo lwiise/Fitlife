@@ -18,10 +18,12 @@ export function ProfileEditedBanner({ ownerSex }: { ownerSex?: string | null }) 
   const [showNudge, setShowNudge] = useState(false);
 
   useEffect(() => {
-    const editedParam = params.get("edited"); // 'health' | 'family'
+    const editedParam = params.get("edited"); // 'health' | 'family' | 'deep-dive'
     const savedParam = params.get("saved"); // '1'
 
-    if (editedParam === "health" || editedParam === "family") {
+    // The deep-dive answers feed the plan's lifestyle block, so a save there
+    // is a plan-affecting edit like health/family — it used to show nothing.
+    if (editedParam === "health" || editedParam === "family" || editedParam === "deep-dive") {
       sessionStorage.setItem(STORAGE_KEY, String(Date.now()));
       // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs UI from URL params with sessionStorage/replaceState side effects; params stable, no loop
       setShowNudge(true);

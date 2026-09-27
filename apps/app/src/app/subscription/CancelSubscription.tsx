@@ -30,10 +30,10 @@ type Step = "reason" | "offer" | "confirm";
 // plea. «متابعة الإلغاء» stays one tap away at every step: honest retention,
 // no dark patterns, no confirm-shaming loops.
 const REASONS: Array<{ key: CancelReason; label: string }> = [
-  { key: "traveling", label: "مسافرة أو مشغولة هذه الفترة" },
-  { key: "not_using", label: "ما أستخدمه كفاية" },
-  { key: "price", label: "السعر ما يناسبني" },
-  { key: "not_suitable", label: "الخطط ما ناسبتنا" },
+  { key: "traveling", label: "سفر أو انشغال في هذه الفترة" },
+  { key: "not_using", label: "لا أستخدمه بما يكفي" },
+  { key: "price", label: "السعر لا يناسبني" },
+  { key: "not_suitable", label: "الخطط لم تناسبنا" },
 ];
 
 // Mirrors the three `step === "offer"` render branches below. Kept as data so
@@ -89,9 +89,9 @@ export function CancelSubscription({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setError(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setError(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       }
     });
   }
@@ -115,9 +115,9 @@ export function CancelSubscription({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setError(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setError(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       }
     });
   }
@@ -138,8 +138,8 @@ export function CancelSubscription({
   const dialogBody =
     step === "reason"
       ? g(
-          "وش السبب؟ اختيارك يساعدنا نقترح الأنسب لك — وتقدرين تكملين الإلغاء مباشرة.",
-          "وش السبب؟ اختيارك يساعدنا نقترح الأنسب لك — وتقدر تكمل الإلغاء مباشرة.",
+          "ما السبب؟ يساعدنا اختياركِ على اقتراح الأنسب لكِ، ويمكنكِ إكمال الإلغاء مباشرة.",
+          "ما السبب؟ يساعدنا اختيارك على اقتراح الأنسب لك، ويمكنك إكمال الإلغاء مباشرة.",
         )
       : step === "confirm"
         ? `${g("بتلغين", "بتلغي")} خطة ${tierName}. اشتراكك بيستمر شغّال حتى ${fmtDate(endsAt)}، وبعدها بيتوقف التجديد التلقائي. ما فيه استرداد للفترة الحالية.`
@@ -244,8 +244,8 @@ export function CancelSubscription({
               />
               <p className="text-sm text-brand-ink leading-relaxed">
                 {g(
-                  "تقدرين تنزلين لخطة أصغر وأوفر بدل ما تخسرين كل شيء",
-                  "تقدر تنزل لخطة أصغر وأوفر بدل ما تخسر كل شيء",
+                  "يمكنكِ الانتقال إلى باقة أصغر وأوفر بدلاً من الإلغاء",
+                  "يمكنك الانتقال إلى باقة أصغر وأوفر بدلاً من الإلغاء",
                 )}{" "}
                 — التبديل فوري ومن نفس الصفحة.
               </p>
@@ -255,7 +255,7 @@ export function CancelSubscription({
               onClick={close}
               className="block w-full text-center min-h-11 leading-[2.75rem] rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
             >
-              {g("شوفي الخطط الأصغر", "شوف الخطط الأصغر")}
+              {"الباقات الأصغر"}
             </a>
           </div>
         )}
@@ -268,8 +268,8 @@ export function CancelSubscription({
                 aria-hidden="true"
               />
               <p className="text-sm text-brand-ink leading-relaxed">
-                {g("قولي", "قل")} للمستشارة وش اللي ما ناسبكم — أغلب الأحيان تعديل
-                واحد في الخطة القادمة يغيّر كل شيء.
+                {g("أخبري", "أخبر")} المستشارة بما لم يناسبكم، فكثيراً ما يكفي تعديل
+                واحد في الخطة القادمة.
               </p>
             </div>
             <a
@@ -312,9 +312,9 @@ export function PausedNotice({
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setError(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setError(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setError(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       }
     });
   }

@@ -67,10 +67,10 @@ export function DeleteAccountButton({
         return;
       }
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? g("حدث خطأ في حذف حسابك. حاولي مرة ثانية", "حدث خطأ في حذف حسابك. حاول مرة ثانية"));
+      setError(body?.error ?? g("حدث خطأ في حذف حسابك. حاولي مرة أخرى", "حدث خطأ في حذف حسابك. حاول مرة أخرى"));
       setIsDeleting(false);
     } catch {
-      setError(g("تعذّر الاتصال. تأكدي من اتصالك وحاولي مرة ثانية", "تعذّر الاتصال. تأكد من اتصالك وحاول مرة ثانية"));
+      setError(g("تعذّر الاتصال. تأكدي من اتصالك وحاولي مرة أخرى", "تعذّر الاتصال. تأكد من اتصالك وحاول مرة أخرى"));
       setIsDeleting(false);
     }
   }

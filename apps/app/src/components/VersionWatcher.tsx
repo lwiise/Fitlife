@@ -132,7 +132,7 @@ export function VersionWatcher() {
         <p className="flex-1 text-brand-ink text-sm font-medium leading-relaxed">
           {reloading
             ? "نحدّث التطبيق للنسخة الأحدث…"
-            : "فيه نسخة جديدة من التطبيق"}
+            : "تتوفر نسخة جديدة من التطبيق"}
         </p>
         {!reloading && (
           <>

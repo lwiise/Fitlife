@@ -45,7 +45,7 @@ export default async function ChatPage() {
         <div className="container-app py-12 max-w-lg">
           <div className="bg-brand-card rounded-2xl border border-brand-line p-6 text-center">
             <p className="font-bold text-brand-ink text-lg">
-              {g("المستشارة الغذائية حق المشتركات", "المستشارة الغذائية حق المشتركين")}
+              {"المستشارة الغذائية متاحة مع الاشتراك"}
             </p>
             <p className="mt-2 text-brand-ink-muted text-sm leading-relaxed">
               {isSubscriber

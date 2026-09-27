@@ -117,9 +117,9 @@ export function RegenerateButton({
           return;
         }
         // Keep the dialog open and surface the error inside it.
-        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة ثانية", "حدث خطأ. حاول مرة ثانية"));
+        setErrorMessage(body.error ?? g("حدث خطأ. حاولي مرة أخرى", "حدث خطأ. حاول مرة أخرى"));
       } catch {
-        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة ثانية", "حدث خطأ في الاتصال. حاول مرة ثانية"));
+        setErrorMessage(g("حدث خطأ في الاتصال. حاولي مرة أخرى", "حدث خطأ في الاتصال. حاول مرة أخرى"));
       }
     });
   }

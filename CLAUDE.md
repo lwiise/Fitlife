@@ -1397,3 +1397,56 @@ demo in its methodology note and disclaimer. Demo plans are stored like real one
 (cost $0), so delete demo accounts via /settings when done. Guarded by
 `src/demo/demo.test.ts`, which runs full generations through the real engine and fails
 on any engine warning (a re-roll or repair means the demo replies drifted).
+
+---
+
+## The signed-in app redesign («سفرة اليوم», 09/2026)
+
+Owner-approved direction, shipped in four phases. Read before touching a signed-in page.
+
+**One frame.** Every signed-in section (dashboard, plan, family, profile, journey, chat,
+recap, settings, subscription) has a one-line `layout.tsx` re-exporting
+`components/shell/SignedInLayout` → `AppShell`: sticky header (compact logo → /dashboard,
+desktop nav, account menu with logout) and a five-tab bar on phones (الرئيسية · الخطة ·
+المستشارة · العائلة · حسابي). `nav.ts` owns the tabs and the focus routes (`/family/add`,
+`/plan/housekeeper`), which render bare. Pages no longer draw their own top bar or
+«لوحة التحكم» link; sub-pages keep a `BackButton` row. Sticky things offset by
+`--app-header-h` / `--app-tabbar-h` (globals.css, set via `:has()`); anything fixed to the
+viewport bottom carries `data-float-bottom` so it sits above the tab bar.
+
+**One vocabulary.** `components/ui/`: `Button`/`ButtonLink`/`buttonClasses` (primary = the
+ONE filled purple action per screen), `Card`/`CardHeader`, `Notice` (five tones, colour AND
+icon differ; one per screen, chosen by priority), `PageHeader`, `Avatar`/`AvatarStack`
+(colour by roster index, never rank), `Ring`. Tokens: `brand-card` (the card surface —
+never `bg-white`), `brand-tint`, `brand-line`, `critical`/`success`/`warning` (+`-soft`),
+`gold-soft`/`gold-line` (achievements only). Type: `text-app-title` (30→40px),
+`text-app-section`, `text-app-item`, `text-meta` (13px floor). Use `clsx`, not `cn()`,
+around the custom `text-*` utilities (tailwind-merge drops them). In-app figures use
+Arabic-Indic digits via `lib/copy/numbers.ts`; `countAr(n, forms, arNum)` for counted nouns.
+
+**Home = today.** Greeting + one-line summary in numbers → one notice (past_due › masked
+failure › upgrade › member progress › regeneration › trial) → «سفرة اليوم» → today's
+workout → «موسم بيتنا» (`SeasonBoard`: still competitive, #1 crowned, children ranked,
+only «طبختها كما هي» counts, every number from `computeSeasonStats`) or the solo «أسبوعكِ»
+card (`getFamilySeasonProps(…, { allowSolo: true })`) → quick tiles → ONE `NextStepCard`
+(family › workout › deep-dive). The table is `lib/dashboard/todayTable.ts` (pure, tested):
+the household's day folded into DISHES, present sharers = per_member_portions minus
+meal_absences (PlanViewer's `dishIds` rule), status via `checkinMap.resolveCheckin`, and
+its one-tap mark calls the same `setSharedMealCheckin`/`setMealCheckin` /plan does. It
+reads `getCurrentUserCookablePlan`, so a regeneration's empty row never takes today's
+meals off the screen.
+
+**/plan.** «طبختها كما هي» is on the collapsed MealCard; the dish name leads; numbers show
+once (day total / target + macros); the day switcher is sticky; «إنشاء خطة جديدة» lives in
+the «المزيد» menu (`RegenerateButton appearance="menu-item"` — the menu ignores presses
+inside `[data-dialog-root]` so it cannot unmount its own dialog); `ConfirmDialog` is a
+bottom sheet on phones.
+
+**Voice.** In-app copy is warm فصحى (marketing keeps Gulf phrasing): «مرة أخرى» not «مرة
+ثانية», «تعذّر…» not «ما قدرنا…», no «عشان/وش/تبين/تقدرين». Static strings that cannot take
+`genderPick` (module constants, the shared locale tables) are gender-neutral.
+
+**Fixed on the way.** `/pricing` redirects a live subscriber to /subscription (checkout
+409s them); the cancel flow's `#change-plan` anchor exists; the deep-dive save shows the
+profile banner; the recap's language/day labels agree with their number; chat errors are
+critical red and the composer is pinned above the tab bar.

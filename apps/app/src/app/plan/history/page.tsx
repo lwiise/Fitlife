@@ -111,15 +111,15 @@ export default async function PlanHistoryPage({
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
             {g(
-              "اختاري الفرد وشوفي خططه السابقة، واستعيدي أي وحدة تبينها لهذا الأسبوع.",
-              "اختر الفرد وشوف خططه السابقة، واستعِد أي وحدة تبيها لهذا الأسبوع.",
+              "اختاري الفرد لتري خططه السابقة، واستعيدي أيّاً منها لهذا الأسبوع.",
+              "اختر الفرد لترى خططه السابقة، واستعِد أيّاً منها لهذا الأسبوع.",
             )}
           </p>
         </header>
 
         {history.length === 0 ? (
           <div className="bg-brand-card rounded-2xl border border-brand-line p-6 text-center">
-            <p className="font-bold text-brand-ink">ما عندك خطط سابقة</p>
+            <p className="font-bold text-brand-ink">لا توجد خطط سابقة بعد</p>
             <Link
               href="/plan"
               className="inline-flex items-center justify-center min-h-11 mt-4 px-5 rounded-full border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
