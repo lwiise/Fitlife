@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { Users } from "lucide-react";
+import { Notice } from "@/components/ui/notice";
+import { ButtonLink } from "@/components/ui/button";
 import {
   getCurrentUserLatestPlan,
   getCurrentUserProfile,
@@ -490,11 +491,7 @@ export default async function PlanPage({
             finishes (until the new member's own shell lands) — so there is no
             blank gap before the next member shows as loading. */}
         {pendingMembers.length > 0 && !pendingBlocked && (isGenerating || planReady) && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-3 mb-6 text-brand-ink text-sm font-medium leading-relaxed"
-          >
+<Notice tone="progress" className="mb-6">
             {isGenerating
               ? `أضفنا ${queuedNames} — ${
                   orderedPending.length > 1 ? "نجهّز خططهم" : "نجهّز الخطة"
@@ -502,45 +499,29 @@ export default async function PlanPage({
               : restPendingNames
                 ? `نجهّز خطة ${firstPendingName} الآن · التالي: ${restPendingNames}`
                 : `نجهّز خطة ${firstPendingName} الآن`}
-          </div>
+          </Notice>
         )}
 
         {pendingBlocked && (
-          <div className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-4 mb-6">
+          <>
             {/* A paid user can land here if their activation webhook was missed.
                 Reconcile directly with Lemonsqueezy once; if it activates, the
-                page refreshes and the drain takes over instead of this banner. */}
+                page refreshes and the drain takes over instead of this notice. */}
             <SubscriptionSelfHeal />
-            <div className="flex items-start gap-3">
-              <Users
-                className="size-5 flex-shrink-0 mt-0.5 text-brand-purple-900"
-                aria-hidden="true"
-              />
-              <div className="flex-1">
-                <p className="text-brand-ink text-sm font-medium leading-relaxed">
-                  {blockedIsSubscriber
-                    ? `جهّزنا خطتك. خطط ${queuedNames} تحتاج باقة أكبر — ${genderPick(
-                        profile?.sex,
-                      )(
-                        "رقّي باقتك",
-                        "رقّ باقتك",
-                      )} ونجهّزها دفعة واحدة مع وجبات العائلة المنسقة.`
-                    : `جهّزنا خطتك. خطط ${queuedNames} متاحة مع الاشتراك — ${genderPick(
-                        profile?.sex,
-                      )(
-                        "اشتركي",
-                        "اشترك",
-                      )} ونجهّزها دفعة واحدة مع وجبات العائلة المنسقة.`}
-                </p>
-                <a
-                  href={blockedHref}
-                  className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
-                >
+            <Notice
+              tone="info"
+              className="mb-6"
+              action={
+                <ButtonLink href={blockedHref} variant="secondary">
                   {blockedIsSubscriber ? "ترقية الباقة" : "عرض الباقات"}
-                </a>
-              </div>
-            </div>
-          </div>
+                </ButtonLink>
+              }
+            >
+              {blockedIsSubscriber
+                ? `جهّزنا خطتك. خطط ${queuedNames} تحتاج باقة أكبر، ${genderPick(profile?.sex)("رقّي باقتكِ", "رقِّ باقتك")} ونجهّزها مع وجبات البيت.`
+                : `جهّزنا خطتك. خطط ${queuedNames} متاحة مع الاشتراك، ${genderPick(profile?.sex)("اشتركي", "اشترك")} ونجهّزها مع وجبات البيت.`}
+            </Notice>
+          </>
         )}
 
         {/* Standalone in every state except the meal-ready and workout-ready
@@ -567,21 +548,18 @@ export default async function PlanPage({
               />
             )}
             {workout.status === "failed" && (
-              <div
-                role="alert"
-                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4"
+              // Never surface the raw engine error (English/zod internals);
+              // it stays on the DB row for debugging.
+              <Notice
+                tone="critical"
+                title="تعذّر إنشاء برنامج التمارين"
+                action={<RetryWorkoutButton ownerSex={profile?.sex} />}
               >
-                {/* Never surface the raw engine error (English/zod internals);
-                    it stays on the DB row for debugging. */}
-                <p className="text-sm text-red-700 leading-relaxed">
-                  تعذّر إنشاء برنامج التمارين.{" "}
-                  {genderPick(profile?.sex)(
-                    "أعيدي المحاولة، أو عدّلي إجاباتك من الملف الشخصي.",
-                    "أعِد المحاولة، أو عدّل إجاباتك من الملف الشخصي.",
-                  )}
-                </p>
-                <RetryWorkoutButton ownerSex={profile?.sex} />
-              </div>
+                {genderPick(profile?.sex)(
+                  "أعيدي المحاولة، أو عدّلي إجاباتكِ من الملف الشخصي.",
+                  "أعِد المحاولة، أو عدّل إجاباتك من الملف الشخصي.",
+                )}
+              </Notice>
             )}
             {workout.status === "ready" && workout.plan_data && (
               <WorkoutViewer
@@ -629,21 +607,18 @@ export default async function PlanPage({
               // The plan below is the PREVIOUS week: the newest run failed with
               // nothing to show. The fallback is deliberate (a stale week beats
               // an error screen) — silence about it was not.
-              <div
-                role="status"
-                className="rounded-2xl border border-brand-purple-900/15 bg-brand-lavender/25 px-4 py-3 mb-6 text-brand-ink text-sm leading-relaxed"
-              >
-                آخر محاولة لإنشاء خطة جديدة لم تكتمل، وهذه خطتك السابقة كما هي. يمكن
+              <Notice tone="warning" className="mb-6">
+                آخر محاولة لإنشاء خطة جديدة لم تكتمل، وهذه خطتكم السابقة كما هي. يمكن
                 المحاولة مرة أخرى بعد قليل.
                 {latest.masked_failure.error_message && (
-                  <details className="mt-2 text-xs text-brand-ink-muted">
+                  <details className="mt-2 text-meta text-brand-ink-muted">
                     <summary className="cursor-pointer">تفاصيل تقنية</summary>
                     <p dir="ltr" className="mt-1 break-words text-start">
                       {latest.masked_failure.error_message}
                     </p>
                   </details>
                 )}
-              </div>
+              </Notice>
             )}
             <PlanViewer
               plan={applyMemberDisplayNames(

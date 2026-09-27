@@ -27,10 +27,16 @@ export function PlanActionsMenu({ children }: { children: ReactNode }) {
     if (!open) return;
 
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Element;
+      // A dialog opened FROM the menu (regenerate) is portaled to <body>;
+      // pressing inside it must not close the menu and unmount its owner.
+      if (target.closest?.("[data-dialog-root]")) return;
+      if (!rootRef.current?.contains(target)) setOpen(false);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        // An open dialog owns Escape (and may be mid-request).
+        if (document.querySelector("[data-dialog-root]")) return;
         setOpen(false);
         triggerRef.current?.focus();
       }

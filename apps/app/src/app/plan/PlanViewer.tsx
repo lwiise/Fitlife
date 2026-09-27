@@ -818,7 +818,7 @@ export function PlanViewer({
             side, led by the meals/exercise toggle — it is the FIRST item, so in
             RTL it sits to the RIGHT of the CTA (owner directive). The workout
             viewer renders the same band with the toggle in the same slot. */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           {/* This is the page's <h1>. /plan, /plan/housekeeper and
               /plan/history/[planId] all render PlanViewer and had NO h1 at all
               — the main screen of the product gave a screen reader nothing to
@@ -834,18 +834,19 @@ export function PlanViewer({
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {planTypeToggle}
-            {!readOnly && (
-              <RegenerateButton
-                memberId={activeMember.member_id}
-                memberName={activeMember.member_name_ar}
-                hasSharedMeals={activeMemberHasShared}
-                memberCount={plan.members.length}
-                locale={locale}
-                ownerSex={ownerSex}
-              />
-            )}
             {hasMenuActions && (
               <PlanActionsMenu>
+                {!readOnly && (
+                  <RegenerateButton
+                    appearance="menu-item"
+                    memberId={activeMember.member_id}
+                    memberName={activeMember.member_name_ar}
+                    hasSharedMeals={activeMemberHasShared}
+                    memberCount={plan.members.length}
+                    locale={locale}
+                    ownerSex={ownerSex}
+                  />
+                )}
                 {!readOnly && (
                   <Link href="/plan/history" className={PLAN_MENU_ITEM_CLASS}>
                     <History className="size-4 text-brand-purple-900" aria-hidden="true" />
@@ -982,37 +983,6 @@ export function PlanViewer({
         <SaraChangesCard changes={plan.week_changes} />
       )}
 
-      {/* Member summary tiles */}
-      <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.daily_calories}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.daily_calories_target}
-          </p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.protein}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.macros_target.protein_g}
-            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
-          </p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.carbs}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.macros_target.carbs_g}
-            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
-          </p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
-          <p className="text-brand-ink-muted text-xs">{t.fat}</p>
-          <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {activeMember.macros_target.fat_g}
-            <span className="text-brand-ink-muted text-xs ms-1">{t.grams}</span>
-          </p>
-        </div>
-      </div>
-
       {/* Children are planned by PORTIONS (healthy-plate servings), not a calorie
           target — so the figures above are an APPROXIMATE weekly average and each
           day naturally varies. Say so, so the numbers don't read as a fixed daily
@@ -1067,8 +1037,9 @@ export function PlanViewer({
           thing — `generating` means days ARE still arriving in this run. */}
       {!translated && !readOnly && partialWeek && !generating && <PartialWeekNotice />}
 
-      {/* Day tabs */}
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* Day tabs — sticky under the app header so switching days never
+          means scrolling back up past a long day of recipes. */}
+      <div className="sticky top-[var(--app-header-h)] z-20 -mx-4 grid grid-cols-7 gap-1.5 bg-brand-surface/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-brand-surface/85 sm:mx-0 sm:px-0">
         {Array.from({ length: 7 }, (_, i) => {
           const day = activeMember.days.find((d) => d.day_index === i);
           const label = translated
@@ -1104,26 +1075,31 @@ export function PlanViewer({
         })}
       </div>
 
-      {/* Day total pill */}
-      {activeDay && (
-        <div className="inline-flex flex-wrap items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
-          <span className="text-brand-ink-muted text-xs">{t.day_total}:</span>
-          <span className="font-bold text-brand-ink text-sm tabular-nums">
-            {activeDay.day_total.calories} {t.calories_unit}
-          </span>
-          <span className="text-brand-ink-muted/40">·</span>
-          <span className="text-brand-ink text-xs tabular-nums">
-            {activeDay.day_total.protein_g} {t.protein}
-          </span>
-          <span className="text-brand-ink-muted/40">·</span>
-          <span className="text-brand-ink text-xs tabular-nums">
-            {activeDay.day_total.carbs_g} {t.carbs}
-          </span>
-          <span className="text-brand-ink-muted/40">·</span>
-          <span className="text-brand-ink text-xs tabular-nums">
-            {activeDay.day_total.fat_g} {t.fat}
-          </span>
+      {/* The day's numbers, ONCE (09/2026 redesign): the day's total against
+          the member's target, then the macros. Four target tiles, a total
+          pill and a macro line on every meal used to repeat the same figures
+          three times over. */}
+      {activeDay ? (
+        <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-brand-ink">
+            <span className="text-meta text-brand-ink-muted">{t.day_total}</span>
+            <b className="text-lg font-extrabold tabular-nums">
+              {activeDay.day_total.calories}
+            </b>
+            <span className="text-meta text-brand-ink-muted tabular-nums">
+              / {activeMember.daily_calories_target} {t.calories_unit}
+            </span>
+          </p>
+          <p className="mt-0.5 text-meta text-brand-ink-muted tabular-nums">
+            {activeDay.day_total.protein_g} {t.grams} {t.protein} ·{" "}
+            {activeDay.day_total.carbs_g} {t.grams} {t.carbs} ·{" "}
+            {activeDay.day_total.fat_g} {t.grams} {t.fat}
+          </p>
         </div>
+      ) : (
+        <p className="text-meta text-brand-ink-muted tabular-nums">
+          {t.daily_calories}: {activeMember.daily_calories_target} {t.calories_unit}
+        </p>
       )}
 
       {/* Meal list */}

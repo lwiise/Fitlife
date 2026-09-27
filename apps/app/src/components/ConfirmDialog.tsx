@@ -64,7 +64,10 @@ export function ConfirmDialog({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          data-dialog-root=""
+          // A bottom sheet on phones (thumb reach, the keyboard never hides the
+          // actions of a tall form), a centred card from sm up.
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -79,7 +82,7 @@ export function ConfirmDialog({
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
-            className="relative bg-white rounded-3xl border border-brand-ink/5 shadow-xl w-full max-w-md p-6 md:p-7"
+            className="relative w-full max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl border border-brand-line bg-brand-card p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-3xl md:p-7"
             initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
@@ -100,9 +103,9 @@ export function ConfirmDialog({
             {error && (
               <div
                 role="alert"
-                className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3"
+                className="mt-4 rounded-xl border border-critical/25 bg-critical-soft px-4 py-3"
               >
-                <p className="text-red-700 text-sm leading-relaxed">{error}</p>
+                <p className="text-critical text-sm leading-relaxed">{error}</p>
               </div>
             )}
 
