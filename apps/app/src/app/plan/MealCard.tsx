@@ -314,7 +314,7 @@ export function MealCard({
       className={`rounded-2xl overflow-hidden ${
         isShared
           ? "bg-brand-lavender/10 border border-brand-lavender/50 border-s-4 border-s-brand-purple-900/70"
-          : "bg-brand-surface-elevated border border-brand-ink/5"
+          : "bg-brand-surface-elevated border border-brand-line"
       }`}
     >
       <button
@@ -408,7 +408,7 @@ export function MealCard({
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 pt-3 border-t border-brand-ink/5 space-y-4">
+            <div className="px-5 pb-5 pt-3 border-t border-brand-line space-y-4">
               <p className="text-meta text-brand-ink-muted tabular-nums">
                 {[
                   `${meal.macros.protein_g} ${t.grams} ${t.protein}`,
@@ -602,7 +602,7 @@ export function MealCard({
                   meal's row belongs to the member whose tab is open. */}
               {onCheckin && (
                 <div
-                  className="pt-3 border-t border-brand-ink/5 space-y-2"
+                  className="pt-3 border-t border-brand-line space-y-2"
                   aria-label="تتبّع الوجبة"
                 >
                   {viewerAbsent ? (

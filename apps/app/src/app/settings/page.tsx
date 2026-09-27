@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserRound, Users, ChevronLeft } from "lucide-react";
+import { ChevronLeft, CreditCard, LineChart, LogOut, UserRound, Users } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscription/state";
 import { AccountInfoCard } from "./AccountInfoCard";
@@ -33,52 +34,48 @@ export default async function SettingsPage() {
     <main className="min-h-screen bg-brand-surface">
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-8">
-        <header>
-          <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
-            الإعدادات
-          </h1>
-          <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            معلومات حسابك وبياناتك والمستندات القانونية.
-          </p>
-        </header>
+        <PageHeader
+          className="mb-0"
+          title="الإعدادات"
+          description="حسابك وبيتك واشتراكك وبياناتك."
+        />
 
-        <Link
-          href="/profile"
-          className="flex items-center gap-4 bg-white rounded-2xl border border-brand-ink/5 p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-        >
-          <div className="size-11 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-            <UserRound className="size-5 text-brand-purple-900" aria-hidden="true" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-brand-ink text-base">تعديل ملفي الشخصي</h2>
-            <p className="text-brand-ink-muted text-sm mt-0.5">
-              معلوماتك الشخصية، الصحة والأهداف، وتفضيلات العائلة
-            </p>
-          </div>
-          <ChevronLeft
-            className="size-5 text-brand-ink-muted group-hover:text-brand-purple-900 transition-colors flex-shrink-0"
-            aria-hidden="true"
-          />
-        </Link>
-
-        <Link
-          href="/family"
-          className="flex items-center gap-4 bg-white rounded-2xl border border-brand-ink/5 p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-        >
-          <div className="size-11 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-            <Users className="size-5 text-brand-purple-900" aria-hidden="true" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-brand-ink text-base">أفراد العائلة</h2>
-            <p className="text-brand-ink-muted text-sm mt-0.5">
-              {g("أضيفي وعدّلي بيانات أفراد العائلة والخدامة", "أضِف وعدّل بيانات أفراد العائلة والخدامة")}
-            </p>
-          </div>
-          <ChevronLeft
-            className="size-5 text-brand-ink-muted group-hover:text-brand-purple-900 transition-colors flex-shrink-0"
-            aria-hidden="true"
-          />
-        </Link>
+        {/* The account's doors in one grouped list (09/2026 redesign) —
+            subscription and weight tracking had no way in from here. */}
+        <nav aria-label="الحساب" className="overflow-hidden rounded-[1.375rem] border border-brand-line bg-brand-card">
+          <ul className="divide-y divide-brand-line">
+            {[
+              { href: "/profile", icon: UserRound, title: "ملفي الشخصي", sub: "معلوماتك، الصحة والأهداف، وتفضيلات البيت" },
+              {
+                href: "/family",
+                icon: Users,
+                title: "أفراد العائلة",
+                sub: g("أضيفي وعدّلي أفراد البيت ومن يطبخ", "أضِف وعدّل أفراد البيت ومن يطبخ"),
+              },
+              { href: "/subscription", icon: CreditCard, title: "الاشتراك", sub: "الباقة، الفواتير، والدفع" },
+              { href: "/journey", icon: LineChart, title: "الوزن والمتابعة", sub: "سجلّ خاص لكل فرد" },
+            ].map(({ href, icon: Icon, title, sub }) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="group flex min-h-16 items-center gap-4 px-4 py-3 hover:bg-brand-tint/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-purple-900 sm:px-5"
+                >
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-tint">
+                    <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-bold text-brand-ink">{title}</span>
+                    <span className="mt-0.5 block text-meta text-brand-ink-muted">{sub}</span>
+                  </span>
+                  <ChevronLeft
+                    className="size-5 shrink-0 text-brand-ink-muted group-hover:text-brand-purple-900"
+                    aria-hidden="true"
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         <AccountInfoCard
           email={user.email ?? ""}
@@ -94,6 +91,16 @@ export default async function SettingsPage() {
         <PrivacyChoiceCard ownerSex={ownerSex} />
 
         <SupportSection ownerSex={ownerSex} />
+
+        <form action="/auth/logout" method="post">
+          <button
+            type="submit"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-critical/30 bg-brand-card px-6 text-base font-bold text-critical hover:bg-critical-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-critical focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+          >
+            <LogOut className="size-5" aria-hidden="true" />
+            تسجيل الخروج
+          </button>
+        </form>
       </div>
     </main>
   );

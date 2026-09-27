@@ -143,7 +143,7 @@ export function WorkoutGeneratingState({
 
   if (timedOut) {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+      <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
         <h1 className="font-extrabold text-xl text-brand-ink leading-tight">
           العملية تاخذ وقت أطول من المتوقع
         </h1>
@@ -166,7 +166,7 @@ export function WorkoutGeneratingState({
 
   if (waitingForMeals) {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+      <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
         <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-lavender/40 mb-4">
           <UtensilsCrossed className="size-7 text-brand-purple-900" aria-hidden="true" />
         </div>
@@ -199,7 +199,7 @@ export function WorkoutGeneratingState({
   }
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+    <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
       <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-purple-900/10 mb-4">
         <Loader2
           className="size-8 text-brand-purple-900 animate-spin motion-reduce:animate-none"

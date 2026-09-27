@@ -7,9 +7,9 @@ export default function RecapLoading() {
   return (
     <main className="min-h-screen bg-brand-surface" aria-busy="true" aria-label="جارٍ التحميل">
       <div className="container-app py-8 space-y-6">
-        <div className="h-7 w-56 animate-pulse rounded-lg bg-white" />
-        <div className="h-72 animate-pulse rounded-3xl border border-brand-ink/5 bg-white" />
-        <div className="h-32 animate-pulse rounded-2xl border border-brand-ink/5 bg-white" />
+        <div className="h-7 w-56 animate-pulse rounded-lg bg-brand-card" />
+        <div className="h-72 animate-pulse rounded-3xl border border-brand-line bg-brand-card" />
+        <div className="h-32 animate-pulse rounded-2xl border border-brand-line bg-brand-card" />
       </div>
     </main>
   );

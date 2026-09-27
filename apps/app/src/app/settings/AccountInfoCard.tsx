@@ -48,7 +48,7 @@ function statusBadge(status: SubscriptionRow["status"]): {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-3 border-b border-brand-ink/5 last:border-0">
+    <div className="flex items-baseline justify-between gap-4 py-3 border-b border-brand-line last:border-0">
       <span className="text-brand-ink-muted text-sm flex-shrink-0">{label}</span>
       <span className="text-brand-ink font-bold text-sm text-end">{children}</span>
     </div>
@@ -70,7 +70,7 @@ export function AccountInfoCard({
   const badge = subscription ? statusBadge(subscription.status) : null;
 
   return (
-    <section className="bg-white rounded-2xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
       <div className="flex items-center gap-3 mb-4">
         <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
           <UserRound className="size-5 text-brand-purple-900" aria-hidden="true" />

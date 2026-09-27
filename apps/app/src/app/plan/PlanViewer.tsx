@@ -813,7 +813,7 @@ export function PlanViewer({
           laptop widths — every secondary now lives in the «المزيد» menu, so
           the row is two controls wide no matter how many the account
           qualifies for. Every control here is 44px tall. */}
-      <div className="rounded-3xl bg-white border border-brand-ink/5 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="rounded-3xl bg-brand-card border border-brand-line px-4 py-4 sm:px-6 sm:py-5">
         {/* Line 1: week range on the start side; the action cluster on the end
             side, led by the meals/exercise toggle — it is the FIRST item, so in
             RTL it sits to the RIGHT of the CTA (owner directive). The workout
@@ -999,7 +999,7 @@ export function PlanViewer({
           Hidden once the viewed member is complete (ready === total) so a full
           bar never sits there spinning. */}
       {memberIsGenerating && !preparingStalled && genProgress.ready < genProgress.total && (
-        <div className="bg-white rounded-2xl border border-brand-ink/5 px-4 py-3.5 space-y-2.5">
+        <div className="bg-brand-card rounded-2xl border border-brand-line px-4 py-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-brand-ink font-bold text-sm leading-relaxed">
               <Loader2

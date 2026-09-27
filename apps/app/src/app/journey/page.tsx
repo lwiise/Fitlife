@@ -210,7 +210,7 @@ export default async function JourneyPage({
       </div>
 
       <div className="container-app max-w-2xl py-8 space-y-6">
-        <h1 className="text-3xl font-extrabold text-brand-ink">
+        <h1 className="text-app-title text-brand-ink">
           {memberName ? `رحلة ${memberName} الخاصة` : "رحلتك الخاصة"}
         </h1>
 
@@ -257,7 +257,7 @@ export default async function JourneyPage({
         {logs.length >= 2 && (
           <section
             aria-label="مسار الوزن"
-            className="bg-white rounded-2xl border border-brand-ink/5 p-6 space-y-3"
+            className="bg-brand-card rounded-2xl border border-brand-line p-6 space-y-3"
           >
             <div className="flex items-baseline justify-between">
               <h2 className="font-bold text-brand-ink">

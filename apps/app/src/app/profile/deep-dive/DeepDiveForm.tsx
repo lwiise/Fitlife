@@ -65,7 +65,7 @@ function OptionButton({
       className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
         active
           ? "border-brand-purple-900 bg-brand-purple-900/5"
-          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
+          : "border-brand-ink/10 bg-brand-card hover:border-brand-ink/20"
       }`}
     >
       {children}
@@ -76,7 +76,7 @@ function OptionButton({
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="font-bold text-lg text-brand-ink border-b border-brand-ink/5 pb-2">
+      <h2 className="font-bold text-lg text-brand-ink border-b border-brand-line pb-2">
         {title}
       </h2>
       {children}
@@ -156,14 +156,14 @@ export function DeepDiveForm({
   };
 
   const numberInput =
-    "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900";
+    "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900";
   const textArea =
-    "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none";
+    "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none";
 
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+        <h1 className="text-app-title text-brand-ink">
           أسئلة إضافية لخطة أدق
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">

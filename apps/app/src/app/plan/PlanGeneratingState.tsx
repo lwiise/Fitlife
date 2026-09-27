@@ -176,7 +176,7 @@ export function PlanGeneratingState({
 
   if (maskedFailure !== null) {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+      <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
         <h1 className="font-extrabold text-xl text-brand-ink leading-tight">
           لم تكتمل الخطة الجديدة
         </h1>
@@ -207,7 +207,7 @@ export function PlanGeneratingState({
 
   if (timedOut) {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+      <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
         <h1 className="font-extrabold text-xl text-brand-ink leading-tight">
           {pollBroken ? "انقطع الاتصال بالخادم" : "العملية تاخذ وقت أطول من المتوقع"}
         </h1>
@@ -234,7 +234,7 @@ export function PlanGeneratingState({
   }
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+    <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
       <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-purple-900/10 mb-4">
         <Loader2
           className="size-8 text-brand-purple-900 animate-spin motion-reduce:animate-none"

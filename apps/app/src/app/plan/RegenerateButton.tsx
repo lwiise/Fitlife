@@ -266,7 +266,7 @@ export function RegenerateButton({
               disabled={isPending}
               rows={2}
               placeholder="مثلاً: الوجبات متكرّرة، أو لا أحب السمك"
-              className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+              className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
             />
           </div>
           <div>
@@ -283,7 +283,7 @@ export function RegenerateButton({
               disabled={isPending}
               rows={2}
               placeholder="مثلاً: تنوّع أكثر، ووجبات أخفّ للعشاء"
-              className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+              className="w-full px-3 py-2.5 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink text-sm leading-relaxed placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
             />
           </div>
         </div>

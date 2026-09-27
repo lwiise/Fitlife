@@ -79,7 +79,7 @@ function OptionButton({
       } ${
         active
           ? "border-brand-purple-900 bg-brand-purple-900/5"
-          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
+          : "border-brand-ink/10 bg-brand-card hover:border-brand-ink/20"
       }`}
     >
       {children}
@@ -89,7 +89,7 @@ function OptionButton({
 
 function GroupHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="font-bold text-lg text-brand-ink border-b border-brand-ink/5 pb-2">
+    <h2 className="font-bold text-lg text-brand-ink border-b border-brand-line pb-2">
       {children}
     </h2>
   );
@@ -239,7 +239,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+        <h1 className="text-app-title text-brand-ink">
           الصحة والأهداف
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -304,14 +304,14 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
             </div>
           )}
           {dayNature && exerciseDays ? (
-            <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-white border border-brand-ink/5 px-4 py-3">
+            <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-brand-card border border-brand-line px-4 py-3">
               مستوى نشاطك المحتسب:{" "}
               <span className="font-bold text-brand-ink">
                 {ACTIVITY_LEVEL_LABELS[activityLevelFrom(dayNature, exerciseDays)]}
               </span>
             </p>
           ) : activity ? (
-            <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-white border border-brand-ink/5 px-4 py-3">
+            <p className="text-sm text-brand-ink-muted leading-relaxed rounded-xl bg-brand-card border border-brand-line px-4 py-3">
               مستواك الحالي المسجل:{" "}
               <span className="font-bold text-brand-ink">
                 {ACTIVITY_OPTIONS.find((o) => o.value === activity)?.label ?? activity}
@@ -333,7 +333,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               step="0.1"
               value={targetWeight}
               onChange={(e) => setTargetWeight(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             />
           </div>
         </div>
@@ -372,7 +372,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         </div>
 
         {pregStatus === "pregnant" && (
-          <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+          <div className="space-y-4 rounded-xl bg-brand-card border border-brand-line p-4">
             <div>
               <p className="text-sm font-bold text-brand-ink mb-2">الثلث الحالي</p>
               <div className="grid grid-cols-3 gap-2">
@@ -412,7 +412,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
         )}
 
         {pregStatus === "lactating" && (
-          <div className="rounded-xl bg-white border border-brand-ink/5 p-4">
+          <div className="rounded-xl bg-brand-card border border-brand-line p-4">
             <label htmlFor="months-pp" className="block text-sm font-bold text-brand-ink mb-2">
               كم شهراً مضى على الولادة؟
             </label>
@@ -425,13 +425,13 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               max={24}
               value={monthsPP}
               onChange={(e) => setMonthsPP(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             />
           </div>
         )}
 
         {pregStatus === "none" && (
-          <div className="space-y-4 rounded-xl bg-white border border-brand-ink/5 p-4">
+          <div className="space-y-4 rounded-xl bg-brand-card border border-brand-line p-4">
             <div>
               <p className="text-sm font-bold text-brand-ink mb-2">
                 هل ولدتِ خلال آخر 12 شهراً؟
@@ -474,7 +474,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
                   max={12}
                   value={monthsPP}
                   onChange={(e) => setMonthsPP(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                  className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
                 />
               </div>
             )}
@@ -562,7 +562,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               max={16}
               value={sleepHours}
               onChange={(e) => setSleepHours(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+              className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             />
           </div>
         </div>
@@ -576,7 +576,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
             onChange={(e) => setNotes(e.target.value)}
             maxLength={500}
             rows={3}
-            className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
+            className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 resize-none"
             placeholder="مثلاً: أفضّل وجبات سريعة التحضير أيام الدوام"
           />
         </div>
@@ -622,7 +622,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
               className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                 conditions.includes(c.slug)
                   ? "border-brand-pink bg-brand-pink-light text-brand-pink"
-                  : "border-brand-ink/10 bg-white text-brand-ink hover:border-brand-pink/40"
+                  : "border-brand-ink/10 bg-brand-card text-brand-ink hover:border-brand-pink/40"
               }`}
             >
               {c.label_ar}
@@ -640,7 +640,7 @@ export function HealthEditForm({ initial }: { initial: HealthInitial }) {
             value={otherCondition}
             onChange={(e) => setOtherCondition(e.target.value)}
             spellCheck={false}
-            className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            className="w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink placeholder:text-brand-ink-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             placeholder={g("اكتبيها هنا", "اكتبها هنا")}
           />
         </div>

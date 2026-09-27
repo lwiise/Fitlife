@@ -106,7 +106,7 @@ export function DeleteAccountButton({
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="delete-account-title"
-                  className="relative bg-white rounded-3xl border border-brand-ink/5 shadow-xl w-full max-w-md p-6 md:p-7"
+                  className="relative bg-brand-card rounded-3xl border border-brand-line shadow-xl w-full max-w-md p-6 md:p-7"
                   initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}

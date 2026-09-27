@@ -83,10 +83,10 @@ export default async function RecapPage() {
     <main dir="rtl" className="min-h-screen bg-brand-surface">
 
       <div className="container-app max-w-2xl py-8 space-y-6">
-        <h1 className="text-3xl font-extrabold text-brand-ink">رسالتك الأسبوعية</h1>
+        <h1 className="text-app-title text-brand-ink">رسالتك الأسبوعية</h1>
 
         {!recap ? (
-          <section className="bg-white rounded-2xl border border-brand-ink/5 p-6 space-y-3">
+          <section className="bg-brand-card rounded-2xl border border-brand-line p-6 space-y-3">
             <p className="text-brand-ink-muted leading-relaxed">
               رسالتك الأولى تصدر بعد أول خطة أسبوعية لبيتك.
             </p>
@@ -102,7 +102,7 @@ export default async function RecapPage() {
             {/* The letter */}
             <section
               aria-label="رسالة الأسبوع"
-              className="bg-white rounded-2xl border border-brand-ink/5 p-6 space-y-4"
+              className="bg-brand-card rounded-2xl border border-brand-line p-6 space-y-4"
             >
               <div className="flex items-center gap-3">
                 <span
@@ -190,7 +190,7 @@ export default async function RecapPage() {
               ].map(({ icon: Icon, value, label }) => (
                 <div
                   key={label}
-                  className="bg-white rounded-2xl border border-brand-ink/5 p-4 text-center"
+                  className="bg-brand-card rounded-2xl border border-brand-line p-4 text-center"
                 >
                   <Icon className="size-4 text-brand-purple-900 mx-auto" aria-hidden="true" />
                   <p className="text-2xl font-extrabold text-brand-purple-900 mt-1">

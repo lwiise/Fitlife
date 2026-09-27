@@ -109,7 +109,7 @@ function SessionDetail({
   const [expanded, setExpanded] = useState<number | null>(null);
   return (
     <>
-      <div className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5">
+      <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3.5">
         <p className="text-xs font-bold text-brand-ink-muted mb-1.5">الإحماء</p>
         <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5 space-y-0.5">
           {session.warmup_ar.map((w, i) => (
@@ -118,8 +118,8 @@ function SessionDetail({
         </ul>
       </div>
 
-      <div className="rounded-2xl border border-brand-ink/5 bg-white overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-brand-ink/5">
+      <div className="rounded-2xl border border-brand-line bg-brand-card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-brand-line">
           <p className="font-bold text-brand-ink text-sm">{session.session_name_ar}</p>
           <p className="text-brand-ink-muted text-xs tabular-nums">
             {session.exercises.length} تمارين · {totalSets} مجموعة
@@ -128,7 +128,7 @@ function SessionDetail({
         <div className="overflow-x-auto no-scrollbar px-4 pb-1">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-brand-ink-muted text-xs border-b border-brand-ink/5">
+              <tr className="text-brand-ink-muted text-xs border-b border-brand-line">
                 <th className="text-start font-bold py-2 pe-3">التمرين</th>
                 <th className="text-center font-bold py-2 px-2">المجموعات</th>
                 <th className="text-center font-bold py-2 px-2">التكرارات</th>
@@ -145,7 +145,7 @@ function SessionDetail({
                 const isOpen = expanded === i;
                 return (
                   <Fragment key={i}>
-                    <tr className="border-b border-brand-ink/5 last:border-0 align-top">
+                    <tr className="border-b border-brand-line last:border-0 align-top">
                       <td className="py-1.5 pe-3">
                         {animId ? (
                           <button
@@ -196,7 +196,7 @@ function SessionDetail({
                       </td>
                     </tr>
                     {animId && isOpen && (
-                      <tr className="border-b border-brand-ink/5 last:border-0">
+                      <tr className="border-b border-brand-line last:border-0">
                         <td colSpan={4} className="pb-4 pt-1">
                           <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-brand-lavender/15 p-3">
                             <div className="w-full max-w-56 sm:w-56 flex-shrink-0">
@@ -221,7 +221,7 @@ function SessionDetail({
       </div>
 
       {session.cooldown_ar.length > 0 && (
-        <div className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5">
+        <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3.5">
           <p className="text-xs font-bold text-brand-ink-muted mb-1.5">التهدئة</p>
           <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5 space-y-0.5">
             {session.cooldown_ar.map((c, i) => (
@@ -446,7 +446,7 @@ export function WorkoutViewer({
           too, where the stacked line makes the cluster full-width (a no-op at
           sm+, where the parent's justify-between already pins the
           content-width cluster to the end). */}
-      <div className="rounded-3xl bg-white border border-brand-ink/5 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="rounded-3xl bg-brand-card border border-brand-line px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-brand-ink-muted text-xs">الأسبوع</p>
@@ -570,26 +570,26 @@ export function WorkoutViewer({
 
       {/* Member summary tiles */}
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+        <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
           <p className="text-brand-ink-muted text-xs">التقسيم</p>
           <p className="font-extrabold text-brand-ink text-sm mt-1 leading-snug">
             {activeWorkout.split_name_ar}
           </p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+        <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
           <p className="text-brand-ink-muted text-xs">جلسات الأسبوع</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {stats.count}
           </p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+        <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
           <p className="text-brand-ink-muted text-xs">متوسط الجلسة</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {stats.avgMin}
             <span className="text-brand-ink-muted text-xs ms-1">دقيقة</span>
           </p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-brand-ink/5">
+        <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
           <p className="text-brand-ink-muted text-xs">تمارين الأسبوع</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
             {stats.totalExercises}
@@ -613,7 +613,7 @@ export function WorkoutViewer({
                   ? "bg-brand-purple-900 text-white"
                   : isTraining
                     ? "bg-brand-lavender/30 text-brand-purple-900 hover:bg-brand-lavender/50"
-                    : "bg-white text-brand-ink-muted/60 border border-brand-ink/5 hover:text-brand-ink-muted"
+                    : "bg-brand-card text-brand-ink-muted/60 border border-brand-line hover:text-brand-ink-muted"
               }`}
             >
               {DAY_NAMES_AR[i]}
@@ -625,7 +625,7 @@ export function WorkoutViewer({
       {/* Session summary pill + home/gym toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {activeSession ? (
-          <div className="inline-flex flex-wrap items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
+          <div className="inline-flex flex-wrap items-center gap-2 bg-brand-card rounded-full border border-brand-line px-4 py-2">
             <span className="font-bold text-brand-ink text-sm">
               {activeSession.session_name_ar}
             </span>
@@ -657,7 +657,7 @@ export function WorkoutViewer({
             )}
           </div>
         ) : (
-          <div className="inline-flex items-center gap-2 bg-white rounded-full border border-brand-ink/5 px-4 py-2">
+          <div className="inline-flex items-center gap-2 bg-brand-card rounded-full border border-brand-line px-4 py-2">
             <span className="text-brand-ink-muted text-xs">يوم راحة</span>
           </div>
         )}
@@ -669,7 +669,7 @@ export function WorkoutViewer({
             className={`min-h-9 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
               homeMode
                 ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
-                : "border-brand-ink/10 bg-white text-brand-ink"
+                : "border-brand-ink/10 bg-brand-card text-brand-ink"
             }`}
           >
             {homeMode ? "نسخة المنزل" : "نسخة النادي"}
@@ -704,7 +704,7 @@ export function WorkoutViewer({
               بيتنا». Server re-derives the date and enforces the window. */}
           {activeSession && canMarkActive && (
             <div
-              className="rounded-2xl border border-brand-ink/5 bg-white px-4 py-3.5 space-y-2"
+              className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3.5 space-y-2"
               aria-label="تتبّع الحصة"
             >
               <p className="text-xs font-bold text-brand-ink-muted">
@@ -734,7 +734,7 @@ export function WorkoutViewer({
                 ))}
               </div>
               {activeStatus === "done" && (
-                <div className="pt-1.5 border-t border-brand-ink/5 space-y-1.5">
+                <div className="pt-1.5 border-t border-brand-line space-y-1.5">
                   <p className="text-xs font-bold text-brand-ink-muted">
                     كيف كانت شدة الحصة؟
                   </p>
@@ -782,7 +782,7 @@ export function WorkoutViewer({
 
       {/* Program notes */}
       <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-brand-ink/5 bg-white p-4">
+        <div className="rounded-2xl border border-brand-line bg-brand-card p-4">
           <p className="flex items-center gap-2 text-sm font-bold text-brand-ink mb-1.5">
             <TrendingUp className="size-4 text-brand-purple-900" aria-hidden="true" />
             التدرّج
@@ -792,7 +792,7 @@ export function WorkoutViewer({
           </p>
         </div>
         {activeWorkout.cardio_notes_ar && (
-          <div className="rounded-2xl border border-brand-ink/5 bg-white p-4">
+          <div className="rounded-2xl border border-brand-line bg-brand-card p-4">
             <p className="flex items-center gap-2 text-sm font-bold text-brand-ink mb-1.5">
               <Flame className="size-4 text-brand-pink" aria-hidden="true" />
               الكارديو والخطوات

@@ -30,7 +30,7 @@ export function MemberHistorySelect({
         id="history-member"
         value={selected}
         onChange={(e) => router.push(`/plan/history?member=${e.target.value}`)}
-        className="w-full sm:w-64 min-h-11 px-4 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+        className="w-full sm:w-64 min-h-11 px-4 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
       >
         {members.map((m) => (
           <option key={m.id} value={m.id}>

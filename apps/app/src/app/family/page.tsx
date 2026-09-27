@@ -32,7 +32,7 @@ export default async function FamilyPage() {
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>
-          <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+          <h1 className="text-app-title text-brand-ink">
             عائلتك
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -45,7 +45,7 @@ export default async function FamilyPage() {
 
         <div className="space-y-3">
           {/* Mom — edits via her own profile flow (/profile), not the member wizard. */}
-          <div className="flex items-center gap-3 bg-white rounded-2xl p-4 border border-brand-ink/5">
+          <div className="flex items-center gap-3 bg-brand-card rounded-2xl p-4 border border-brand-line">
             <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center flex-shrink-0">
               <User className="size-5 text-brand-pink" aria-hidden="true" />
             </div>

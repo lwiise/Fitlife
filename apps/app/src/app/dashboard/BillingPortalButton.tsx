@@ -37,7 +37,7 @@ export function BillingPortalButton({
     "inline-flex items-center gap-2 font-bold text-sm px-4 py-2 rounded-full transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed";
   const variantClasses =
     variant === "primary"
-      ? "bg-white text-brand-purple-900 hover:bg-brand-yellow focus-visible:ring-offset-brand-purple-900"
+      ? "bg-brand-card text-brand-purple-900 hover:bg-brand-yellow focus-visible:ring-offset-brand-purple-900"
       : "bg-brand-ink text-white hover:bg-brand-purple-900 focus-visible:ring-offset-white";
 
   return (

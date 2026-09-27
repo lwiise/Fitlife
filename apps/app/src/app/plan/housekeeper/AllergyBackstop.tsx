@@ -56,7 +56,7 @@ export function AllergyBackstop({
                 key={j}
                 dir="rtl"
                 lang="ar"
-                className="inline-flex items-center rounded-lg border border-brand-pink/40 bg-white px-2.5 py-1 text-sm font-bold text-brand-ink"
+                className="inline-flex items-center rounded-lg border border-brand-pink/40 bg-brand-card px-2.5 py-1 text-sm font-bold text-brand-ink"
               >
                 {allergen}
               </span>

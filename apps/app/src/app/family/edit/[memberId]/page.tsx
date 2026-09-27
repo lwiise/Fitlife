@@ -39,7 +39,7 @@ function SectionCard({
   return (
     <Link
       href={href}
-      className="flex items-center gap-4 bg-white rounded-2xl border border-brand-ink/5 p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+      className="flex items-center gap-4 bg-brand-card rounded-2xl border border-brand-line p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
     >
       <div className="size-11 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
         <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
@@ -152,7 +152,7 @@ export default async function EditMemberPage({
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>
-          <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+          <h1 className="text-app-title text-brand-ink">
             تعديل بيانات {m.name}
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -182,7 +182,7 @@ export default async function EditMemberPage({
           />
         </div>
 
-        <div className="rounded-2xl bg-white/60 border border-brand-ink/5 px-4 py-3">
+        <div className="rounded-2xl bg-white/60 border border-brand-line px-4 py-3">
           <p className="text-brand-ink-muted text-sm leading-relaxed">
             أي تعديل لن يطبق على الخطة حتى تنشئي{" "}
             <Link

@@ -37,7 +37,7 @@ export function PrivacyChoiceCard({ ownerSex }: { ownerSex?: string | null }) {
   };
 
   return (
-    <section className="bg-white rounded-2xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
       <div className="flex items-center gap-3 mb-3">
         <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
           <BarChart3 className="size-5 text-brand-purple-900" aria-hidden="true" />

@@ -95,7 +95,7 @@ export function HousekeeperPlanView({
 
   return (
     <main dir={info.direction} lang={locale} className="min-h-screen bg-brand-surface">
-      <header className="bg-white border-b border-brand-ink/5 sticky top-0 z-10 print:hidden">
+      <header className="bg-brand-card border-b border-brand-line sticky top-0 z-10 print:hidden">
         <div className="container-app py-4 flex items-center justify-between gap-3">
           <Logo className="h-9 w-auto" />
           <div className="flex items-center gap-2">

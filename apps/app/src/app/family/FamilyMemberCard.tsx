@@ -44,7 +44,7 @@ export function FamilyMemberCard({
   const { Icon } = meta;
 
   return (
-    <div className="flex items-center gap-3 bg-white rounded-2xl p-4 border border-brand-ink/5">
+    <div className="flex items-center gap-3 bg-brand-card rounded-2xl p-4 border border-brand-line">
       <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
         <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
       </div>

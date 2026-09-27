@@ -9,7 +9,7 @@ import { genderPick } from "@/lib/copy/gender";
 const currentYear = new Date().getFullYear();
 
 const FIELD =
-  "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-white text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors";
+  "w-full px-4 py-3 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink placeholder:text-brand-ink-muted/40 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:border-transparent transition-colors";
 
 export type MemberPersonalInitial = {
   name: string;
@@ -85,7 +85,7 @@ export function MemberPersonalEditForm({
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+        <h1 className="text-app-title text-brand-ink">
           المعلومات الشخصية
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -144,7 +144,7 @@ export function MemberPersonalEditForm({
                   className={`min-h-11 rounded-2xl border-2 px-4 py-3 text-sm font-bold text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
                     active
                       ? "border-brand-purple-900 bg-brand-purple-900/5"
-                      : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
+                      : "border-brand-ink/10 bg-brand-card hover:border-brand-ink/20"
                   }`}
                 >
                   {o.label}
