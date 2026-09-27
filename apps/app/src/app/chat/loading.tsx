@@ -8,11 +8,11 @@ export default function ChatLoading() {
     <main className="min-h-screen bg-brand-surface flex flex-col" aria-busy="true" aria-label="جارٍ التحميل">
       <div className="container-app flex-1 py-6 flex flex-col gap-4">
         <div className="flex-1 space-y-3">
-          <div className="h-16 w-3/4 animate-pulse rounded-2xl bg-white" />
-          <div className="h-12 w-1/2 animate-pulse rounded-2xl bg-white ms-auto" />
-          <div className="h-16 w-2/3 animate-pulse rounded-2xl bg-white" />
+          <div className="h-16 w-3/4 animate-pulse rounded-2xl bg-brand-card" />
+          <div className="h-12 w-1/2 animate-pulse rounded-2xl bg-brand-card ms-auto" />
+          <div className="h-16 w-2/3 animate-pulse rounded-2xl bg-brand-card" />
         </div>
-        <div className="h-14 animate-pulse rounded-2xl border border-brand-ink/5 bg-white" />
+        <div className="h-14 animate-pulse rounded-2xl border border-brand-line bg-brand-card" />
       </div>
     </main>
   );

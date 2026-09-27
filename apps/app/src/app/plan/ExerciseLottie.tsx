@@ -80,7 +80,7 @@ export function ExerciseLottie({
   }
 
   return (
-    <div className="relative aspect-square w-full rounded-2xl bg-white overflow-hidden">
+    <div className="relative aspect-square w-full rounded-2xl bg-brand-card overflow-hidden">
       <div ref={containerRef} className="absolute inset-0" role="img" aria-label={label} />
       {reduced && !userPlay && (
         <button

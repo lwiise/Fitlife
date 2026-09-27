@@ -16,7 +16,7 @@ function ContactRow({
   return (
     <a
       href={href}
-      className="flex items-center justify-between gap-3 min-h-11 py-3 border-b border-brand-ink/5 last:border-0 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
+      className="flex items-center justify-between gap-3 min-h-11 py-3 border-b border-brand-line last:border-0 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-md"
     >
       <span className="flex items-center gap-2.5">
         <Icon className="size-4 text-brand-purple-900" aria-hidden="true" />
@@ -41,7 +41,7 @@ export function SupportSection({ ownerSex }: { ownerSex?: string | null }) {
   const hasContact = Boolean(email || whatsapp);
 
   return (
-    <section className="bg-white rounded-2xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
       <div className="flex items-center gap-3 mb-3">
         <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
           <LifeBuoy className="size-5 text-brand-purple-900" aria-hidden="true" />

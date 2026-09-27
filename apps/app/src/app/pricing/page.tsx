@@ -7,7 +7,12 @@ import { PreselectionScroll } from "./PreselectionScroll";
 import { SkipSubscriptionButton } from "./SkipSubscriptionButton";
 import { Logo } from "@/components/Logo";
 import { BackToDashboard } from "@/components/BackToDashboard";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getCurrentSubscription,
+  hasLiveLemonsqueezySubscription,
+} from "@/lib/subscription/state";
 import { genderPick } from "@/lib/copy/gender";
 
 export const metadata = {
@@ -46,6 +51,12 @@ export default async function PricingPage({
       .eq("id", user.id)
       .single();
     ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+    // An existing subscriber cannot start a checkout (/api/checkout 409s them),
+    // so every CTA on this page would fail for them. Changing plans lives on
+    // /subscription.
+    if (hasLiveLemonsqueezySubscription(await getCurrentSubscription(user.id))) {
+      redirect("/subscription");
+    }
   }
   const g = genderPick(ownerSex);
 

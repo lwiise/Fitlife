@@ -66,7 +66,7 @@ export function ChangePlanSection({
   }
 
   return (
-    <section className="bg-white rounded-3xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="font-extrabold text-xl text-brand-ink leading-tight">
           {isTrial ? g("اختاري خطتك للاستمرار بعد التجربة", "اختر خطتك للاستمرار بعد التجربة") : "تغيير الخطة"}
@@ -133,7 +133,7 @@ export function ChangePlanSection({
               className={`rounded-2xl border p-4 ${
                 isCurrent
                   ? "border-brand-purple-900/40 bg-brand-lavender/15"
-                  : "border-brand-ink/10 bg-white"
+                  : "border-brand-ink/10 bg-brand-card"
               }`}
             >
               <div className="flex items-baseline justify-between gap-2">

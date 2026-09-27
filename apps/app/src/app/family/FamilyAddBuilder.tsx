@@ -153,7 +153,7 @@ export function FamilyAddBuilder({
   }
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-dashed border-brand-purple-900/30">
+    <div className="bg-brand-card rounded-2xl p-5 border border-dashed border-brand-purple-900/30">
       <p className="font-bold text-brand-ink text-sm">إضافة أفراد جدد</p>
       <p className="mt-1 mb-4 text-brand-ink-muted text-xs leading-relaxed">
         {g(

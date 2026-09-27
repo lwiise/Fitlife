@@ -40,7 +40,7 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
       });
       if (!res.ok || !res.body) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? g("صار خطأ. حاولي مرة ثانية.", "صار خطأ. حاول مرة ثانية."));
+        setError(body.error ?? g("حدث خطأ. حاولي مرة أخرى.", "حدث خطأ. حاول مرة أخرى."));
         setMessages(next); // drop the empty assistant placeholder
         return;
       }
@@ -58,7 +58,7 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
         });
       }
     } catch {
-      setError(g("صار خطأ في الاتصال. حاولي مرة ثانية.", "صار خطأ في الاتصال. حاول مرة ثانية."));
+      setError(g("تعذّر الاتصال. حاولي مرة أخرى.", "تعذّر الاتصال. حاول مرة أخرى."));
       setMessages(next);
     } finally {
       setStreaming(false);
@@ -70,7 +70,7 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
   return (
     <div className="flex-1 flex flex-col container-app w-full max-w-2xl py-6 min-h-0">
       {/* Messages */}
-      <div className="flex-1 flex flex-col gap-3 overflow-y-auto pb-4">
+      <div className="flex-1 flex flex-col gap-3 pb-4">
         {empty ? (
           <div className="m-auto text-center max-w-md">
             <div className="inline-flex items-center justify-center size-14 rounded-full bg-brand-lavender/30 mb-4">
@@ -91,7 +91,7 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
                   key={s}
                   type="button"
                   onClick={() => send(s)}
-                  className="text-start min-h-11 rounded-2xl border border-brand-purple-900/15 bg-white px-4 py-3 text-brand-ink text-sm leading-relaxed hover:bg-brand-lavender/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+                  className="text-start min-h-11 rounded-2xl border border-brand-purple-900/15 bg-brand-card px-4 py-3 text-brand-ink text-sm leading-relaxed hover:bg-brand-lavender/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
                 >
                   {s}
                 </button>
@@ -102,10 +102,10 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
           messages.map((m, i) => (
             <div
               key={i}
-              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+              className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed whitespace-pre-wrap ${
                 m.role === "user"
                   ? "self-end bg-brand-purple-900 text-white"
-                  : "self-start bg-white border border-brand-ink/5 text-brand-ink"
+                  : "self-start bg-brand-card border border-brand-line text-brand-ink"
               }`}
             >
               {m.content ? (
@@ -119,25 +119,27 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
             </div>
           ))
         )}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="scroll-mb-44" />
       </div>
 
+      {/* Composer — pinned to the bottom of the viewport (above the tab bar
+          on phones) so a long conversation never scrolls it away. */}
+      <div className="sticky bottom-[var(--app-tabbar-h)] z-10 -mx-4 bg-brand-surface/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-brand-surface/85 sm:mx-0 sm:px-0">
       {error && (
         <p
           role="alert"
-          className="text-brand-pink text-sm font-bold mb-2 text-center"
+          className="mb-2 text-center text-sm font-bold text-critical"
         >
           {error}
         </p>
       )}
 
-      {/* Composer */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           send(input);
         }}
-        className="flex items-end gap-2 rounded-2xl border border-brand-ink/10 bg-white p-2 focus-within:ring-2 focus-within:ring-brand-purple-900"
+        className="flex items-end gap-2 rounded-2xl border border-brand-ink/10 bg-brand-card p-2 focus-within:ring-2 focus-within:ring-brand-purple-900"
       >
         <textarea
           value={input}
@@ -166,9 +168,10 @@ export function ChatPanel({ ownerSex }: { ownerSex?: string | null }) {
           )}
         </button>
       </form>
-      <p className="mt-2 text-brand-ink-muted text-sm text-center leading-relaxed">
-        {g("إرشاد مساعِد فقط — راجعي طبيبك في الأمور الطبية.", "إرشاد مساعِد فقط — راجع طبيبك في الأمور الطبية.")}
+      <p className="mt-2 text-meta text-brand-ink-muted text-center">
+        {g("إرشاد مساعِد فقط — راجعي طبيبكِ في الأمور الطبية.", "إرشاد مساعِد فقط — راجع طبيبك في الأمور الطبية.")}
       </p>
+      </div>
     </div>
   );
 }

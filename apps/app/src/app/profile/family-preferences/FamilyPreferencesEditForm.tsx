@@ -45,7 +45,7 @@ function OptionButton({
       } ${
         active
           ? "border-brand-purple-900 bg-brand-purple-900/5"
-          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
+          : "border-brand-ink/10 bg-brand-card hover:border-brand-ink/20"
       }`}
     >
       {children}
@@ -70,7 +70,7 @@ function Pill({
       className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium text-brand-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
         active
           ? "border-brand-purple-900 bg-brand-purple-900/5"
-          : "border-brand-ink/10 bg-white hover:border-brand-ink/20"
+          : "border-brand-ink/10 bg-brand-card hover:border-brand-ink/20"
       }`}
     >
       {children}
@@ -80,7 +80,7 @@ function Pill({
 
 function GroupHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="font-bold text-lg text-brand-ink border-b border-brand-ink/5 pb-2">
+    <h2 className="font-bold text-lg text-brand-ink border-b border-brand-line pb-2">
       {children}
     </h2>
   );
@@ -141,7 +141,7 @@ export function FamilyPreferencesEditForm({
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+        <h1 className="text-app-title text-brand-ink">
           تفضيلات العائلة
         </h1>
         <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -221,7 +221,7 @@ export function FamilyPreferencesEditForm({
             value={hkLang}
             onChange={(e) => setHkLang(e.target.value as LocaleCode)}
             disabled={isPending}
-            className="w-full min-h-11 px-4 rounded-xl border border-brand-ink/10 bg-white text-brand-ink text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+            className="w-full min-h-11 px-4 rounded-xl border border-brand-ink/10 bg-brand-card text-brand-ink text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
           >
             {LOCALE_CODES_ORDERED.map((code) => {
               const info = LOCALE_INFO[code];

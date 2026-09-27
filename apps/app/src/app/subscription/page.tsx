@@ -39,7 +39,7 @@ function SectionShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-3xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7">
       <h2 className="font-extrabold text-xl text-brand-ink leading-tight mb-4">
         {title}
       </h2>
@@ -72,7 +72,7 @@ export default async function SubscriptionPage({
     return (
       <main className="min-h-screen bg-brand-surface">
         <div className="container-app py-8 md:py-12 max-w-2xl">
-          <div className="bg-white rounded-3xl border border-brand-ink/5 p-6 text-center">
+          <div className="bg-brand-card rounded-3xl border border-brand-line p-6 text-center">
             <p className="font-bold text-brand-ink">ما عندك اشتراك بعد</p>
             <Link
               href="/pricing"
@@ -93,7 +93,7 @@ export default async function SubscriptionPage({
     <main className="min-h-screen bg-brand-surface">
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
-        <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+        <h1 className="text-app-title text-brand-ink">
           اشتراكك
         </h1>
 

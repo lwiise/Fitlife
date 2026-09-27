@@ -48,7 +48,7 @@ export function PlanFailedState({
   }
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-3xl border border-brand-ink/5 p-8 text-center">
+    <div className="max-w-md mx-auto bg-brand-card rounded-3xl border border-brand-line p-8 text-center">
       <div className="inline-flex items-center justify-center size-16 rounded-full bg-brand-warm-orange/15 mb-4">
         <AlertCircle
           className="size-8 text-brand-warm-orange"

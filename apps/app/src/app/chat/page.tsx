@@ -43,7 +43,7 @@ export default async function ChatPage() {
         <ChatPanel ownerSex={ownerSex} />
       ) : (
         <div className="container-app py-12 max-w-lg">
-          <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
+          <div className="bg-brand-card rounded-2xl border border-brand-line p-6 text-center">
             <p className="font-bold text-brand-ink text-lg">
               {g("المستشارة الغذائية حق المشتركات", "المستشارة الغذائية حق المشتركين")}
             </p>

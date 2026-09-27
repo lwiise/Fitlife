@@ -47,7 +47,7 @@ export function CurrentPlanCard({
   const badge = STATUS_BADGE[sub.status] ?? STATUS_BADGE.expired!;
 
   return (
-    <section className="bg-white rounded-3xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-extrabold text-2xl text-brand-ink leading-tight">
@@ -88,7 +88,7 @@ export function CurrentPlanCard({
       </div>
 
       {/* What's included */}
-      <ul className="mt-5 space-y-2 border-t border-brand-ink/5 pt-5">
+      <ul className="mt-5 space-y-2 border-t border-brand-line pt-5">
         {tier.features_ar.map((f, i) => (
           <li
             key={i}

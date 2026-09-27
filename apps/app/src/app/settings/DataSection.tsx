@@ -12,7 +12,7 @@ export function DataSection({
 }) {
   const g = genderPick(ownerSex);
   return (
-    <section className="bg-white rounded-2xl border border-brand-ink/5 p-6 md:p-7">
+    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
       <div className="flex items-center gap-3 mb-5">
         <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center flex-shrink-0">
           <Database className="size-5 text-brand-pink" aria-hidden="true" />

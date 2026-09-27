@@ -106,7 +106,7 @@ export default async function PlanHistoryPage({
 
       <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
         <header>
-          <h1 className="font-extrabold text-3xl text-brand-ink leading-tight">
+          <h1 className="text-app-title text-brand-ink">
             الخطط السابقة
           </h1>
           <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
@@ -118,7 +118,7 @@ export default async function PlanHistoryPage({
         </header>
 
         {history.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
+          <div className="bg-brand-card rounded-2xl border border-brand-line p-6 text-center">
             <p className="font-bold text-brand-ink">ما عندك خطط سابقة</p>
             <Link
               href="/plan"
@@ -134,7 +134,7 @@ export default async function PlanHistoryPage({
             )}
 
             {deduped.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-brand-ink/5 p-6 text-center">
+              <div className="bg-brand-card rounded-2xl border border-brand-line p-6 text-center">
                 <p className="font-bold text-brand-ink">ما عنده خطط سابقة</p>
               </div>
             ) : (
@@ -144,7 +144,7 @@ export default async function PlanHistoryPage({
                   return (
               <div
                 key={item.id}
-                className="bg-white rounded-2xl border border-brand-ink/5 p-5"
+                className="bg-brand-card rounded-2xl border border-brand-line p-5"
               >
                 <div className="flex items-start gap-3">
                   <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">

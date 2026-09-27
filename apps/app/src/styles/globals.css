@@ -762,6 +762,12 @@
    it (the plan's day switcher). 0 on focus routes, which have no header. */
 :root {
   --app-header-h: 0px;
+  --app-tabbar-h: 0px;
+}
+@media (width < 64rem) {
+  body:has([data-app-tabbar]) {
+    --app-tabbar-h: calc(4.25rem + env(safe-area-inset-bottom));
+  }
 }
 body:has([data-app-header]) {
   --app-header-h: 4rem;
