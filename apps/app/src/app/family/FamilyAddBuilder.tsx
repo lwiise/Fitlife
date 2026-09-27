@@ -8,6 +8,8 @@ import { PregLactSwitch } from "./add/PregLactSwitch";
 import { HousekeeperForm } from "./add/HousekeeperForm";
 import { CheckRow, StepperRow } from "./add/FamilyComposerControls";
 import { genderPick } from "@/lib/copy/gender";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
 
 // One step of the guided sequence. Husband and maid are singular; the rest carry a count.
 type Task =
@@ -153,9 +155,14 @@ export function FamilyAddBuilder({
   }
 
   return (
-    <div className="bg-brand-card rounded-2xl p-5 border border-dashed border-brand-purple-900/30">
-      <p className="font-bold text-brand-ink text-sm">إضافة أفراد جدد</p>
-      <p className="mt-1 mb-4 text-brand-ink-muted text-xs leading-relaxed">
+    <Card aria-labelledby="family-add-title">
+      <CardHeader
+        id="family-add-title"
+        title="إضافة أفراد جدد"
+        icon={<UserPlus className="size-5 text-brand-purple-900" aria-hidden="true" />}
+        className="mb-1"
+      />
+      <p className="mb-4 text-meta leading-relaxed text-brand-ink-muted">
         {g(
           "اختاري من تضيفين، ويأخذ كل فرد خطته ضمن وجبات العائلة.",
           "اختر من تضيف، ويأخذ كل فرد خطته ضمن وجبات العائلة.",
@@ -171,7 +178,7 @@ export function FamilyAddBuilder({
             onToggle={() => setHusband((v) => !v)}
           />
         )}
-        <StepperRow label="بالغ ثاني" Icon={UserPlus} value={adult} onChange={setAdult} />
+        <StepperRow label="بالغ ثانٍ" Icon={UserPlus} value={adult} onChange={setAdult} />
         <StepperRow label="طفل" Icon={Baby} value={child} onChange={setChild} />
         <StepperRow
           label="امرأة حامل/مرضعة"
@@ -189,16 +196,17 @@ export function FamilyAddBuilder({
         )}
       </div>
 
-      <button
-        type="button"
+      <Button
         onClick={start}
         disabled={totalSelected === 0}
-        className="mt-4 w-full flex items-center justify-center gap-2 min-h-11 bg-brand-ink hover:bg-brand-purple-900 disabled:bg-brand-ink/30 disabled:cursor-not-allowed text-white font-bold text-base py-3.5 rounded-xl transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+        size="lg"
+        block
+        className="mt-4"
       >
         {totalSelected > 0
-          ? g("التالي — أكملي بيانات العائلة", "التالي — أكمل بيانات العائلة")
+          ? g("التالي: أكملي بيانات العائلة", "التالي: أكمل بيانات العائلة")
           : g("اختاري فرداً للإضافة", "اختر فرداً للإضافة")}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }

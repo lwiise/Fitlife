@@ -4,7 +4,6 @@ import {
   getCurrentUserFamilyMembers,
 } from "@/lib/supabase/queries";
 import { isLocaleCode } from "@/lib/plans/locales";
-import { BackButton } from "@/components/BackButton";
 import { asStringArray } from "../labels";
 import { FamilyPreferencesEditForm } from "./FamilyPreferencesEditForm";
 
@@ -29,12 +28,8 @@ export default async function FamilyPreferencesEditPage() {
         : null;
 
   return (
-    <main className="min-h-screen bg-brand-surface">
-      <div className="container-app pt-3 -mb-4 md:-mb-6">
-        <BackButton className="-ms-2.5" href="/profile" />
-      </div>
-
-      <div className="container-app py-8 md:py-12 max-w-2xl">
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl">
         <FamilyPreferencesEditForm
           initial={{
             cuisine_preference: profile.cuisine_preference || "",

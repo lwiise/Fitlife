@@ -7,6 +7,7 @@ import { ChipInput } from "@/components/ChipInput";
 import { CUISINES, DIETARY, COOKING, MEAL_OUT } from "../labels";
 import { saveMomFamilyPreferences, saveHousekeeperLanguage } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   LOCALE_CODES_ORDERED,
   LOCALE_INFO,
@@ -140,14 +141,12 @@ export function FamilyPreferencesEditForm({
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-app-title text-brand-ink">
-          تفضيلات العائلة
-        </h1>
-        <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          تنطبق على وجبات العائلة كلها. الأكل حلال دائماً.
-        </p>
-      </header>
+      <PageHeader
+        className="mb-0"
+        back={{ href: "/profile", label: "ملفي الشخصي" }}
+        title="تفضيلات العائلة"
+        description="تنطبق على وجبات العائلة كلها. الأكل حلال دائماً."
+      />
 
       <section className="space-y-3">
         <GroupHeading>المطبخ المفضل</GroupHeading>

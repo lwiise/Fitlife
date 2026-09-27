@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, ChevronLeft } from "lucide-react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import { BackButton } from "@/components/BackButton";
+import { PageHeader } from "@/components/ui/page-header";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { genderPick } from "@/lib/copy/gender";
 import { HousekeeperForm } from "../../add/HousekeeperForm";
@@ -25,7 +25,8 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-function SectionCard({
+/** One tappable row of the grouped list — the settings page's row shape. */
+function SectionRow({
   href,
   title,
   summary,
@@ -37,22 +38,24 @@ function SectionCard({
   icon: typeof UserRound;
 }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-4 bg-brand-card rounded-2xl border border-brand-line p-5 md:p-6 group hover:border-brand-purple-900/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-    >
-      <div className="size-11 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-        <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h2 className="font-bold text-brand-ink text-base">{title}</h2>
-        <p className="text-brand-ink-muted text-sm mt-0.5 truncate">{summary}</p>
-      </div>
-      <span className="inline-flex items-center gap-1 text-brand-purple-900 text-sm font-bold flex-shrink-0 group-hover:text-brand-purple-700 transition-colors">
-        تعديل
-        <ChevronLeft className="size-4" aria-hidden="true" />
-      </span>
-    </Link>
+    <li>
+      <Link
+        href={href}
+        className="group flex min-h-16 items-center gap-4 px-4 py-3 hover:bg-brand-tint/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-purple-900 sm:px-5"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-tint">
+          <Icon className="size-5 text-brand-purple-900" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-bold text-brand-ink">{title}</span>
+          <span className="mt-0.5 block truncate text-meta text-brand-ink-muted">{summary}</span>
+        </span>
+        <ChevronLeft
+          className="size-5 shrink-0 text-brand-ink-muted group-hover:text-brand-purple-900"
+          aria-hidden="true"
+        />
+      </Link>
+    </li>
   );
 }
 
@@ -144,56 +147,55 @@ export default async function EditMemberPage({
       .filter(Boolean)
       .join("، ") || g("أضيفي التفاصيل الصحية", "أضِف التفاصيل الصحية");
 
-  return (
-    <main className="min-h-screen bg-brand-surface">
-      <div className="container-app pt-3 -mb-4 md:-mb-6">
-        <BackButton className="-ms-2.5" href="/family" />
-      </div>
+  const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex;
 
-      <div className="container-app py-8 md:py-12 max-w-2xl space-y-6">
-        <header>
-          <h1 className="text-app-title text-brand-ink">
-            تعديل بيانات {m.name}
-          </h1>
-          <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-            {g(
-              "اختاري القسم الذي تريدين تعديله.",
-              "اختر القسم الذي تريد تعديله.",
-            )}
-          </p>
-        </header>
+  return (
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <PageHeader
+          className="mb-0"
+          back={{ href: "/family", label: "العائلة" }}
+          title={`تعديل بيانات ${m.name}`}
+          description={g(
+            "اختاري القسم الذي تريدين تعديله.",
+            "اختر القسم الذي تريد تعديله.",
+          )}
+        />
 
         <Suspense fallback={null}>
-          <MemberEditedBanner memberId={memberId} ownerSex={(ownerProfile as { sex?: string | null } | null)?.sex} />
+          <MemberEditedBanner memberId={memberId} ownerSex={ownerSex} />
         </Suspense>
 
-        <div className="space-y-3">
-          <SectionCard
-            href={`/family/edit/${memberId}/personal`}
-            title="المعلومات الشخصية"
-            summary={personalSummary}
-            icon={UserRound}
-          />
-          <SectionCard
-            href={`/family/edit/${memberId}/health`}
-            title="الصحة والأهداف"
-            summary={healthSummary}
-            icon={HeartPulse}
-          />
-        </div>
+        <nav
+          aria-label={`أقسام بيانات ${m.name}`}
+          className="overflow-hidden rounded-[1.375rem] border border-brand-line bg-brand-card"
+        >
+          <ul className="divide-y divide-brand-line">
+            <SectionRow
+              href={`/family/edit/${memberId}/personal`}
+              title="المعلومات الشخصية"
+              summary={personalSummary}
+              icon={UserRound}
+            />
+            <SectionRow
+              href={`/family/edit/${memberId}/health`}
+              title="الصحة والأهداف"
+              summary={healthSummary}
+              icon={HeartPulse}
+            />
+          </ul>
+        </nav>
 
-        <div className="rounded-2xl bg-white/60 border border-brand-line px-4 py-3">
-          <p className="text-brand-ink-muted text-sm leading-relaxed">
-            أي تعديل لن يطبق على الخطة حتى تنشئي{" "}
-            <Link
-              href="/plan"
-              className="text-brand-purple-900 font-bold underline underline-offset-4 hover:text-brand-purple-700 transition-colors"
-            >
-              خطة جديدة من صفحة الخطة
-            </Link>
-            .
-          </p>
-        </div>
+        <p className="text-meta leading-relaxed text-brand-ink-muted">
+          أي تعديل لن يُطبَّق على الخطة حتى {g("تنشئي", "تنشئ")}{" "}
+          <Link
+            href="/plan"
+            className="font-bold text-brand-purple-900 underline underline-offset-4 hover:text-brand-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          >
+            خطة جديدة من صفحة الخطة
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );

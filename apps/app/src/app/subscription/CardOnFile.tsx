@@ -9,7 +9,7 @@ export async function CardOnFile({ subId }: { subId: string }) {
   if (!details?.card_last_four) return null;
 
   return (
-    <p className="mt-1 text-brand-ink-muted text-sm leading-relaxed">
+    <p className="mt-1 text-[15px] leading-relaxed text-brand-ink-muted">
       البطاقة: •••• {details.card_last_four}
       {details.card_brand ? ` (${details.card_brand})` : ""}
     </p>

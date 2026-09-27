@@ -9,7 +9,10 @@ import {
   type Tier,
   type Cadence,
 } from "@fitlife/config";
+import { clsx } from "clsx";
 import { genderPick } from "@/lib/copy/gender";
+import { buttonClasses } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 
 const TIER_ORDER: Tier[] = ["starter", "pro", "family", "premium"];
 
@@ -70,23 +73,24 @@ export function ChangePlanSection({
     // anchor didn't exist, so that retention link went nowhere.
     <section
       id="change-plan"
-      className="scroll-mt-[calc(var(--app-header-h)+1rem)] bg-brand-card rounded-3xl border border-brand-line p-6 md:p-7"
+      className="scroll-mt-[calc(var(--app-header-h)+1rem)] rounded-[1.375rem] border border-brand-line bg-brand-card p-4 sm:p-5"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 className="font-extrabold text-xl text-brand-ink leading-tight">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-app-section text-brand-ink">
           {isTrial ? g("اختاري خطتك للاستمرار بعد التجربة", "اختر خطتك للاستمرار بعد التجربة") : "تغيير الخطة"}
         </h2>
         {/* Monthly / annual toggle */}
-        <div className="inline-flex rounded-full border border-brand-ink/10 p-1 self-start">
+        <div className="inline-flex self-start rounded-full border border-brand-line bg-brand-surface p-1">
           <button
             type="button"
             onClick={() => setCadence("monthly")}
             aria-pressed={cadence === "monthly"}
-            className={`min-h-9 px-4 rounded-full text-sm font-bold transition-colors ${
+            className={clsx(
+              "min-h-11 rounded-full px-5 text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 motion-reduce:transition-none",
               cadence === "monthly"
                 ? "bg-brand-purple-900 text-white"
-                : "text-brand-ink-muted hover:text-brand-ink"
-            }`}
+                : "text-brand-ink-muted hover:text-brand-ink",
+            )}
           >
             شهري
           </button>
@@ -94,31 +98,23 @@ export function ChangePlanSection({
             type="button"
             onClick={() => setCadence("annual")}
             aria-pressed={cadence === "annual"}
-            className={`min-h-9 px-4 rounded-full text-sm font-bold transition-colors ${
+            className={clsx(
+              "min-h-11 rounded-full px-5 text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 motion-reduce:transition-none",
               cadence === "annual"
                 ? "bg-brand-purple-900 text-white"
-                : "text-brand-ink-muted hover:text-brand-ink"
-            }`}
+                : "text-brand-ink-muted hover:text-brand-ink",
+            )}
           >
             سنوي
           </button>
         </div>
       </div>
 
-      {done && (
-        <div
-          role="status"
-          className="mt-4 rounded-xl bg-brand-emerald/10 border border-brand-emerald/20 px-4 py-3"
-        >
-          <p className="text-brand-emerald text-sm font-bold leading-relaxed">
-            تم تغيير خطتك
-          </p>
-        </div>
-      )}
+      {done && <Notice tone="success" title="تم تغيير خطتك" className="mt-4" />}
       {error && (
-        <div role="alert" className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-          <p className="text-red-700 text-sm leading-relaxed">{error}</p>
-        </div>
+        <Notice tone="critical" className="mt-4">
+          {error}
+        </Notice>
       )}
 
       <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -135,22 +131,23 @@ export function ChangePlanSection({
           return (
             <div
               key={tierId}
-              className={`rounded-2xl border p-4 ${
+              className={clsx(
+                "rounded-2xl border p-4",
                 isCurrent
-                  ? "border-brand-purple-900/40 bg-brand-lavender/15"
-                  : "border-brand-ink/10 bg-brand-card"
-              }`}
+                  ? "border-brand-purple-900/40 bg-brand-tint"
+                  : "border-brand-line bg-brand-card",
+              )}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <h3 className="font-bold text-brand-ink">{t.name_ar}</h3>
-                <p className="text-brand-ink-muted text-xs">
-                  <span className="font-extrabold text-brand-ink text-lg tabular-nums">
+                <h3 className="text-app-item text-brand-ink">{t.name_ar}</h3>
+                <p className="text-meta text-brand-ink-muted">
+                  <span className="text-lg font-extrabold tabular-nums text-brand-ink">
                     {displayPrice}
                   </span>{" "}
                   ر.س / شهر
                 </p>
               </div>
-              <p className="mt-1 text-brand-ink-muted text-xs leading-relaxed">
+              <p className="mt-1 text-meta leading-relaxed text-brand-ink-muted">
                 {t.max_people === null
                   ? "أفراد غير محدودين"
                   : `حتى ${t.max_people} ${t.max_people === 1 ? "فرد" : "أفراد"}`}
@@ -158,7 +155,7 @@ export function ChangePlanSection({
               </p>
 
               {isCurrent ? (
-                <p className="mt-3 inline-flex items-center gap-1 text-brand-purple-900 text-sm font-bold">
+                <p className="mt-3 inline-flex min-h-11 items-center gap-1 text-[15px] font-bold text-brand-purple-900">
                   <Check className="size-4" aria-hidden="true" />
                   خطتك الحالية
                 </p>
@@ -167,7 +164,7 @@ export function ChangePlanSection({
                   type="button"
                   onClick={() => choose(tierId)}
                   disabled={isPending}
-                  className="mt-3 w-full inline-flex items-center justify-center gap-2 bg-brand-ink hover:bg-brand-purple-900 disabled:bg-brand-ink/40 text-white font-bold text-sm py-2.5 rounded-xl transition-colors disabled:cursor-not-allowed min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  className={buttonClasses({ variant: "secondary", block: true, className: "mt-3" })}
                 >
                   {thisPending && (
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />

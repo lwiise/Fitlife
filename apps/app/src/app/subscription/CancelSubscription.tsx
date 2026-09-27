@@ -156,7 +156,7 @@ export function CancelSubscription({
           capture("cancel_flow_opened");
         }}
         disabled={isPending}
-        className="inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-full border border-red-300 text-red-600 hover:bg-red-50 text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
+        className="inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-full border border-critical/30 text-critical hover:bg-critical-soft text-sm font-bold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-critical focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
       >
         إلغاء الاشتراك
       </button>
@@ -334,7 +334,7 @@ export function PausedNotice({
         {isPending ? "لحظات…" : "عودة مبكرة الآن"}
       </button>
       {error && (
-        <p role="alert" className="text-sm font-bold text-red-700">
+        <p role="alert" className="text-sm font-bold text-critical">
           {error}
         </p>
       )}

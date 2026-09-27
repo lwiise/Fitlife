@@ -66,7 +66,7 @@ export function PhotoStrip({
   return (
     <section
       aria-label="صور المسار"
-      className="bg-brand-card rounded-2xl border border-brand-line p-6 space-y-4"
+      className="space-y-4 rounded-[1.375rem] border border-brand-line bg-brand-card p-4 sm:p-5"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">

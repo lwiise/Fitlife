@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, Sparkles } from "lucide-react";
+import { Notice } from "@/components/ui/notice";
+import { ButtonLink } from "@/components/ui/button";
 import { genderPick } from "@/lib/copy/gender";
 
 const STORAGE_PREFIX = "fitlife.memberEdited.";
@@ -59,36 +59,26 @@ export function MemberEditedBanner({
     setShowNudge(false);
   }
 
+  if (!saved && !showNudge) return null;
+
   return (
     <div className="space-y-3">
-      {saved && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-center gap-2 rounded-2xl border border-brand-emerald/30 bg-brand-emerald/10 px-4 py-3 transition-opacity"
-        >
-          <CheckCircle2 className="size-5 text-brand-emerald flex-shrink-0" aria-hidden="true" />
-          <p className="text-brand-emerald text-sm font-bold">تم الحفظ</p>
-        </div>
-      )}
+      {saved && <Notice tone="success" title="تم الحفظ" />}
 
       {showNudge && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-brand-lavender/60 bg-brand-lavender/20 px-4 py-3">
-          <Sparkles className="size-5 text-brand-purple-900 flex-shrink-0" aria-hidden="true" />
-          <p className="flex-1 text-brand-ink text-sm leading-relaxed">
-            {genderPick(ownerSex)(
-              "عدّلتِ البيانات. أنشئي خطة جديدة لتطبيق التعديلات على الخطة",
-              "عدّلت البيانات. أنشئ خطة جديدة لتطبيق التعديلات على الخطة",
-            )}
-          </p>
-          <Link
-            href="/plan"
-            onClick={clearNudge}
-            className="inline-flex items-center justify-center min-h-11 px-4 rounded-full bg-brand-purple-900 text-white hover:bg-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
-          >
-            إنشاء خطة جديدة
-          </Link>
-        </div>
+        <Notice
+          tone="info"
+          action={
+            <ButtonLink href="/plan" onClick={clearNudge}>
+              إنشاء خطة جديدة
+            </ButtonLink>
+          }
+        >
+          {genderPick(ownerSex)(
+            "عدّلتِ البيانات. أنشئي خطة جديدة لتطبيق التعديلات على الخطة.",
+            "عدّلت البيانات. أنشئ خطة جديدة لتطبيق التعديلات على الخطة.",
+          )}
+        </Notice>
       )}
     </div>
   );

@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { BackButton } from "@/components/BackButton";
+import { clsx } from "clsx";
+import { Card, CardHeader } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   isWeighInEligibleMember,
   isWeighInEligibleMom,
@@ -203,16 +205,43 @@ export default async function JourneyPage({
   // The switcher renders only when there is someone to switch TO.
   const showSwitcher = (momEligible ? 1 : 0) + eligibleMembers.length >= 2;
 
-  return (
-    <main dir="rtl" className="min-h-screen bg-brand-surface">
-      <div className="container-app pt-3 -mb-4 md:-mb-6">
-        <BackButton className="-ms-2.5" href="/plan" />
-      </div>
+  const chipClass = (active: boolean) =>
+    clsx(
+      "inline-flex min-h-11 items-center rounded-full px-4 text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface motion-reduce:transition-none",
+      active
+        ? "bg-brand-purple-900 text-white"
+        : "border-[1.5px] border-brand-purple-900/20 bg-brand-card text-brand-purple-900 hover:bg-brand-tint",
+    );
 
-      <div className="container-app max-w-2xl py-8 space-y-6">
-        <h1 className="text-app-title text-brand-ink">
-          {memberName ? `رحلة ${memberName} الخاصة` : "رحلتك الخاصة"}
-        </h1>
+  // Summary tiles: the latest reading, the change since the one before it,
+  // and — for the owner's own record only — the distance to her target.
+  const tiles: Array<{ label: string; value: string }> = [];
+  if (latest) {
+    tiles.push({ label: "آخر تسجيل", value: `${AR_NUM.format(latest.weight_kg)} كجم` });
+  }
+  if (delta !== null) {
+    tiles.push({
+      label: "منذ التسجيل السابق",
+      value:
+        delta === 0
+          ? "ثبات"
+          : delta < 0
+            ? `−${AR_NUM.format(Math.abs(delta))} كجم`
+            : `+${AR_NUM.format(delta)} كجم`,
+    });
+  }
+  if (remaining !== null && remaining > 0) {
+    tiles.push({ label: "المتبقي نحو الهدف", value: `${AR_NUM.format(remaining)} كجم` });
+  }
+
+  return (
+    <main dir="rtl" className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <PageHeader
+          className="mb-0"
+          title={memberName ? `رحلة ${memberName} الخاصة` : "رحلتك الخاصة"}
+          description="سجلّ خاص لا يظهر على لوحة العائلة ولا في أي مكان مشترك."
+        />
 
         {showSwitcher && (
           <nav aria-label="اختيار الفرد" className="flex flex-wrap gap-2">
@@ -220,11 +249,7 @@ export default async function JourneyPage({
               <Link
                 href="/journey"
                 aria-current={memberId === "mom" ? "page" : undefined}
-                className={`inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                  memberId === "mom"
-                    ? "bg-brand-purple-900 text-white"
-                    : "border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30"
-                }`}
+                className={chipClass(memberId === "mom")}
               >
                 {g("أنتِ", "أنتَ")}
               </Link>
@@ -234,11 +259,7 @@ export default async function JourneyPage({
                 key={m.id}
                 href={`/journey?member=${m.id}`}
                 aria-current={memberId === m.id ? "page" : undefined}
-                className={`inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                  memberId === m.id
-                    ? "bg-brand-purple-900 text-white"
-                    : "border border-brand-purple-900/20 text-brand-purple-900 hover:bg-brand-lavender/30"
-                }`}
+                className={chipClass(memberId === m.id)}
               >
                 {m.name}
               </Link>
@@ -255,31 +276,34 @@ export default async function JourneyPage({
         />
 
         {logs.length >= 2 && (
-          <section
-            aria-label="مسار الوزن"
-            className="bg-brand-card rounded-2xl border border-brand-line p-6 space-y-3"
-          >
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-bold text-brand-ink">
-                {memberName ? `مسار ${memberName}` : "مسارك"}
-              </h2>
-              {delta !== null && (
-                <p className="text-sm font-bold text-brand-purple-900">
-                  {delta === 0
-                    ? "ثبات هذا الأسبوع"
-                    : delta < 0
-                      ? `−${AR_NUM.format(Math.abs(delta))} كجم منذ آخر تسجيل`
-                      : `+${AR_NUM.format(delta)} كجم منذ آخر تسجيل`}
-                </p>
-              )}
-            </div>
+          <Card aria-labelledby="journey-trend-title" className="space-y-4">
+            <CardHeader
+              id="journey-trend-title"
+              className="mb-0"
+              title={memberName ? `مسار ${memberName}` : "مسارك"}
+            />
+            {tiles.length > 0 && (
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {tiles.map((t) => (
+                  <div
+                    key={t.label}
+                    className="rounded-2xl border border-brand-line bg-brand-card p-3"
+                  >
+                    <dt className="text-meta text-brand-ink-muted">{t.label}</dt>
+                    <dd className="mt-1 text-2xl font-extrabold leading-tight text-brand-ink">
+                      {t.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
             <Sparkline points={logs} targetKg={targetKg} />
             {remaining !== null && remaining > 0 && (
-              <p className="text-xs text-brand-ink-muted">
-                بقي {AR_NUM.format(remaining)} كجم نحو هدفك — الخط الذهبي.
+              <p className="text-meta text-brand-ink-muted">
+                الخط الذهبي المتقطّع هو هدفك.
               </p>
             )}
-          </section>
+          </Card>
         )}
 
         {photos.length > 0 && (
@@ -287,8 +311,8 @@ export default async function JourneyPage({
         )}
 
         {logs.length < 2 && (
-          <p className="text-sm text-brand-ink-muted leading-relaxed">
-            بعد تسجيلين أسبوعيين يظهر المسار هنا — تسجيل واحد في الأسبوع يكفي
+          <p className="text-base leading-relaxed text-brand-ink-muted">
+            بعد تسجيلين أسبوعيين يظهر المسار هنا. تسجيل واحد في الأسبوع يكفي
             تماماً.
           </p>
         )}

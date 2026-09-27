@@ -1,6 +1,7 @@
 import { Database } from "lucide-react";
 import { ExportButton } from "./ExportButton";
 import { DeleteAccountButton } from "./DeleteAccountButton";
+import { Card, CardHeader } from "@/components/ui/card";
 import { genderPick } from "@/lib/copy/gender";
 
 export function DataSection({
@@ -12,28 +13,28 @@ export function DataSection({
 }) {
   const g = genderPick(ownerSex);
   return (
-    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="size-10 rounded-full bg-brand-pink-light flex items-center justify-center flex-shrink-0">
-          <Database className="size-5 text-brand-pink" aria-hidden="true" />
-        </div>
-        <h2 className="font-bold text-lg text-brand-ink">بياناتك</h2>
-      </div>
+    <Card aria-labelledby="data-section-title">
+      <CardHeader
+        id="data-section-title"
+        className="mb-4"
+        title="بياناتك"
+        icon={<Database className="size-5 text-brand-purple-900" aria-hidden="true" />}
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div>
           <ExportButton ownerSex={ownerSex} />
-          <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
-            {g("احصلي على نسخة من بياناتك بصيغة JSON", "احصل على نسخة من بياناتك بصيغة JSON")}
+          <p className="mt-2 text-meta leading-relaxed text-brand-ink-muted">
+            {g("احصلي على نسخة من بياناتك بصيغة JSON.", "احصل على نسخة من بياناتك بصيغة JSON.")}
           </p>
         </div>
         <div>
           <DeleteAccountButton userEmail={userEmail} ownerSex={ownerSex} />
-          <p className="mt-2 text-brand-ink-muted text-xs leading-relaxed">
-            حذف حسابك وكل بياناتك بشكل نهائي. لا يمكن التراجع
+          <p className="mt-2 text-meta leading-relaxed text-brand-ink-muted">
+            حذف حسابك وكل بياناتك بشكل نهائي، ولا يمكن التراجع عن ذلك.
           </p>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

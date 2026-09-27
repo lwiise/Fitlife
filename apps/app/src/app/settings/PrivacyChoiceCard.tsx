@@ -10,6 +10,8 @@ import {
 } from "@/lib/analytics";
 import { isMeasurementOn } from "@/components/consentPlacement";
 import { genderPick } from "@/lib/copy/gender";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
 
 /**
  * Permanent way back to the measurement choice.
@@ -37,28 +39,22 @@ export function PrivacyChoiceCard({ ownerSex }: { ownerSex?: string | null }) {
   };
 
   return (
-    <section className="bg-brand-card rounded-2xl border border-brand-line p-6 md:p-7">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-          <BarChart3 className="size-5 text-brand-purple-900" aria-hidden="true" />
-        </div>
-        <h2 className="font-bold text-lg text-brand-ink">القياس والتحسين</h2>
-      </div>
+    <Card aria-labelledby="privacy-choice-title">
+      <CardHeader
+        id="privacy-choice-title"
+        title="القياس والتحسين"
+        icon={<BarChart3 className="size-5 text-brand-purple-900" aria-hidden="true" />}
+      />
 
-      <p className="text-brand-ink-muted text-sm leading-relaxed">
+      <p className="text-[15px] leading-relaxed text-brand-ink-muted">
         {on
           ? "القياس مفعّل. نجمع إحصاءات مجهولة الهوية عن الاستخدام وحده، ولا نقيس بياناتك الصحية."
           : "القياس متوقف. لا نجمع أي إحصاءات عن استخدامك."}
       </p>
 
-      <button
-        type="button"
-        onClick={toggle}
-        aria-pressed={on}
-        className="mt-4 min-h-11 rounded-xl border-2 border-brand-purple-900 px-5 text-sm font-bold text-brand-purple-900 transition-colors hover:bg-brand-purple-900/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-      >
+      <Button variant="secondary" onClick={toggle} aria-pressed={on} className="mt-4">
         {on ? g("أوقفي القياس", "أوقف القياس") : g("فعّلي القياس", "فعّل القياس")}
-      </button>
-    </section>
+      </Button>
+    </Card>
   );
 }

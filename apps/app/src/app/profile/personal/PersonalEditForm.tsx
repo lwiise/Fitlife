@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { saveMomPersonalInfo } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
 
 const currentYear = new Date().getFullYear();
 
@@ -75,14 +76,12 @@ export function PersonalEditForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <header>
-        <h1 className="text-app-title text-brand-ink">
-          المعلومات الشخصية
-        </h1>
-        <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          {g("عدّلي اسمك وبياناتك الأساسية.", "عدّل اسمك وبياناتك الأساسية.")}
-        </p>
-      </header>
+      <PageHeader
+        className="mb-0"
+        back={{ href: "/profile", label: "ملفي الشخصي" }}
+        title="المعلومات الشخصية"
+        description={g("عدّلي اسمك وبياناتك الأساسية.", "عدّل اسمك وبياناتك الأساسية.")}
+      />
 
       <div>
         <label htmlFor="display_name" className="block text-sm font-bold text-brand-ink mb-2">

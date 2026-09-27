@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { ChefHat } from "lucide-react";
+import { ButtonLink } from "@/components/ui/button";
 import { RemoveMemberButton } from "./RemoveMemberButton";
 import { LOCALE_INFO, isLocaleCode } from "@/lib/plans/locales";
 
 /**
- * The maid's row on /family. She isn't a plan beneficiary (no goal/macros) — just a
+ * The maid's row on /family (an <li> of the household list). She isn't a plan beneficiary (no goal/macros) — just a
  * name and the language she reads the recipes in — so the card shows that and links
  * to her dedicated edit form (HousekeeperForm via /family/edit/[id]).
  */
@@ -24,25 +24,26 @@ export function HousekeeperCard({
     : null;
 
   return (
-    <div className="flex items-center gap-3 bg-brand-card rounded-2xl p-4 border border-brand-line">
-      <div className="size-10 rounded-full bg-brand-lavender/30 flex items-center justify-center flex-shrink-0">
-        <ChefHat className="size-5 text-brand-purple-900" aria-hidden="true" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-brand-ink truncate">{name}</p>
-        <p className="text-brand-ink-muted text-xs mt-0.5">
+    <li className="flex min-h-16 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-tint">
+        <ChefHat className="size-4 text-brand-purple-900" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-bold text-brand-ink">{name}</p>
+        <p className="mt-0.5 truncate text-meta text-brand-ink-muted">
           خدامة{langLabel ? ` · تقرأ بـ ${langLabel}` : ""}
         </p>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <Link
+      <div className="flex shrink-0 items-center gap-1">
+        <ButtonLink
           href={`/family/edit/${id}`}
-          className="text-brand-purple-900 hover:text-brand-purple-700 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 rounded-md px-1 min-h-11 inline-flex items-center"
+          variant="quiet"
+          aria-label={`تعديل ${name}`}
         >
           تعديل
-        </Link>
+        </ButtonLink>
         <RemoveMemberButton memberId={id} name={name} ownerSex={ownerSex} />
       </div>
-    </div>
+    </li>
   );
 }

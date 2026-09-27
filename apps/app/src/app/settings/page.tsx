@@ -31,9 +31,8 @@ export default async function SettingsPage() {
   const g = genderPick(ownerSex);
 
   return (
-    <main className="min-h-screen bg-brand-surface">
-
-      <div className="container-app py-8 md:py-12 max-w-2xl space-y-8">
+    <main className="container-shell py-6 lg:py-10">
+      <div className="mx-auto max-w-2xl space-y-8">
         <PageHeader
           className="mb-0"
           title="الإعدادات"

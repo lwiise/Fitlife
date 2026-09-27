@@ -23,6 +23,7 @@ import {
 import type { MemberType } from "@/app/onboarding/actions";
 import { updateMemberHealth } from "../actions";
 import { genderPick } from "@/lib/copy/gender";
+import { PageHeader } from "@/components/ui/page-header";
 import { WATER_LITERS_OPTIONS, type WaterLiters } from "@/lib/plans/waterOptions";
 import {
   ACTIVITY_OPTIONS,
@@ -229,14 +230,12 @@ export function MemberHealthEditForm({
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-app-title text-brand-ink">
-          الصحة والأهداف
-        </h1>
-        <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-          {g("عدّلي النشاط والهدف والحالة الصحية.", "عدّل النشاط والهدف والحالة الصحية.")}
-        </p>
-      </header>
+      <PageHeader
+        className="mb-0"
+        back={{ href: `/family/edit/${memberId}`, label: "بيانات الفرد" }}
+        title="الصحة والأهداف"
+        description={g("عدّلي النشاط والهدف والحالة الصحية.", "عدّل النشاط والهدف والحالة الصحية.")}
+      />
 
       {/* النشاط والهدف */}
       {(isAdult || isChild) && (
