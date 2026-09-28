@@ -151,6 +151,7 @@ describe("buildTodayTable", () => {
     });
     const lunch = t.rows.find((r) => r.slot === "lunch")!;
     expect(lunch.eaterIds).toEqual(["dad", "kid"]);
+    expect(lunch.absentIds).toEqual(["mom"]);
     expect(lunch.writeIds).not.toContain("mom");
     // She is not eating it, so the calories shown are the first eater's.
     expect(lunch.kcalFor).toBe("dad");

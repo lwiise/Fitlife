@@ -44,7 +44,6 @@ import { BillingPortalButton } from "./BillingPortalButton";
 import { EmptyPlanCTA } from "./EmptyPlanCTA";
 import { GeneratingPlanWatcher } from "./GeneratingPlanWatcher";
 import { KitchenToday, type KitchenCook } from "./KitchenToday";
-import { TomorrowCard } from "./TomorrowCard";
 import { MoreCard, type NextStep } from "./MoreCard";
 import { RegenerateButton } from "../plan/RegenerateButton";
 import { getLocaleInfo, isLocaleCode } from "@/lib/plans/locales";
@@ -230,10 +229,19 @@ export default async function DashboardPage() {
   const greeting = profile.display_name
     ? `${hello} يا ${profile.display_name}`
     : g("أهلاً بكِ", "أهلاً بك");
+  // «السبت ٢٦ سبتمبر | اليوم ٤ من ٧ في خطتكم» — a rule, not a comma or a
+  // pipe character, between the two facts.
+  const dateLabel = riyadhDateLabelAr().replace("،", "");
   const dateLine =
-    todayIndex !== null
-      ? `${riyadhDateLabelAr()} | اليوم ${arNum(todayIndex + 1)} من ٧ في خطتكم`
-      : riyadhDateLabelAr();
+    todayIndex !== null ? (
+      <>
+        {dateLabel}
+        <i className="sep" aria-hidden="true" />
+        اليوم {arNum(todayIndex + 1)} من ٧ في خطتكم
+      </>
+    ) : (
+      dateLabel
+    );
   const lead = !onboardingDone
     ? g(
         "أسئلة قصيرة عنكِ وعن بيتكِ، ثم نجهّز خطة الأسبوع.",
@@ -260,10 +268,10 @@ export default async function DashboardPage() {
         }
       : null;
 
-  // ── «سفرة الغد», in the evening or once today is answered ─────────────
-  const todayAnswered = !!today && today.rows.length > 0 && today.marked === today.rows.length;
+  // ── «سفرة الغد»: evening rows under the run-sheet, or the closed ticket's
+  // look ahead once today is answered (KitchenToday decides which). ─────────
   const tomorrow =
-    tablePlan?.plan_data && todayIndex !== null && todayIndex < 6 && (hour >= 17 || todayAnswered)
+    tablePlan?.plan_data && todayIndex !== null && todayIndex < 6
       ? {
           dayName: dayNameFromWeekStart(tablePlan.plan_data.week_start_date, todayIndex + 1),
           rows: buildTodayTable({
@@ -397,13 +405,14 @@ export default async function DashboardPage() {
         "أجيبي عن أسئلة التفضيلات لتكون الخطة أدق",
         "أجب عن أسئلة التفضيلات لتكون الخطة أدق",
       ),
-      meta: "اختيارية، في ثلاث دقائق تقريباً",
+      meta: "أسئلة اختيارية | ٣ دقائق تقريباً",
       href: "/profile/deep-dive",
     };
   }
 
   // ── Today block ────────────────────────────────────────────────────────
   let todayBlock: React.ReactNode;
+  const kitchenShown = !!(onboardingDone && tablePlan && today && today.rows.length > 0);
   if (!onboardingDone) {
     todayBlock = (
       <Card tone="feature" aria-labelledby="start-title">
@@ -430,6 +439,7 @@ export default async function DashboardPage() {
       <KitchenToday
         planId={tablePlan.id}
         dayIndex={todayIndex!}
+        dayName={dayNameFromWeekStart(tablePlan.plan_data!.week_start_date, todayIndex!)}
         rows={today.rows}
         people={people}
         ownerSex={profile.sex ?? null}
@@ -437,29 +447,36 @@ export default async function DashboardPage() {
         hour={hour}
         cook={cook}
         ownerDay={today.ownerDay}
+        ownerWeek={stats?.ranked.find((m) => m.id === "mom") ?? null}
+        tomorrow={tomorrow}
+        workout={
+          workoutToday ? <WorkoutTodayCard today={workoutToday} ownerSex={profile.sex ?? null} /> : null
+        }
       />
     );
   } else if (tablePlan && todayIndex === null) {
     todayBlock = (
-      <section
-        aria-labelledby="week-ended"
-        className="rounded-[1.75rem] bg-brand-purple-900 p-5 text-white sm:p-6"
-      >
-        <h2 id="week-ended" className="text-[1.75rem] font-extrabold leading-tight">
-          انتهى أسبوع خطتكم
-        </h2>
-        <p className="mt-2 text-[15px] text-white/80">
-          {g(
-            "أنشئي خطة الأسبوع الجديد للبيت كله. يستغرق ذلك من خمس إلى عشر دقائق، وتبقى الأسابيع السابقة في السجل.",
-            "أنشئ خطة الأسبوع الجديد للبيت كله. يستغرق ذلك من خمس إلى عشر دقائق، وتبقى الأسابيع السابقة في السجل.",
-          )}
-        </p>
-        <div className="mt-4">
-          <RegenerateButton
-            memberCount={Math.max(1, roster.length)}
-            ownerSex={profile.sex ?? null}
-            label={g("أنشئي خطة الأسبوع الجديد", "أنشئ خطة الأسبوع الجديد")}
-          />
+      <section className="kt-ticket" aria-labelledby="week-ended">
+        <div className="kt-head solo-end">
+          <div className="kt-stamp">
+            <p className="kt-slot">
+              <b>أسبوع خطتكم</b>
+              <span>انتهى</span>
+            </p>
+          </div>
+          <h2 className="kt-dish" id="week-ended">
+            {g("أنشئي خطة الأسبوع الجديد", "أنشئ خطة الأسبوع الجديد")}
+          </h2>
+          <p className="kt-note">
+            للبيت كله في طلب واحد. يستغرق ذلك من ٥ إلى ١٠ دقائق، وتبقى الأسابيع السابقة في السجل.
+          </p>
+          <div className="mt-4">
+            <RegenerateButton
+              memberCount={Math.max(1, roster.length)}
+              ownerSex={profile.sex ?? null}
+              label={g("أنشئي الخطة الآن", "أنشئ الخطة الآن")}
+            />
+          </div>
         </div>
       </section>
     );
@@ -515,7 +532,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="container-shell py-6 lg:py-10">
+    <main className="container-shell kt">
       {/* Marks made on /plan or another device reach an open dashboard on the
           next fetch — refresh when the tab wakes. */}
       <RefreshOnFocus />
@@ -526,25 +543,22 @@ export default async function DashboardPage() {
         <DeferredMemberDrain generating={latestPlan?.in_progress ?? false} />
       )}
 
-      <header className="mb-5">
-        <p className="text-meta font-bold text-brand-ink-muted">{dateLine}</p>
-        <h1 className="mt-1 text-[1.75rem] font-extrabold leading-tight text-brand-ink lg:text-[2.375rem]">
-          {greeting}
-        </h1>
-        {lead && <p className="mt-2 max-w-prose text-base leading-relaxed text-brand-ink">{lead}</p>}
+      <header>
+        <p className="kt-date">{dateLine}</p>
+        <h1 className="kt-h1">{greeting}</h1>
+        {lead && <p className="kt-lead max-w-prose">{lead}</p>}
       </header>
 
-      {notice && <div className="mb-5">{notice}</div>}
+      {notice && <div className="kt-notice">{notice}</div>}
 
-      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
-        <div className="space-y-4 lg:col-span-7">
+      <div className="kt-grid">
+        <div className="kt-main">
           {todayBlock}
-          {workoutToday && (
+          {workoutToday && !kitchenShown && (
             <WorkoutTodayCard today={workoutToday} ownerSex={profile.sex ?? null} />
           )}
-          {tomorrow && <TomorrowCard dayName={tomorrow.dayName} rows={tomorrow.rows} />}
         </div>
-        <div className="space-y-4 lg:col-span-5">
+        <aside className="kt-aside">
           {seasonProps && stats && isFamily && <SeasonBoard props={seasonProps} stats={stats} />}
           {seasonProps && stats && !isFamily && stats.ranked[0] && (
             <SoloWeekCard me={stats.ranked[0]} ownerSex={profile.sex ?? null} />
@@ -557,7 +571,7 @@ export default async function DashboardPage() {
             />
           )}
           {onboardingDone && <MoreCard nextStep={nextStep} ownerSex={profile.sex ?? null} />}
-        </div>
+        </aside>
       </div>
     </main>
   );

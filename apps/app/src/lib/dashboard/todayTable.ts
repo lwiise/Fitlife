@@ -52,6 +52,8 @@ export interface TodayRow {
   shared: boolean;
   /** Who eats it today, roster order, absentees removed. */
   eaterIds: string[];
+  /** Planned sharers marked out of this occurrence, roster order. */
+  absentIds: string[];
   /** The ids a mark is written for (present sharers, or the one member). */
   writeIds: string[];
   /** Calories of ONE portion, for `kcalFor` (the owner when she eats it). */
@@ -221,6 +223,7 @@ export function buildTodayTable(input: {
       recipeName: meal.recipe_name_ar,
       shared,
       eaterIds,
+      absentIds: planned.filter((id) => !present.includes(id)).sort(byRoster),
       writeIds,
       kcal: kcal != null ? Math.round(kcal) : null,
       kcalFor,

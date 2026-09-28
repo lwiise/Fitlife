@@ -1,6 +1,6 @@
-import { Dumbbell, Moon } from "lucide-react";
-import { ButtonLink } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import Link from "next/link";
+import { clsx } from "clsx";
+import { AlertTriangle, Check, ChevronLeft, Dumbbell, Loader2, Moon } from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
 import { arNum } from "@/lib/copy/numbers";
 import { countAr, EXERCISE_FORMS, MINUTE_FORMS } from "@/lib/copy/plural";
@@ -17,7 +17,10 @@ export type WorkoutToday =
       done: boolean;
     };
 
-/** Today's session for the account owner, or a one-line rest day. */
+/**
+ * Today's session for the account owner, as one row that opens the session
+ * (marking and the intensity question live there, not on the home screen).
+ */
 export function WorkoutTodayCard({
   today,
   ownerSex,
@@ -26,58 +29,67 @@ export function WorkoutTodayCard({
   ownerSex: string | null;
 }) {
   const g = genderPick(ownerSex);
-  const Icon = today.kind === "rest" ? Moon : Dumbbell;
+  const eyebrow = g("تمرينكِ اليوم", "تمرينك اليوم");
+  let Icon = Dumbbell;
+  let ok = false;
   let title: string;
-  let meta: string | null = null;
-  let cta: string | null = g("اعرضي التمارين", "اعرض التمارين");
+  let meta: React.ReactNode = null;
+  let cta: string | null = null;
 
   switch (today.kind) {
     case "generating":
-      title = "نجهّز برنامج تمارينك";
+      Icon = Loader2;
+      title = g("نجهّز برنامج تمارينكِ", "نجهّز برنامج تمارينك");
       meta = today.waitingForMeals
-        ? "نجهّز وجباتك أولاً، ثم البرنامج."
-        : "يستغرق ذلك عادةً بضع دقائق.";
+        ? g("نجهّز وجباتكِ أولاً، ثم البرنامج", "نجهّز وجباتك أولاً، ثم البرنامج")
+        : "يستغرق ذلك عادةً بضع دقائق";
       cta = "متابعة الحالة";
       break;
     case "failed":
-      title = "لم يكتمل إعداد برنامج التمارين";
-      meta = "آخر محاولة لم تنجح، ويمكن إعادتها من صفحة التمارين.";
+      Icon = AlertTriangle;
+      title = "لم يكتمل إعداد البرنامج";
+      meta = "آخر محاولة لم تنجح";
       cta = "إعادة المحاولة";
       break;
     case "rest":
-      title = "اليوم يوم راحة";
+      Icon = Moon;
+      title = "يوم راحة";
       meta = today.nextName ? `الحصة القادمة: ${today.nextName}` : null;
       break;
     case "session":
-      title = `تمرين اليوم: ${today.name}`;
-      meta = `${countAr(today.minutes, MINUTE_FORMS, arNum)} · ${countAr(today.exercises, EXERCISE_FORMS, arNum)}`;
-      cta = today.done ? g("اعرضي الحصة", "اعرض الحصة") : g("ابدئي التمرين", "ابدأ التمرين");
+      ok = today.done;
+      if (ok) Icon = Check;
+      title = today.done ? `${g("أنجزتِ", "أنجزتَ")} ${today.name}` : today.name;
+      meta = (
+        <>
+          {countAr(today.minutes, MINUTE_FORMS, arNum)}
+          <i className="sep" aria-hidden="true" />
+          {countAr(today.exercises, EXERCISE_FORMS, arNum)}
+        </>
+      );
+      cta = today.done ? g("اعرضي الحصة", "اعرض الحصة") : g("ابدئي الحصة", "ابدأ الحصة");
       break;
   }
 
   return (
-    <Card aria-labelledby="workout-today-title">
-      <div className="flex items-start gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-tint text-brand-purple-900">
-          <Icon className="size-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 id="workout-today-title" className="text-app-item text-brand-ink">
-            {title}
-          </h2>
-          {meta && <p className="mt-0.5 text-meta text-brand-ink-muted">{meta}</p>}
-          {today.kind === "session" && today.done && (
-            <p className="mt-1 text-meta font-bold text-success">
-              {g("أنجزتِ حصة اليوم", "أنجزتَ حصة اليوم")}
-            </p>
-          )}
-        </div>
-      </div>
+    <Link href="/plan?view=workout" className="kt-gym">
+      <span className={clsx("kt-gym-ico", ok && "ok")}>
+        <Icon
+          className={clsx("i", today.kind === "generating" && "animate-spin motion-reduce:animate-none")}
+          aria-hidden="true"
+        />
+      </span>
+      <span className="kt-gym-t">
+        <small>{eyebrow}</small>
+        <strong>{title}</strong>
+        {meta && <span>{meta}</span>}
+      </span>
       {cta && (
-        <ButtonLink href="/plan?view=workout" variant="secondary" className="mt-3">
+        <span className="kt-pill">
           {cta}
-        </ButtonLink>
+          <ChevronLeft className="i" aria-hidden="true" />
+        </span>
       )}
-    </Card>
+    </Link>
   );
 }

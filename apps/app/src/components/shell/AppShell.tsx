@@ -12,8 +12,8 @@ import {
   LineChart,
   LogOut,
   Mail,
+  MessageCircleMore,
   Settings,
-  Sparkles,
   UserRound,
   Users,
 } from "lucide-react";
@@ -24,7 +24,7 @@ import { activeNavKey, isFocusRoute, NAV_ITEMS, type NavKey } from "./nav";
 const ICONS: Record<NavKey, typeof Home> = {
   home: Home,
   plan: CalendarDays,
-  chat: Sparkles,
+  chat: MessageCircleMore,
   family: Users,
   account: UserRound,
 };
@@ -56,14 +56,14 @@ export function AppShell({
         تخطَّ إلى المحتوى
       </a>
       <header data-app-header="" className="sticky top-0 z-30 border-b border-brand-line bg-brand-card/95 backdrop-blur supports-[backdrop-filter]:bg-brand-card/85">
-        <div className="container-shell flex h-16 items-center justify-between gap-4 lg:h-[4.5rem]">
-          <div className="flex items-center gap-8">
+        <div className="container-shell flex h-[60px] items-center justify-between gap-4 lg:h-[4.5rem]">
+          <div className="flex items-center gap-9">
             <Link
               href="/dashboard"
               aria-label="فت لايف — الرئيسية"
               className="-ms-1 inline-flex min-h-11 items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
             >
-              <Logo variant="compact" className="h-10 w-auto" priority />
+              <Logo variant="compact" className="h-9 w-auto lg:h-10" priority />
             </Link>
             <nav aria-label="التنقل الرئيسي" className="hidden lg:block">
               <ul className="flex items-center gap-1">
@@ -105,7 +105,7 @@ export function AppShell({
         data-app-tabbar=""
         className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-line bg-brand-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-brand-card/90 lg:hidden"
       >
-        <ul className="mx-auto grid max-w-lg grid-cols-5 px-1 pt-1.5 pb-1">
+        <ul className="mx-auto grid max-w-lg grid-cols-5 px-1 pt-1.5 pb-2.5">
           {NAV_ITEMS.map((item) => {
             const Icon = ICONS[item.key];
             const on = active === item.key;
@@ -115,7 +115,7 @@ export function AppShell({
                   href={item.href}
                   aria-current={on ? "page" : undefined}
                   className={clsx(
-                    "group flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-bold",
+                    "group flex min-h-[3.25rem] flex-col items-center justify-center gap-[3px] rounded-xl text-[13px] font-bold",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900",
                     on ? "text-brand-purple-900" : "text-brand-ink-muted",
                   )}
@@ -197,22 +197,19 @@ function AccountMenu({
         aria-controls="account-menu"
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          "inline-flex min-h-11 items-center gap-2 rounded-full ps-1 pe-1 lg:pe-3",
+          "inline-flex min-h-11 items-center gap-1 rounded-full ps-1 pe-0.5 lg:gap-1.5",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900",
           active || open ? "bg-brand-tint" : "hover:bg-brand-tint/60",
         )}
       >
         <span
           aria-hidden="true"
-          className="grid size-9 place-items-center rounded-full bg-brand-pink text-[15px] font-extrabold text-white"
+          className="grid size-9 place-items-center rounded-full bg-brand-pink text-[15px] font-extrabold text-white lg:size-10 lg:text-base"
         >
           {initial}
         </span>
-        <span className="hidden text-[15px] font-bold text-brand-ink lg:inline">
-          {displayName ?? "حسابي"}
-        </span>
-        <ChevronDown className="hidden size-4 text-brand-ink-muted lg:block" aria-hidden="true" />
-        <span className="sr-only lg:hidden">قائمة الحساب</span>
+        <ChevronDown className="size-4 text-brand-ink-muted" aria-hidden="true" />
+        <span className="sr-only">حساب {displayName ?? ""}، القائمة</span>
       </button>
       {open && (
         <div

@@ -17,6 +17,7 @@ import { isLocaleCode } from "@/lib/plans/locales";
 import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 import { asStringArray } from "@/app/profile/labels";
 import { HousekeeperPlanView } from "./HousekeeperPlanView";
+import { PrintOnOpen } from "./PrintOnOpen";
 import type { AllergyEntry } from "./AllergyBackstop";
 
 export const metadata = {
@@ -100,12 +101,13 @@ export default async function HousekeeperPage() {
         ? latest.plan_data.week_start_date
         : null;
       const base = supabase.from("meal_absences").select("*");
-      const { data } = await (anchor
-        ? base
-            .eq("user_id", profile?.id ?? "")
-            .gte("local_date", anchor)
-            .lte("local_date", addDaysISO(anchor, 6))
-        : base.eq("meal_plan_id", latest.id)
+      const { data } = await (
+        anchor
+          ? base
+              .eq("user_id", profile?.id ?? "")
+              .gte("local_date", anchor)
+              .lte("local_date", addDaysISO(anchor, 6))
+          : base.eq("meal_plan_id", latest.id)
       ).limit(400);
       return ((data ?? []) as Array<Record<string, unknown>>)
         .map((r) => ({
@@ -166,16 +168,19 @@ export default async function HousekeeperPage() {
   ].filter((e) => e.allergies.length > 0);
 
   return (
-    <HousekeeperPlanView
-      plan={planForView}
-      planId={latest.id}
-      locale={locale}
-      needsTranslation={needsTranslation}
-      preparing={preparing}
-      partialWeek={partialWeek}
-      superseded={superseded}
-      absences={absences}
-      allergyEntries={allergyEntries}
-    />
+    <>
+      <PrintOnOpen />
+      <HousekeeperPlanView
+        plan={planForView}
+        planId={latest.id}
+        locale={locale}
+        needsTranslation={needsTranslation}
+        preparing={preparing}
+        partialWeek={partialWeek}
+        superseded={superseded}
+        absences={absences}
+        allergyEntries={allergyEntries}
+      />
+    </>
   );
 }
