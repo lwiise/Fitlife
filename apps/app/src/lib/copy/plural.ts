@@ -106,3 +106,12 @@ export const MINUTE_FORMS: ArabicCountForms = {
   many: "دقيقة",
   other: "دقيقة",
 };
+
+/** طبق */
+export const DISH_FORMS: ArabicCountForms = {
+  one: "طبق واحد",
+  two: "طبقان",
+  few: "أطباق",
+  many: "طبقاً",
+  other: "طبق",
+};

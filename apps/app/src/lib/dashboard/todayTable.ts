@@ -58,6 +58,16 @@ export interface TodayRow {
   kcal: number | null;
   kcalFor: string | null;
   status: CheckinStatus | null;
+  /** Each PRESENT eater's share of the pot as a whole percent (shared dishes
+   * with 2+ eaters only; empty otherwise). From portion_percentage, falling
+   * back to portion_grams, then equal shares — renormalised after absences so
+   * the bar always sums to 100 for the people actually eating. */
+  shares: Array<{ id: string; pct: number }>;
+  prepMinutes: number | null;
+  cookMinutes: number | null;
+  /** The dish in the cook's language, when the plan carries a translation. */
+  translatedName: string | null;
+  translatedLocale: string | null;
 }
 
 export interface TodayTable {
@@ -83,6 +93,36 @@ function rowKeyFor(meal: Meal, memberId: string, indexInDay: number): string {
     return `s|${meal.slot}|${meal.recipe_name_ar.trim()}`;
   }
   return `i|${meal.slot}|${memberId}|${indexInDay}`;
+}
+
+/** Whole-percent shares for the present eaters, summing to exactly 100. */
+export function potShares(meal: Meal, eaterIds: readonly string[]) {
+  const portions = new Map(
+    (meal.per_member_portions ?? []).map((p) => [p.member_id, p]),
+  );
+  const weightOf = (id: string, key: "portion_percentage" | "portion_grams") => {
+    const v = Number(portions.get(id)?.[key]);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  };
+  const pick = (key: "portion_percentage" | "portion_grams") =>
+    eaterIds.map((id) => weightOf(id, key));
+  let weights = pick("portion_percentage");
+  if (weights.some((w) => w === 0)) weights = pick("portion_grams");
+  if (weights.some((w) => w === 0)) weights = eaterIds.map(() => 1);
+  const total = weights.reduce((a, b) => a + b, 0);
+  const raw = weights.map((w) => (w / total) * 100);
+  const floors = raw.map(Math.floor);
+  let left = 100 - floors.reduce((a, b) => a + b, 0);
+  // Largest-remainder rounding, so the legend adds up to 100.
+  const order = raw
+    .map((r, i) => ({ i, rem: r - Math.floor(r) }))
+    .sort((a, b) => b.rem - a.rem);
+  for (const { i } of order) {
+    if (left <= 0) break;
+    floors[i]! += 1;
+    left -= 1;
+  }
+  return eaterIds.map((id, i) => ({ id, pct: floors[i]! }));
 }
 
 export function buildTodayTable(input: {
@@ -170,6 +210,11 @@ export function buildTodayTable(input: {
       : (eaterIds.find((id) => g.kcalById.has(id)) ?? null);
     const kcal = kcalFor ? (g.kcalById.get(kcalFor) ?? null) : null;
     rows.push({
+      shares: shared && eaterIds.length > 1 ? potShares(meal, eaterIds) : [],
+      prepMinutes: meal.prep_time_minutes ?? null,
+      cookMinutes: meal.cook_time_minutes ?? null,
+      translatedName: meal.recipe_name_translated ?? null,
+      translatedLocale: meal.prep_steps_translated_locale ?? null,
       key,
       slot: meal.slot,
       slotLabel: meal.slot_name_ar,

@@ -1450,3 +1450,28 @@ bottom sheet on phones.
 409s them); the cancel flow's `#change-plan` anchor exists; the deep-dive save shows the
 profile banner; the recap's language/day labels agree with their number; chat errors are
 critical red and the composer is pinned above the tab bar.
+
+---
+
+## Home = the kitchen ticket («تذكرة المطبخ», 09/2026)
+
+Owner-chosen from three options (supersedes the «Home = today» layout above; the data
+rules there still hold). The dashboard leads with ONE dish as a purple ticket:
+`lib/dashboard/ticket.ts` `pickTicket(rows, riyadhHour())` takes, from the current part of
+the day forward (`partOfDay`: <11 breakfast, <17 lunch, else dinner), the first MAIN slot
+with an unanswered row, the pot with the most eaters leading; snacks are never the ticket.
+**The part of day only chooses what is on the ticket — it NEVER gates a mark**: every row
+of the day stays one-tap markable in the list under it (`KitchenToday.tsx`), since
+«any elapsed day is markable» is the owner directive. A tap on the ticket holds it for 6s as
+a confirmation with undo; list toggles show an undo toast. Shared pots show a split bar
+from `todayTable.potShares` (portion_percentage → grams → equal, renormalised after
+absences, largest-remainder to exactly 100). When a housekeeper exists, a torn-off stub
+shows the dish in her language (`recipe_name_translated`) and links to /plan/housekeeper.
+Evenings (or once today is fully answered) add `TomorrowCard`; the last plan day adds a
+notice, and a week that has ended offers `RegenerateButton` with no member scope = the
+whole household. `SeasonBoard` reads as a race: plannedTotal denominator, short day names,
+the leader on the gold panel (gold means ONE thing: winning), and under everyone else
+`engagement/raceGap.mealsToPass` — the fewest «كما هي» meals to strictly pass the person
+above, sessions held fixed, null when unreachable. `MoreCard` replaced QuickTiles +
+NextStepCard (one next step + recap + journey). `initialOf` (components/ui/avatar) renders
+a lone «ه» as «هـ» so it reads as a letter.

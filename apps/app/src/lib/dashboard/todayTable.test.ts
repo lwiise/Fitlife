@@ -81,6 +81,42 @@ describe("buildTodayTable", () => {
     // The owner's own portion, not the batch or someone else's.
     expect(lunch[0]!.kcal).toBe(600);
     expect(lunch[0]!.kcalFor).toBe("mom");
+    // No stored percentages → equal shares that still add up to 100.
+    expect(lunch[0]!.shares.map((x) => x.pct)).toEqual([34, 33, 33]);
+    expect(lunch[0]!.shares.reduce((n, x) => n + x.pct, 0)).toBe(100);
+  });
+
+  it("splits the pot by stored percentages, renormalised after an absence", () => {
+    const withPct = household.map((m) => ({
+      ...m,
+      days: m.days.map((d) => ({
+        ...d,
+        meals: d.meals.map((meal) =>
+          meal.slot === "lunch"
+            ? {
+                ...meal,
+                per_member_portions: [
+                  { member_id: "mom", portion_percentage: 30 },
+                  { member_id: "dad", portion_percentage: 50 },
+                  { member_id: "kid", portion_percentage: 20 },
+                ],
+              }
+            : meal,
+        ),
+      })),
+    })) as MemberPlan[];
+    const t = buildTodayTable({
+      members: withPct,
+      rosterOrder: roster,
+      dayIndex: 2,
+      checkins: [],
+      absences: [{ day_index: 2, slot: "lunch", member_id: "kid" }],
+    });
+    const lunch = t.rows.find((r) => r.slot === "lunch")!;
+    expect(lunch.shares).toEqual([
+      { id: "mom", pct: 38 },
+      { id: "dad", pct: 62 },
+    ]);
   });
 
   it("keeps each member's own dish as its own row, in meal order", () => {

@@ -27,7 +27,10 @@ export function RegenerateButton({
   locale,
   ownerSex,
   appearance = "button",
+  label = "إنشاء خطة جديدة",
 }: {
+  /** The trigger's text (the dialog keeps its own titles). */
+  label?: string;
   /** "menu-item" renders the trigger as a row of the plan's «المزيد» menu —
    * the 09/2026 redesign moved this 5-15 minute action out of the page's
    * primary slot, which belongs to marking meals. */
@@ -172,7 +175,7 @@ export function RegenerateButton({
             aria-hidden="true"
           />
         )}
-        إنشاء خطة جديدة
+        {label}
       </button>
 
       <ConfirmDialog

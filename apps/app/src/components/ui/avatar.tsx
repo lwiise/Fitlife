@@ -12,6 +12,14 @@ const AVATAR_BG = [
   "bg-[#5B5670]",
 ];
 
+/** A name's first letter for an avatar. An isolated «ه» reads as the digit
+ * «٥» beside Arabic-Indic numerals, so it is shown in its initial form «هـ». */
+export function initialOf(name: string | null | undefined): string {
+  const ch = name?.trim().charAt(0) ?? "";
+  if (!ch) return "؟";
+  return ch === "ه" ? "هـ" : ch;
+}
+
 export function avatarColor(rosterIndex: number) {
   return AVATAR_BG[((rosterIndex % AVATAR_BG.length) + AVATAR_BG.length) % AVATAR_BG.length]!;
 }
@@ -37,7 +45,7 @@ export function Avatar({
         className,
       )}
     >
-      {name.trim().charAt(0)}
+      {initialOf(name)}
     </span>
   );
 }
