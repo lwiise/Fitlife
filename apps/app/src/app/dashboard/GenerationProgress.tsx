@@ -1,13 +1,13 @@
+import Link from "next/link";
 import { clsx } from "clsx";
-import { ButtonLink } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
 import { genderPick } from "@/lib/copy/gender";
 import { arNum } from "@/lib/copy/numbers";
+import { countAr, DAY_FORMS } from "@/lib/copy/plural";
 import { GeneratingPlanWatcher } from "./GeneratingPlanWatcher";
 
 /**
- * A plan being built, shown as what is actually written: days whose meals
- * exist for every member of the plan, read from plan_data — not a timer.
+ * A plan being built, in the ticket's place: days whose meals exist for every
+ * member of the plan, read from plan_data — not a timer.
  */
 export function GenerationProgress({
   daysReady,
@@ -20,31 +20,47 @@ export function GenerationProgress({
 }) {
   const g = genderPick(ownerSex);
   return (
-    <Card aria-labelledby="gen-title" aria-live="polite">
-      <CardHeader id="gen-title" title={firstPlan ? "خطتكم قيد الإعداد" : "خطة جديدة قيد الإعداد"} />
-      <p className="text-base leading-relaxed text-brand-ink-muted">
-        {g(
-          "يستغرق ذلك عادةً من خمس إلى عشر دقائق، ويمكنكِ إغلاق الصفحة.",
-          "يستغرق ذلك عادةً من خمس إلى عشر دقائق، ويمكنك إغلاق الصفحة.",
+    <section className="kt-ticket" aria-labelledby="gen-title" aria-live="polite">
+      <div className="kt-head solo-end">
+        <div className="kt-stamp">
+          <p className="kt-slot">
+            <b>{firstPlan ? "خطتكم الأولى" : "خطة الأسبوع الجديد"}</b>
+            <span>قيد التجهيز</span>
+          </p>
+          <span className="kt-no">{arNum(daysReady)} من ٧</span>
+        </div>
+        <h2 className="kt-dish" id="gen-title">
+          نجهّز أسبوعكم يوماً بيوم
+        </h2>
+        <div className="kt-gen" aria-hidden="true">
+          {Array.from({ length: 7 }, (_, i) => (
+            <i key={i} className={clsx(i < daysReady && "on")} />
+          ))}
+        </div>
+        <p className="kt-who">
+          {daysReady > 0 ? (
+            <>
+              جاهز <b>{countAr(daysReady, DAY_FORMS, arNum)}</b> من ٧
+            </>
+          ) : (
+            "نحسب الأهداف ونختار أطباق الأسبوع"
+          )}
+        </p>
+        <p className="kt-note">
+          {g(
+            "يستغرق ذلك من ٥ إلى ١٠ دقائق عادةً، ويمكنكِ إغلاق الصفحة، فالعمل يكتمل في الخلفية.",
+            "يستغرق ذلك من ٥ إلى ١٠ دقائق عادةً، ويمكنك إغلاق الصفحة، فالعمل يكتمل في الخلفية.",
+          )}
+        </p>
+        {daysReady > 0 && (
+          <div className="kt-gen-acts">
+            <Link className="kt-btn primary" href="/plan">
+              عرض ما جهز حتى الآن
+            </Link>
+          </div>
         )}
-      </p>
-      <div aria-hidden="true" className="mt-4 grid grid-cols-7 gap-1.5">
-        {Array.from({ length: 7 }, (_, i) => (
-          <span
-            key={i}
-            className={clsx("h-2 rounded-full", i < daysReady ? "bg-brand-purple-900" : "bg-brand-tint")}
-          />
-        ))}
       </div>
-      <p className="mt-2 text-base font-extrabold text-brand-ink">
-        {daysReady > 0 ? `${arNum(daysReady)} من ٧ أيام جاهزة` : "نحسب الأهداف ونختار أطباق الأسبوع"}
-      </p>
-      {daysReady > 0 && (
-        <ButtonLink href="/plan" variant="secondary" className="mt-3">
-          عرض ما جهز حتى الآن
-        </ButtonLink>
-      )}
       <GeneratingPlanWatcher />
-    </Card>
+    </section>
   );
 }

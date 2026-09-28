@@ -1475,3 +1475,19 @@ the leader on the gold panel (gold means ONE thing: winning), and under everyone
 above, sessions held fixed, null when unreachable. `MoreCard` replaced QuickTiles +
 NextStepCard (one next step + recap + journey). `initialOf` (components/ui/avatar) renders
 a lone «ه» as «هـ» so it reads as a letter.
+
+**Pixel pass (09/2026).** The first build drifted from the mockup, so the home was
+rebuilt against the mockup's own CSS: every measurement lives in one `.kt-*` block in
+`globals.css` (phone values, desktop overrides from 1024px). The ticket/stub edges
+(notches, zigzag tear) are background/mask geometry that utilities cannot express; pot
+shares and bars use `.kt-w{1..100}` / `.kt-p{0..100}` classes instead of inline styles.
+`.kt` resets line-height to normal, because the mockup never set the body's 1.7. The
+ticket has three forms: «وقته الآن» (full-width «طبختها كما هي», then «بدّلتها أو
+تجاوزتها» / «الوصفة»), prep «التالي في المطبخ» (الوصفة والمقادير + اسألي عنها), and
+closed «سفرة {اليوم} اكتملت» carrying tomorrow's first dish. After a mark it confirms
+«+١ وجبة لأربعتكم، ونسبتكِ الآن ٦٦٪» with undo. Run-sheet rows for a later part of the
+day show a dashed ring plus «بعد الغداء»/«مساءً», and stay tappable. The season is an
+open section, not a card. Workout is one row that opens the session. «اطبعيها» opens
+/plan/housekeeper?print=1 (`PrintOnOpen`). Frame: 60px phone header, avatar + chevron
+(no name), a speech-bubble advisor icon, and `container-shell` widened to a 1184px
+content column (lg padding 48px).

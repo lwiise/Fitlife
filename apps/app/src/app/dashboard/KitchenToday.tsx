@@ -1,14 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
-import { BookOpen, Check, ChefHat, Clock, Loader2, Minus, Repeat2 } from "lucide-react";
+import {
+  ArrowRightLeft,
+  BookOpen,
+  Check,
+  ChefHat,
+  ChevronLeft,
+  Clock,
+  Loader2,
+  MessageCircle,
+  Minus,
+  Printer,
+  Repeat2,
+  Smartphone,
+} from "lucide-react";
 import { genderPick } from "@/lib/copy/gender";
-import { arNum } from "@/lib/copy/numbers";
-import { countAr, DISH_FORMS, MEAL_FORMS, MINUTE_FORMS } from "@/lib/copy/plural";
+import { arNum, arPct } from "@/lib/copy/numbers";
+import { countAr, DISH_FORMS, MINUTE_FORMS } from "@/lib/copy/plural";
 import { setMealCheckin, setSharedMealCheckin } from "@/lib/engagement/actions";
+import { starsForDay } from "@/lib/engagement/seasonMath";
 import type { CheckinStatus } from "@/lib/engagement/types";
 import { OWNER_ID, type TodayRow } from "@/lib/dashboard/todayTable";
 import { MAIN_SLOTS, partOfDay, pickTicket } from "@/lib/dashboard/ticket";
@@ -29,44 +43,72 @@ export interface KitchenCook {
   dir: "rtl" | "ltr";
 }
 
+/** The owner's week as the season board counts it, for the confirmation line. */
+export interface OwnerWeek {
+  mealsMarked: number;
+  mealsPlanned: number;
+  sessionsMarked?: number;
+  sessionsPlanned?: number;
+}
+
 const STATUS_TAG: Record<CheckinStatus, string> = {
   cooked: "كما هي",
-  swapped: "بُدّلت",
-  skipped: "لم تُطبخ",
+  swapped: "بدّلتها",
+  skipped: "تجاوزتها",
 };
 
-/** «لـفهد», folding the article: «الجدة» → «للجدة». */
+const MAIN_AR: Record<(typeof MAIN_SLOTS)[number], string> = {
+  breakfast: "الفطور",
+  lunch: "الغداء",
+  dinner: "العشاء",
+};
+const WHEN_AR: Record<(typeof MAIN_SLOTS)[number], string> = {
+  breakfast: "صباحاً",
+  lunch: "ظهراً",
+  dinner: "مساءً",
+};
+
+/** «لثلاثة» — a pot for N people. */
+const FOR_COUNT = ["", "لواحد", "لاثنين", "لثلاثة", "لأربعة", "لخمسة", "لستة", "لسبعة", "لثمانية"];
+/** «لأربعتكم» — credited to all N of you. */
+const FOR_ALL_OF_YOU = ["", "", "لكليكما", "لثلاثتكم", "لأربعتكم", "لخمستكم", "لستتكم", "لسبعتكم", "لثمانيتكم"];
+
+const forCount = (n: number) => FOR_COUNT[n] ?? `لـ${arNum(n)}`;
+const forAllOfYou = (n: number) => FOR_ALL_OF_YOU[n] || "لكم جميعاً";
+
+/** «لفهد», folding the article: «الجدة» → «للجدة». */
 function forName(name: string) {
   const n = name.trim();
   return n.startsWith("ال") ? `ل${n.slice(1)}` : `ل${n}`;
 }
 
-/** A thin vertical rule between facts. A «·» beside Arabic-Indic digits reads
- * as a zero («دقيقة · ٥»), so facts are never separated by middle dots. */
-function Sep({ tone = "light" }: { tone?: "light" | "dark" }) {
+function Sep() {
+  return <i className="sep" aria-hidden="true" />;
+}
+
+function Star() {
   return (
-    <span
-      aria-hidden="true"
-      className={clsx(
-        "mx-2 inline-block h-3.5 w-px align-middle",
-        tone === "light" ? "bg-white/35" : "bg-brand-ink/20",
-      )}
-    />
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m12 2 3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8z" fill="#F2BB16" />
+    </svg>
   );
 }
 
 /**
- * «تذكرة المطبخ» (09/2026, the owner's chosen home). One object leads the
- * screen: an order ticket for the current main meal — the dish, who it feeds,
- * each person's share of the pot — with the cook's copy torn off below it.
- * The rest of today follows as a run-sheet where EVERY meal is one tap to mark
- * (the part of day only chooses which meal is on the ticket; it never blocks a
- * mark, so home and /plan follow one rule). Marks go through the same server
- * actions /plan uses, with the same roster (present sharers).
+ * «تذكرة المطبخ» (09/2026, the owner's chosen home), built to the approved
+ * mockup. One object leads the screen: an order ticket for the main meal of
+ * this part of the day — the dish, who it feeds, each person's share of the
+ * pot — with the cook's copy torn off below it. While that meal is due the
+ * ticket carries «طبختها كما هي»; once answered it moves forward to the next
+ * main meal as preparation. The rest of today follows as a run-sheet where
+ * EVERY meal is one tap (later meals show a dashed ring, but the part of day
+ * never gates a mark — home and /plan follow one rule). Marks go through the
+ * same server actions /plan uses, with the same roster (present sharers).
  */
 export function KitchenToday({
   planId,
   dayIndex,
+  dayName,
   rows,
   people,
   ownerSex,
@@ -74,9 +116,14 @@ export function KitchenToday({
   hour,
   cook,
   ownerDay,
+  ownerWeek,
+  tomorrow,
+  workout,
 }: {
   planId: string;
   dayIndex: number;
+  /** «السبت». */
+  dayName: string;
   rows: TodayRow[];
   people: KitchenPerson[];
   ownerSex: string | null;
@@ -85,6 +132,11 @@ export function KitchenToday({
   hour: number;
   cook: KitchenCook | null;
   ownerDay: { calories: number; target: number } | null;
+  ownerWeek: OwnerWeek | null;
+  /** Tomorrow's dishes, when tomorrow is still inside the plan week. */
+  tomorrow: { dayName: string; rows: TodayRow[] } | null;
+  /** Today's workout row (server-rendered), placed under the run-sheet. */
+  workout?: ReactNode;
 }) {
   const g = genderPick(ownerSex);
   const router = useRouter();
@@ -94,7 +146,7 @@ export function KitchenToday({
   const [error, setError] = useState<string | null>(null);
   // The ticket that was just marked keeps its place for a moment as a
   // confirmation with undo, so a quick second tap can never land on the next
-  // dish, then the ticket moves forward.
+  // dish; then the ticket moves forward.
   const [justMarked, setJustMarked] = useState<string | null>(null);
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [toast, setToast] = useState<{ text: string; action: string; run: () => void } | null>(
@@ -116,6 +168,25 @@ export function KitchenToday({
   const rest = live.filter((r) => r.key !== ticket?.key);
   const cookedCount = live.filter((r) => r.status === "cooked").length;
   const solo = householdSize <= 1;
+  const nowIdx = MAIN_SLOTS.indexOf(partOfDay(hour));
+
+  // Which part of the day each row belongs to: a main meal is its own; a
+  // snack belongs after the main meal before it in the day's order.
+  const partOf = new Map<string, number>();
+  live.reduce((prevMain, r) => {
+    const i = MAIN_SLOTS.indexOf(r.slot as (typeof MAIN_SLOTS)[number]);
+    partOf.set(r.key, i >= 0 ? i : prevMain);
+    return i >= 0 ? i : prevMain;
+  }, -1);
+  const isLater = (r: TodayRow) => {
+    const p = partOf.get(r.key) ?? -1;
+    return r.slot === "snack" ? p >= nowIdx : p > nowIdx;
+  };
+  const whenLabel = (r: TodayRow) => {
+    const p = partOf.get(r.key) ?? -1;
+    if (r.slot !== "snack") return WHEN_AR[MAIN_SLOTS[p]!];
+    return p >= 0 ? `بعد ${MAIN_AR[MAIN_SLOTS[p]!]}` : "صباحاً";
+  };
 
   function later(fn: () => void, ms: number) {
     timers.current.push(window.setTimeout(fn, ms));
@@ -189,32 +260,48 @@ export function KitchenToday({
     later(() => setToast(null), 6000);
   }
 
-  // «لكِ ولفهد ولمى» / «للبيت كله».
-  function forEaters(ids: readonly string[]) {
-    if (!solo && ids.length >= householdSize) return "للبيت كله";
-    return ids
-      .map((id, i) => {
-        const part = id === OWNER_ID ? g("لكِ", "لك") : forName(byId.get(id)?.name ?? "");
-        return i === 0 ? part : `و${part}`;
-      })
-      .join(" ");
+  const wholeHouse = (r: TodayRow) =>
+    !solo && r.absentIds.length === 0 && r.eaterIds.length >= householdSize;
+  const nameOf = (id: string) => byId.get(id)?.name ?? "";
+  const namesOf = (ids: readonly string[]) => ids.map(nameOf).filter(Boolean).join(" و");
+
+  // The confirmation line: «+١ وجبة لأربعتكم، ونسبتكِ الآن ٦٦٪».
+  function confirmation(row: TodayRow & { status: CheckinStatus | null }) {
+    if (row.status === "swapped") return "سُجّلت: بدّلتها";
+    if (row.status === "skipped") return "سُجّلت: تجاوزتها";
+    const who = solo || row.eaterIds.length < 2 ? "" : ` ${forAllOfYou(row.eaterIds.length)}`;
+    let line = `+١ وجبة${who}`;
+    const ownerEats = row.eaterIds.includes(OWNER_ID);
+    if (ownerWeek && ownerEats && ownerWeek.mealsPlanned > 0) {
+      // The server's figure already counts a mark it has seen.
+      const serverHad = rows.find((r) => r.key === row.key)?.status === "cooked";
+      const m = Math.min(ownerWeek.mealsPlanned, ownerWeek.mealsMarked + (serverHad ? 0 : 1));
+      const mealPart = m / ownerWeek.mealsPlanned;
+      const pct =
+        ownerWeek.sessionsPlanned
+          ? (mealPart + Math.min(1, (ownerWeek.sessionsMarked ?? 0) / ownerWeek.sessionsPlanned)) / 2
+          : mealPart;
+      line += `، ${g("ونسبتكِ", "ونسبتك")} الآن ${arPct(pct)}`;
+    }
+    return line;
   }
-  const nameOf = (id: string) => (id === OWNER_ID ? g("أنتِ", "أنتَ") : (byId.get(id)?.name ?? ""));
 
   return (
-    <div className="space-y-4">
+    <>
       {ticket ? (
         <Ticket
           row={ticket}
           index={live.findIndex((r) => r.key === ticket.key)}
           total={live.length}
-          nowSlot={partOfDay(hour)}
+          isNow={MAIN_SLOTS.indexOf(ticket.slot as (typeof MAIN_SLOTS)[number]) === nowIdx}
           confirmed={justMarked === ticket.key}
+          confirmText={confirmation(ticket)}
           busy={busyKey === ticket.key}
           solo={solo}
+          wholeHouse={wholeHouse(ticket)}
           ownerSex={ownerSex}
-          forEaters={forEaters}
           nameOf={nameOf}
+          namesOf={namesOf}
           showAlternatives={showAlternatives}
           onAlternatives={() => setShowAlternatives((v) => !v)}
           onMark={(s) => markTicket(ticket, s)}
@@ -223,42 +310,38 @@ export function KitchenToday({
           dishCount={live.length}
         />
       ) : (
-        <DayDone
+        <ClosedTicket
+          dayName={dayName}
           cooked={cookedCount}
           total={live.length}
           openLeft={live.filter((r) => r.status === null).length}
           ownerSex={ownerSex}
+          tomorrow={tomorrow}
         />
       )}
 
       {error && (
-        <p role="alert" className="text-meta font-bold text-critical">
+        <p role="alert" className="kt-error">
           {error}
         </p>
       )}
 
       {rest.length > 0 && (
-        <section
-          aria-labelledby="rest-title"
-          className="rounded-[1.375rem] border border-brand-line bg-brand-card"
-        >
-          <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
-            <h2 id="rest-title" className="text-app-section text-brand-ink">
-              {ticket ? "بقية سفرة اليوم" : "سفرة اليوم"}
-            </h2>
-            <Link
-              href="/plan"
-              className="-me-2 inline-flex min-h-11 items-center rounded-full px-2 text-[15px] font-bold text-brand-purple-900 hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-            >
+        <>
+          <div className="kt-sec-h">
+            <h2 id="rest-title">{ticket ? "بقية سفرة اليوم" : "سفرة اليوم"}</h2>
+            <Link href="/plan">
               الأسبوع كاملاً
+              <ChevronLeft className="i" aria-hidden="true" />
             </Link>
           </div>
-          <ul className="divide-y divide-brand-line">
+          <section className="kt-sheet" aria-labelledby="rest-title">
             {rest.map((row) => {
               const status = row.status;
               const busy = busyKey === row.key;
+              const laterRow = status === null && isLater(row);
               return (
-                <li key={row.key} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <div key={row.key} className="kt-row">
                   <button
                     type="button"
                     onClick={() => toggleRow(row)}
@@ -266,94 +349,76 @@ export function KitchenToday({
                     aria-pressed={status !== null}
                     aria-label={
                       status === null
-                        ? `طبختها كما هي: ${row.recipeName}`
-                        : `إلغاء تسجيل ${row.recipeName}`
+                        ? `${row.recipeName}: طبختها كما هي`
+                        : `${row.recipeName}: ${STATUS_TAG[status]}، ${g("اضغطي", "اضغط")} للتراجع`
                     }
-                    className="grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+                    className={clsx(
+                      "kt-tick",
+                      status === "cooked" && "done",
+                      (status === "swapped" || status === "skipped") && "other",
+                      laterRow && "later",
+                    )}
                   >
-                    <span
-                      aria-hidden="true"
-                      className={clsx(
-                        "grid size-7 place-items-center rounded-full",
-                        status === null && "border-2 border-dashed border-brand-ink/30",
-                        status === "cooked" && "bg-brand-yellow text-brand-ink",
-                        (status === "swapped" || status === "skipped") &&
-                          "border-2 border-brand-ink/25 text-brand-ink-muted",
-                      )}
-                    >
+                    <i>
                       {busy ? (
-                        <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+                        <Loader2 className="i animate-spin motion-reduce:animate-none" aria-hidden="true" />
                       ) : status === "cooked" ? (
-                        <Check className="size-4" strokeWidth={3} />
+                        <Check className="i" aria-hidden="true" />
                       ) : status === "swapped" ? (
-                        <Repeat2 className="size-3.5" />
+                        <Repeat2 className="i" aria-hidden="true" />
                       ) : status === "skipped" ? (
-                        <Minus className="size-3.5" />
+                        <Minus className="i" aria-hidden="true" />
                       ) : null}
-                    </span>
+                    </i>
                   </button>
-                  <Link
-                    href="/plan"
-                    className="min-w-0 flex-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-                  >
-                    <span className="block text-meta text-brand-ink-muted">
+                  <Link href="/plan" className="kt-rt">
+                    <small>
                       {row.slotLabel}
                       {!solo && (
                         <>
-                          <Sep tone="dark" />
-                          {forEaters(row.eaterIds)}
+                          <Sep />
+                          {wholeHouse(row) ? "البيت كله" : namesOf(row.eaterIds)}
                         </>
                       )}
-                    </span>
-                    <span
-                      className={clsx(
-                        "mt-0.5 block text-[1.0625rem] font-bold leading-snug",
-                        status === null ? "text-brand-ink" : "text-brand-ink/70",
-                      )}
-                    >
-                      {row.recipeName}
-                    </span>
+                    </small>
+                    <strong>{row.recipeName}</strong>
                   </Link>
-                  {status && (
-                    <span
-                      className={clsx(
-                        "shrink-0 rounded-full px-2.5 py-1 text-meta font-bold",
-                        status === "cooked"
-                          ? "border border-gold-line bg-gold-soft text-brand-ink"
-                          : "bg-brand-ink/[0.06] text-brand-ink-muted",
-                      )}
-                    >
+                  {status ? (
+                    <span className={clsx("kt-tag", status !== "cooked" && "other")}>
                       {STATUS_TAG[status]}
                     </span>
-                  )}
-                </li>
+                  ) : laterRow ? (
+                    <span className="kt-when">{whenLabel(row)}</span>
+                  ) : null}
+                </div>
               );
             })}
-          </ul>
-          <p className="flex flex-wrap items-center gap-y-1 border-t border-brand-line px-4 py-3 text-meta text-brand-ink-muted sm:px-5">
-            <span>
-              طُبخ اليوم <b className="text-brand-ink">{arNum(cookedCount)}</b> من{" "}
-              <b className="text-brand-ink">{arNum(live.length)}</b> كما هي
-            </span>
-            {ownerDay && (
-              <>
-                <Sep tone="dark" />
+            <p className="kt-sum">
+              <span>
+                طُبخ اليوم{" "}
+                <b>
+                  {arNum(cookedCount)} من {arNum(live.length)}
+                </b>
+              </span>
+              {ownerDay && (
                 <span>
-                  {g("مجموع يومكِ", "مجموع يومك")}{" "}
-                  <b className="text-brand-ink">{arNum(ownerDay.calories)}</b> من{" "}
-                  <b className="text-brand-ink">{arNum(ownerDay.target)}</b> سعرة
+                  {g("مجموع يومكِ", "مجموع يومك")} <b>{arNum(ownerDay.calories)}</b> من{" "}
+                  <b>{arNum(ownerDay.target)}</b> سعرة
                 </span>
-              </>
-            )}
-          </p>
-        </section>
+              )}
+            </p>
+          </section>
+        </>
+      )}
+
+      {workout}
+
+      {ticket && hour >= 17 && tomorrow && tomorrow.rows.length > 0 && (
+        <TomorrowRows dayName={tomorrow.dayName} rows={tomorrow.rows} />
       )}
 
       {toast && (
-        <div
-          role="status"
-          className="flex items-center justify-between gap-3 rounded-2xl bg-brand-ink px-4 py-2 text-[15px] text-white"
-        >
+        <div role="status" className="kt-toast" data-float-bottom="">
           <span className="min-w-0 truncate">{toast.text}</span>
           <button
             type="button"
@@ -361,13 +426,12 @@ export function KitchenToday({
               toast.run();
               setToast(null);
             }}
-            className="inline-flex min-h-11 shrink-0 items-center rounded-full px-3 font-bold text-brand-lavender hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             {toast.action}
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -375,13 +439,15 @@ function Ticket({
   row,
   index,
   total,
-  nowSlot,
+  isNow,
   confirmed,
+  confirmText,
   busy,
   solo,
+  wholeHouse,
   ownerSex,
-  forEaters,
   nameOf,
+  namesOf,
   showAlternatives,
   onAlternatives,
   onMark,
@@ -392,13 +458,15 @@ function Ticket({
   row: TodayRow & { status: CheckinStatus | null };
   index: number;
   total: number;
-  nowSlot: (typeof MAIN_SLOTS)[number];
+  isNow: boolean;
   confirmed: boolean;
+  confirmText: string;
   busy: boolean;
   solo: boolean;
+  wholeHouse: boolean;
   ownerSex: string | null;
-  forEaters: (ids: readonly string[]) => string;
   nameOf: (id: string) => string;
+  namesOf: (ids: readonly string[]) => string;
   showAlternatives: boolean;
   onAlternatives: () => void;
   onMark: (s: CheckinStatus) => void;
@@ -407,167 +475,186 @@ function Ticket({
   dishCount: number;
 }) {
   const g = genderPick(ownerSex);
-  const isNow = row.slot === nowSlot;
   const ownerEats = row.eaterIds.includes(OWNER_ID);
-  const potFor = forEaters(row.eaterIds);
-  const whoLine = solo
-    ? null
-    : row.shared && row.eaterIds.length > 1
-      ? `قدر واحد ${potFor}`
-      : row.eaterIds.length === 1 && row.eaterIds[0] === OWNER_ID
-        ? g("طبقكِ", "طبقك")
-        : `طبق ${row.eaterIds.map(nameOf).join(" و")}`;
-  const kcalLine =
-    row.kcal == null
-      ? null
-      : ownerEats
-        ? `${g("حصتكِ", "حصتك")} ${arNum(row.kcal)} سعرة`
-        : `${arNum(row.kcal)} سعرة ${row.kcalFor ? forEaters([row.kcalFor]) : ""}`;
-  const cookTranslated = !cook
+  const pot = row.shared && row.eaterIds.length > 1;
+  const kcal = row.kcal != null ? <b>{arNum(row.kcal)}</b> : null;
+
+  // «قدر واحد للبيت كله | حصتكِ ٦٥٠ سعرة» and its variants.
+  let who: ReactNode;
+  if (solo || (!pot && row.eaterIds.length === 1 && ownerEats)) {
+    who = (
+      <>
+        {g("طبقكِ", "طبقك")}
+        {kcal && (
+          <>
+            <Sep />
+            {kcal} سعرة
+          </>
+        )}
+      </>
+    );
+  } else if (!pot) {
+    who = (
+      <>
+        طبق {namesOf(row.eaterIds)}
+        {kcal && (
+          <>
+            <Sep />
+            {kcal} سعرة
+          </>
+        )}
+      </>
+    );
+  } else if (row.absentIds.length > 0) {
+    who = (
+      <>
+        قدر واحد <b>{forCount(row.eaterIds.length)}</b>
+        <Sep />
+        {namesOf(row.absentIds)} خارج هذه الوجبة
+      </>
+    );
+  } else {
+    who = (
+      <>
+        قدر واحد <b>{wholeHouse ? "للبيت كله" : row.eaterIds.map((id) => forName(nameOf(id))).join(" و")}</b>
+        {ownerEats && kcal && (
+          <>
+            <Sep />
+            {g("حصتكِ", "حصتك")} {kcal} سعرة
+          </>
+        )}
+      </>
+    );
+  }
+
+  const credit = pot ? forAllOfYou(row.eaterIds.length) : null;
+  const hasTimes = row.prepMinutes != null || row.cookMinutes != null;
+  const meta = hasTimes ? (
+    <p className="kt-meta">
+      <Clock className="i" aria-hidden="true" />
+      {row.prepMinutes != null && <>تحضير {countAr(row.prepMinutes, MINUTE_FORMS, arNum)}</>}
+      {row.prepMinutes != null && row.cookMinutes != null && <Sep />}
+      {row.cookMinutes != null && <>طبخ {countAr(row.cookMinutes, MINUTE_FORMS, arNum)}</>}
+    </p>
+  ) : null;
+
+  const cookText = !cook
     ? null
     : cook.locale === "ar"
       ? row.recipeName
       : row.translatedName && row.translatedLocale === cook.locale
         ? row.translatedName
         : null;
-  const cookPronoun = cook?.sex === "male" ? "له" : "لها";
+  const cookFor = cook?.sex === "male" ? "له" : "لها";
 
   return (
-    <article
-      aria-labelledby="ticket-dish"
-      className="overflow-hidden rounded-[1.75rem] bg-brand-purple-900 text-white shadow-[0_18px_40px_-24px_rgba(78,36,144,0.8)]"
-    >
-      <div className="p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[15px]">
-            <b className="font-extrabold">{row.slotLabel}</b>
-            <Sep />
-            <span className="text-white/75">{isNow ? "الآن في المطبخ" : "التالي في المطبخ"}</span>
+    <section className="kt-ticket" aria-labelledby="t-dish">
+      <div className={clsx("kt-head", !cook && "solo-end")}>
+        <div className="kt-stamp">
+          <p className="kt-slot">
+            <b>{row.slotLabel}</b>
+            <span>{isNow ? "وقته الآن" : "التالي في المطبخ"}</span>
           </p>
-          <span className="shrink-0 rounded-lg border border-white/30 px-2 py-0.5 text-meta text-white/85">
+          <span className="kt-no">
             الطبق {arNum(index + 1)} من {arNum(total)}
           </span>
         </div>
-
-        <h2
-          id="ticket-dish"
-          className="mt-3 line-clamp-2 text-[1.875rem] font-extrabold leading-[1.2] lg:text-[2.625rem]"
-        >
+        <h2 className="kt-dish" id="t-dish">
           {row.recipeName}
         </h2>
-
-        {(whoLine || kcalLine) && (
-          <p className="mt-2 text-[15px] text-white/80">
-            {whoLine}
-            {whoLine && kcalLine && <Sep />}
-            {kcalLine}
-          </p>
-        )}
+        <p className="kt-who">{who}</p>
 
         {row.shares.length > 1 && (
-          <div className="mt-4">
-            <p className="text-meta text-white/70">نصيب كل فرد من القدر</p>
-            <PotBar shares={row.shares} />
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-meta">
+          <div
+            className="kt-pot"
+            role="img"
+            aria-label={`نصيب كل فرد من القدر: ${row.shares
+              .map((s) => `${s.id === OWNER_ID ? g("أنتِ", "أنتَ") : nameOf(s.id)} ${arNum(s.pct)}٪`)
+              .join("، ")}`}
+          >
+            <p className="kt-pot-h">
+              {row.absentIds.length > 0 ? "أُعيد توزيع القدر على الحاضرين" : "نصيب كل فرد من القدر"}
+            </p>
+            <div className="kt-bar" aria-hidden="true">
               {row.shares.map((s) => (
-                <li key={s.id} className={s.id === OWNER_ID ? "font-bold text-white" : "text-white/75"}>
-                  {nameOf(s.id)} <span className="tabular-nums">{arNum(s.pct)}٪</span>
-                </li>
+                <i key={s.id} className={clsx(`kt-w${Math.max(1, s.pct)}`, s.id === OWNER_ID && "you")} />
               ))}
-            </ul>
+            </div>
+            <div className="kt-legend" aria-hidden="true">
+              {row.shares.map((s) => (
+                <span key={s.id} className={`kt-w${Math.max(1, s.pct)}`}>
+                  <b>{arNum(s.pct)}٪</b>
+                  {s.id === OWNER_ID ? g("أنتِ", "أنتَ") : nameOf(s.id)}
+                </span>
+              ))}
+            </div>
           </div>
-        )}
-
-        {(row.prepMinutes != null || row.cookMinutes != null) && (
-          <p className="mt-3 flex items-center text-meta text-white/70">
-            <Clock className="me-1.5 size-4" aria-hidden="true" />
-            {row.prepMinutes != null && <>تحضير {countAr(row.prepMinutes, MINUTE_FORMS, arNum)}</>}
-            {row.prepMinutes != null && row.cookMinutes != null && <Sep />}
-            {row.cookMinutes != null && <>طبخ {countAr(row.cookMinutes, MINUTE_FORMS, arNum)}</>}
-          </p>
         )}
 
         {confirmed ? (
-          <div
-            role="status"
-            className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/10 px-4 py-3"
-          >
-            <p className="flex items-center gap-2 text-[15px] font-bold">
-              <span className="grid size-7 place-items-center rounded-full bg-brand-yellow text-brand-ink">
-                <Check className="size-4" strokeWidth={3} aria-hidden="true" />
-              </span>
-              {row.status === "cooked"
-                ? solo
-                  ? "سُجّلت كما هي"
-                  : `سُجّلت ${potFor} في موسم بيتنا`
-                : row.status === "swapped"
-                  ? "سُجّلت: بُدّلت"
-                  : "سُجّلت: لم تُطبخ"}
-            </p>
-            <button
-              type="button"
-              onClick={onUndo}
-              disabled={busy}
-              className="inline-flex min-h-11 items-center rounded-full px-3 font-bold text-brand-lavender hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
+          <div role="status" className="kt-done">
+            <span className="tickmark">
+              <Check className="i" aria-hidden="true" />
+            </span>
+            <p>{confirmText}</p>
+            <button type="button" onClick={onUndo} disabled={busy}>
               تراجع
             </button>
           </div>
-        ) : (
+        ) : isNow ? (
           <>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => onMark("cooked")}
-                disabled={busy}
-                className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand-card px-6 text-base font-extrabold text-brand-purple-900 hover:bg-brand-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-purple-900 disabled:opacity-60"
-              >
-                {busy ? (
-                  <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                ) : (
-                  <Check className="size-5" aria-hidden="true" />
-                )}
-                طبختها كما هي
+            <button type="button" className="kt-mark" onClick={() => onMark("cooked")} disabled={busy}>
+              {busy ? (
+                <Loader2 className="i animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : (
+                <Check className="i" aria-hidden="true" />
+              )}
+              طبختها كما هي
+            </button>
+            {showAlternatives ? (
+              <div className="kt-choices">
+                <button type="button" className="kt-choice" onClick={() => onMark("swapped")}>
+                  بدّلتها
+                </button>
+                <button type="button" className="kt-choice" onClick={() => onMark("skipped")}>
+                  تجاوزتها
+                </button>
+              </div>
+            ) : null}
+            <div className="kt-alt2">
+              <button type="button" onClick={onAlternatives} aria-expanded={showAlternatives}>
+                <ArrowRightLeft className="i" aria-hidden="true" />
+                {showAlternatives ? "إخفاء الخيارين" : "بدّلتها أو تجاوزتها"}
               </button>
-              <Link
-                href="/plan"
-                className="inline-flex min-h-12 items-center gap-2 rounded-full border-[1.5px] border-white/35 px-5 text-base font-bold text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-              >
-                <BookOpen className="size-5" aria-hidden="true" />
-                الوصفة والمقادير
+              <Link href="/plan">
+                <BookOpen className="i" aria-hidden="true" />
+                الوصفة
               </Link>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={onAlternatives}
-                aria-expanded={showAlternatives}
-                className="-ms-2 inline-flex min-h-11 items-center rounded-full px-2 text-meta font-bold text-white/80 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-              >
-                بدّلتها أو تجاوزتها
-              </button>
-              {showAlternatives && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onMark("swapped")}
-                    className="inline-flex min-h-11 items-center rounded-full border border-white/30 px-4 text-meta font-bold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                  >
-                    بدّلتها
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onMark("skipped")}
-                    className="inline-flex min-h-11 items-center rounded-full border border-white/30 px-4 text-meta font-bold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                  >
-                    تجاوزتها
-                  </button>
-                </>
-              )}
+            {credit && (
+              <p className="kt-note">
+                ضغطة واحدة تُحتسب <b>{credit}</b> في موسم بيتنا.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="kt-foot">
+              {meta}
+              <div className="kt-acts">
+                <Link className="kt-btn primary" href="/plan">
+                  <BookOpen className="i" aria-hidden="true" />
+                  الوصفة والمقادير
+                </Link>
+                <Link className="kt-btn ghost" href="/chat">
+                  <MessageCircle className="i" aria-hidden="true" />
+                  {g("اسألي عنها", "اسأل عنها")}
+                </Link>
+              </div>
             </div>
-            {!solo && row.eaterIds.length > 1 && (
-              <p className="mt-2 text-meta text-white/70">
-                ضغطة واحدة تُحتسب {potFor} في موسم بيتنا.
+            {credit && (
+              <p className="kt-note">
+                {g("سجّليها", "سجّلها")} بعد التقديم، فيُحتسب هذا الطبق <b>{credit}</b> في موسم بيتنا.
               </p>
             )}
           </>
@@ -575,104 +662,131 @@ function Ticket({
       </div>
 
       {cook && (
-        <div className="ticket-perforation bg-brand-tint px-5 pb-5 pt-5 text-brand-ink sm:px-6">
-          <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-card text-brand-purple-900">
-              <ChefHat className="size-5" aria-hidden="true" />
+        <div className="kt-stub">
+          <div className="kt-cook">
+            <span className="kt-cook-ico">
+              <ChefHat className="i" aria-hidden="true" />
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="flex flex-wrap items-center gap-2">
-                <b className="text-[1.0625rem] font-extrabold">نسخة {cook.name} لليوم</b>
-                <span className="rounded-full bg-brand-card px-2 py-0.5 text-meta font-bold text-brand-purple-900">
-                  {cook.languageAr}
-                </span>
-              </p>
-              {cookTranslated ? (
-                <p lang={cook.locale} dir={cook.dir} className="mt-1 text-[15px] text-brand-ink">
-                  {cookTranslated}
-                </p>
+            <div className="kt-cook-t">
+              <strong>
+                نسخة {cook.name} لليوم
+                {cook.locale !== "ar" && <span className="kt-lang">{cook.languageAr}</span>}
+              </strong>
+              {cookText ? (
+                cook.locale !== "ar" && (
+                  <p lang={cook.locale} dir={cook.dir}>
+                    {cookText}
+                  </p>
+                )
               ) : (
-                <p className="mt-1 text-meta text-brand-ink-muted">
-                  نجهّز ترجمة أطباق اليوم {forName(cook.name)}.
-                </p>
+                <p className="pending">نجهّز ترجمة أطباق اليوم {forName(cook.name)}.</p>
               )}
-              <p className="mt-0.5 text-meta text-brand-ink-muted">
-                {countAr(dishCount, DISH_FORMS, arNum)} بمقاديرها وخطواتها
-              </p>
+              <small>{countAr(dishCount, DISH_FORMS, arNum)} بمقاديرها وخطواتها، جاهزة للطبخ</small>
             </div>
           </div>
-          <Link
-            href="/plan/housekeeper"
-            className="mt-3 inline-flex min-h-11 items-center rounded-full border-[1.5px] border-brand-purple-900/25 bg-brand-card px-5 text-[15px] font-bold text-brand-purple-900 hover:bg-brand-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-          >
-            {g(`افتحيها ${cookPronoun}`, `افتحها ${cookPronoun}`)}
-          </Link>
+          <div className="kt-cook-acts">
+            <Link className="kt-cbtn out" href="/plan/housekeeper">
+              <Smartphone className="i" aria-hidden="true" />
+              {g(`افتحيها ${cookFor}`, `افتحها ${cookFor}`)}
+            </Link>
+            <Link className="kt-cbtn" href="/plan/housekeeper?print=1">
+              <Printer className="i" aria-hidden="true" />
+              {g("اطبعيها", "اطبعها")}
+            </Link>
+          </div>
         </div>
       )}
-    </article>
+    </section>
   );
 }
 
-/** The pot, split by share. SVG attributes rather than inline styles; drawn
- * from the right so the first eater (the owner) sits at the reading start. */
-function PotBar({ shares }: { shares: Array<{ id: string; pct: number }> }) {
-  const gap = 1;
-  const usable = 100 - gap * (shares.length - 1);
-  // Precompute each segment's start, right to left (a pure reduce, no
-  // reassignment during render).
-  const segs = shares.map((s, i) => {
-    const w = (s.pct / 100) * usable;
-    const before = shares
-      .slice(0, i)
-      .reduce((n, p) => n + (p.pct / 100) * usable + gap, 0);
-    return { ...s, w, x: 100 - before - w };
-  });
-  return (
-    <svg viewBox="0 0 100 6" preserveAspectRatio="none" className="mt-2 block h-2.5 w-full" aria-hidden="true">
-      {segs.map(({ id, w, x }) => {
-        const s = { id };
-        return (
-          <rect
-            key={s.id}
-            x={x}
-            y={0}
-            width={w}
-            height={6}
-            rx={3}
-            fill={s.id === OWNER_ID ? "#FCFBFE" : "var(--color-brand-lavender)"}
-            fillOpacity={s.id === OWNER_ID ? 1 : 0.75}
-          />
-        );
-      })}
-    </svg>
-  );
-}
-
-function DayDone({
+/** The day is answered: the ticket closes, with tomorrow as a read-only look ahead. */
+function ClosedTicket({
+  dayName,
   cooked,
   total,
   openLeft,
   ownerSex,
+  tomorrow,
 }: {
+  dayName: string;
   cooked: number;
   total: number;
   openLeft: number;
   ownerSex: string | null;
+  tomorrow: { dayName: string; rows: TodayRow[] } | null;
 }) {
   const g = genderPick(ownerSex);
+  const stars = starsForDay(cooked, total);
+  const first = tomorrow?.rows[0];
   return (
-    <section
-      aria-labelledby="day-done"
-      className="rounded-[1.75rem] bg-brand-purple-900 p-5 text-white sm:p-6"
-    >
-      <h2 id="day-done" className="text-[1.75rem] font-extrabold leading-tight">
-        {openLeft === 0 ? "اكتملت سفرة اليوم" : "سُجّلت وجبات اليوم الرئيسية"}
-      </h2>
-      <p className="mt-2 text-[15px] text-white/80">
-        طُبخ اليوم {arNum(cooked)} من {arNum(total)} كما هي.
-        {openLeft > 0 &&
-          ` ${openLeft === 2 ? "بقيت وجبتان" : `بقيت ${countAr(openLeft, MEAL_FORMS, arNum)}`} ${g("تسجّلينها", "تسجّلها")} من القائمة أدناه بضغطة على الدائرة.`}
-      </p>
+    <section className="kt-ticket" aria-labelledby="t-dish">
+      <div className="kt-head solo-end">
+        <div className="kt-stamp">
+          <p className="kt-slot">
+            <b>سفرة {dayName}</b>
+            <span>{openLeft === 0 ? "اكتملت" : "سُجّلت وجباتها الرئيسية"}</span>
+          </p>
+          {stars > 0 && (
+            <span className="kt-stars" role="img" aria-label={`${arNum(stars)} من ٣ نجوم`}>
+              {Array.from({ length: stars }, (_, i) => (
+                <Star key={i} />
+              ))}
+            </span>
+          )}
+        </div>
+        <h2 className="kt-dish" id="t-dish">
+          طُبخ {arNum(cooked)} من {arNum(total)} كما هي
+        </h2>
+        <p className="kt-who">
+          {openLeft > 0
+            ? `${openLeft === 1 ? "بقيت وجبة" : openLeft === 2 ? "بقيت وجبتان" : `بقيت ${arNum(openLeft)} وجبات`} ${g("تسجّلينها", "تسجّلها")} من القائمة أدناه.`
+            : stars === 3
+              ? "أضاء اليوم بنجومه الثلاث لبيتكم."
+              : "سُجّلت وجبات اليوم كلها."}
+        </p>
+        {first && tomorrow && (
+          <div className="kt-tmrw">
+            <small>
+              غداً، {tomorrow.dayName}
+              <Sep />
+              للاطلاع
+            </small>
+            <strong>
+              {first.slotLabel}: {first.recipeName}
+            </strong>
+            <Link href="/plan">
+              الأسبوع كاملاً
+              <ChevronLeft className="i" aria-hidden="true" />
+            </Link>
+          </div>
+        )}
+      </div>
     </section>
+  );
+}
+
+/** «سفرة الغد» in the evening, while today's ticket is still open: read-only. */
+function TomorrowRows({ dayName, rows }: { dayName: string; rows: TodayRow[] }) {
+  return (
+    <>
+      <div className="kt-sec-h">
+        <h2 id="tomorrow-title">سفرة الغد، {dayName}</h2>
+        <Link href="/plan">
+          للاطلاع
+          <ChevronLeft className="i" aria-hidden="true" />
+        </Link>
+      </div>
+      <section className="kt-sheet" aria-labelledby="tomorrow-title">
+        {rows.map((r) => (
+          <div key={r.key} className="kt-row">
+            <span className="kt-rt ps-1.5">
+              <small>{r.slotLabel}</small>
+              <strong>{r.recipeName}</strong>
+            </span>
+          </div>
+        ))}
+      </section>
+    </>
   );
 }
