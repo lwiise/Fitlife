@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { initialOf } from "@/components/ui/avatar";
 import { activeNavKey, isFocusRoute, NAV_ITEMS, type NavKey } from "./nav";
 
 const ICONS: Record<NavKey, typeof Home> = {
@@ -185,7 +186,7 @@ function AccountMenu({
     };
   }, [open]);
 
-  const initial = displayName?.trim().charAt(0) || "؟";
+  const initial = initialOf(displayName);
 
   return (
     <div ref={wrapRef} className="relative">

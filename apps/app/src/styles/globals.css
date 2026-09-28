@@ -777,3 +777,27 @@ body:has([data-app-header]) {
     --app-header-h: 4.5rem;
   }
 }
+
+/* «تذكرة المطبخ»: the tear line between the kitchen ticket and the cook's
+   stub — a dashed rule with a notch bitten out of each edge (the parent
+   clips the circles to half-moons). */
+.ticket-perforation {
+  position: relative;
+  border-top: 2px dashed rgb(78 36 144 / 0.35);
+}
+.ticket-perforation::before,
+.ticket-perforation::after {
+  content: "";
+  position: absolute;
+  top: -13px;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: var(--color-brand-surface);
+}
+.ticket-perforation::before {
+  inset-inline-start: -12px;
+}
+.ticket-perforation::after {
+  inset-inline-end: -12px;
+}

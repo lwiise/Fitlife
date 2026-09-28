@@ -18,6 +18,7 @@ import {
   dayIndexFromWeekStart,
   riyadhDateLabelAr,
   riyadhHour,
+  dayNameFromWeekStart,
   riyadhTodayISO,
   riyadhWeekday,
 } from "@/lib/plans/dayMapping";
@@ -34,7 +35,6 @@ import { buildTodayTable } from "@/lib/dashboard/todayTable";
 import { getTodayAbsences } from "@/lib/dashboard/todayAbsences";
 import { daysReady } from "@/lib/dashboard/planProgress";
 import { genderPick } from "@/lib/copy/gender";
-import { countAr, MEAL_FORMS } from "@/lib/copy/plural";
 import { arNum } from "@/lib/copy/numbers";
 import { DeferredMemberDrain } from "../plan/DeferredMemberDrain";
 import { RenewalRecapCard } from "./RenewalRecapCard";
@@ -43,11 +43,13 @@ import { RefreshOnFocus } from "./RefreshOnFocus";
 import { BillingPortalButton } from "./BillingPortalButton";
 import { EmptyPlanCTA } from "./EmptyPlanCTA";
 import { GeneratingPlanWatcher } from "./GeneratingPlanWatcher";
-import { TodayTimeline } from "./TodayTimeline";
+import { KitchenToday, type KitchenCook } from "./KitchenToday";
+import { TomorrowCard } from "./TomorrowCard";
+import { MoreCard, type NextStep } from "./MoreCard";
+import { RegenerateButton } from "../plan/RegenerateButton";
+import { getLocaleInfo, isLocaleCode } from "@/lib/plans/locales";
 import { SeasonBoard } from "./SeasonBoard";
 import { SoloWeekCard } from "./SoloWeekCard";
-import { QuickTiles } from "./QuickTiles";
-import { NextStepCard } from "./NextStepCard";
 import { WorkoutTodayCard, type WorkoutToday } from "./WorkoutTodayCard";
 import { GenerationProgress } from "./GenerationProgress";
 
@@ -222,30 +224,59 @@ export default async function DashboardPage() {
     }
   }
 
-  // ── Greeting + summary ─────────────────────────────────────────────────
-  const hello = riyadhHour() < 12 ? "صباح الخير" : "مساء الخير";
+  // ── Greeting ───────────────────────────────────────────────────────
+  const hour = riyadhHour();
+  const hello = hour < 12 ? "صباح الخير" : "مساء الخير";
   const greeting = profile.display_name
-    ? `${hello}، ${profile.display_name}`
+    ? `${hello} يا ${profile.display_name}`
     : g("أهلاً بكِ", "أهلاً بك");
-  let summary: string | null = null;
-  if (today && today.rows.length > 0 && stats) {
-    const left = today.rows.length - today.marked;
-    const leftText =
-      left === 0
-        ? g("سجّلتِ وجبات اليوم كلها", "سجّلتَ وجبات اليوم كلها")
-        : `بقيت ${left === 2 ? "وجبتان" : countAr(left, MEAL_FORMS, arNum)} اليوم`;
-    const weekText = isFamily
-      ? `طبخ بيتكم ${countAr(stats.followedMeals, MEAL_FORMS, arNum)} من الخطة هذا الأسبوع`
-      : `${g("طبختِ", "طبختَ")} ${countAr(stats.ranked[0]?.mealsMarked ?? 0, MEAL_FORMS, arNum)} من ${g("خطتكِ", "خطتك")} هذا الأسبوع`;
-    summary = `${leftText}، و${weekText}.`;
-  } else if (!onboardingDone) {
-    summary = g(
-      "أسئلة قصيرة عنكِ وعن بيتكِ، ثم نجهّز خطة الأسبوع.",
-      "أسئلة قصيرة عنك وعن بيتك، ثم نجهّز خطة الأسبوع.",
-    );
-  } else if (generating && !tablePlan) {
-    summary = "نجهّز خطة أسبوعكم الأولى.";
-  }
+  const dateLine =
+    todayIndex !== null
+      ? `${riyadhDateLabelAr()} | اليوم ${arNum(todayIndex + 1)} من ٧ في خطتكم`
+      : riyadhDateLabelAr();
+  const lead = !onboardingDone
+    ? g(
+        "أسئلة قصيرة عنكِ وعن بيتكِ، ثم نجهّز خطة الأسبوع.",
+        "أسئلة قصيرة عنك وعن بيتك، ثم نجهّز خطة الأسبوع.",
+      )
+    : generating && !tablePlan
+      ? "نجهّز خطة أسبوعكم الأولى."
+      : null;
+
+  // ── The cook's stub on the ticket ──────────────────────────────────────
+  const cookLocale =
+    housekeeper && isLocaleCode(housekeeper.preferred_language)
+      ? housekeeper.preferred_language
+      : null;
+  const cookInfo = cookLocale ? getLocaleInfo(cookLocale) : null;
+  const cook: KitchenCook | null =
+    housekeeper && cookLocale && cookInfo
+      ? {
+          name: housekeeper.name,
+          sex: (housekeeper.sex as string | null) ?? null,
+          languageAr: `ب${cookInfo.ar_name}`,
+          locale: cookLocale,
+          dir: cookInfo.direction === "rtl" ? "rtl" : "ltr",
+        }
+      : null;
+
+  // ── «سفرة الغد», in the evening or once today is answered ─────────────
+  const todayAnswered = !!today && today.rows.length > 0 && today.marked === today.rows.length;
+  const tomorrow =
+    tablePlan?.plan_data && todayIndex !== null && todayIndex < 6 && (hour >= 17 || todayAnswered)
+      ? {
+          dayName: dayNameFromWeekStart(tablePlan.plan_data.week_start_date, todayIndex + 1),
+          rows: buildTodayTable({
+            members: tablePlan.plan_data.members.filter(
+              (m) => m.member_id === "mom" || liveMemberIds.has(m.member_id),
+            ),
+            rosterOrder: roster.map((m) => m.id),
+            dayIndex: todayIndex + 1,
+            checkins: [],
+            absences: [],
+          }).rows,
+        }
+      : null;
 
   // ── ONE notice, by priority ────────────────────────────────────────────
   const liveSub = hasLiveLemonsqueezySubscription(subscription);
@@ -331,27 +362,33 @@ export default async function DashboardPage() {
     );
   }
 
+  if (!notice && todayIndex === 6) {
+    notice = (
+      <Notice tone="info">
+        {g(
+          "اليوم آخر أيام خطتكم. من الغد تبدئين أسبوعاً جديداً بضغطة واحدة من هنا.",
+          "اليوم آخر أيام خطتكم. من الغد تبدأ أسبوعاً جديداً بضغطة واحدة من هنا.",
+        )}
+      </Notice>
+    );
+  }
+
   // ── ONE next step, by priority: family > workout > deep-dive ───────────
   const settled = planIsReady && !latestPlan?.in_progress;
-  let nextStep: React.ComponentProps<typeof NextStepCard> | null = null;
+  let nextStep: NextStep | null = null;
   if (settled && profile.mom_profile_completed_at !== null && beneficiaries.length === 0) {
     nextStep = {
       id: "family",
       title: g("أضيفي أفراد بيتكِ إلى الخطة", "أضف أفراد بيتك إلى الخطة"),
-      body: "اشتراك واحد يخدم البيت كله: طبخة واحدة، وحصة محسوبة لكل فرد.",
+      meta: "اشتراك واحد يخدم البيت كله: طبخة واحدة، وحصة محسوبة لكل فرد",
       href: "/family",
-      cta: g("أضيفي فرداً", "أضف فرداً"),
     };
   } else if (settled && profile.workout_profile === null && workoutPlan === null) {
     nextStep = {
       id: "workout",
       title: g("أكملي خطتكِ ببرنامج تمارين", "أكمل خطتك ببرنامج تمارين"),
-      body: g(
-        "برنامج أسبوعي يوافق هدفكِ الغذائي، بعد بضع إجابات قصيرة.",
-        "برنامج أسبوعي يوافق هدفك الغذائي، بعد بضع إجابات قصيرة.",
-      ),
+      meta: g("برنامج أسبوعي يوافق هدفكِ، بعد بضع إجابات", "برنامج أسبوعي يوافق هدفك، بعد بضع إجابات"),
       href: "/onboarding/workout",
-      cta: g("أضيفي التمارين", "أضف التمارين"),
     };
   } else if (settled && profile.deep_dive_completed_at === null) {
     nextStep = {
@@ -360,9 +397,8 @@ export default async function DashboardPage() {
         "أجيبي عن أسئلة التفضيلات لتكون الخطة أدق",
         "أجب عن أسئلة التفضيلات لتكون الخطة أدق",
       ),
-      body: "أسئلة اختيارية عن النوم والعادات والتفضيلات، في ثلاث دقائق تقريباً.",
+      meta: "اختيارية، في ثلاث دقائق تقريباً",
       href: "/profile/deep-dive",
-      cta: g("ابدئي", "ابدأ"),
     };
   }
 
@@ -391,43 +427,41 @@ export default async function DashboardPage() {
     );
   } else if (tablePlan && today && today.rows.length > 0) {
     todayBlock = (
-      <Card aria-labelledby="today-title">
-        <CardHeader
-          id="today-title"
-          title="سفرة اليوم"
-          action={{ href: "/plan", label: "الأسبوع كاملاً" }}
-        />
-        <TodayTimeline
-          planId={tablePlan.id}
-          dayIndex={todayIndex!}
-          rows={today.rows}
-          people={people}
-          ownerSex={profile.sex ?? null}
-          householdSize={Math.max(1, roster.length)}
-        />
-        {today.ownerDay && (
-          <p className="mt-3 border-t border-brand-line pt-3 text-meta text-brand-ink-muted">
-            {g("مجموع يومكِ", "مجموع يومك")}{" "}
-            <b className="text-brand-ink">{arNum(today.ownerDay.calories)}</b> من{" "}
-            <b className="text-brand-ink">{arNum(today.ownerDay.target)}</b> سعرة
-          </p>
-        )}
-      </Card>
+      <KitchenToday
+        planId={tablePlan.id}
+        dayIndex={todayIndex!}
+        rows={today.rows}
+        people={people}
+        ownerSex={profile.sex ?? null}
+        householdSize={Math.max(1, roster.length)}
+        hour={hour}
+        cook={cook}
+        ownerDay={today.ownerDay}
+      />
     );
   } else if (tablePlan && todayIndex === null) {
     todayBlock = (
-      <Card aria-labelledby="today-title">
-        <CardHeader id="today-title" title="انتهى أسبوع خطتكم" />
-        <p className="text-base leading-relaxed text-brand-ink-muted">
+      <section
+        aria-labelledby="week-ended"
+        className="rounded-[1.75rem] bg-brand-purple-900 p-5 text-white sm:p-6"
+      >
+        <h2 id="week-ended" className="text-[1.75rem] font-extrabold leading-tight">
+          انتهى أسبوع خطتكم
+        </h2>
+        <p className="mt-2 text-[15px] text-white/80">
           {g(
-            "أنشئي خطة الأسبوع الجديد من صفحة الخطة، وتبقى الأسابيع السابقة في السجل.",
-            "أنشئ خطة الأسبوع الجديد من صفحة الخطة، وتبقى الأسابيع السابقة في السجل.",
+            "أنشئي خطة الأسبوع الجديد للبيت كله. يستغرق ذلك من خمس إلى عشر دقائق، وتبقى الأسابيع السابقة في السجل.",
+            "أنشئ خطة الأسبوع الجديد للبيت كله. يستغرق ذلك من خمس إلى عشر دقائق، وتبقى الأسابيع السابقة في السجل.",
           )}
         </p>
-        <ButtonLink href="/plan" className="mt-3">
-          إلى الخطة
-        </ButtonLink>
-      </Card>
+        <div className="mt-4">
+          <RegenerateButton
+            memberCount={Math.max(1, roster.length)}
+            ownerSex={profile.sex ?? null}
+            label={g("أنشئي خطة الأسبوع الجديد", "أنشئ خطة الأسبوع الجديد")}
+          />
+        </div>
+      </section>
     );
   } else if (tablePlan) {
     todayBlock = (
@@ -493,11 +527,11 @@ export default async function DashboardPage() {
       )}
 
       <header className="mb-5">
-        <p className="text-meta font-bold text-brand-ink-muted">{riyadhDateLabelAr()}</p>
-        <h1 className="mt-1 text-app-title text-brand-ink">{greeting}</h1>
-        {summary && (
-          <p className="mt-2 max-w-prose text-base leading-relaxed text-brand-ink">{summary}</p>
-        )}
+        <p className="text-meta font-bold text-brand-ink-muted">{dateLine}</p>
+        <h1 className="mt-1 text-[1.75rem] font-extrabold leading-tight text-brand-ink lg:text-[2.375rem]">
+          {greeting}
+        </h1>
+        {lead && <p className="mt-2 max-w-prose text-base leading-relaxed text-brand-ink">{lead}</p>}
       </header>
 
       {notice && <div className="mb-5">{notice}</div>}
@@ -508,6 +542,7 @@ export default async function DashboardPage() {
           {workoutToday && (
             <WorkoutTodayCard today={workoutToday} ownerSex={profile.sex ?? null} />
           )}
+          {tomorrow && <TomorrowCard dayName={tomorrow.dayName} rows={tomorrow.rows} />}
         </div>
         <div className="space-y-4 lg:col-span-5">
           {seasonProps && stats && isFamily && <SeasonBoard props={seasonProps} stats={stats} />}
@@ -521,14 +556,7 @@ export default async function DashboardPage() {
               ownerSex={profile.sex}
             />
           )}
-          {onboardingDone && (
-            <QuickTiles
-              ownerSex={profile.sex ?? null}
-              familySize={beneficiaries.length + 1}
-              hasHousekeeper={!!housekeeper}
-            />
-          )}
-          {nextStep && <NextStepCard {...nextStep} />}
+          {onboardingDone && <MoreCard nextStep={nextStep} ownerSex={profile.sex ?? null} />}
         </div>
       </div>
     </main>
