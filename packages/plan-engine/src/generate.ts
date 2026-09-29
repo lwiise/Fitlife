@@ -1431,6 +1431,27 @@ function withJoinRecords(plan: MealPlan, ids: string[], join: MemberJoin): MealP
 }
 
 /**
+ * «سارة عدّلت خطتك» for a plan this run is about to write. A skeleton that
+ * emitted changes speaks for itself. One that emitted none — or no skeleton call
+ * at all (drain/chain/sweeper refills, gap-fills, the fast path) — is continuing
+ * the SAME plan week, so it carries that week's changes: every refill mints a new
+ * meal_plans row, and without the carry Sara's note vanished mid-week. Never
+ * across weeks — last week's changes describe last week's adaptation and would
+ * misattribute. The week check is deliberately the helper's own, not inherited
+ * from how the caller derived `weekStart`. Empty arrays → undefined.
+ */
+export function resolveWeekChanges(
+  skeletonChanges: MealPlan["week_changes"],
+  existingPlan: MealPlan | null | undefined,
+  weekStart: string,
+): MealPlan["week_changes"] {
+  if (skeletonChanges && skeletonChanges.length > 0) return skeletonChanges;
+  if (!existingPlan || existingPlan.week_start_date !== weekStart) return undefined;
+  const carried = existingPlan.week_changes;
+  return carried && carried.length > 0 ? carried : undefined;
+}
+
+/**
  * Generate the family plan day-by-day (sequential, all days shown as "loading").
  * INCREMENTAL: members already complete in `existingPlan` are carried over
  * verbatim; only new/incomplete members are generated, and they're aligned to
@@ -1743,6 +1764,7 @@ export async function generateMealPlan(params: {
       members,
       methodology_notes_ar: existingPlan?.methodology_notes_ar,
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
+      week_changes: resolveWeekChanges(undefined, existingPlan, weekStart),
       days_total: familyDayIndices.length || members[0]?.days.length || 7,
       generating: false,
       member_joins: memberJoinsOut,
@@ -1838,6 +1860,9 @@ export async function generateMealPlan(params: {
       members: preMembers,
       methodology_notes_ar: existingPlan?.methodology_notes_ar,
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
+      // Persisted while the skeleton runs, so it must carry too — otherwise the
+      // note blinks off for the whole of phase 1 (snapshot() may then replace it).
+      week_changes: resolveWeekChanges(undefined, existingPlan, weekStart),
       days_total: familyDayIndices.length,
       generating: true,
       // Name the targeted member from the very first emit so the loading screen
@@ -2386,12 +2411,8 @@ export async function generateMealPlan(params: {
       skeleton.methodology_notes_ar ?? existingPlan?.methodology_notes_ar,
     safety_disclaimer_ar:
       skeleton.safety_disclaimer_ar ?? existingPlan?.safety_disclaimer_ar,
-    // «سارة عدّلت خطتك»: THIS run's changes only — never carried from the prior
-    // plan (old changes would misattribute) and empty arrays drop to undefined.
-    week_changes:
-      skeleton.week_changes && skeleton.week_changes.length > 0
-        ? skeleton.week_changes
-        : undefined,
+    // «سارة عدّلت خطتك»: this run's own changes, else the same week's carried ones.
+    week_changes: resolveWeekChanges(skeleton.week_changes, existingPlan, weekStart),
     days_total: totalDays,
     generating,
     // While generating a single targeted member, tell the UI who — so the loading

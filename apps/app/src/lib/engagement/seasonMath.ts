@@ -188,9 +188,9 @@ export function isISODate(v: string | null | undefined): v is string {
   return typeof v === "string" && ISO_DATE_RE.test(v);
 }
 
-/** The floor of the workout marking window, mirrored from actions.ts
- * GRACE_DAYS: setWorkoutCheckin can stamp a session's local_date back to
- * today - max(todayWeekday, GRACE_DAYS). */
+/** The floor of the workout marking window: a session's local_date can be
+ * stamped back to today - max(todayWeekday, WORKOUT_GRACE_DAYS), so the last
+ * two days of the previous week keep their grace on a Sunday or Monday. */
 export const WORKOUT_GRACE_DAYS = 2;
 
 /** Weekday (0=Sunday, matches setWorkoutCheckin's derivation) of a
@@ -218,6 +218,25 @@ export function workoutMarkingWindow(todayISO: string): {
     ),
     end: todayISO,
   };
+}
+
+/**
+ * The calendar date a weekday-anchored session is marked against, or null when
+ * that weekday falls outside the marking window (a session later this week has
+ * no past date yet). Today counts. Within the window a weekday occurs at most
+ * once, so this resolves uniquely — on a Sunday, day_index 5 is LAST Friday.
+ * The ONE rule setWorkoutCheckin stamps by, the /plan strip dates its cells by
+ * and WorkoutViewer gates its marking controls by, so a cell can never show one
+ * date while the mark lands on another.
+ */
+export function workoutSessionPastDateISO(
+  todayISO: string,
+  dayIndex: number,
+): string | null {
+  const back = (weekdayOfISO(todayISO) - dayIndex + 7) % 7;
+  return back <= Math.max(weekdayOfISO(todayISO), WORKOUT_GRACE_DAYS)
+    ? addDaysISO(todayISO, -back)
+    : null;
 }
 
 /** Whole days from `startISO` to `dateISO` (both YYYY-MM-DD; UTC math — the

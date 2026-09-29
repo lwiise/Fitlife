@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { clsx } from "clsx";
+import { Dumbbell, UtensilsCrossed } from "lucide-react";
 import { Notice } from "@/components/ui/notice";
 import { ButtonLink } from "@/components/ui/button";
 import {
@@ -29,7 +31,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import {
   planHasContent,
-  memberIsShort,
   MEMBER_GEN_MAX_ATTEMPTS,
   ownerRequiresDoctorSignOff,
 } from "@fitlife/plan-engine";
@@ -38,6 +39,8 @@ import { applyMemberDisplayNames } from "@/lib/plans/memberNames";
 import { genderPick } from "@/lib/copy/gender";
 import { dropRemovedMembers } from "@/lib/plans/removedMembers";
 import { staleMemberIds } from "@/lib/plans/memberEdit";
+import { incompleteInPlanMemberIds } from "@/lib/plans/drainScope";
+import { pickPlanNotice } from "@/lib/plans/planNotice";
 import { EmptyState } from "./EmptyState";
 import { PlanGeneratingState } from "./PlanGeneratingState";
 import { PlanFailedState } from "./PlanFailedState";
@@ -54,6 +57,7 @@ import Link from "next/link";
 import { PlanOnboardingBanner } from "./PlanOnboardingBanner";
 import { DeferredMemberDrain } from "./DeferredMemberDrain";
 import { SubscriptionSelfHeal } from "./SubscriptionSelfHeal";
+import { PlanBar, PlanBarRow } from "./bar/PlanBar";
 
 export const metadata = {
   title: "خطتي — فت لايف",
@@ -297,17 +301,18 @@ export default async function PlanPage({
     .slice(1)
     .map((m) => m.name)
     .join("، ");
-  // An in-plan member with a failed/missing day that's still under the retry
-  // cap — the drain re-targets it to completion before starting the next member,
-  // so keep the drain mounted for it. A newcomer's days before they joined the
-  // week are not missing (memberIsShort), and must not keep the drain mounted.
-  const planData = latest?.plan_data;
-  const genAttempts = planData?.gen_attempts ?? {};
-  const hasIncompleteMember = !!planData?.members.some(
-    (m) =>
-      memberIsShort(planData, m) &&
-      (genAttempts[m.member_id] ?? 0) < MEMBER_GEN_MAX_ATTEMPTS,
-  );
+  // In-plan members with a failed/missing day (fewer mealed days than the plan's
+  // day count) that are still under the retry cap — the drain re-targets them
+  // to completion before starting the next member, so keep the drain mounted
+  // for them. The same definition the drain and the worker's chain decide from
+  // (join-aware: a newcomer's days before they joined the week are not missing).
+  const incompleteMemberIds = latest?.plan_data
+    ? incompleteInPlanMemberIds({
+        plan: latest.plan_data,
+        maxAttempts: MEMBER_GEN_MAX_ATTEMPTS,
+      })
+    : [];
+  const hasIncompleteMember = incompleteMemberIds.length > 0;
   // Members still in the plan but no longer on the roster: a removal that
   // landed while a run held the lock. Hidden from the live view below and
   // handed to the drain, which dispatches a roster-aligning run.
@@ -330,6 +335,11 @@ export default async function PlanPage({
       hasIncompleteMember ||
       ghostMembers.length > 0 ||
       staleMembers.length > 0);
+  // The members whose empty days will fill with no action from her: short,
+  // under the attempt cap, AND a drain is actually mounted to refill them. A
+  // capped member, a tier-blocked household, or an unfinished onboarding gets
+  // nothing automatic, so its empty day keeps the failed box and its retry.
+  const partialWeekMemberIds = shouldDrain ? incompleteMemberIds : [];
   // «رحلتك الخاصة» entries — one per member who may keep a private weight
   // record (adults AND children now, per owner directive; the housekeeper
   // never — the shared rule in engagement/eligibility.ts). The PlanViewer shows
@@ -419,119 +429,166 @@ export default async function PlanPage({
     planHasContent(latest.plan_data) &&
     !latest.in_progress;
 
-  // The meal-ready view renders PlanViewer, which hosts the plan-type toggle at
-  // the end of its top strip's action cluster (the far/left corner in RTL).
-  // Every other state renders the toggle standalone above its content, pinned
-  // to the same corner.
+  // A ready plan renders its viewer, which draws the plan bar itself (member,
+  // dated week strip, •••) and places the notice + plan-type switch under it.
+  // Every other state gets the minimal bar below instead.
   const mealReadyView =
     !workoutView && latest?.status === "ready" && !!latest.plan_data;
-  // The workout-ready view renders WorkoutViewer, which hosts the toggle in the
-  // SAME top-strip slot as PlanViewer — so it isn't rendered standalone above
-  // it, and the toggle never moves when switching views.
   const workoutReadyView =
     workoutView && workout?.status === "ready" && !!workout.plan_data;
 
+  // ONE notice, by priority (lib/plans/planNotice.ts) — they used to stack
+  // above the plan. The masked failure only means something over the meal
+  // plan it replaced, so it is only a candidate there.
+  const maskedFailure = mealReadyView ? (latest?.masked_failure ?? null) : null;
+  const noticeKind = pickPlanNotice({
+    maskedFailure: maskedFailure !== null,
+    tierBlocked: pendingBlocked,
+    // A continuous "preparing" line for queued members — while the current
+    // plan generates AND through the hand-off window after it finishes (until
+    // the new member's own shell lands) — so there is no blank gap before the
+    // next member shows as loading.
+    membersPending:
+      pendingMembers.length > 0 && !pendingBlocked && (isGenerating || planReady),
+  });
+
+  const pageNotice =
+    noticeKind === "masked_failure" && maskedFailure ? (
+      // The plan below is the PREVIOUS week: the newest run failed with
+      // nothing to show. The fallback is deliberate (a stale week beats an
+      // error screen) — silence about it was not.
+      <Notice tone="warning">
+        آخر محاولة لإنشاء خطة جديدة لم تكتمل، وهذه خطتكم السابقة كما هي. يمكن
+        المحاولة مرة أخرى بعد قليل.
+        {maskedFailure.error_message && (
+          <details className="text-meta text-brand-ink-muted">
+            {/* 44px tall through its own padding (it keeps list-item display,
+                and with it the disclosure marker). */}
+            <summary className="min-h-11 cursor-pointer py-3">تفاصيل تقنية</summary>
+            <p dir="ltr" className="break-words text-start">
+              {maskedFailure.error_message}
+            </p>
+          </details>
+        )}
+      </Notice>
+    ) : noticeKind === "tier_blocked" ? (
+      <Notice
+        tone="info"
+        action={
+          <ButtonLink href={blockedHref} variant="secondary">
+            {blockedIsSubscriber ? "ترقية الباقة" : "عرض الباقات"}
+          </ButtonLink>
+        }
+      >
+        {blockedIsSubscriber
+          ? `جهّزنا خطتك. خطط ${queuedNames} تحتاج باقة أكبر، ${genderPick(profile?.sex)("رقّي باقتكِ", "رقِّ باقتك")} ونجهّزها مع وجبات البيت.`
+          : `جهّزنا خطتك. خطط ${queuedNames} متاحة مع الاشتراك، ${genderPick(profile?.sex)("اشتركي", "اشترك")} ونجهّزها مع وجبات البيت.`}
+      </Notice>
+    ) : noticeKind === "members_pending" ? (
+      <Notice tone="progress">
+        {isGenerating
+          ? `أضفنا ${queuedNames} — ${
+              orderedPending.length > 1 ? "نجهّز خططهم" : "نجهّز الخطة"
+            } بعد انتهاء الخطة الحالية`
+          : restPendingNames
+            ? `نجهّز خطة ${firstPendingName} الآن · التالي: ${restPendingNames}`
+            : `نجهّز خطة ${firstPendingName} الآن`}
+      </Notice>
+    ) : null;
+
+  // The post-onboarding banner only when no notice was picked — it is a nudge,
+  // and a notice is always the more important line. It renders nothing most of
+  // the time; `*:mb-0` cancels the bottom margin it carries for its old
+  // top-of-page slot, since the slot it lands in now spaces itself.
+  const notice = pageNotice ?? (
+    <div className="*:mb-0">
+      <Suspense fallback={null}>
+        <PlanOnboardingBanner planReady={planReady} ownerSex={profile?.sex} />
+      </Suspense>
+    </div>
+  );
+
+  // The meal/workout switch: a full-width segmented control under the plan
+  // bar, rendered by the viewers (and by the non-ready states below). Two
+  // links between two views of one page — navigation, so a <nav> with
+  // aria-current, not tab semantics. The track is 52px (p-1 around 44px
+  // segments), so each half is a full tap target.
   const planTypeToggle =
     workout != null ? (
-      // Segmented view switch: brand-purple active segment on a lavender track.
-      // The track tint reads on BOTH surfaces the toggle appears on — the white
-      // header band and, before a plan is ready, the bare page background.
-      // Each Link spans the FULL 44px track height (min-h-11) for the tap
-      // target; the inner span is the 36px visual thumb, vertically centered →
-      // the 4px inset look. Hover lives on the Link (group) so the strips above
-      // and below the thumb respond like they click.
-      <div
-        className="inline-flex rounded-full bg-brand-lavender/25 px-[3px]"
-        role="tablist"
+      <nav
         aria-label="نوع الخطة"
+        className="grid grid-cols-2 rounded-full bg-brand-tint p-1 print:hidden"
       >
-        <Link
-          href="/plan"
-          role="tab"
-          aria-selected={!workoutView}
-          className="group min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-        >
-          <span
-            className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
-              !workoutView
-                ? "bg-brand-purple-900 text-white"
-                : "text-brand-ink/70 group-hover:text-brand-ink"
-            }`}
+        {[
+          { href: "/plan", label: "الوجبات", Icon: UtensilsCrossed, active: !workoutView },
+          { href: "/plan?view=workout", label: "التمارين", Icon: Dumbbell, active: workoutView },
+        ].map(({ href, label, Icon, active }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={clsx(
+              "inline-flex min-h-11 items-center justify-center gap-2 rounded-full text-[15px] font-bold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900",
+              active
+                ? "bg-brand-card text-brand-purple-900 shadow-[0_0_0_1px_var(--color-brand-line)]"
+                : "text-brand-purple-900/80 hover:text-brand-purple-900",
+            )}
           >
-            الوجبات
-          </span>
-        </Link>
-        <Link
-          href="/plan?view=workout"
-          role="tab"
-          aria-selected={workoutView}
-          className="group min-h-11 inline-flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
-        >
-          <span
-            className={`min-h-9 inline-flex items-center rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
-              workoutView
-                ? "bg-brand-purple-900 text-white"
-                : "text-brand-ink/70 group-hover:text-brand-ink"
-            }`}
-          >
-            التمارين
-          </span>
-        </Link>
-      </div>
+            <Icon className="size-[18px]" aria-hidden="true" />
+            {label}
+          </Link>
+        ))}
+      </nav>
     ) : null;
+
+  // Non-ready states (no plan yet, generating, failed) open with a minimal
+  // plan bar too, so the phone header does not flip between the shell's and
+  // the plan's as a week goes from empty to generating to ready (the bar
+  // hides the shell header on phones — globals.css). The state components
+  // carry the page's <h1>; where one does not (the workout failure notice, or
+  // a ready row with nothing to show), the bar's title becomes the heading so
+  // the page never has none — and never two.
+  const stateOwnsHeading = workoutView
+    ? workout?.status === "generating"
+    : !latest || latest.status === "generating" || latest.status === "failed";
+  const stateTitle = workoutView ? "خطة التمارين" : "خطة الوجبات";
+  const StateIcon = workoutView ? Dumbbell : UtensilsCrossed;
+  const stateTitleClass = "min-w-0 truncate text-app-item text-brand-ink";
 
   return (
     <main className="min-h-screen bg-brand-surface">
+      {/* No top padding below lg: on phones the plan bar replaces the app
+          header, so it sits flush at the top of the screen (PlanBar cancels
+          the inline padding too). From lg the shell header is back and the
+          bar sticks beneath it as a card. */}
+      <div className="container-app pb-8 pt-0 md:pb-12 lg:pt-8">
+        {/* A paid user can land here if their activation webhook was missed.
+            Reconcile directly with Lemonsqueezy once; if it activates, the page
+            refreshes and the drain takes over instead of the tier notice.
+            Mounted whenever the tier blocks, even when a higher-priority
+            notice is the one showing — it renders nothing. */}
+        {pendingBlocked && <SubscriptionSelfHeal />}
 
-      <div className="container-app py-8 md:py-12">
-        <Suspense fallback={null}>
-          <PlanOnboardingBanner planReady={planReady} ownerSex={profile?.sex} />
-        </Suspense>
-
-        {/* Keep a continuous "preparing" indicator for queued members — while the
-            current plan generates AND through the hand-off window after it
-            finishes (until the new member's own shell lands) — so there is no
-            blank gap before the next member shows as loading. */}
-        {pendingMembers.length > 0 && !pendingBlocked && (isGenerating || planReady) && (
-<Notice tone="progress" className="mb-6">
-            {isGenerating
-              ? `أضفنا ${queuedNames} — ${
-                  orderedPending.length > 1 ? "نجهّز خططهم" : "نجهّز الخطة"
-                } بعد انتهاء الخطة الحالية`
-              : restPendingNames
-                ? `نجهّز خطة ${firstPendingName} الآن · التالي: ${restPendingNames}`
-                : `نجهّز خطة ${firstPendingName} الآن`}
-          </Notice>
-        )}
-
-        {pendingBlocked && (
+        {!mealReadyView && !workoutReadyView && (
           <>
-            {/* A paid user can land here if their activation webhook was missed.
-                Reconcile directly with Lemonsqueezy once; if it activates, the
-                page refreshes and the drain takes over instead of this notice. */}
-            <SubscriptionSelfHeal />
-            <Notice
-              tone="info"
-              className="mb-6"
-              action={
-                <ButtonLink href={blockedHref} variant="secondary">
-                  {blockedIsSubscriber ? "ترقية الباقة" : "عرض الباقات"}
-                </ButtonLink>
-              }
-            >
-              {blockedIsSubscriber
-                ? `جهّزنا خطتك. خطط ${queuedNames} تحتاج باقة أكبر، ${genderPick(profile?.sex)("رقّي باقتكِ", "رقِّ باقتك")} ونجهّزها مع وجبات البيت.`
-                : `جهّزنا خطتك. خطط ${queuedNames} متاحة مع الاشتراك، ${genderPick(profile?.sex)("اشتركي", "اشترك")} ونجهّزها مع وجبات البيت.`}
-            </Notice>
+            <PlanBar>
+              <PlanBarRow>
+                <span
+                  aria-hidden="true"
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-tint text-brand-purple-900"
+                >
+                  <StateIcon className="size-5" />
+                </span>
+                {stateOwnsHeading ? (
+                  <p className={stateTitleClass}>{stateTitle}</p>
+                ) : (
+                  <h1 className={stateTitleClass}>{stateTitle}</h1>
+                )}
+              </PlanBarRow>
+            </PlanBar>
+            <div className="mt-3">{notice}</div>
+            {planTypeToggle && <div className="mt-3">{planTypeToggle}</div>}
           </>
-        )}
-
-        {/* Standalone in every state except the meal-ready and workout-ready
-            views, where the viewer hosts it in the top strip's action cluster.
-            justify-end pins it to the same far (left in RTL) corner the ready
-            views use, so the toggle never moves across states. */}
-        {planTypeToggle && !mealReadyView && !workoutReadyView && (
-          <div className="mb-6 flex justify-end">{planTypeToggle}</div>
         )}
 
         {workoutView && workout && (
@@ -542,18 +599,21 @@ export default async function PlanPage({
               // "نجهّز وجباتك أولاً" card, no generic flash. `status ===
               // "generating"` covers the first seconds before the meal shell's
               // first emit; `in_progress` covers the rest of the run.
-              <WorkoutGeneratingState
-                initialWaitingForMeals={
-                  !!latest && (latest.status === "generating" || latest.in_progress)
-                }
-                ownerSex={profile?.sex}
-              />
+              <div className="mt-6">
+                <WorkoutGeneratingState
+                  initialWaitingForMeals={
+                    !!latest && (latest.status === "generating" || latest.in_progress)
+                  }
+                  ownerSex={profile?.sex}
+                />
+              </div>
             )}
             {workout.status === "failed" && (
               // Never surface the raw engine error (English/zod internals);
               // it stays on the DB row for debugging.
               <Notice
                 tone="critical"
+                className="mt-6"
                 title="تعذّر إنشاء برنامج التمارين"
                 action={<RetryWorkoutButton ownerSex={profile?.sex} />}
               >
@@ -563,12 +623,13 @@ export default async function PlanPage({
                 )}
               </Notice>
             )}
-            {workout.status === "ready" && workout.plan_data && (
+            {workoutReadyView && workout.plan_data && (
               <WorkoutViewer
                 plan={applyMemberDisplayNames(workout.plan_data, nameRoster)}
                 planId={workout.id}
                 checkins={workoutCheckins}
                 ownerSex={profile?.sex}
+                notice={notice}
                 planTypeToggle={planTypeToggle}
                 journeyMembers={journeyMembers}
                 roster={workoutRoster}
@@ -579,49 +640,38 @@ export default async function PlanPage({
         )}
 
         {!workoutView && !latest && (
-          <EmptyState
-            isOnboarded={isOnboarded}
-            ownerSex={profile?.sex}
-            needsDoctorSignOff={needsDoctorSignOff}
-          />
+          <div className="mt-6">
+            <EmptyState
+              isOnboarded={isOnboarded}
+              ownerSex={profile?.sex}
+              needsDoctorSignOff={needsDoctorSignOff}
+            />
+          </div>
         )}
 
         {!workoutView && latest?.status === "generating" && (
-          <PlanGeneratingState
-            planId={latest.id}
-            name={generatingFor}
-            ownerSex={profile?.sex}
-          />
+          <div className="mt-6">
+            <PlanGeneratingState
+              planId={latest.id}
+              name={generatingFor}
+              ownerSex={profile?.sex}
+            />
+          </div>
         )}
 
         {!workoutView && latest?.status === "failed" && (
-          <PlanFailedState
-            planId={latest.id}
-            reason={latest.error_message}
-            ownerSex={profile?.sex}
-          />
+          <div className="mt-6">
+            <PlanFailedState
+              planId={latest.id}
+              reason={latest.error_message}
+              ownerSex={profile?.sex}
+            />
+          </div>
         )}
 
-        {!workoutView && latest?.status === "ready" && latest.plan_data && (
+        {mealReadyView && latest?.plan_data && (
           <>
             {shouldDrain && <DeferredMemberDrain generating={latest.in_progress} />}
-            {latest.masked_failure && (
-              // The plan below is the PREVIOUS week: the newest run failed with
-              // nothing to show. The fallback is deliberate (a stale week beats
-              // an error screen) — silence about it was not.
-              <Notice tone="warning" className="mb-6">
-                آخر محاولة لإنشاء خطة جديدة لم تكتمل، وهذه خطتكم السابقة كما هي. يمكن
-                المحاولة مرة أخرى بعد قليل.
-                {latest.masked_failure.error_message && (
-                  <details className="mt-2 text-meta text-brand-ink-muted">
-                    <summary className="cursor-pointer">تفاصيل تقنية</summary>
-                    <p dir="ltr" className="mt-1 break-words text-start">
-                      {latest.masked_failure.error_message}
-                    </p>
-                  </details>
-                )}
-              </Notice>
-            )}
             <PlanViewer
               plan={applyMemberDisplayNames(
                 profile
@@ -648,9 +698,10 @@ export default async function PlanPage({
               verdicts={verdicts}
               absences={absences}
               journeyMembers={journeyMembers}
+              notice={notice}
               planTypeToggle={planTypeToggle}
               ownerSex={profile?.sex}
-              partialWeek={hasIncompleteMember}
+              partialWeekMemberIds={partialWeekMemberIds}
             />
           </>
         )}

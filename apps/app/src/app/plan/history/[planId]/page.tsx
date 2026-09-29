@@ -37,9 +37,12 @@ export default async function HistoryPlanViewPage({
 
   return (
     <main className="min-h-screen bg-brand-surface">
-
-      <div className="container-app py-8 md:py-12">
-        <div className="flex items-center justify-between gap-3 mb-6">
+      {/* Padded like /plan: PlanViewer's bar replaces the app header on phones
+          and sticks at the very top once the back row above it scrolls away.
+          That row is the first thing on a phone screen, so it keeps a small
+          top gap of its own instead of the bar's flush pt-0. */}
+      <div className="container-app pb-8 pt-2 md:pb-12 lg:pt-8">
+        <div className="mb-2 flex items-center justify-between gap-3 lg:mb-4">
           <BackButton
             href={member ? `/plan/history?member=${member}` : "/plan/history"}
             label="كل الخطط"

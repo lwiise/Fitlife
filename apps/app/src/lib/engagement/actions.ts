@@ -13,6 +13,7 @@ import {
   isWeighInEligibleMom,
 } from "./eligibility";
 import { BODY_PHOTOS_BUCKET, HOUSEHOLD_CHECKIN_MEMBER } from "./types";
+import { workoutSessionPastDateISO } from "./seasonMath";
 import {
   OWNER_WEIGHT_FLOOR_KG,
   closeDayInputSchema,
@@ -33,16 +34,6 @@ import {
 
 const VALIDATION_ERROR_AR = "تعذر حفظ البيانات، يرجى المحاولة مرة أخرى";
 const AUTH_ERROR_AR = "انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى";
-
-/**
- * The floor of the retroactive marking window, in days. Meal marks now stay
- * open for the WHOLE plan week — any elapsed day, never the future (owner
- * directive 07/2026), so a mom can complete or correct earlier days anytime
- * before the week rolls over into history. Weekday-anchored workout sessions
- * stay markable for the whole current week too, with this as the floor so the
- * last couple days of the previous week keep their grace.
- */
-const GRACE_DAYS = 2;
 
 const CHECKIN_CLEAR_ERROR_AR = "تعذر مسح التسجيل، يرجى المحاولة مرة أخرى";
 
@@ -324,11 +315,6 @@ async function isOutOfMeal(
   return !error && !!data && data.length > 0;
 }
 
-/** Weekday (0=Sunday, matches JS getDay) of a Riyadh-local YYYY-MM-DD date. */
-function weekdayOfISO(dateISO: string): number {
-  return new Date(`${dateISO}T00:00:00Z`).getUTCDay();
-}
-
 /**
  * Inline workout-session marking from the plan page (?view=workout) — «هل
  * أنجزت حصة اليوم؟» done/moved/skipped. The exercise pillar's honest signal:
@@ -377,21 +363,13 @@ export async function setWorkoutCheckin(rawInput: SetWorkoutCheckinInput) {
     if (!member) return { ok: false as const, error: VALIDATION_ERROR_AR };
   }
 
-  // Derive the session's calendar date from its weekday, scanning back over the
-  // whole current week (Sunday-anchored), with GRACE_DAYS as a floor so the tail
-  // of the previous week keeps its grace. Never the future: within any ≤7-day
-  // span a given weekday occurs at most once, so this resolves uniquely or not
-  // at all, and a future session this week has no past date to resolve to.
-  const today = riyadhTodayISO();
-  const maxBack = Math.max(weekdayOfISO(today), GRACE_DAYS);
-  let localDate: string | null = null;
-  for (let off = 0; off <= maxBack; off++) {
-    const candidate = addDaysISO(today, -off);
-    if (weekdayOfISO(candidate) === input.day_index) {
-      localDate = candidate;
-      break;
-    }
-  }
+  // Derive the session's calendar date from its weekday: the whole current week
+  // (Sunday-anchored) is markable, with a 48h floor so the tail of the previous
+  // week keeps its grace (meal marks stay open for the whole plan week the same
+  // way — owner directive 07/2026). Never the future: a session later this week
+  // has no past date to resolve to. One rule with the /plan strip that dates
+  // the cell she tapped (workoutSessionPastDateISO), so the two cannot drift.
+  const localDate = workoutSessionPastDateISO(riyadhTodayISO(), input.day_index);
   if (!localDate) return { ok: false as const, error: VALIDATION_ERROR_AR };
 
   const db = supabase as unknown as SupabaseClient;

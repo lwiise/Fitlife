@@ -19,7 +19,10 @@ export interface EngagementStats {
   activeCheckinHouseholds7d: number;
   verdicts7d: number;
   weighIns7d: number;
-  /** Share of recent ready plans carrying week_changes (null = no plans). */
+  /** Share of recent ready plans carrying week_changes (null = no plans) —
+   * i.e. SHOWING Sara's note. Since same-week runs carry the week's changes
+   * forward (resolveWeekChanges), this counts plan rows that display them, not
+   * runs whose own skeleton wrote them; expect it higher than before 09/2026. */
   plansWithChangesPct: number | null;
   /** Renewal-1 proxy: paid subs that crossed ≥1 renewal / all paid subs. */
   paidTotal: number;

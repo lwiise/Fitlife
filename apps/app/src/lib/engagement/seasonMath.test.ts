@@ -6,6 +6,7 @@ import {
   computeSeasonStats,
   dayHasCookedMark,
   workoutMarkingWindow,
+  workoutSessionPastDateISO,
   type RawSeasonMealRow,
   type SeasonMealMark,
   type SeasonMember,
@@ -694,6 +695,36 @@ describe("workoutMarkingWindow", () => {
       start: "2026-07-19",
       end: "2026-07-25",
     });
+  });
+});
+
+describe("workoutSessionPastDateISO", () => {
+  it("resolves this week's elapsed sessions and today", () => {
+    // 2026-07-22 is a Wednesday.
+    expect(workoutSessionPastDateISO("2026-07-22", 3)).toBe("2026-07-22");
+    expect(workoutSessionPastDateISO("2026-07-22", 0)).toBe("2026-07-19");
+  });
+
+  it("refuses a session later this week — never pre-marked", () => {
+    expect(workoutSessionPastDateISO("2026-07-22", 4)).toBeNull();
+    expect(workoutSessionPastDateISO("2026-07-22", 6)).toBeNull();
+  });
+
+  it("reaches LAST Friday and Saturday from a Sunday (the 48h floor)", () => {
+    // 2026-07-19 is a Sunday.
+    expect(workoutSessionPastDateISO("2026-07-19", 5)).toBe("2026-07-17");
+    expect(workoutSessionPastDateISO("2026-07-19", 6)).toBe("2026-07-18");
+    expect(workoutSessionPastDateISO("2026-07-19", 4)).toBeNull();
+  });
+
+  it("never reaches outside workoutMarkingWindow", () => {
+    for (const today of ["2026-07-19", "2026-07-20", "2026-07-22", "2026-07-25"]) {
+      const { start, end } = workoutMarkingWindow(today);
+      for (let i = 0; i < 7; i++) {
+        const d = workoutSessionPastDateISO(today, i);
+        if (d) expect(d >= start && d <= end).toBe(true);
+      }
+    }
   });
 });
 

@@ -1,33 +1,55 @@
 "use client";
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Flame, ShieldCheck, TrendingUp, Moon, Check, UserPlus, Dumbbell } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import {
+  ChevronDown,
+  Flame,
+  ShieldCheck,
+  TrendingUp,
+  Moon,
+  Check,
+  UserPlus,
+  Dumbbell,
+  History,
+} from "lucide-react";
 import type { WorkoutPlan, MemberWorkout, WorkoutSession } from "@fitlife/plan-engine";
 import type { WorkoutCheckinStatus, WorkoutIntensity } from "@/lib/engagement/types";
 import { setWorkoutCheckin as setWorkoutCheckinAction } from "@/lib/engagement/actions";
 import { ExerciseLottie } from "./ExerciseLottie";
-import { formatWeekRange } from "@/lib/plans/dayMapping";
+import { formatWeekRange, riyadhTodayISO } from "@/lib/plans/dayMapping";
+import { stripDayLabel, workoutStripDays } from "@/lib/plans/weekStrip";
 import { genderPick } from "@/lib/copy/gender";
+import { arDec, arDigits, arNum } from "@/lib/copy/numbers";
+import { workoutSessionPastDateISO } from "@/lib/engagement/seasonMath";
+import { countAr, type ArabicCountForms } from "@/lib/copy/plural";
+import { Avatar } from "@/components/ui/avatar";
+import {
+  PlanBar,
+  PlanBarEnd,
+  PlanBarIdentity,
+  PlanBarMore,
+  PlanBarRow,
+} from "./bar/PlanBar";
+import { WeekStrip, type WeekStripDay } from "./bar/WeekStrip";
+import { MemberSheet, type MemberSheetMember } from "./bar/MemberSheet";
+import { MoreSheet } from "./bar/MoreSheet";
+import { PLAN_MENU_ICON_CLASS, PLAN_MENU_ITEM_CLASS } from "./bar/menuItem";
 
 // Workout day_index is weekday-anchored: 0 = الأحد … 6 = السبت (matches JS
-// Date#getDay, where 0 = Sunday).
-const DAY_NAMES_AR = [
-  "الأحد",
-  "الاثنين",
-  "الثلاثاء",
-  "الأربعاء",
-  "الخميس",
-  "الجمعة",
-  "السبت",
-];
+// Date#getDay, where 0 = Sunday) — which is why the plan bar's strip comes
+// from workoutStripDays (the current week's dates), not the plan's week start.
 
-// A session stays markable for the whole current week (Sunday-anchored), with a
-// 48h floor so the tail of the previous week keeps its grace — mirrors the meal
-// window (the whole plan week). The server re-derives + enforces this; the
-// client gate just hides the controls on future sessions.
-const WORKOUT_GRACE_DAYS = 2;
+// «٣ حصص أسبوعياً» — the member sheet's status line for a trainee.
+const SESSION_FORMS: ArabicCountForms = {
+  one: "حصة واحدة",
+  two: "حصتان",
+  few: "حصص",
+  many: "حصة",
+  other: "حصة",
+};
+
 const WORKOUT_STATUS_CHIPS: { value: WorkoutCheckinStatus; label: string }[] = [
   { value: "done", label: "أنجزتها" },
   { value: "moved", label: "بدّلتها" },
@@ -78,8 +100,17 @@ function seedWorkoutMap(
 
 function formatRest(restSeconds: number): string {
   return restSeconds >= 60
-    ? `${Math.round(restSeconds / 30) / 2} د`
-    : `${restSeconds} ث`;
+    ? `${arDec(Math.round(restSeconds / 30) / 2)} د`
+    : `${arNum(restSeconds)} ث`;
+}
+
+// Today's weekday (0=Sunday) in RIYADH time — the clock the server marks
+// against (setWorkoutCheckin), the strip dates its cells by and the meal view
+// uses. The device clock disagreed with all three near midnight outside UTC+3
+// (a UAE phone after 00:00 offered a session the server then refused), and
+// with the server's own render during hydration.
+function riyadhWeekday(): number {
+  return new Date(`${riyadhTodayISO()}T00:00:00Z`).getUTCDay();
 }
 
 // Today if it's a training day, else the next training day (wrapping) — so the
@@ -88,7 +119,7 @@ function formatRest(restSeconds: number): string {
 function defaultDayIndex(member: MemberWorkout | undefined): number {
   if (!member) return 0;
   const trainingDays = new Set(member.weekly_sessions.map((s) => s.day_index));
-  const today = new Date().getDay();
+  const today = riyadhWeekday();
   for (let k = 0; k < 7; k++) {
     const di = (today + k) % 7;
     if (trainingDays.has(di)) return di;
@@ -110,7 +141,7 @@ function SessionDetail({
   return (
     <>
       <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3.5">
-        <p className="text-xs font-bold text-brand-ink-muted mb-1.5">الإحماء</p>
+        <p className="text-meta font-bold text-brand-ink-muted mb-1.5">الإحماء</p>
         <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5 space-y-0.5">
           {session.warmup_ar.map((w, i) => (
             <li key={i}>{w}</li>
@@ -121,14 +152,14 @@ function SessionDetail({
       <div className="rounded-2xl border border-brand-line bg-brand-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-brand-line">
           <p className="font-bold text-brand-ink text-sm">{session.session_name_ar}</p>
-          <p className="text-brand-ink-muted text-xs tabular-nums">
-            {session.exercises.length} تمارين · {totalSets} مجموعة
+          <p className="text-brand-ink-muted text-meta tabular-nums">
+            {arNum(session.exercises.length)} تمارين · {arNum(totalSets)} مجموعة
           </p>
         </div>
         <div className="overflow-x-auto no-scrollbar px-4 pb-1">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-brand-ink-muted text-xs border-b border-brand-line">
+              <tr className="text-brand-ink-muted text-meta border-b border-brand-line">
                 <th className="text-start font-bold py-2 pe-3">التمرين</th>
                 <th className="text-center font-bold py-2 px-2">المجموعات</th>
                 <th className="text-center font-bold py-2 px-2">التكرارات</th>
@@ -160,36 +191,39 @@ function SessionDetail({
                             />
                             <span className="min-w-0">
                               <span className="font-bold text-brand-ink block">{displayName}</span>
-                              <span className="text-brand-ink-muted text-xs block">
+                              <span className="text-brand-ink-muted text-meta block">
                                 {ex.target_muscles_ar}
                                 {ex.name_en && !homeMode ? ` · ${ex.name_en}` : ""}
                               </span>
                               {ex.rir && (
-                                <span className="text-brand-purple-900 text-xs block mt-0.5">{ex.rir}</span>
+                                <span className="text-brand-purple-900 text-meta block mt-0.5">{ex.rir}</span>
                               )}
                             </span>
                           </button>
                         ) : (
                           <span className="block py-1">
                             <span className="font-bold text-brand-ink block">{displayName}</span>
-                            <span className="text-brand-ink-muted text-xs block">
+                            <span className="text-brand-ink-muted text-meta block">
                               {ex.target_muscles_ar}
                               {ex.name_en && !homeMode ? ` · ${ex.name_en}` : ""}
                             </span>
                             {ex.rir && (
-                              <span className="text-brand-purple-900 text-xs block mt-0.5">{ex.rir}</span>
+                              <span className="text-brand-purple-900 text-meta block mt-0.5">{ex.rir}</span>
                             )}
                             {ex.notes_ar && (
-                              <span className="text-brand-ink-muted text-xs block mt-0.5">{ex.notes_ar}</span>
+                              <span className="text-brand-ink-muted text-meta block mt-0.5">{ex.notes_ar}</span>
                             )}
                           </span>
                         )}
                       </td>
                       <td className="py-2.5 px-2 text-center tabular-nums font-bold text-brand-ink">
-                        {ex.sets}
+                        {arNum(ex.sets)}
                       </td>
-                      <td className="py-2.5 px-2 text-center tabular-nums text-brand-ink" dir="ltr">
-                        {ex.reps}
+                      {/* A stored range («8-12») in the table's own digits, in
+                          the table's own RTL order — «٨-١٢» reads right to
+                          left like the rest of the row. */}
+                      <td className="py-2.5 px-2 text-center tabular-nums text-brand-ink">
+                        {arDigits(ex.reps)}
                       </td>
                       <td className="py-2.5 ps-2 text-center tabular-nums text-brand-ink-muted">
                         {formatRest(ex.rest_seconds)}
@@ -203,7 +237,7 @@ function SessionDetail({
                               <ExerciseLottie exerciseId={animId} label={displayName} />
                             </div>
                             <div className="flex-1 min-w-48">
-                              <p className="text-brand-pink font-bold text-xs mb-1.5">الأداء الصحيح</p>
+                              <p className="text-brand-purple-900 font-bold text-meta mb-1.5">الأداء الصحيح</p>
                               <p className="text-brand-ink text-sm leading-relaxed">
                                 {ex.notes_ar || ex.target_muscles_ar}
                               </p>
@@ -222,7 +256,7 @@ function SessionDetail({
 
       {session.cooldown_ar.length > 0 && (
         <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3.5">
-          <p className="text-xs font-bold text-brand-ink-muted mb-1.5">التهدئة</p>
+          <p className="text-meta font-bold text-brand-ink-muted mb-1.5">التهدئة</p>
           <ul className="text-sm text-brand-ink leading-relaxed list-disc ps-5 space-y-0.5">
             {session.cooldown_ar.map((c, i) => (
               <li key={i}>{c}</li>
@@ -235,16 +269,17 @@ function SessionDetail({
 }
 
 /**
- * Read-only weekly workout program viewer, mirroring the meal PlanViewer's
- * structure: member tabs → summary tiles → 7-day tab grid → one day at a time
- * (training session or rest state), with a home/gym variant toggle when the
- * member's plan includes home variants.
+ * Weekly workout program viewer, mirroring the meal PlanViewer's structure:
+ * the plan bar (whose program + the week's seven days) → summary tiles → one
+ * day at a time (training session or rest state), with a home/gym variant
+ * toggle when the member's plan includes home variants.
  */
 export function WorkoutViewer({
   plan,
   planId,
   checkins,
   ownerSex,
+  notice,
   planTypeToggle,
   journeyMembers,
   roster,
@@ -264,9 +299,12 @@ export function WorkoutViewer({
   }>;
   /** Account owner's sex → the «أنتِ/أنتَ» mom-tab marker. */
   ownerSex?: string | null;
-  /** The meal/workout plan-type toggle, hosted in the top strip's action
-   * cluster — the same slot the meal PlanViewer uses (there it leads a row of
-   * action buttons; here it is the cluster's only item). */
+  /** The page's one notice (or its onboarding banner), rendered under the plan
+   * bar — the bar is the top of the page on phones, so nothing sits above it. */
+  notice?: ReactNode;
+  /** The meal/workout plan-type switch, full-width under the bar (and notice)
+   * — the same slot the meal PlanViewer gives it, so it never moves when
+   * switching views. */
   planTypeToggle?: ReactNode;
   /** «رحلتك الخاصة» entries, member-keyed. The link follows the active member
    * tab and shows only for eligible members (same rule as the meal view). */
@@ -277,12 +315,12 @@ export function WorkoutViewer({
    * gets an add-plan CTA, an ineligible one (child) an adults-only note. Absent
    * → fall back to the workout plan's own members (every tab has content). */
   roster?: Array<{ member_id: string; member_name_ar: string; eligible: boolean }>;
-  /** The trailing «إضافة فرد» button target — /family, exactly like the meal
+  /** The member sheet's «إضافة فرد» target — /family, exactly like the meal
    * view (adding a household member, not the workout opt-in). */
   addMemberHref?: string;
-  /** Where the solo-household «add another adult to workouts» prompt leads. The
-   * page resolves this to the opt-in questionnaire when an eligible adult can be
-   * added, else to /family to add one first. */
+  /** Where «إضافة فرد للتمارين» leads. The page resolves this to the opt-in
+   * questionnaire when an eligible adult can be added, else to /family to add
+   * one first. */
   addTraineeHref?: string;
 }) {
   // The Exercise view mirrors the meal view's member tabs (owner directive
@@ -314,14 +352,31 @@ export function WorkoutViewer({
   // Viewer-level so the choice survives switching days/members.
   const [homeMode, setHomeMode] = useState(false);
 
+  // One sheet at a time: opening one replaces the other.
+  const [openSheet, setOpenSheet] = useState<"member" | "more" | null>(null);
+  // Spoken after a member switch when focus did NOT land back on the renamed
+  // identity trigger — otherwise nothing says the page below changed.
+  const [announcement, setAnnouncement] = useState("");
+  // The bar's sheet triggers: each sheet's focus-return target (Safari never
+  // focuses a tapped button).
+  const identityRef = useRef<HTMLButtonElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const reduceMotion = useReducedMotion();
+  const dayTopRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  // Today in Riyadh, once per mount — the clock the server marks against
+  // (setWorkoutCheckin) — so a midnight re-render cannot move «اليوم» or the
+  // markable days under the user's finger. The strip dates each cell by the
+  // same rule the mark is stamped by (workoutSessionPastDateISO).
+  const [todayISO] = useState(riyadhTodayISO);
+  const [stripBase] = useState(() => workoutStripDays("ar", todayISO));
+
   // Optimistic session marks, keyed member|day. Seeded from the checkins prop;
   // clearing removes the mark (a mis-tap must be reversible). The whole-current-
   // week window (48h floor) is enforced server-side — the client gate just hides
   // controls on future sessions.
   const [checkinMap, setCheckinMap] = useState(() => seedWorkoutMap(checkins));
   const [checkinError, setCheckinError] = useState<string | null>(null);
-  // Weekday today (0=Sunday), once — matches defaultDayIndex's approach.
-  const [todayWeekday] = useState(() => new Date().getDay());
 
   // Marks in flight — while > 0 the optimistic map is the truth and the
   // props-resync below must hold off. Render-phase adjust (the React
@@ -402,159 +457,146 @@ export function WorkoutViewer({
     : 0;
 
   // This member's mark for the open day, and whether it's within the markable
-  // window: the whole current week (Sunday-anchored) is markable, with the 48h
-  // floor for the previous week's tail. A future session this week wraps past
-  // this bound (activeDayDist becomes large) and stays hidden.
+  // window: the whole current week (Sunday-anchored), with the 48h floor for
+  // the previous week's tail; a session later this week has no date to mark
+  // yet. The server enforces the same rule — one helper, so the controls, the
+  // strip's dates and the stored date cannot disagree.
   const activeMark =
     checkinMap.get(`${activeTab.member_id}|${activeDayIndex}`) ?? null;
   const activeStatus = activeMark?.status ?? null;
   const activeIntensity = activeMark?.intensity ?? null;
-  const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
-  const workoutMaxBack = Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
   const canMarkActive =
     checkins !== undefined &&
     !!planId &&
     !!activeWorkout &&
-    activeDayDist <= workoutMaxBack;
+    workoutSessionPastDateISO(todayISO, activeDayIndex) !== null;
+
+  const pick = genderPick(ownerSex);
+  const activeRosterIndex = Math.max(
+    0,
+    tabs.findIndex((t) => t.member_id === activeTab.member_id),
+  );
+  const weekRange = formatWeekRange(plan.week_start_date);
+
+  // Rest days are muted cells; their state is "empty" only so the strip can
+  // speak «يوم راحة» after the date (stateLabels are keyed by state). A member
+  // without a program gets no strip at all — seven cells that all say «rest»
+  // would misdescribe someone who simply has no program yet.
+  const trainingDays = new Set(activeWorkout?.weekly_sessions.map((s) => s.day_index));
+  const stripDays: WeekStripDay[] = stripBase.map((d) =>
+    trainingDays.has(d.index)
+      ? { ...d, state: "ready" }
+      : { ...d, state: "empty", muted: true },
+  );
+  const activeStripDay = stripBase.find((d) => d.index === activeDayIndex);
+
+  function selectDay(index: number) {
+    setActiveDayIndex(index);
+    // Picking a day from the pinned strip while deep in a session: jump to the
+    // new day's top instead of leaving the reader mid-way down another day.
+    // Instant, not smooth (restrained motion); scroll-padding clears the bar.
+    const top = dayTopRef.current;
+    const bar = document.querySelector("[data-plan-bar]");
+    if (top && bar && top.getBoundingClientRect().top < bar.getBoundingClientRect().bottom) {
+      top.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+  }
+
+  const memberRows: MemberSheetMember[] = tabs.map((t, i) => {
+    const program = plan.members.find((m) => m.member_id === t.member_id);
+    return {
+      id: t.member_id,
+      name: t.member_name_ar,
+      prefix: t.member_id === "mom" ? `${pick("أنتِ", "أنتَ")} ·` : undefined,
+      rosterIndex: i,
+      status: {
+        text: program
+          ? `${countAr(program.weekly_sessions.length, SESSION_FORMS, arNum)} أسبوعياً`
+          : t.eligible
+            ? "لا يوجد برنامج"
+            : "التمارين للبالغين فقط",
+      },
+    };
+  });
 
   // The private «الوزن والمتابعة» journey link for the ACTIVE member (eligible
-  // members only) — same placement rule as the meal view: beside the tabs for a
-  // family, up top with the toggle for a solo program.
+  // members only) — same rule as the meal view; it lives in the ••• sheet.
   const journeyEntry =
     journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
-  const journeyLink = journeyEntry ? (
-    <Link
-      href={
-        journeyEntry.id === "mom"
-          ? "/journey"
-          : `/journey?member=${journeyEntry.id}`
-      }
-      className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border border-brand-purple-900/25 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-    >
-      <TrendingUp className="size-4" aria-hidden="true" />
-      الوزن والمتابعة
+  const journeyItems = journeyEntry
+    ? [
+        <Link
+          key="journey"
+          href={journeyEntry.id === "mom" ? "/journey" : `/journey?member=${journeyEntry.id}`}
+          className={PLAN_MENU_ITEM_CLASS}
+        >
+          <TrendingUp className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+          الوزن والمتابعة
+        </Link>,
+      ]
+    : [];
+
+  // A solo program has no member sheet, so its «add a trainee» door — the only
+  // way the switcher ever grows — moves here from the old header paragraph.
+  const addTraineeRow = (
+    <Link key="add-trainee" href={addTraineeHref} className={PLAN_MENU_ITEM_CLASS}>
+      <Dumbbell className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+      إضافة فرد للتمارين
     </Link>
-  ) : null;
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Unified header band — the SAME contract as the meal PlanViewer: week
-          range on the start side of line 1, the action cluster on the end side
-          led by the meals/exercise toggle, then a hairline and the member
-          chips. This view has no action buttons of its own, so the toggle is
-          the cluster's only item; justify-end keeps it at the end on mobile
-          too, where the stacked line makes the cluster full-width (a no-op at
-          sm+, where the parent's justify-between already pins the
-          content-width cluster to the end). */}
-      <div className="rounded-3xl bg-brand-card border border-brand-line px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-brand-ink-muted text-xs">الأسبوع</p>
-            {/* The page's <h1> — see the matching note in PlanViewer. /plan
-                renders this instead when ?view=workout, so without it the
-                exercise view has no heading either. */}
-            <h1 className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
-              {formatWeekRange(plan.week_start_date)}
-            </h1>
-          </div>
-          <div className="flex items-center justify-end gap-2 flex-wrap">
-            {planTypeToggle}
-          </div>
-        </div>
-
-        {/* Member chips — the SAME set/order as the meal viewer (owner directive
-            07/2026): every household member appears, «إضافة فرد» follows the
-            last chip (→ /family, exactly like meals), and «الوزن والمتابعة»
-            takes the trailing slot. A member without a program renders the
-            add-plan CTA in the body below; a solo household shows the invite
-            prompt instead of a lone chip. */}
-        {!isSolo && (
-          <>
-            <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
-            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
-              <div className="flex items-center justify-between gap-3 min-w-max">
-                <div className="flex items-center gap-2">
-                  {tabs.map((m) => {
-                    const isActive = m.member_id === activeMemberId;
-                    return (
-                      <button
-                        key={m.member_id}
-                        type="button"
-                        onClick={() => setActiveMemberId(m.member_id)}
-                        aria-pressed={isActive}
-                        className={`relative inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
-                          isActive
-                            ? "text-white"
-                            : "bg-brand-lavender/25 text-brand-purple-900 hover:bg-brand-lavender/40"
-                        }`}
-                      >
-                        {isActive && (
-                          <motion.span
-                            layoutId="workout-member-chip-fill"
-                            className="absolute inset-0 rounded-full bg-brand-purple-900"
-                          />
-                        )}
-                        <span className="relative">
-                          {/* «أنتِ» stays visible TEXT — same treatment as the
-                              meal viewer's chips. */}
-                          {m.member_id === "mom" && (
-                            <span className="me-1">
-                              {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                            </span>
-                          )}
-                          {m.member_name_ar}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  <Link
-                    href={addMemberHref}
-                    className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                  >
-                    <UserPlus className="size-4" aria-hidden="true" />
-                    إضافة فرد
-                  </Link>
-                </div>
-                {journeyLink}
-              </div>
-            </div>
-          </>
+    <div>
+      <PlanBar>
+        {/* The page's <h1>: the bar carries the page's identity on phones, so
+            the heading lives in it — visually the identity + strip say it. */}
+        <h1 className="sr-only">خطة التمارين، {weekRange}</h1>
+        <PlanBarRow>
+          <PlanBarIdentity
+            avatar={
+              <Avatar
+                name={activeTab.member_name_ar}
+                rosterIndex={activeRosterIndex}
+                size="lg"
+                className="ring-2 ring-brand-lavender"
+              />
+            }
+            name={activeTab.member_name_ar}
+            suffix={activeTab.member_id === "mom" ? pick("أنتِ", "أنتَ") : undefined}
+            ref={identityRef}
+            onOpen={isSolo ? undefined : () => setOpenSheet("member")}
+            expanded={openSheet === "member"}
+            openLabel={`خطة ${activeTab.member_name_ar}، تبديل الفرد`}
+          />
+          <PlanBarEnd>
+            <PlanBarMore
+              ref={moreRef}
+              onClick={() => setOpenSheet("more")}
+              expanded={openSheet === "more"}
+            />
+          </PlanBarEnd>
+        </PlanBarRow>
+        {activeWorkout && (
+          <WeekStrip
+            days={stripDays}
+            selected={activeDayIndex}
+            onSelect={selectDay}
+            todayLabel="اليوم"
+            label="أيام الأسبوع"
+            stateLabels={{ empty: "يوم راحة" }}
+            panelId={panelId}
+          />
         )}
+      </PlanBar>
 
-        {/* Solo program — no chips to switch between yet. Since the whole point
-            of the exercise page's switcher is moving between people, surface a
-            warm prompt to give another adult their own program (workouts are
-            adults-only + opt-in per person, so this is the only way the
-            switcher grows). Sits where the chip row would be, so it reads as
-            «this is where other people appear». */}
-        {isSolo && (
-          <>
-            <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-brand-ink-muted text-sm leading-relaxed max-w-sm">
-              {genderPick(ownerSex)(
-                "يتدرّب معكِ فرد بالغ آخر؟ أضيفيه لخطة التمارين لتنتقلي بينكما من هنا.",
-                "يتدرّب معك فرد بالغ آخر؟ أضِفه لخطة التمارين لتنتقل بينكما من هنا.",
-              )}
-            </p>
-              <Link
-                href={addTraineeHref}
-                className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                <UserPlus className="size-4" aria-hidden="true" />
-                إضافة فرد للتمارين
-              </Link>
-            </div>
-          </>
-        )}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
-        {/* Solo + eligible for a private journey: the chip has no chip row to
-            sit in, so it takes its own line at the band's end. */}
-        {isSolo && journeyLink && (
-          <div className="flex items-center justify-end mt-3">{journeyLink}</div>
-        )}
-      </div>
+      {notice && <div className="mt-3">{notice}</div>}
+      {planTypeToggle && <div className="mt-3">{planTypeToggle}</div>}
 
+      <div className="mt-4 space-y-6">
       {/* A member with a program shows it; one without shows the add-plan CTA
           (eligible adults) or an adults-only note (children) — the Exercise view
           keeps the meal view's tabs while «if there are exercises show them, if
@@ -571,79 +613,61 @@ export function WorkoutViewer({
       {/* Member summary tiles */}
       <div className="grid grid-cols-4 gap-2">
         <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
-          <p className="text-brand-ink-muted text-xs">التقسيم</p>
+          <p className="text-brand-ink-muted text-meta">التقسيم</p>
           <p className="font-extrabold text-brand-ink text-sm mt-1 leading-snug">
             {activeWorkout.split_name_ar}
           </p>
         </div>
         <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
-          <p className="text-brand-ink-muted text-xs">جلسات الأسبوع</p>
+          <p className="text-brand-ink-muted text-meta">جلسات الأسبوع</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {stats.count}
+            {arNum(stats.count)}
           </p>
         </div>
         <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
-          <p className="text-brand-ink-muted text-xs">متوسط الجلسة</p>
+          <p className="text-brand-ink-muted text-meta">متوسط الجلسة</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {stats.avgMin}
-            <span className="text-brand-ink-muted text-xs ms-1">دقيقة</span>
+            {arNum(stats.avgMin)}
+            <span className="text-brand-ink-muted text-meta ms-1">دقيقة</span>
           </p>
         </div>
         <div className="bg-brand-card rounded-2xl p-4 border border-brand-line">
-          <p className="text-brand-ink-muted text-xs">تمارين الأسبوع</p>
+          <p className="text-brand-ink-muted text-meta">تمارين الأسبوع</p>
           <p className="font-extrabold text-brand-ink text-xl mt-1 tabular-nums">
-            {stats.totalExercises}
+            {arNum(stats.totalExercises)}
           </p>
         </div>
       </div>
 
-      {/* Day tabs — rest days stay visible but muted */}
-      <div className="grid grid-cols-7 gap-1.5">
-        {Array.from({ length: 7 }, (_, i) => {
-          const isTraining = activeWorkout.weekly_sessions.some((s) => s.day_index === i);
-          const isActive = i === activeDayIndex;
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setActiveDayIndex(i)}
-              aria-pressed={isActive}
-              className={`rounded-xl py-2.5 font-bold text-xs transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                isActive
-                  ? "bg-brand-purple-900 text-white"
-                  : isTraining
-                    ? "bg-brand-lavender/30 text-brand-purple-900 hover:bg-brand-lavender/50"
-                    : "bg-brand-card text-brand-ink-muted/60 border border-brand-line hover:text-brand-ink-muted"
-              }`}
-            >
-              {DAY_NAMES_AR[i]}
-            </button>
-          );
-        })}
-      </div>
-
+      {/* The strip's panel: the open day's summary, session and marking. */}
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-label={activeStripDay ? stripDayLabel(activeStripDay) : undefined}
+        className="space-y-6"
+      >
       {/* Session summary pill + home/gym toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div ref={dayTopRef} className="flex flex-wrap items-center justify-between gap-2">
         {activeSession ? (
           <div className="inline-flex flex-wrap items-center gap-2 bg-brand-card rounded-full border border-brand-line px-4 py-2">
             <span className="font-bold text-brand-ink text-sm">
               {activeSession.session_name_ar}
             </span>
             <span className="text-brand-ink-muted/40">·</span>
-            <span className="text-brand-ink text-xs tabular-nums">
-              نحو {activeSession.duration_min} دقيقة
+            <span className="text-brand-ink text-meta tabular-nums">
+              نحو {arNum(activeSession.duration_min)} دقيقة
             </span>
             <span className="text-brand-ink-muted/40">·</span>
-            <span className="text-brand-ink text-xs tabular-nums">
-              {activeSession.exercises.length} تمارين
+            <span className="text-brand-ink text-meta tabular-nums">
+              {arNum(activeSession.exercises.length)} تمارين
             </span>
             <span className="text-brand-ink-muted/40">·</span>
-            <span className="text-brand-ink text-xs tabular-nums">
-              {activeSets} مجموعة
+            <span className="text-brand-ink text-meta tabular-nums">
+              {arNum(activeSets)} مجموعة
             </span>
             {activeStatus && (
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-meta font-bold ${
                   activeStatus === "done"
                     ? "bg-brand-purple-900 text-white"
                     : "bg-brand-lavender/40 text-brand-purple-900"
@@ -658,7 +682,7 @@ export function WorkoutViewer({
           </div>
         ) : (
           <div className="inline-flex items-center gap-2 bg-brand-card rounded-full border border-brand-line px-4 py-2">
-            <span className="text-brand-ink-muted text-xs">يوم راحة</span>
+            <span className="text-brand-ink-muted text-meta">يوم راحة</span>
           </div>
         )}
         {showHomeVariant && (
@@ -666,7 +690,7 @@ export function WorkoutViewer({
             type="button"
             onClick={() => setHomeMode((v) => !v)}
             aria-pressed={homeMode}
-            className={`min-h-9 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
+            className={`min-h-11 rounded-full border px-4 text-meta font-bold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 ${
               homeMode
                 ? "border-brand-purple-900 bg-brand-purple-900/10 text-brand-purple-900"
                 : "border-brand-ink/10 bg-brand-card text-brand-ink"
@@ -681,10 +705,10 @@ export function WorkoutViewer({
       <AnimatePresence mode="wait">
         <motion.div
           key={`${activeWorkout.member_id}-${activeDayIndex}`}
-          initial={{ opacity: 0, y: 8 }}
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+          transition={{ duration: reduceMotion ? 0 : 0.2 }}
           className="space-y-3"
         >
           {activeSession ? (
@@ -707,7 +731,7 @@ export function WorkoutViewer({
               className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3.5 space-y-2"
               aria-label="تتبّع الحصة"
             >
-              <p className="text-xs font-bold text-brand-ink-muted">
+              <p className="text-meta font-bold text-brand-ink-muted">
                 هل أنجزت حصة اليوم؟
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -723,7 +747,7 @@ export function WorkoutViewer({
                       )
                     }
                     aria-pressed={activeStatus === c.value}
-                    className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                    className={`min-h-11 px-3.5 rounded-full text-meta font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                       activeStatus === c.value
                         ? "bg-brand-purple-900 text-white"
                         : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
@@ -735,7 +759,7 @@ export function WorkoutViewer({
               </div>
               {activeStatus === "done" && (
                 <div className="pt-1.5 border-t border-brand-line space-y-1.5">
-                  <p className="text-xs font-bold text-brand-ink-muted">
+                  <p className="text-meta font-bold text-brand-ink-muted">
                     كيف كانت شدة الحصة؟
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -752,7 +776,7 @@ export function WorkoutViewer({
                           )
                         }
                         aria-pressed={activeIntensity === c.value}
-                        className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                        className={`min-h-11 px-3.5 rounded-full text-meta font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                           activeIntensity === c.value
                             ? "bg-brand-pink text-white"
                             : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
@@ -762,23 +786,24 @@ export function WorkoutViewer({
                       </button>
                     ))}
                   </div>
-                  <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+                  <p className="text-meta text-brand-ink-muted leading-relaxed">
                     إجابتك تضبط شدة برنامج الأسبوع القادم.
                   </p>
                 </div>
               )}
               {checkinError && (
-                <p role="alert" className="text-xs font-bold text-red-700">
+                <p role="alert" className="text-meta font-bold text-red-700">
                   {checkinError}
                 </p>
               )}
-              <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+              <p className="text-meta text-brand-ink-muted leading-relaxed">
                 تسجيلك يُغذّي موسم بيتكم — والضغط مرة أخرى يمسح الاختيار.
               </p>
             </div>
           )}
         </motion.div>
       </AnimatePresence>
+      </div>
 
       {/* Program notes */}
       <div className="grid gap-3 md:grid-cols-2">
@@ -826,7 +851,7 @@ export function WorkoutViewer({
                 className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-3 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
               >
                 <Dumbbell className="size-4" aria-hidden="true" />
-                {genderPick(ownerSex)(
+                {pick(
                   `أضيفي خطة تمارين لـ${activeTab.member_name_ar}`,
                   `أضِف خطة تمارين لـ${activeTab.member_name_ar}`,
                 )}
@@ -835,12 +860,83 @@ export function WorkoutViewer({
           ) : (
             <p className="text-brand-ink-muted text-sm leading-relaxed max-w-sm">
               خطط التمارين مخصّصة للكبار.{" "}
-              {genderPick(ownerSex)("تجدين", "تجد")} خطة{" "}
+              {pick("تجدين", "تجد")} خطة{" "}
               {activeTab.member_name_ar} الغذائية في قسم الوجبات.
             </p>
           )}
         </div>
       )}
+      </div>
+
+      {!isSolo && (
+        <MemberSheet
+          open={openSheet === "member"}
+          onClose={() => setOpenSheet(null)}
+          title="أفراد البيت"
+          subtitle={weekRange}
+          members={memberRows}
+          selectedId={activeTab.member_id}
+          onSelect={(id) => {
+            const next = tabs.find((t) => t.member_id === id);
+            setActiveMemberId(id);
+            setOpenSheet(null);
+            if (next) {
+              const text = `${pick("تعرضين", "تعرض")} خطة تمارين ${next.member_name_ar}`;
+              // The closing sheet hands focus back to the identity trigger,
+              // whose label already names her; speak only where it did not.
+              requestAnimationFrame(() => {
+                if (document.activeElement !== identityRef.current) setAnnouncement(text);
+              });
+            }
+          }}
+          returnFocusRef={identityRef}
+          footer={
+            <>
+              <Link href={addMemberHref} className={PLAN_MENU_ITEM_CLASS}>
+                <UserPlus className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+                إضافة فرد
+              </Link>
+              {/* When nobody can be opted in yet the page points this at
+                  /family too — one door, not two rows to the same place. */}
+              {addTraineeHref !== addMemberHref && addTraineeRow}
+            </>
+          }
+        />
+      )}
+
+      <MoreSheet
+        open={openSheet === "more"}
+        onClose={() => setOpenSheet(null)}
+        groups={[
+          {
+            key: "member",
+            label: (
+              <>
+                <Avatar
+                  name={activeTab.member_name_ar}
+                  rosterIndex={activeRosterIndex}
+                  size="sm"
+                />
+                {activeTab.member_name_ar}
+              </>
+            ),
+            items: journeyItems,
+          },
+          {
+            key: "plans",
+            items: [
+              // /plan/history is meal-only (workout programs keep no history),
+              // so the row says which plans it opens.
+              <Link key="history" href="/plan/history" className={PLAN_MENU_ITEM_CLASS}>
+                <History className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+                خطط الوجبات السابقة
+              </Link>,
+              ...(isSolo ? [addTraineeRow] : []),
+            ],
+          },
+        ]}
+        returnFocusRef={moreRef}
+      />
     </div>
   );
 }

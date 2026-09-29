@@ -64,7 +64,8 @@ export function PlanOnboardingBanner({
           type="button"
           onClick={() => setVisible(false)}
           aria-label="إخفاء"
-          className="flex-shrink-0 inline-flex items-center justify-center size-8 rounded-full hover:bg-brand-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
+          // 44px target, pulled into the banner's padding so it doesn't grow.
+          className="-my-1.5 -me-2 flex-shrink-0 inline-flex items-center justify-center size-11 rounded-full hover:bg-brand-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900"
         >
           <X className="size-4 text-brand-ink-muted" aria-hidden="true" />
         </button>

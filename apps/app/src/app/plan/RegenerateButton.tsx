@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
 import type { LocaleCode } from "@fitlife/plan-engine";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getPlanActionStrings } from "@/lib/plans/locales";
 import { genderPick } from "@/lib/copy/gender";
-import { PLAN_MENU_ITEM_CLASS } from "./PlanActionsMenu";
+import { PLAN_MENU_ICON_CLASS, PLAN_MENU_ITEM_CLASS } from "./bar/menuItem";
 
 /**
  * "household" is not a partial scope — it drops the memberId entirely and asks
@@ -28,7 +28,18 @@ export function RegenerateButton({
   ownerSex,
   appearance = "button",
   label = "إنشاء خطة جديدة",
+  onStarted,
+  onDialogOpenChange,
 }: {
+  /** Its confirm dialog opened or closed (unmounting while open reports
+   * closed). Lets the page hold other overlays — the Sara toast — while a
+   * dialog that is not one of its sheets is up. */
+  onDialogOpenChange?: (open: boolean) => void;
+  /** The run was accepted. The ••• sheet that hosts the menu-item row closes
+   * on it — otherwise, when the page keeps the viewer mounted (a carry-over
+   * run renders the plan while it fills), the sheet would still be open over
+   * the plan once the dialog above it closed. */
+  onStarted?: () => void;
   /** The trigger's text (the dialog keeps its own titles). */
   label?: string;
   /** "menu-item" renders the trigger as a row of the plan's «المزيد» menu —
@@ -58,6 +69,12 @@ export function RegenerateButton({
   const [issues, setIssues] = useState("");
   const [improvements, setImprovements] = useState("");
   const [scope, setScope] = useState<RegenScope>("both");
+
+  useEffect(() => {
+    if (!confirmOpen) return;
+    onDialogOpenChange?.(true);
+    return () => onDialogOpenChange?.(false);
+  }, [confirmOpen, onDialogOpenChange]);
 
   function openDialog() {
     setErrorMessage(null);
@@ -92,6 +109,7 @@ export function RegenerateButton({
         });
         if (res.ok) {
           closeDialog();
+          onStarted?.();
           router.refresh();
           return;
         }
@@ -159,19 +177,19 @@ export function RegenerateButton({
         type="button"
         onClick={openDialog}
         disabled={isPending}
-        // Ring offset stays the Tailwind default (white): this button now sits
-        // on the plan header's white band and, on a failed day, on a near-white
-        // tinted box — never on the page's grey surface.
+        // Ring offset stays the Tailwind default (white): as a button this sits
+        // on a failed day's near-white tinted box or a dashboard card — never
+        // on the page's grey surface. As a ••• sheet row it takes the row style.
         className={appearance === "menu-item" ? PLAN_MENU_ITEM_CLASS : "inline-flex items-center justify-center gap-2 bg-brand-purple-900 hover:bg-brand-purple-700 disabled:bg-brand-purple-900/40 text-white font-bold text-sm px-5 py-2.5 rounded-full transition-colors disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 min-h-[2.75rem]"}
       >
         {isPending ? (
           <Loader2
-            className="size-4 animate-spin motion-reduce:animate-none"
+            className={`${appearance === "menu-item" ? PLAN_MENU_ICON_CLASS : "size-4"} animate-spin motion-reduce:animate-none`}
             aria-hidden="true"
           />
         ) : (
           <Sparkles
-            className={appearance === "menu-item" ? "size-4 text-brand-purple-900" : "size-4"}
+            className={appearance === "menu-item" ? PLAN_MENU_ICON_CLASS : "size-4"}
             aria-hidden="true"
           />
         )}
@@ -245,7 +263,7 @@ export function RegenerateButton({
                         <span className="block text-sm font-bold text-brand-ink">
                           {opt.label}
                         </span>
-                        <span className="block text-xs text-brand-ink-muted leading-relaxed mt-0.5">
+                        <span className="block text-meta text-brand-ink-muted leading-relaxed mt-0.5">
                           {opt.hint}
                         </span>
                       </span>
