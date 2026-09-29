@@ -11,6 +11,7 @@ import {
   runMealPlanGeneration,
   runMealPlanTranslation,
   prepareSharedGroupRegen,
+  prepareMemberJoin,
   OnboardingIncompleteError,
   MedicalGateError,
   PlanValidationError,
@@ -302,6 +303,21 @@ export async function triggerPlanGeneration(params: {
     context.family_members = context.family_members.filter((m) =>
       keep.has(m.id),
     );
+    // A newcomer generated on their own — an independent add, or the queue
+    // reaching a pending member — joins only what is left of the week, like a
+    // shared add (prepareMemberJoin). Dev-inline only, for the same reason as
+    // the shared path below: production reads the marks in the worker.
+    if (
+      process.env.NODE_ENV === "development" &&
+      !existingPlan.members.some((m) => m.member_id === onlyMemberId)
+    ) {
+      existingPlan = prepareMemberJoin(
+        context,
+        existingPlan,
+        onlyMemberId,
+        await readJoinToday(supabase, userId),
+      );
+    }
   }
 
   // Shared-group regen — a new SHARED member was added, OR a SHARED member's
@@ -510,10 +526,10 @@ export async function triggerPlanGeneration(params: {
 
 /**
  * What the household has already recorded TODAY (meal_checkins + meal_absences,
- * keyed by Riyadh local_date) — the input a shared add needs to rebuild only
- * what is left of the week (plan-engine memberJoin.ts). Mirrors the worker's
- * readJoinToday, including its degradation: an unreadable table reads as
- * "nothing marked yet", which still keeps every past day intact.
+ * keyed by Riyadh local_date) — the input a mid-week add, shared or independent,
+ * needs to plan only what is left of the week (plan-engine memberJoin.ts).
+ * Mirrors the worker's readJoinToday, including its degradation: an unreadable
+ * table reads as "nothing marked yet", which still keeps every past day intact.
  */
 async function readJoinToday(supabase: ServerClient, userId: string): Promise<JoinToday> {
   const dateISO = riyadhTodayISO();

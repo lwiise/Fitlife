@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { prepareSharedGroupRegen } from "./generate";
+import { prepareMemberJoin, prepareSharedGroupRegen } from "./generate";
 import type { PlanPromptContext, PlanPromptContextMember } from "./buildContext";
 import type { MealPlan, MemberPlan, Meal, Day } from "./schema";
 import { MealPlanSchema } from "./schema";
@@ -363,5 +363,89 @@ describe("prepareSharedGroupRegen — mid-week join rebuilds only what is left",
 
     expect(mealedDayIndices(existingPlan, "mom")).toEqual([]);
     expect(existingPlan.member_joins).toBeUndefined();
+  });
+});
+
+// ── An independent (or queued) newcomer generated on their own ──────────────
+// Same four-day week; "today" 2026-06-07 is day 1. The table is breakfast +
+// lunch for everyone in the plan.
+describe("prepareMemberJoin — one newcomer, planned only from what is left", () => {
+  const WEEK = [0, 1, 2, 3];
+  const LUNCH: Meal = { ...MEAL, slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة" };
+  const tableDay = (di: number): Day => ({ ...day(di), meals: [MEAL, LUNCH] });
+  const weekMember = (member_id: string): MemberPlan => ({
+    ...planMember(member_id),
+    days: WEEK.map(tableDay),
+  });
+  const plan = () =>
+    MealPlanSchema.parse({
+      week_start_date: "2026-06-06",
+      members: [weekMember("mom"), weekMember("m-shared"), weekMember("m-indep")],
+      days_total: WEEK.length,
+    });
+  const ctx = () =>
+    makeCtx("shared", [
+      ctxMember("m-shared", "shared"),
+      ctxMember("m-indep", "independent"),
+      ctxMember("new-indep", "independent"),
+      ctxMember("new-shared", "shared"),
+    ]);
+  const today = (checkins: { slot: string; member_id: string | null }[] = [], dateISO = "2026-06-07") => ({
+    dateISO,
+    checkins: checkins.map((c) => ({ ...c, local_date: dateISO })),
+    absences: [],
+  });
+
+  it("records where an independent newcomer's week starts — and touches nobody else", () => {
+    const before = plan();
+    const after = prepareMemberJoin(ctx(), before, "new-indep", today([{ slot: "breakfast", member_id: "mom" }]));
+
+    expect(after.member_joins).toEqual({
+      "new-indep": { day_index: 1, closed_slots: ["breakfast"] },
+    });
+    expect(after.members).toEqual(before.members);
+  });
+
+  it("for an independent newcomer the whole household's mealtimes count — an independent member's mark closes the slot", () => {
+    const after = prepareMemberJoin(
+      ctx(),
+      plan(),
+      "new-indep",
+      today([{ slot: "lunch", member_id: "m-indep" }]),
+    );
+    expect(after.member_joins?.["new-indep"]).toEqual({ day_index: 1, closed_slots: ["lunch"] });
+  });
+
+  it("a shared newcomer reached one at a time sits at the shared table — a private meal's mark does not close it", () => {
+    const after = prepareMemberJoin(
+      ctx(),
+      plan(),
+      "new-shared",
+      today([{ slot: "lunch", member_id: "m-indep" }]),
+    );
+    expect(after.member_joins?.["new-shared"]).toEqual({ day_index: 1 });
+  });
+
+  it("a whole day answered means tomorrow; a week already over means next week", () => {
+    const done = today([
+      { slot: "breakfast", member_id: "household" },
+      { slot: "lunch", member_id: "household" },
+    ]);
+    expect(prepareMemberJoin(ctx(), plan(), "new-indep", done).member_joins?.["new-indep"]).toEqual({
+      day_index: 2,
+    });
+    expect(
+      prepareMemberJoin(ctx(), plan(), "new-indep", today([], "2026-06-20")).member_joins?.[
+        "new-indep"
+      ],
+    ).toEqual({ day_index: WEEK.length });
+  });
+
+  it("returns the plan unchanged for a refill, the owner, no marks read, or a day-0 join with nothing answered", () => {
+    const p = plan();
+    expect(prepareMemberJoin(ctx(), p, "m-indep", today())).toBe(p); // already in the plan
+    expect(prepareMemberJoin(ctx(), p, "mom", today())).toBe(p);
+    expect(prepareMemberJoin(ctx(), p, "new-indep")).toBe(p);
+    expect(prepareMemberJoin(ctx(), p, "new-indep", today([], "2026-06-06"))).toBe(p);
   });
 });

@@ -14,6 +14,7 @@ import {
   runMealPlanTranslation,
   generationAlreadySettled,
   prepareSharedGroupRegen,
+  prepareMemberJoin,
 } from "../../../../packages/plan-engine/src/generate";
 import {
   runWorkoutPlanGeneration,
@@ -506,10 +507,11 @@ async function fetchPriorReadyRow(
 }
 
 /**
- * What the household has already recorded TODAY — the input a shared add needs
- * so it rebuilds only what is left of the week (memberJoin.ts): a meal already
- * cooked, swapped or skipped stays exactly as it was, and the newcomer is kept
- * off it. PostgREST flavour of dispatch.ts's readJoinToday.
+ * What the household has already recorded TODAY — the input a mid-week add
+ * (shared or independent) needs so it plans only what is left of the week
+ * (memberJoin.ts): a meal already cooked, swapped or skipped stays exactly as it
+ * was, and the newcomer is kept off it. PostgREST flavour of dispatch.ts's
+ * readJoinToday.
  *
  * A failed read degrades to "nothing marked yet" rather than failing the add:
  * the past days are still kept (that needs only the date), and the worst left
@@ -1255,6 +1257,18 @@ const handler = async (req: Request): Promise<Response> => {
       context.family_members = context.family_members.filter((m) =>
         keep.has(m.id),
       );
+      // A newcomer (an independent add, or the queue reaching a pending member)
+      // joins only what is left of the week — no meals on days already eaten,
+      // none in a slot the household already answered today. Refills of an
+      // in-plan member skip the read: they are not joins.
+      if (!existingPlan.members.some((m) => m.member_id === body.onlyMemberId)) {
+        existingPlan = prepareMemberJoin(
+          context,
+          existingPlan,
+          body.onlyMemberId,
+          await readJoinToday(supabaseUrl, serviceKey, userId),
+        );
+      }
     }
 
     // Shared-group regen (a new SHARED member was added): rebuild every shared

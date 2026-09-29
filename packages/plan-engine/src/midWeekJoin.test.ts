@@ -8,7 +8,7 @@ vi.mock("./anthropic", async () => {
 });
 
 import { streamAnthropic } from "./anthropic";
-import { generateMealPlan, prepareSharedGroupRegen } from "./generate";
+import { generateMealPlan, prepareMemberJoin, prepareSharedGroupRegen } from "./generate";
 import { incompleteInPlanMemberIds } from "./chain";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "./constants";
 import type { PlanPromptContext, PlanPromptContextMember } from "./buildContext";
@@ -79,7 +79,11 @@ function priorMember(member_id: string): MemberPlan {
   };
 }
 
-function adult(id: string, name: string): PlanPromptContextMember {
+function adult(
+  id: string,
+  name: string,
+  meal_mode: "shared" | "independent" = "shared",
+): PlanPromptContextMember {
   return {
     id,
     name,
@@ -103,7 +107,7 @@ function adult(id: string, name: string): PlanPromptContextMember {
     consulted_doctor: false,
     is_child: false,
     preferred_language: "ar",
-    meal_mode: "shared",
+    meal_mode,
     target_weight_kg: null,
     day_nature: null,
     exercise_days: null,
@@ -409,5 +413,87 @@ describe("generateMealPlan — a shared member joining mid-week", () => {
     expect(memberOf(plan, "gma").days).toHaveLength(WEEK.length);
     expect(plan.member_joins?.gma).toEqual({ day_index: WEEK.length });
     expect(dayOf(plan, "mom", 3)).toEqual(dayOf(priorPlan(), "mom", 3));
+  });
+});
+
+/**
+ * The same household when «الخال» (the uncle) is added as an INDEPENDENT member
+ * on day 1, with today's breakfast already marked. He eats his own dishes, so
+ * nobody else's meals may change at all — and he gets none of the week that
+ * is already behind the household.
+ */
+describe("generateMealPlan — an independent member joining mid-week", () => {
+  const withUncle = () =>
+    context([adult("dad", "أبو محمد"), adult("uncle", "الخال", "independent")]);
+
+  async function joinUncle() {
+    mockedStream.mockImplementation(fakeModel() as typeof streamAnthropic);
+    const prior = priorPlan();
+    const ctx = withUncle();
+    const existingPlan = prepareMemberJoin(ctx, prior, "uncle", breakfastDone);
+    const result = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: ctx,
+      existingPlan,
+      onlyMemberId: "uncle",
+    });
+    return { prior, ...result };
+  }
+
+  it("changes nothing for anyone else, on any day", async () => {
+    const { plan, prior } = await joinUncle();
+    for (const id of ["mom", "dad"]) {
+      expect(memberOf(plan, id).days).toEqual(memberOf(prior, id).days);
+    }
+  });
+
+  it("gives him no meals on the days already behind the household", async () => {
+    const { plan } = await joinUncle();
+    expect(dayOf(plan, "uncle", 0).meals).toEqual([]);
+    expect(dayPrompts().some((p) => /day_index=0\b/.test(p))).toBe(false);
+  });
+
+  it("today: only the slots still open, his own dish, sized to what is left of the day", async () => {
+    const { plan } = await joinUncle();
+    const today = dayOf(plan, "uncle", 1).meals;
+    expect(today.map((m) => m.slot)).toEqual(["lunch"]);
+    expect(today[0]!.shared_recipe).toBeFalsy();
+    const prompt = dayPrompts().find((p) => /day_index=1\b/.test(p))!;
+    // Lunch is 1200 of the household's 1800 kcal day → 2/3 of his 2000.
+    expect(prompt).toContain('member_id="uncle" — الهدف: 1333 سعرة');
+  });
+
+  it("plans the rest of the week in full, and leaves nobody 'short'", async () => {
+    const { plan } = await joinUncle();
+    for (const di of [2, 3]) {
+      expect(dayOf(plan, "uncle", di).meals.map((m) => m.slot)).toEqual(["breakfast", "lunch"]);
+    }
+    expect(plan.member_joins).toEqual({ uncle: { day_index: 1, closed_slots: ["breakfast"] } });
+    expect(incompleteInPlanMemberIds({ plan, maxAttempts: MEMBER_GEN_MAX_ATTEMPTS })).toEqual([]);
+  });
+
+  it("after the week has ended: recorded for next week, no model call, attempt caps kept", async () => {
+    mockedStream.mockImplementation(async () => {
+      throw new Error("no model call may be made when nothing of the week is left");
+    });
+    const ctx = withUncle();
+    const prior = { ...priorPlan(), gen_attempts: { dad: 3 } };
+    const existingPlan = prepareMemberJoin(ctx, prior, "uncle", {
+      dateISO: "2026-06-20",
+      checkins: [],
+      absences: [],
+    });
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: ctx,
+      existingPlan,
+      onlyMemberId: "uncle",
+    });
+
+    expect(mockedStream).not.toHaveBeenCalled();
+    expect(memberOf(plan, "uncle").days.every((d) => d.meals.length === 0)).toBe(true);
+    expect(plan.member_joins?.uncle).toEqual({ day_index: WEEK.length });
+    // The no-op path used to drop this, handing a capped member fresh retries.
+    expect(plan.gen_attempts).toEqual({ dad: 3 });
   });
 });

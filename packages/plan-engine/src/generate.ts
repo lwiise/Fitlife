@@ -79,6 +79,7 @@ import {
   memberJoinDayIndex,
   openDayShare,
   type JoinToday,
+  type MemberJoin,
 } from "./memberJoin";
 import { canonicalRecipeKey } from "./canonicalRecipeKey";
 import { captureToSentry } from "./sentryReport";
@@ -1266,16 +1267,13 @@ export function prepareSharedGroupRegen(
   existingPlan: MealPlan,
   today?: JoinToday,
 ): { existingPlan: MealPlan; familyMembers: PlanPromptContextMember[] } {
-  const sharedIds = new Set<string>();
-  if (context.mom.meal_mode === "shared") sharedIds.add("mom");
-  for (const m of context.family_members)
-    if (m.role !== "housekeeper" && m.meal_mode === "shared") sharedIds.add(m.id);
+  const sharedIds = sharedGroupIds(context);
 
   const inPlan = new Set(existingPlan.members.map((m) => m.member_id));
   const newcomers = [...sharedIds].filter((id) => !inPlan.has(id));
   const joining =
     today && newcomers.length > 0
-      ? joinWindow({ plan: existingPlan, sharedIds, today })
+      ? joinWindow({ plan: existingPlan, tableIds: sharedIds, today })
       : null;
   // What this run rebuilds for a shared member: the whole week, or — when a
   // newcomer joins mid-week — only the days after today.
@@ -1302,26 +1300,79 @@ export function prepareSharedGroupRegen(
         : m,
     ),
   };
-  // A join from day 0 with nothing answered is an ordinary whole-week member —
-  // no record needed.
-  if (joining && (joining.join.day_index > 0 || joining.join.closed_slots?.length)) {
-    clearedPlan.member_joins = {
-      ...(existingPlan.member_joins ?? {}),
-      ...Object.fromEntries(
-        newcomers.map((id) => [
-          id,
-          joining.join.closed_slots
-            ? { ...joining.join, closed_slots: [...joining.join.closed_slots] }
-            : { ...joining.join },
-        ]),
-      ),
-    };
-  }
 
   const familyMembers = context.family_members.filter(
     (m) => m.role === "housekeeper" || m.meal_mode === "shared" || inPlan.has(m.id),
   );
-  return { existingPlan: clearedPlan, familyMembers };
+  return {
+    existingPlan: joining ? withJoinRecords(clearedPlan, newcomers, joining.join) : clearedPlan,
+    familyMembers,
+  };
+}
+
+/**
+ * A newcomer generated on their own (`onlyMemberId`) — an INDEPENDENT add, or a
+ * pending member the one-at-a-time queue reaches. Nothing else in the plan is
+ * touched: this only records where their week starts (memberJoin.ts), and
+ * generateMealPlan does the rest — no meals on days already passed, none in a
+ * slot already answered today, the first day sized to what is left of it.
+ *
+ * The table whose marks close a slot is the one they sit at: the shared group
+ * for a shared member (they join its dishes), the whole household for an
+ * independent one (their own dishes, the family's mealtimes). Owner directive
+ * 09/2026, extending the shared rule to independent members: before, an
+ * independent add generated all seven days, the ones already eaten included.
+ *
+ * Returns the plan unchanged without `today`, for the owner, or for someone
+ * already in the plan — that run is a refill, not a join. Pure.
+ */
+export function prepareMemberJoin(
+  context: PlanPromptContext,
+  existingPlan: MealPlan,
+  memberId: string,
+  today?: JoinToday,
+): MealPlan {
+  if (!today || memberId === "mom") return existingPlan;
+  if (existingPlan.members.some((m) => m.member_id === memberId)) return existingPlan;
+  const member = context.family_members.find((m) => m.id === memberId);
+  if (!member || member.role === "housekeeper") return existingPlan;
+  const tableIds =
+    member.meal_mode === "shared"
+      ? sharedGroupIds(context)
+      : new Set(existingPlan.members.map((m) => m.member_id));
+  const joining = joinWindow({ plan: existingPlan, tableIds, today });
+  return joining ? withJoinRecords(existingPlan, [memberId], joining.join) : existingPlan;
+}
+
+/** Mom when she eats the shared menu + every shared family member. */
+function sharedGroupIds(context: PlanPromptContext): Set<string> {
+  const ids = new Set<string>();
+  if (context.mom.meal_mode === "shared") ids.add("mom");
+  for (const m of context.family_members)
+    if (m.role !== "housekeeper" && m.meal_mode === "shared") ids.add(m.id);
+  return ids;
+}
+
+/**
+ * The plan with `join` recorded for each newcomer. A join from day 0 with
+ * nothing answered is an ordinary whole-week member — no record is written.
+ */
+function withJoinRecords(plan: MealPlan, ids: string[], join: MemberJoin): MealPlan {
+  if (ids.length === 0 || (join.day_index === 0 && !join.closed_slots?.length)) return plan;
+  return {
+    ...plan,
+    member_joins: {
+      ...(plan.member_joins ?? {}),
+      ...Object.fromEntries(
+        ids.map((id) => [
+          id,
+          join.closed_slots
+            ? { day_index: join.day_index, closed_slots: [...join.closed_slots] }
+            : { day_index: join.day_index },
+        ]),
+      ),
+    },
+  };
 }
 
 /**
@@ -1640,6 +1691,12 @@ export async function generateMealPlan(params: {
       days_total: familyDayIndices.length || members[0]?.days.length || 7,
       generating: false,
       member_joins: memberJoinsOut,
+      // "Untouched" includes the bookkeeping: dropping gen_attempts here reset
+      // every capped member's retry budget, so the drain would buy another
+      // round of attempts on a day that fails deterministically. A join after
+      // the week is over lands here too.
+      gen_attempts: existingPlan.gen_attempts,
+      hidden_for_member_ids: existingPlan.hidden_for_member_ids,
     });
     if (onProgress)
       await Promise.resolve(onProgress(plan, { readyDays: 0, totalDays: 0 }));

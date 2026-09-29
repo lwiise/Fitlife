@@ -38,6 +38,7 @@ export {
   runMealPlanGeneration,
   generateMealPlan,
   prepareSharedGroupRegen,
+  prepareMemberJoin,
   reconcileChildTargets,
   translateMealPlan,
   runMealPlanTranslation,

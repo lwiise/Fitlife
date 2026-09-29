@@ -174,26 +174,28 @@ export interface JoinToday {
 }
 
 /**
- * Where a newcomer joining the shared table starts, given the plan and what
- * today already holds. Pure.
+ * Where a newcomer starts, given the plan and what today already holds. Pure.
  *
- * A slot of today is closed once someone AT the shared table has answered it:
- * a present sharer's mark is the dish's status (the fan-out writes one row per
- * sharer), and the whole-house row speaks for everyone. An absentee's mark is
- * personal — they sat that meal out — and says nothing about the dish, the same
- * reading /plan gives it. Slot-keyed like every engagement row, so a day with
- * two snacks closes both with one mark.
+ * "The table" is the one they sit at. A SHARED newcomer joins the shared
+ * group's dishes, so it is the shared group: a present sharer's mark is the
+ * dish's status (the fan-out writes one row per sharer). An INDEPENDENT
+ * newcomer eats their own dishes at the household's mealtimes, so it is the
+ * whole household. Either way the whole-house row speaks for everyone, and an
+ * absentee's mark is personal — they sat that meal out — and says nothing
+ * about the meal, the same reading /plan gives it. A slot of today is closed
+ * once someone at the table has answered it. Slot-keyed like every engagement
+ * row, so a day with two snacks closes both with one mark.
  *
  * Returns null when the week anchor cannot be read: with no basis for "what has
- * passed", the caller keeps the whole-week rebuild rather than guess.
+ * passed", the caller keeps the whole-week behaviour rather than guess.
  */
 export function joinWindow(params: {
   plan: MealPlan;
-  /** The shared table: mom when shared + every shared member. */
-  sharedIds: ReadonlySet<string>;
+  /** Whose marks close a slot: the shared group, or the whole household. */
+  tableIds: ReadonlySet<string>;
   today: JoinToday;
 }): { todayIndex: number; join: MemberJoin } | null {
-  const { plan, sharedIds, today } = params;
+  const { plan, tableIds, today } = params;
   const start = Date.parse(`${plan.week_start_date}T00:00:00Z`);
   const now = Date.parse(`${today.dateISO}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(now)) return null;
@@ -208,7 +210,7 @@ export function joinWindow(params: {
 
   const tableSlots = new Set<MealSlot>();
   for (const m of plan.members) {
-    if (!sharedIds.has(m.member_id)) continue;
+    if (!tableIds.has(m.member_id)) continue;
     for (const meal of m.days.find((d) => d.day_index === todayIndex)?.meals ?? [])
       tableSlots.add(meal.slot);
   }
@@ -224,7 +226,7 @@ export function joinWindow(params: {
     const who = row.member_id || HOUSEHOLD_MARK_MEMBER;
     const speaksForTable =
       who === HOUSEHOLD_MARK_MEMBER ||
-      (sharedIds.has(who) && !absent.has(`${row.slot}|${who}`));
+      (tableIds.has(who) && !absent.has(`${row.slot}|${who}`));
     if (speaksForTable) answered.add(row.slot);
   }
 

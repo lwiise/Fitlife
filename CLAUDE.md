@@ -1496,15 +1496,16 @@ content column (lg padding 48px).
 
 ## A member added mid-week joins only what is left (09/2026)
 
-Owner directive: when a SHARED member is added, days that have already passed and meals
-already marked (cooked as planned, swapped, skipped) are not touched, and the newcomer is
-not added to them — only to what is left of the week. Before, a shared add ran
+Owner directive: when a member is added — shared first, then (same day) independent too —
+days that have already passed and meals already marked (cooked as planned, swapped,
+skipped) are not touched, and the newcomer is not added to them — only to what is left of
+the week. Before, a shared add ran
 `prepareSharedGroupRegen`, which cleared every shared member's meals on ALL seven days:
 days already eaten were rewritten with the newcomer at the table, and because
 `meal_checkins` are calendar-keyed, Monday's «طبختها كما هي» stayed lit on a dish nobody
 cooked.
 
-**The rule** (`packages/plan-engine/src/memberJoin.ts`, the one definition):
+**The rule for a SHARED add** (`packages/plan-engine/src/memberJoin.ts`, the one definition):
 - days before today: kept byte-for-byte for everyone; the newcomer has no meals on them;
 - today: the menu stays as planned; the newcomer is aligned to today's still-OPEN dishes
   (a portion is added, the dish is not changed) and never given a slot already answered;
@@ -1546,13 +1547,25 @@ names the join day and no longer lists pre-join days as "not generated yet". Pla
 imports the helpers from the new subpath `@fitlife/plan-engine/memberJoin` — a leaf module
 — so the client bundle never pulls the engine barrel.
 
-**Scope, deliberately:** only a SHARED add. An independent add (`onlyMemberId`) still
-generates the newcomer's whole week (their meals are private — nobody else's history
-changes); a shared member's REGENERATE (re-merging with the group) still rebuilds the whole
-week; and a refill of the joiner's own join day uses the closed slots recorded at join
-time, so a meal marked between the add and a delayed refill is not re-checked. Guarded by
-`memberJoin.test.ts`, `prepareSharedGroupRegen.test.ts` and `midWeekJoin.test.ts` (a real
-`generateMealPlan` run with a mocked model: past days untouched, the answered breakfast
-byte-identical without the newcomer, today's open lunch re-portioned with them, later days
-rebuilt, nobody left "short", a stray closed-slot meal dropped, a refill honouring the
-join, and a week-over add making no model call).
+**An INDEPENDENT add** (or any newcomer the one-at-a-time queue reaches via
+`onlyMemberId`) goes through `prepareMemberJoin`, wired in the same two places: nobody
+else's meals are touched at all, and the newcomer gets their own dishes only from what is
+left — no meals on past days, none in a slot already answered today, the first day
+pro-rated. The table whose marks close a slot is the one they sit at: the shared group for a
+shared newcomer (they join its dishes, so a private meal's mark says nothing), the WHOLE
+household for an independent one (their own dishes, the family's mealtimes — an independent
+member's mark counts). Before, an independent add generated all seven days, the ones
+already eaten included. The engine's no-op fast path (reached by a join after the week is
+over) now carries `gen_attempts` and `hidden_for_member_ids` — it used to drop them, which
+reset every capped member's retry budget.
+
+**Scope, deliberately:** adds only. A shared member's REGENERATE (re-merging with the
+group) still rebuilds the whole week, and a refill of the joiner's own join day uses the
+closed slots recorded at join time, so a meal marked between the add and a delayed refill
+is not re-checked. Guarded by `memberJoin.test.ts`, `prepareSharedGroupRegen.test.ts`
+(including `prepareMemberJoin`) and `midWeekJoin.test.ts` (real `generateMealPlan` runs
+with a mocked model — shared: past days untouched, the answered breakfast byte-identical
+without the newcomer, today's open lunch re-portioned with them, later days rebuilt, a
+stray closed-slot meal dropped, a refill honouring the join; independent: nobody else's
+meals change on any day, no past days, today's open slots only at a pro-rated target; both:
+nobody left "short", and a week-over add making no model call).

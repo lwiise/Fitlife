@@ -142,7 +142,7 @@ describe("joinWindow", () => {
 
   it("joins TODAY with nothing closed when today is unmarked", () => {
     // 2026-06-06 is day 0, so 06-09 is day 3.
-    expect(joinWindow({ plan: base, sharedIds: shared, today: today("2026-06-09") })).toEqual({
+    expect(joinWindow({ plan: base, tableIds: shared, today: today("2026-06-09") })).toEqual({
       todayIndex: 3,
       join: { day_index: 3 },
     });
@@ -151,7 +151,7 @@ describe("joinWindow", () => {
   it("a present sharer's mark (any status) closes that slot for the newcomer", () => {
     const w = joinWindow({
       plan: base,
-      sharedIds: shared,
+      tableIds: shared,
       today: today("2026-06-09", {
         checkins: [
           { local_date: "2026-06-09", slot: "breakfast", member_id: "mom" },
@@ -165,7 +165,7 @@ describe("joinWindow", () => {
   it("the whole-house row closes a slot — named or legacy null", () => {
     const w = joinWindow({
       plan: base,
-      sharedIds: shared,
+      tableIds: shared,
       today: today("2026-06-09", {
         checkins: [
           { local_date: "2026-06-09", slot: "dinner", member_id: "household" },
@@ -179,7 +179,7 @@ describe("joinWindow", () => {
   it("an independent member's private meal does not close the shared table's slot", () => {
     const w = joinWindow({
       plan: base,
-      sharedIds: shared,
+      tableIds: shared,
       today: today("2026-06-09", {
         checkins: [{ local_date: "2026-06-09", slot: "breakfast", member_id: "indep" }],
       }),
@@ -190,7 +190,7 @@ describe("joinWindow", () => {
   it("an absentee's personal mark says nothing about the dish", () => {
     const w = joinWindow({
       plan: base,
-      sharedIds: shared,
+      tableIds: shared,
       today: today("2026-06-09", {
         checkins: [{ local_date: "2026-06-09", slot: "lunch", member_id: "m1" }],
         absences: [{ local_date: "2026-06-09", slot: "lunch", member_id: "m1" }],
@@ -202,7 +202,7 @@ describe("joinWindow", () => {
   it("ignores rows from other dates and slots it does not know", () => {
     const w = joinWindow({
       plan: base,
-      sharedIds: shared,
+      tableIds: shared,
       today: today("2026-06-09", {
         checkins: [
           { local_date: "2026-06-08", slot: "breakfast", member_id: "mom" },
@@ -220,7 +220,7 @@ describe("joinWindow", () => {
       member_id: "mom",
     }));
     expect(
-      joinWindow({ plan: base, sharedIds: shared, today: today("2026-06-09", { checkins }) })
+      joinWindow({ plan: base, tableIds: shared, today: today("2026-06-09", { checkins }) })
         ?.join,
     ).toEqual({ day_index: 4 });
     // On the week's last day there is no tomorrow in it.
@@ -228,7 +228,7 @@ describe("joinWindow", () => {
     expect(
       joinWindow({
         plan: base,
-        sharedIds: shared,
+        tableIds: shared,
         today: today("2026-06-12", { checkins: last }),
       })?.join,
     ).toEqual({ day_index: 7 });
@@ -236,7 +236,7 @@ describe("joinWindow", () => {
 
   it("after the week is over, nothing of it is left", () => {
     expect(
-      joinWindow({ plan: base, sharedIds: shared, today: today("2026-06-20") }),
+      joinWindow({ plan: base, tableIds: shared, today: today("2026-06-20") }),
     ).toEqual({ todayIndex: 14, join: { day_index: 7 } });
   });
 
@@ -244,7 +244,7 @@ describe("joinWindow", () => {
     expect(
       joinWindow({
         plan: base,
-        sharedIds: shared,
+        tableIds: shared,
         today: today("2026-06-05", {
           checkins: [{ local_date: "2026-06-05", slot: "breakfast", member_id: "mom" }],
         }),
@@ -256,7 +256,7 @@ describe("joinWindow", () => {
     expect(
       joinWindow({
         plan: { ...base, week_start_date: "not-a-date" },
-        sharedIds: shared,
+        tableIds: shared,
         today: today("2026-06-09"),
       }),
     ).toBeNull();
