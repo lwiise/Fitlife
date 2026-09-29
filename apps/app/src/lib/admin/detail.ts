@@ -136,7 +136,11 @@ function daysCovered(pd: PlanDataMin): number {
 
 // ── Loaders ──────────────────────────────────────────────────────────────────
 
-function mapSubscription(s: {
+/** The subscriptions columns `mapSubscription` reads (shared with family.ts). */
+export const SUBSCRIPTION_COLUMNS =
+  "tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id, lemonsqueezy_customer_id, lemonsqueezy_variant_id";
+
+export function mapSubscription(s: {
   tier: string | null;
   status: string | null;
   cadence: string | null;
@@ -194,9 +198,7 @@ export async function loadSubscriberDetail(
     db.auth.admin.getUserById(userId),
     db
       .from("subscriptions")
-      .select(
-        "tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id, lemonsqueezy_customer_id, lemonsqueezy_variant_id",
-      )
+      .select(SUBSCRIPTION_COLUMNS)
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
     db

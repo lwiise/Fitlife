@@ -551,6 +551,9 @@ const GOAL: Record<string, Entry> = {
   digestive_health: { ar: "الصحة الهضمية", en: "Digestive health" },
   pregnancy_lactation: { ar: "الحمل والرضاعة", en: "Pregnancy / lactation" },
   posture_recovery: { ar: "التعافي والقوام", en: "Posture / recovery" },
+  // Promoted canonical goals (plan-engine PRIMARY_GOALS, 07/2026).
+  maintain: { ar: "ثبات الوزن", en: "Maintain weight" },
+  general_health: { ar: "الصحة العامة", en: "General health" },
 };
 export function goalLabel(goal: string | null, locale: AdminLocale): string {
   if (!goal) return "—";

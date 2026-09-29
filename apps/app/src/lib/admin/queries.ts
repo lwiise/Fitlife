@@ -1,8 +1,19 @@
 import "server-only";
 
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
+import {
+  MEAL_PROBE_COLUMNS,
+  finiteNumber,
+  mealCellFromRows,
+  type MealProbeFields,
+  type MealRowLite,
+} from "@/lib/admin/mealProjection";
+import { workoutCellFromRows, type WorkoutRowLite } from "@/lib/admin/workoutProjection";
+import { deriveFamilyFlags, newestGenerationByKind } from "@/lib/admin/familyFlags";
+import type { FamilyRow } from "@/lib/admin/console-types";
 import { computeMrr } from "@/lib/admin/revenue";
 import { trend, type Trend } from "@/lib/admin/period";
 import {
@@ -101,17 +112,43 @@ interface MemberLite {
   role: string;
 }
 interface PlanLite {
+  id: string;
   user_id: string;
   status: string;
   created_at: string;
 }
-interface GenLite {
+/**
+ * A recent meal_plans row with JSON-path probes instead of its blob (see
+ * MEAL_PROBE_COLUMNS). Only rows created in the last PROBE_WINDOW_DAYS and not
+ * archived — enough to decide what every household is served now.
+ */
+export interface PlanProbeLite extends MealProbeFields {
+  id: string;
   user_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+interface WorkoutPlanLite {
+  id: string;
+  user_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+interface GenLite {
+  id: string;
+  user_id: string;
+  /** 'meal' | 'workout' (00014; null on a pre-00014 row = meal). */
+  plan_kind: string | null;
   cost_usd: number | null;
   created_at: string;
+  completed_at: string | null;
   status: string;
   error_message: string | null;
   failure_reason: string | null;
+  meal_plan_id: string | null;
+  workout_plan_id: string | null;
 }
 interface ChatLite {
   user_id: string;
@@ -124,12 +161,20 @@ export interface AdminDataset {
   subscriptions: SubscriptionLite[];
   members: MemberLite[];
   plans: PlanLite[];
+  /** Recent, non-archived meal plans with probes (bounded — see PlanProbeLite). */
+  planProbes: PlanProbeLite[];
+  workoutPlans: WorkoutPlanLite[];
   generations: GenLite[];
   chats: ChatLite[];
   emailByUser: Map<string, string | null>;
   /** Tables where the safety ceiling was hit (counts may undercount). */
   truncated: string[];
+  /** ISO time the tables were read (the cache may be up to a minute old). */
+  loadedAt: string;
 }
+
+/** How far back the meal-plan probes reach. A served plan is almost always newer. */
+export const PROBE_WINDOW_DAYS = 21;
 
 async function loadEmailMap(
   onTruncate: (label: string) => void,
@@ -160,68 +205,125 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
   const onTruncate = (label: string) => {
     if (!truncated.includes(label)) truncated.push(label);
   };
+  const probeSince = new Date(Date.now() - PROBE_WINDOW_DAYS * 86_400_000).toISOString();
 
-  const [profiles, subscriptions, members, plans, generations, chats] =
-    await Promise.all([
-      paginate<ProfileLite>(
-        (f, t) =>
-          db
-            .from("profiles")
-            .select(
-              "id, display_name, preferred_language, created_at, onboarding_completed_at, family_wide_completed_at, mom_profile_completed_at",
-            )
-            .range(f, t),
-        "profiles",
-        onTruncate,
-      ),
-      paginate<SubscriptionLite>(
-        (f, t) =>
-          db
-            .from("subscriptions")
-            .select(
-              "user_id, tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id",
-            )
-            .order("created_at", { ascending: false })
-            .range(f, t),
-        "subscriptions",
-        onTruncate,
-      ),
-      paginate<MemberLite>(
-        (f, t) => db.from("family_members").select("user_id, role").range(f, t),
-        "family_members",
-        onTruncate,
-      ),
-      paginate<PlanLite>(
-        (f, t) =>
-          db.from("meal_plans").select("user_id, status, created_at").range(f, t),
-        "meal_plans",
-        onTruncate,
-      ),
-      paginate<GenLite>(
-        (f, t) =>
-          db
-            .from("plan_generations")
-            .select("user_id, cost_usd, created_at, status, error_message, failure_reason")
-            .range(f, t),
-        "plan_generations",
-        onTruncate,
-      ),
-      paginate<ChatLite>(
-        (f, t) =>
-          db.from("chat_messages").select("user_id, cost_usd, created_at").range(f, t),
-        "chat_messages",
-        onTruncate,
-      ),
-    ]);
+  // Every paginated read is ordered by a unique key (id, or id as the
+  // tie-breaker): range() over an unordered read may return the same row on two
+  // pages and skip another once a table outgrows one page.
+  const [
+    profiles,
+    subscriptions,
+    members,
+    plans,
+    planProbes,
+    workoutPlans,
+    generations,
+    chats,
+  ] = await Promise.all([
+    paginate<ProfileLite>(
+      (f, t) =>
+        db
+          .from("profiles")
+          .select(
+            "id, display_name, preferred_language, created_at, onboarding_completed_at, family_wide_completed_at, mom_profile_completed_at",
+          )
+          .order("id", { ascending: true })
+          .range(f, t),
+      "profiles",
+      onTruncate,
+    ),
+    paginate<SubscriptionLite>(
+      (f, t) =>
+        db
+          .from("subscriptions")
+          .select(
+            "user_id, tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id",
+          )
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(f, t),
+      "subscriptions",
+      onTruncate,
+    ),
+    paginate<MemberLite>(
+      (f, t) =>
+        db
+          .from("family_members")
+          .select("user_id, role")
+          .order("id", { ascending: true })
+          .range(f, t),
+      "family_members",
+      onTruncate,
+    ),
+    paginate<PlanLite>(
+      (f, t) =>
+        db
+          .from("meal_plans")
+          .select("id, user_id, status, created_at")
+          .order("id", { ascending: true })
+          .range(f, t),
+      "meal_plans",
+      onTruncate,
+    ),
+    paginate<PlanProbeLite>(
+      (f, t) =>
+        db
+          .from("meal_plans")
+          .select(`id, user_id, status, created_at, updated_at, ${MEAL_PROBE_COLUMNS}`)
+          .gte("created_at", probeSince)
+          .neq("status", "archived")
+          .order("id", { ascending: true })
+          .range(f, t)
+          .returns<PlanProbeLite[]>(),
+      "meal_plan_probes",
+      onTruncate,
+    ),
+    paginate<WorkoutPlanLite>(
+      (f, t) =>
+        db
+          .from("workout_plans")
+          .select("id, user_id, status, created_at, updated_at")
+          .order("id", { ascending: true })
+          .range(f, t),
+      "workout_plans",
+      onTruncate,
+    ),
+    paginate<GenLite>(
+      (f, t) =>
+        db
+          .from("plan_generations")
+          .select(
+            "id, user_id, plan_kind, cost_usd, created_at, completed_at, status, error_message, failure_reason, meal_plan_id, workout_plan_id",
+          )
+          .order("id", { ascending: true })
+          .range(f, t),
+      "plan_generations",
+      onTruncate,
+    ),
+    paginate<ChatLite>(
+      (f, t) =>
+        db
+          .from("chat_messages")
+          .select("user_id, cost_usd, created_at")
+          .order("id", { ascending: true })
+          .range(f, t),
+      "chat_messages",
+      onTruncate,
+    ),
+  ]);
 
   return {
     profiles,
     subscriptions,
     members,
     plans,
-    generations,
-    chats,
+    planProbes,
+    workoutPlans,
+    // Postgres numeric can arrive as a string; every cost sum below assumes a number.
+    generations: generations.map((g) => ({ ...g, cost_usd: finiteNumber(g.cost_usd) })),
+    chats: chats.map((c) => ({ ...c, cost_usd: finiteNumber(c.cost_usd) })),
     truncated,
+    loadedAt: new Date().toISOString(),
   };
 }
 
@@ -229,18 +331,21 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
  * The admin dataset is request-independent (service-role client, no cookies/headers),
  * so cache it globally for a short window. The admin layout is `force-dynamic`, so
  * WITHOUT this every navigation — including the header toggles (currency / locale)
- * and the chart's granularity links — re-ran the full 6-table fetch (~1–3s). The
+ * and the chart's granularity links — re-ran the full multi-table fetch (~1–3s). The
  * per-request view computation + formatting stay OUTSIDE the cache, so locale /
  * currency / range still apply live. `revalidateTag("admin-dataset")` force-refreshes.
  */
 const ADMIN_DATASET_TTL_SECONDS = 60; // analytics tolerate ≤60s staleness
 
-/** JSON-safe shape stored in the cache: the 6 tables (emails are cached separately). */
+/** JSON-safe shape stored in the cache: the tables + loadedAt (emails are cached separately). */
 type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser">;
 
 const cachedAdminDataset = unstable_cache(
   fetchAdminDataset,
-  ["admin-dataset"],
+  // v2: the console rebuild added plan ids, meal-plan probes, workout plans and
+  // generation kinds. A new key part keeps a pre-deploy cache entry (without
+  // them) from ever being read by the new builders.
+  ["admin-dataset", "v2"],
   { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: ["admin-dataset"] },
 );
 
@@ -266,7 +371,12 @@ const cachedEmailEntries = unstable_cache(fetchEmailEntries, ["admin-email-map"]
   tags: ["admin-email-map"],
 });
 
-export async function loadAdminDataset(): Promise<AdminDataset> {
+/**
+ * The dataset for this request. `cache()` makes every caller in one render
+ * (the console frame's rail counts, the overview, the families page) share one
+ * read of the two unstable_cache entries and one rebuilt Map.
+ */
+export const loadAdminDataset = cache(async (): Promise<AdminDataset> => {
   const [base, email] = await Promise.all([cachedAdminDataset(), cachedEmailEntries()]);
   // Rebuild the Map on this side of the cache so every consumer still gets a real
   // Map (`.get`), not the `{}` a serialized Map would degrade to.
@@ -275,7 +385,7 @@ export async function loadAdminDataset(): Promise<AdminDataset> {
     emailByUser: new Map(email.entries),
     truncated: email.truncated ? [...base.truncated, "emails"] : base.truncated,
   };
-}
+});
 
 // ---------------------------------------------------------------------------
 // Aggregation (pure over the dataset)
@@ -361,6 +471,97 @@ export function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
     } satisfies SubscriberRow;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Families list rows (pure over the dataset)
+// ---------------------------------------------------------------------------
+
+const newestFirst = <R extends { id: string; created_at: string }>(rows: readonly R[]): R[] =>
+  [...rows].sort((a, b) => {
+    const d = Date.parse(b.created_at) - Date.parse(a.created_at);
+    if (d) return d;
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  });
+
+/**
+ * The families list: every SubscriberRow field, plus what each household is
+ * actually served (meal + exercise, by the app's own getLatestPlan /
+ * getLatestWorkoutPlan rules — see mealProjection.ts / workoutProjection.ts)
+ * and the attention flags.
+ *
+ * `nowMs` defaults to when the dataset was READ, not the wall clock: the rows
+ * are a snapshot up to a minute old, and judging a snapshot's "silence since
+ * the last write" against a later clock would call a live run stale early.
+ */
+export function buildFamilyRows(
+  ds: AdminDataset,
+  nowMs: number = Date.parse(ds.loadedAt) || Date.now(),
+): FamilyRow[] {
+  const base = buildSubscriberRows(ds);
+  // Defensive `?? []`: a dataset cached by the previous deploy lacks these.
+  const probeById = new Map((ds.planProbes ?? []).map((p) => [p.id, p]));
+  const plansByUser = groupBy(ds.plans, (p) => p.user_id);
+  const workoutsByUser = groupBy(ds.workoutPlans ?? [], (w) => w.user_id);
+  const gensByUser = groupBy(ds.generations, (g) => g.user_id);
+
+  return base.map((row) => {
+    const mealRows: MealRowLite[] = newestFirst(plansByUser.get(row.userId) ?? []).map((p) => {
+      const probe = probeById.get(p.id) ?? null;
+      return {
+        id: p.id,
+        status: p.status,
+        created_at: p.created_at,
+        updated_at: probe?.updated_at ?? null,
+        probe,
+      };
+    });
+    const workoutRows: WorkoutRowLite[] = newestFirst(workoutsByUser.get(row.userId) ?? []);
+    const newestRun = newestGenerationByKind(gensByUser.get(row.userId) ?? []);
+    const meal = mealCellFromRows(mealRows, nowMs);
+    const workout = workoutCellFromRows(workoutRows, nowMs);
+    return {
+      ...row,
+      meal,
+      workout,
+      flags: deriveFamilyFlags({
+        status: row.status,
+        cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+        overLimit: row.overLimit,
+        onboardingComplete: row.onboardingComplete,
+        newestMealRunStatus: newestRun.meal?.status ?? null,
+        newestWorkoutRunStatus: newestRun.workout?.status ?? null,
+        meal,
+        workout,
+      }),
+    } satisfies FamilyRow;
+  });
+}
+
+export interface FamilyListData {
+  rows: FamilyRow[];
+  /** When the underlying dataset was read (ISO). */
+  loadedAt: string;
+  /** Tables where the row ceiling was hit — counts may undercount. */
+  truncated: string[];
+}
+
+/**
+ * The families list for this request. The console frame (rail counts, ⌘K
+ * index) and the families page both read it; `cache()` builds it once.
+ */
+export const loadFamilyList = cache(async (): Promise<FamilyListData> => {
+  const ds = await loadAdminDataset();
+  return {
+    rows: buildFamilyRows(ds),
+    loadedAt: ds.loadedAt ?? new Date().toISOString(),
+    truncated: ds.truncated,
+  };
+});
+
+/** Just the rows of `loadFamilyList` (same per-request computation). */
+export const loadFamilyRows = cache(async (): Promise<FamilyRow[]> => {
+  return (await loadFamilyList()).rows;
+});
 
 const DAY_MS = 86_400_000;
 

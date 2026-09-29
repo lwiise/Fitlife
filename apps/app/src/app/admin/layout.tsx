@@ -1,4 +1,5 @@
 import { getAdminLocale } from "@/lib/admin/locale";
+import "./admin.css";
 
 /**
  * Admin subtree shell: resolves the admin language and flips direction (RTL for

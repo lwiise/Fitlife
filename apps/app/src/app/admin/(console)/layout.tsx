@@ -1,4 +1,8 @@
 import { requireAdmin } from "@/lib/admin/auth";
+import { loadConsoleNavData } from "@/lib/admin/family";
+import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
+import { ConsoleFrame } from "../_shell/ConsoleFrame";
+import { toShellNav, type ShellNav } from "../_shell/navData";
 
 /**
  * Everything an operator sees after signing in lives in this group; the login
@@ -6,12 +10,30 @@ import { requireAdmin } from "@/lib/admin/auth";
  * here. Every page and route handler still calls requireAdmin() itself —
  * a layout is not re-run on client-side navigation, so it cannot be the only
  * gate.
+ *
+ * The nav data (rail counts + the ⌘K family index) is started here but NOT
+ * awaited: the frame paints immediately and the counts stream in. A failed
+ * load resolves to null — the rail shows no counts and says so — instead of
+ * taking every console page down with it.
  */
 export default async function ConsoleLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requireAdmin();
-  return <>{children}</>;
+  const admin = await requireAdmin();
+  const [locale, currency] = await Promise.all([getAdminLocale(), getAdminCurrency()]);
+
+  const nav: Promise<ShellNav | null> = loadConsoleNavData()
+    .then((data) => toShellNav(data, locale))
+    .catch((error: unknown) => {
+      console.error("[admin] console nav data failed", error);
+      return null;
+    });
+
+  return (
+    <ConsoleFrame locale={locale} currency={currency} adminEmail={admin.email} nav={nav}>
+      {children}
+    </ConsoleFrame>
+  );
 }

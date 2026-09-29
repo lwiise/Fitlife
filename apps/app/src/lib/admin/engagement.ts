@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { adminDb } from "./db";
 
 /**
@@ -30,7 +31,7 @@ const WINDOW_DAYS = 7;
 /** Days after signup before a monthly sub's period start implies a renewal. */
 const RENEWAL_PROXY_DAYS = 20;
 
-export async function loadEngagementStats(): Promise<EngagementStats> {
+async function fetchEngagementStats(): Promise<EngagementStats> {
   const db = adminDb();
   const sinceIso = new Date(
     Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000,
@@ -114,3 +115,17 @@ export async function loadEngagementStats(): Promise<EngagementStats> {
     renewedOnce,
   };
 }
+
+/**
+ * Cached like the admin dataset: request-independent (service-role client), so
+ * one read a minute serves every overview load instead of five queries per
+ * navigation. The value is plain JSON. `revalidateTag("admin-engagement")`
+ * force-refreshes.
+ */
+const ENGAGEMENT_TTL_SECONDS = 60;
+
+export const loadEngagementStats: () => Promise<EngagementStats> = unstable_cache(
+  fetchEngagementStats,
+  ["admin-engagement"],
+  { revalidate: ENGAGEMENT_TTL_SECONDS, tags: ["admin-engagement"] },
+);

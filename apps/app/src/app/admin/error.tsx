@@ -1,38 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { t } from "@/lib/admin/i18n";
+import { ErrorView } from "./_shell/ErrorView";
 
 /**
- * Admin error boundary. Logs to the console (Sentry picks it up) and offers a
- * retry. Defaults to Arabic — the operator default.
+ * Admin error boundary for anything the console frame itself could not render
+ * (the (console) layout, or a page when the frame is gone). Page errors inside
+ * the frame are caught one level down by (console)/error.tsx, which keeps the
+ * rail and top bar. Logs to the console (Sentry picks it up).
  */
 export default function AdminError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
-  useEffect(() => {
-    console.error("[admin] render error", error);
-  }, [error]);
-
-  return (
-    <main className="container-app grid min-h-[60vh] place-items-center py-12">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-bold text-brand-ink">{t("error_title", "ar")}</h1>
-        <p className="mt-2 text-sm leading-7 text-brand-ink-muted">
-          {t("error_body", "ar")}
-        </p>
-        <button
-          type="button"
-          onClick={reset}
-          className="mt-6 inline-flex h-11 items-center rounded-lg bg-brand-purple-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-purple-700"
-        >
-          {t("retry", "ar")}
-        </button>
-      </div>
-    </main>
-  );
+  return <ErrorView error={error} retry={retry} />;
 }

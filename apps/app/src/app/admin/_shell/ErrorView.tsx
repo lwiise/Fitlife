@@ -1,0 +1,69 @@
+"use client";
+
+import { useEffect, useSyncExternalStore } from "react";
+import { RotateCcw, TriangleAlert } from "lucide-react";
+import type { AdminLocale } from "@/lib/admin/format";
+import { t } from "@/lib/admin/i18n";
+import { Btn, BtnLink } from "../_ui/Button";
+
+function noopSubscribe() {
+  return () => {};
+}
+
+/** The boundary has no server props; read the language the admin layout set. */
+function readLocale(): AdminLocale {
+  const root = document.querySelector(".admin-root");
+  return root?.getAttribute("lang") === "en" ? "en" : "ar";
+}
+
+function serverLocale(): AdminLocale {
+  return "ar";
+}
+
+/**
+ * The console's error screen, shared by app/admin/error.tsx (outside the
+ * frame) and app/admin/(console)/error.tsx (inside it, so a failing page keeps
+ * the rail and top bar). Retry re-fetches and re-renders the segment; the
+ * digest lets an operator quote the server log entry.
+ */
+export function ErrorView({
+  error,
+  retry,
+}: {
+  error: Error & { digest?: string };
+  retry: () => void;
+}) {
+  const locale = useSyncExternalStore(noopSubscribe, readLocale, serverLocale);
+
+  useEffect(() => {
+    console.error("[admin] render error", error);
+  }, [error]);
+
+  return (
+    <div className="ad-error">
+      <div className="ad-error-card" role="alert">
+        <span className="ad-error-ic" aria-hidden="true">
+          <TriangleAlert className="ad-ic" />
+        </span>
+        <h1>{t("sh_error_title", locale)}</h1>
+        <p>{t("sh_error_body", locale)}</p>
+        {error.digest ? (
+          <p className="ad-ref">
+            {t("sh_error_ref", locale)}
+            <span className="ad-mono" dir="ltr" translate="no">
+              {error.digest}
+            </span>
+          </p>
+        ) : null}
+        <div className="ad-row">
+          <Btn variant="primary" icon={RotateCcw} onClick={() => retry()}>
+            {t("retry", locale)}
+          </Btn>
+          <BtnLink href="/admin" variant="secondary">
+            {t("sh_back_overview", locale)}
+          </BtnLink>
+        </div>
+      </div>
+    </div>
+  );
+}
