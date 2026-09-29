@@ -28,7 +28,6 @@ import {
 import { WeekStrip, type WeekStripDay } from "./bar/WeekStrip";
 import { MemberSheet, type MemberSheetMember } from "./bar/MemberSheet";
 import { MoreSheet } from "./bar/MoreSheet";
-import { RecipesSheet, type RecipesSheetDish } from "./bar/RecipesSheet";
 import { PLAN_MENU_ICON_CLASS, PLAN_MENU_ITEM_CLASS } from "./bar/menuItem";
 import { SaraToast } from "./sara/SaraToast";
 import { SaraChangesSheet } from "./sara/SaraChangesSheet";
@@ -65,7 +64,6 @@ import {
 } from "@/lib/plans/locales";
 import { orderDayMeals } from "@/lib/plans/mealOrder";
 import { dayLineDate, mealStripDays } from "@/lib/plans/weekStrip";
-import { householdDayDishes } from "@/lib/plans/householdDishes";
 import { memberSheetStatus } from "@/lib/plans/memberSheetStatus";
 import { genderPick } from "@/lib/copy/gender";
 import { arNum } from "@/lib/copy/numbers";
@@ -168,8 +166,8 @@ export function PlanViewer({
   // Hide the PDF export (the admin plan view: read-only, no customer export).
   hideExport?: boolean;
   // Set (to a non-Arabic locale) when the household has a housekeeper who reads
-  // another language → the bar's «الوصفات» door opens HER translated view
-  // (without one it opens the day's recipes in a sheet).
+  // another language → the bar's «الخدامة» door opens HER translated view
+  // (without one the bar has no door).
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
@@ -807,7 +805,7 @@ export function PlanViewer({
   // One sheet at a time: opening one replaces whichever was open, and the
   // Sara toast waits while any is up.
   const [openSheet, setOpenSheet] = useState<
-    "member" | "more" | "recipes" | "sara" | null
+    "member" | "more" | "sara" | null
   >(null);
   // Spoken after a member switch when focus did NOT land back on the renamed
   // identity trigger (see selectMember) — otherwise nothing says the plan
@@ -818,7 +816,6 @@ export function PlanViewer({
   // would be <body> there).
   const identityRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
-  const recipesRef = useRef<HTMLButtonElement>(null);
   // The failed day's own «إنشاء خطة جديدة» opens a ConfirmDialog that is not
   // one of the sheets, so it reports itself: the Sara toast must wait it out
   // too, or its once-a-week note times out (and is marked seen) behind the
@@ -910,8 +907,8 @@ export function PlanViewer({
   const hasMenuActions =
     !readOnly || (!translated && !hideExport);
 
-  // With a cook who reads another language, «الوصفات» opens HER view — the
-  // translated one she cooks from; without one, the day's dishes in a sheet.
+  // With a cook who reads another language, «الخدامة» opens HER view — the
+  // translated one she cooks from. An Arabic-reading cook reads /plan itself.
   const cookLanguage =
     housekeeperLocale && isLocaleCode(housekeeperLocale)
       ? LOCALE_INFO[housekeeperLocale].ar_name
@@ -1040,24 +1037,6 @@ export function PlanViewer({
     };
   });
 
-  // «الوصفات» (no cook): every dish of the open day for the whole house, a
-  // shared pot once. «حصتك» marks the owner's portion — she is the reader.
-  const recipeDishes: RecipesSheetDish[] =
-    interactive && !housekeeperLocale
-      ? householdDayDishes(plan.members, activeDayIndex).map(
-          ({ meal, memberId, sharerIds }) => ({
-            meal,
-            forName: isSolo || sharerIds ? null : (memberNames[memberId] ?? null),
-            currentMemberId: sharerIds?.includes("mom") ? "mom" : undefined,
-            absentMemberIds: sharerIds
-              ? sharerIds.filter((id) =>
-                  absenceSet.has(`${activeDayIndex}|${meal.slot}|${id}`),
-                )
-              : undefined,
-          }),
-        )
-      : [];
-
   // The ••• sheet: first what concerns the person on screen, then the week.
   const personItems: ReactNode[] = [];
   if (showJourney && journeyEntry) {
@@ -1172,25 +1151,17 @@ export function PlanViewer({
           />
           {(interactive || hasMenuActions) && (
             <PlanBarEnd>
-              {interactive &&
-                (housekeeperLocale ? (
-                  <PlanBarPill
-                    href="/plan/housekeeper"
-                    icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
-                    ariaLabel={inCookLanguage ? `الوصفات ${inCookLanguage}` : undefined}
-                  >
-                    الوصفات
-                  </PlanBarPill>
-                ) : (
-                  <PlanBarPill
-                    ref={recipesRef}
-                    onClick={() => setOpenSheet("recipes")}
-                    expanded={openSheet === "recipes"}
-                    icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
-                  >
-                    الوصفات
-                  </PlanBarPill>
-                ))}
+              {interactive && housekeeperLocale && (
+                <PlanBarPill
+                  href="/plan/housekeeper"
+                  icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
+                  ariaLabel={
+                    inCookLanguage ? `وصفات الخدامة ${inCookLanguage}` : "وصفات الخدامة"
+                  }
+                >
+                  الخدامة
+                </PlanBarPill>
+              )}
               {hasMenuActions && (
                 <PlanBarMore
                   ref={moreRef}
@@ -1553,19 +1524,6 @@ export function PlanViewer({
           }
           closeLabel={t.close}
           returnFocusRef={moreRef}
-        />
-      )}
-
-      {interactive && !housekeeperLocale && (
-        <RecipesSheet
-          open={openSheet === "recipes"}
-          onClose={() => setOpenSheet(null)}
-          title={`وصفات ${activeDate}`}
-          note={isSolo ? undefined : "وصفات كل أطباق اليوم للبيت كله"}
-          dishes={recipeDishes}
-          memberNames={memberNames}
-          emptyText="لم يُجهَّز هذا اليوم بعد."
-          returnFocusRef={recipesRef}
         />
       )}
 

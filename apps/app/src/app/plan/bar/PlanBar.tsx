@@ -109,51 +109,31 @@ export function PlanBarIdentity({
   );
 }
 
-/** The bar's one labelled door — «الوصفات». A link when it navigates; a
- * button when it opens a sheet, and then it says so (`expanded`). */
+/** The bar's one labelled door — «الخدامة», a link to the cook's translated
+ * view. */
 export function PlanBarPill({
   href,
-  onClick,
   icon,
   children,
   ariaLabel,
-  expanded = false,
-  ref,
 }: {
-  href?: string;
-  onClick?: () => void;
+  href: string;
   icon: ReactNode;
   children: ReactNode;
   ariaLabel?: string;
-  /** Button form only: the sheet it opens is showing. */
-  expanded?: boolean;
-  ref?: Ref<HTMLButtonElement>;
 }) {
-  const className = clsx(
-    "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-brand-tint px-3 text-[15px] font-bold text-brand-purple-900 transition-colors hover:bg-brand-lavender/40 motion-reduce:transition-none",
-    FOCUS,
-  );
-  if (href) {
-    return (
-      <Link href={href} aria-label={ariaLabel} className={className}>
-        {icon}
-        {children}
-      </Link>
-    );
-  }
   return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
+    <Link
+      href={href}
       aria-label={ariaLabel}
-      className={className}
+      className={clsx(
+        "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-brand-tint px-3 text-[15px] font-bold text-brand-purple-900 transition-colors hover:bg-brand-lavender/40 motion-reduce:transition-none",
+        FOCUS,
+      )}
     >
       {icon}
       {children}
-    </button>
+    </Link>
   );
 }
 
