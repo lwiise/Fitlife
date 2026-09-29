@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { prepareMemberJoin, prepareSharedGroupRegen } from "./generate";
+import { joinMarksNeeded, prepareMemberJoins, prepareSharedGroupRegen } from "./generate";
 import type { PlanPromptContext, PlanPromptContextMember } from "./buildContext";
 import type { MealPlan, MemberPlan, Meal, Day } from "./schema";
 import { MealPlanSchema } from "./schema";
@@ -224,86 +224,97 @@ describe("prepareSharedGroupRegen", () => {
 });
 
 // ── A newcomer joining a week already under way (owner directive 09/2026) ────
-// Four-day week starting 2026-06-06, so "today" 2026-06-07 is day 1.
-describe("prepareSharedGroupRegen — mid-week join rebuilds only what is left", () => {
-  const WEEK = [0, 1, 2, 3];
-  const LUNCH: Meal = { ...MEAL, slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة" };
-  // Every day's table: breakfast + lunch.
-  const tableDay = (di: number): Day => ({ ...day(di), meals: [MEAL, LUNCH] });
-  const weekMember = (member_id: string): MemberPlan => ({
-    ...planMember(member_id),
-    days: WEEK.map(tableDay),
+// Four-day week starting 2026-06-06, so "today" 2026-06-07 is day 1. Every
+// day's table: breakfast, lunch, dinner.
+const WEEK = [0, 1, 2, 3];
+const LUNCH: Meal = { ...MEAL, slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة" };
+const DINNER: Meal = { ...MEAL, slot: "dinner", slot_name_ar: "العشاء", recipe_name_ar: "شوربة" };
+const tableDay = (di: number): Day => ({ ...day(di), meals: [MEAL, LUNCH, DINNER] });
+const weekMember = (member_id: string): MemberPlan => ({
+  ...planMember(member_id),
+  days: WEEK.map(tableDay),
+});
+const weekPlan = (members: MemberPlan[], extra: Partial<MealPlan> = {}): MealPlan =>
+  MealPlanSchema.parse({
+    week_start_date: "2026-06-06",
+    members,
+    days_total: WEEK.length,
+    ...extra,
   });
-  const weekPlan = (members: MemberPlan[], extra: Partial<MealPlan> = {}): MealPlan =>
-    MealPlanSchema.parse({
-      week_start_date: "2026-06-06",
-      members,
-      days_total: WEEK.length,
-      ...extra,
-    });
-  const mealedDayIndices = (plan: MealPlan, memberId: string) =>
-    plan.members
-      .find((m) => m.member_id === memberId)!
-      .days.filter((d) => d.meals.length > 0)
-      .map((d) => d.day_index);
+const mealedDayIndices = (plan: MealPlan, memberId: string) =>
+  plan.members
+    .find((m) => m.member_id === memberId)!
+    .days.filter((d) => d.meals.length > 0)
+    .map((d) => d.day_index);
+const onDay = (
+  dateISO: string,
+  checkins: { slot: string; member_id: string | null }[] = [],
+  absences: { slot: string; member_id: string }[] = [],
+) => ({
+  dateISO,
+  checkins: checkins.map((c) => ({ ...c, local_date: dateISO })),
+  absences: absences.map((a) => ({ ...a, local_date: dateISO })),
+});
+const TODAY = "2026-06-07";
+
+/** The order the worker runs them in: record joins on the plan as read, then clear. */
+function sharedRun(
+  ctx: PlanPromptContext,
+  plan: MealPlan,
+  today: ReturnType<typeof onDay> | undefined,
+  memberRegenerate = false,
+) {
+  return prepareSharedGroupRegen(ctx, prepareMemberJoins(ctx, plan, today), {
+    todayISO: today?.dateISO,
+    memberRegenerate,
+  });
+}
+
+describe("a shared add rebuilds only what is left of the week", () => {
   const joinCtx = () =>
     makeCtx("shared", [
       ctxMember("m-shared", "shared"),
       ctxMember("m-indep", "independent"),
       ctxMember("m-new", "shared"), // the newcomer, not in the plan yet
     ]);
-  const today = (checkins: { slot: string; member_id: string | null }[] = []) => ({
-    dateISO: "2026-06-07",
-    checkins: checkins.map((c) => ({ ...c, local_date: "2026-06-07" })),
-    absences: [],
-  });
 
   it("keeps past days AND today for the shared table; clears only the days after today", () => {
     const plan = weekPlan([weekMember("mom"), weekMember("m-shared"), weekMember("m-indep")]);
 
-    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, today());
+    const { existingPlan } = sharedRun(joinCtx(), plan, onDay(TODAY));
 
-    // Day 0 (past) and day 1 (today) stay exactly as they were…
     for (const id of ["mom", "m-shared"]) {
       expect(mealedDayIndices(existingPlan, id)).toEqual([0, 1]);
       const before = plan.members.find((m) => m.member_id === id)!.days.slice(0, 2);
       const after = existingPlan.members.find((m) => m.member_id === id)!.days.slice(0, 2);
       expect(after).toEqual(before);
     }
-    // …the rest of the week is what the group rebuilds, shells kept.
     expect(dayShells(existingPlan, "mom")).toBe(WEEK.length);
-    // The independent member is untouched either way.
     expect(mealedDayIndices(existingPlan, "m-indep")).toEqual(WEEK);
   });
 
-  it("stamps where the newcomer's week starts, with today's answered slots closed", () => {
-    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
-
-    const { existingPlan } = prepareSharedGroupRegen(
+  it("records where the newcomer's week starts, with today's answered slots closed", () => {
+    const { existingPlan } = sharedRun(
       joinCtx(),
-      plan,
-      today([{ slot: "breakfast", member_id: "mom" }]),
+      weekPlan([weekMember("mom"), weekMember("m-shared")]),
+      onDay(TODAY, [{ slot: "breakfast", member_id: "mom" }]),
     );
-
-    expect(existingPlan.member_joins).toEqual({
-      "m-new": { day_index: 1, closed_slots: ["breakfast"] },
+    expect(existingPlan.member_joins?.["m-new"]).toEqual({
+      day_index: 1,
+      closed_slots: ["breakfast"],
     });
-    // Nobody else gets a join record.
+    // Nobody already in the plan gets one.
     expect(existingPlan.member_joins?.mom).toBeUndefined();
+    expect(existingPlan.member_joins?.["m-shared"]).toBeUndefined();
   });
 
   it("a fully answered today means the newcomer starts tomorrow — and today is still kept", () => {
-    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
-
-    const { existingPlan } = prepareSharedGroupRegen(
+    const { existingPlan } = sharedRun(
       joinCtx(),
-      plan,
-      today([
-        { slot: "breakfast", member_id: "m-shared" },
-        { slot: "lunch", member_id: "household" },
-      ]),
+      weekPlan([weekMember("mom"), weekMember("m-shared")]),
+      onDay(TODAY, [{ slot: "dinner", member_id: "household" }]),
     );
-
+    // Dinner marked: breakfast and lunch are behind the household too.
     expect(existingPlan.member_joins?.["m-new"]).toEqual({ day_index: 2 });
     expect(mealedDayIndices(existingPlan, "mom")).toEqual([0, 1]);
   });
@@ -312,140 +323,192 @@ describe("prepareSharedGroupRegen — mid-week join rebuilds only what is left",
     const plan = weekPlan([weekMember("mom"), weekMember("m-shared")], {
       member_joins: { "m-shared": { day_index: 1 } },
     });
-
-    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, today());
-
+    const { existingPlan } = sharedRun(joinCtx(), plan, onDay(TODAY));
     expect(existingPlan.member_joins?.["m-shared"]).toEqual({ day_index: 1 });
     expect(existingPlan.member_joins?.["m-new"]).toEqual({ day_index: 1 });
   });
 
   it("a week that is already over clears nothing and records the newcomer for next week", () => {
-    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
-
-    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, {
-      dateISO: "2026-06-15",
-      checkins: [],
-      absences: [],
-    });
-
+    const { existingPlan } = sharedRun(
+      joinCtx(),
+      weekPlan([weekMember("mom"), weekMember("m-shared")]),
+      onDay("2026-06-15"),
+    );
     expect(mealedDayIndices(existingPlan, "mom")).toEqual(WEEK);
     expect(existingPlan.member_joins?.["m-new"]).toEqual({ day_index: WEEK.length });
   });
 
-  it("joining on the week's first day with nothing answered needs no record — they are a whole-week member", () => {
-    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
-
-    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, {
-      dateISO: "2026-06-06",
-      checkins: [],
-      absences: [],
-    });
-
+  it("joining on the week's first day with nothing answered needs no record", () => {
+    const { existingPlan } = sharedRun(
+      joinCtx(),
+      weekPlan([weekMember("mom"), weekMember("m-shared")]),
+      onDay("2026-06-06"),
+    );
     expect(existingPlan.member_joins).toBeUndefined();
     // Today's dishes are still kept (the newcomer joins them); the rest rebuilds.
     expect(mealedDayIndices(existingPlan, "mom")).toEqual([0]);
   });
 
-  it("no newcomer (a shared member's regenerate re-merging) keeps the whole-week rebuild", () => {
-    const ctx = makeCtx("shared", [ctxMember("m-shared", "shared")]);
-    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
-
-    const { existingPlan } = prepareSharedGroupRegen(ctx, plan, today());
-
+  it("a member's REGENERATE rebuilds the whole week even while another shared member is pending", () => {
+    // The review's case: dad's allergy edit must reach tonight's dinner, even
+    // though m-new (added while a run was busy) is not in the plan yet.
+    const { existingPlan } = sharedRun(
+      joinCtx(),
+      weekPlan([weekMember("mom"), weekMember("m-shared")]),
+      onDay(TODAY, [{ slot: "breakfast", member_id: "mom" }]),
+      true,
+    );
     expect(mealedDayIndices(existingPlan, "mom")).toEqual([]);
-    expect(existingPlan.member_joins).toBeUndefined();
+    expect(mealedDayIndices(existingPlan, "m-shared")).toEqual([]);
+    // …and the pending member it pulls in still joins only what is left.
+    expect(existingPlan.member_joins?.["m-new"]).toEqual({
+      day_index: 1,
+      closed_slots: ["breakfast"],
+    });
   });
 
-  it("without today's marks it is the whole-week rebuild it always was", () => {
+  it("no newcomer, or no date, is the whole-week rebuild it always was", () => {
+    const ctx = makeCtx("shared", [ctxMember("m-shared", "shared")]);
     const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
-
-    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan);
-
-    expect(mealedDayIndices(existingPlan, "mom")).toEqual([]);
-    expect(existingPlan.member_joins).toBeUndefined();
+    expect(mealedDayIndices(sharedRun(ctx, plan, onDay(TODAY)).existingPlan, "mom")).toEqual([]);
+    expect(mealedDayIndices(sharedRun(joinCtx(), plan, undefined).existingPlan, "mom")).toEqual(
+      [],
+    );
   });
 });
 
-// ── An independent (or queued) newcomer generated on their own ──────────────
-// Same four-day week; "today" 2026-06-07 is day 1. The table is breakfast +
-// lunch for everyone in the plan.
-describe("prepareMemberJoin — one newcomer, planned only from what is left", () => {
-  const WEEK = [0, 1, 2, 3];
-  const LUNCH: Meal = { ...MEAL, slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة" };
-  const tableDay = (di: number): Day => ({ ...day(di), meals: [MEAL, LUNCH] });
-  const weekMember = (member_id: string): MemberPlan => ({
-    ...planMember(member_id),
-    days: WEEK.map(tableDay),
-  });
-  const plan = () =>
-    MealPlanSchema.parse({
-      week_start_date: "2026-06-06",
-      members: [weekMember("mom"), weekMember("m-shared"), weekMember("m-indep")],
-      days_total: WEEK.length,
-    });
-  const ctx = () =>
+describe("prepareMemberJoins — every newcomer, whatever run brings them in", () => {
+  const plan = () => weekPlan([weekMember("mom"), weekMember("m-shared"), weekMember("m-indep")]);
+  const ctx = (newcomers: [string, "shared" | "independent"][] = []) =>
     makeCtx("shared", [
       ctxMember("m-shared", "shared"),
       ctxMember("m-indep", "independent"),
-      ctxMember("new-indep", "independent"),
-      ctxMember("new-shared", "shared"),
+      ...newcomers.map(([id, mode]) => ctxMember(id, mode)),
     ]);
-  const today = (checkins: { slot: string; member_id: string | null }[] = [], dateISO = "2026-06-07") => ({
-    dateISO,
-    checkins: checkins.map((c) => ({ ...c, local_date: dateISO })),
-    absences: [],
-  });
 
-  it("records where an independent newcomer's week starts — and touches nobody else", () => {
+  it("records an independent newcomer's start and touches nobody else", () => {
     const before = plan();
-    const after = prepareMemberJoin(ctx(), before, "new-indep", today([{ slot: "breakfast", member_id: "mom" }]));
-
+    const after = prepareMemberJoins(
+      ctx([["new-indep", "independent"]]),
+      before,
+      onDay(TODAY, [{ slot: "breakfast", member_id: "mom" }]),
+    );
     expect(after.member_joins).toEqual({
       "new-indep": { day_index: 1, closed_slots: ["breakfast"] },
     });
     expect(after.members).toEqual(before.members);
   });
 
-  it("for an independent newcomer the whole household's mealtimes count — an independent member's mark closes the slot", () => {
-    const after = prepareMemberJoin(
-      ctx(),
+  it("an independent newcomer sits at the whole household's mealtimes — an independent member's mark counts", () => {
+    const after = prepareMemberJoins(
+      ctx([["new-indep", "independent"]]),
       plan(),
-      "new-indep",
-      today([{ slot: "lunch", member_id: "m-indep" }]),
+      onDay(TODAY, [{ slot: "breakfast", member_id: "m-indep" }]),
     );
-    expect(after.member_joins?.["new-indep"]).toEqual({ day_index: 1, closed_slots: ["lunch"] });
+    expect(after.member_joins?.["new-indep"]).toEqual({
+      day_index: 1,
+      closed_slots: ["breakfast"],
+    });
   });
 
-  it("a shared newcomer reached one at a time sits at the shared table — a private meal's mark does not close it", () => {
-    const after = prepareMemberJoin(
-      ctx(),
+  it("a shared newcomer sits at the shared table — a private meal's mark does not close it", () => {
+    const after = prepareMemberJoins(
+      ctx([["new-shared", "shared"]]),
       plan(),
-      "new-shared",
-      today([{ slot: "lunch", member_id: "m-indep" }]),
+      onDay(TODAY, [{ slot: "breakfast", member_id: "m-indep" }]),
     );
     expect(after.member_joins?.["new-shared"]).toEqual({ day_index: 1 });
   });
 
-  it("a whole day answered means tomorrow; a week already over means next week", () => {
-    const done = today([
-      { slot: "breakfast", member_id: "household" },
-      { slot: "lunch", member_id: "household" },
-    ]);
-    expect(prepareMemberJoin(ctx(), plan(), "new-indep", done).member_joins?.["new-indep"]).toEqual({
-      day_index: 2,
+  it("a marked lunch closes the breakfast nobody marked — it was eaten hours ago", () => {
+    const after = prepareMemberJoins(
+      ctx([["new-shared", "shared"]]),
+      plan(),
+      onDay(TODAY, [{ slot: "lunch", member_id: "m-shared" }]),
+    );
+    expect(after.member_joins?.["new-shared"]).toEqual({
+      day_index: 1,
+      closed_slots: ["breakfast", "lunch"],
     });
-    expect(
-      prepareMemberJoin(ctx(), plan(), "new-indep", today([], "2026-06-20")).member_joins?.[
-        "new-indep"
-      ],
-    ).toEqual({ day_index: WEEK.length });
   });
 
-  it("returns the plan unchanged for a refill, the owner, no marks read, or a day-0 join with nothing answered", () => {
+  it("an absentee's personal mark says nothing about the meal", () => {
+    const after = prepareMemberJoins(
+      ctx([["new-shared", "shared"]]),
+      plan(),
+      onDay(TODAY, [{ slot: "lunch", member_id: "m-shared" }], [{ slot: "lunch", member_id: "m-shared" }]),
+    );
+    expect(after.member_joins?.["new-shared"]).toEqual({ day_index: 1 });
+  });
+
+  it("leaves the plan as it is with no marks read, for people already in it, or for a day-0 join with nothing answered", () => {
     const p = plan();
-    expect(prepareMemberJoin(ctx(), p, "m-indep", today())).toBe(p); // already in the plan
-    expect(prepareMemberJoin(ctx(), p, "mom", today())).toBe(p);
-    expect(prepareMemberJoin(ctx(), p, "new-indep")).toBe(p);
-    expect(prepareMemberJoin(ctx(), p, "new-indep", today([], "2026-06-06"))).toBe(p);
+    expect(prepareMemberJoins(ctx([["new-indep", "independent"]]), p, undefined)).toBe(p);
+    expect(prepareMemberJoins(ctx(), p, onDay(TODAY))).toBe(p);
+    expect(prepareMemberJoins(ctx([["new-indep", "independent"]]), p, onDay("2026-06-06"))).toBe(p);
+  });
+
+  it("a refill of a joiner's still-empty first day adds what was answered since they joined", () => {
+    const joiner = { ...weekMember("new-indep"), days: WEEK.map((di) => (di < 2 ? { ...day(di), meals: [] } : tableDay(di))) };
+    const p = weekPlan([weekMember("mom"), weekMember("m-shared"), joiner], {
+      member_joins: { "new-indep": { day_index: 1, closed_slots: ["breakfast"] } },
+    });
+    // Lunch was cooked after they joined; their day 1 never landed.
+    const after = prepareMemberJoins(
+      ctx([["new-indep", "independent"]]),
+      p,
+      onDay(TODAY, [{ slot: "lunch", member_id: "mom" }]),
+    );
+    expect(after.member_joins?.["new-indep"]).toEqual({
+      day_index: 1,
+      closed_slots: ["breakfast", "lunch"],
+    });
+    // Once dinner is answered too, nothing of today is left for them.
+    const later = prepareMemberJoins(
+      ctx([["new-indep", "independent"]]),
+      p,
+      onDay(TODAY, [{ slot: "dinner", member_id: "household" }]),
+    );
+    expect(later.member_joins?.["new-indep"]).toEqual({ day_index: 2 });
+  });
+
+  it("a joiner whose first day already landed is left alone", () => {
+    const joiner = { ...weekMember("new-indep"), days: WEEK.map((di) => (di < 1 ? { ...day(di), meals: [] } : tableDay(di))) };
+    const p = weekPlan([weekMember("mom"), weekMember("m-shared"), joiner], {
+      member_joins: { "new-indep": { day_index: 1, closed_slots: ["breakfast"] } },
+    });
+    const after = prepareMemberJoins(
+      ctx([["new-indep", "independent"]]),
+      p,
+      onDay(TODAY, [{ slot: "lunch", member_id: "mom" }]),
+    );
+    expect(after.member_joins?.["new-indep"]).toEqual({ day_index: 1, closed_slots: ["breakfast"] });
+  });
+});
+
+describe("joinMarksNeeded — today's marks are read only when a join is being decided", () => {
+  const ctx = (extra: [string, "shared" | "independent"][] = []) =>
+    makeCtx("shared", [
+      ctxMember("m-shared", "shared"),
+      ...extra.map(([id, mode]) => ctxMember(id, mode)),
+    ]);
+
+  it("yes for a newcomer, no for a plan everyone is already in", () => {
+    const p = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+    expect(joinMarksNeeded(ctx([["m-new", "independent"]]), p, TODAY)).toBe(true);
+    expect(joinMarksNeeded(ctx(), p, TODAY)).toBe(false);
+  });
+
+  it("yes for a joiner whose first day is today and still empty — no once it has landed or passed", () => {
+    const empty = { ...weekMember("m-shared"), days: WEEK.map((di) => (di < 2 ? { ...day(di), meals: [] } : tableDay(di))) };
+    const p = weekPlan([weekMember("mom"), empty], {
+      member_joins: { "m-shared": { day_index: 1 } },
+    });
+    expect(joinMarksNeeded(ctx(), p, TODAY)).toBe(true);
+    expect(joinMarksNeeded(ctx(), p, "2026-06-08")).toBe(false);
+    const landed = weekPlan([weekMember("mom"), weekMember("m-shared")], {
+      member_joins: { "m-shared": { day_index: 1 } },
+    });
+    expect(joinMarksNeeded(ctx(), landed, TODAY)).toBe(false);
   });
 });

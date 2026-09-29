@@ -30,6 +30,8 @@ export type MealSlot = Meal["slot"];
 
 /** Schema enum order — gives closed_slots a stable, comparable order. */
 const SLOT_ORDER: readonly MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
+/** The main meals in the order a day eats them. */
+const MAIN_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner"];
 
 function isMealSlot(v: string): v is MealSlot {
   return (SLOT_ORDER as readonly string[]).includes(v);
@@ -151,6 +153,20 @@ export function openDayShare(
 
 // ── Where a newcomer's week starts ─────────────────────────────────────────
 
+/**
+ * The plan's day_index for a calendar date (YYYY-MM-DD) — negative before the
+ * week begins, >= its length after it ends. Null when either date is unreadable.
+ */
+export function planDayIndexOn(
+  plan: Pick<MealPlan, "week_start_date">,
+  dateISO: string,
+): number | null {
+  const start = Date.parse(`${plan.week_start_date}T00:00:00Z`);
+  const on = Date.parse(`${dateISO}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(on)) return null;
+  return Math.round((on - start) / 86_400_000);
+}
+
 /** meal_checkins.member_id for a row that speaks for the whole house (legacy
  * pre-per-person rows and the ختام اليوم ritual). Mirrors
  * HOUSEHOLD_CHECKIN_MEMBER in apps/app — the engine cannot import the app. */
@@ -183,8 +199,9 @@ export interface JoinToday {
  * whole household. Either way the whole-house row speaks for everyone, and an
  * absentee's mark is personal — they sat that meal out — and says nothing
  * about the meal, the same reading /plan gives it. A slot of today is closed
- * once someone at the table has answered it. Slot-keyed like every engagement
- * row, so a day with two snacks closes both with one mark.
+ * once someone at the table has answered it, or has answered a later main meal
+ * (a marked lunch means breakfast is behind them). Slot-keyed like every
+ * engagement row, so a day with two snacks closes both with one mark.
  *
  * Returns null when the week anchor cannot be read: with no basis for "what has
  * passed", the caller keeps the whole-week behaviour rather than guess.
@@ -194,14 +211,16 @@ export function joinWindow(params: {
   /** Whose marks close a slot: the shared group, or the whole household. */
   tableIds: ReadonlySet<string>;
   today: JoinToday;
+  /** Slots already closed for this newcomer (a refill of their first day):
+   * they stay closed whatever today's rows now say. */
+  alreadyClosed?: readonly MealSlot[];
 }): { todayIndex: number; join: MemberJoin } | null {
-  const { plan, tableIds, today } = params;
-  const start = Date.parse(`${plan.week_start_date}T00:00:00Z`);
-  const now = Date.parse(`${today.dateISO}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(now)) return null;
+  const { plan, tableIds, today, alreadyClosed } = params;
+  const indexed = planDayIndexOn(plan, today.dateISO);
+  if (indexed == null) return null;
 
   const weekLength = Math.min(7, plan.days_total ?? 7);
-  const todayIndex = Math.round((now - start) / 86_400_000);
+  const todayIndex = indexed;
   // The week has not begun (a clock edge — plans start on the day they are
   // made): all of it is ahead, and today's marks belong to another week.
   if (todayIndex < 0) return { todayIndex: -1, join: { day_index: 0 } };
@@ -229,6 +248,15 @@ export function joinWindow(params: {
       (tableIds.has(who) && !absent.has(`${row.slot}|${who}`));
     if (speaksForTable) answered.add(row.slot);
   }
+  for (const s of alreadyClosed ?? []) answered.add(s);
+  // An answered meal also closes every MAIN meal before it. Once lunch is
+  // marked, the breakfast nobody marked was still eaten hours ago —
+  // "unanswered" means unknown adherence, not a meal still ahead. Snacks keep
+  // their own marks: one could fall either side of lunch.
+  const latestMain = Math.max(
+    ...MAIN_SLOTS.map((s, i) => (answered.has(s) ? i : -1)),
+  );
+  for (let i = 0; i < latestMain; i++) answered.add(MAIN_SLOTS[i]!);
 
   const closed = SLOT_ORDER.filter((s) => tableSlots.has(s) && answered.has(s));
   // Every dish on today's table is answered: nothing of today is left, so the

@@ -14,7 +14,8 @@ import {
   runMealPlanTranslation,
   generationAlreadySettled,
   prepareSharedGroupRegen,
-  prepareMemberJoin,
+  prepareMemberJoins,
+  joinMarksNeeded,
 } from "../../../../packages/plan-engine/src/generate";
 import {
   runWorkoutPlanGeneration,
@@ -1233,18 +1234,36 @@ const handler = async (req: Request): Promise<Response> => {
     // mirrors the stripping triggerPlanGeneration did before it stopped sending
     // the plan in the body.
     let existingPlan: MealPlan | null = null;
+    // Who the prior plan already covered — before a member is stripped below.
+    let plannedIds: Set<string> | null = null;
+    const todayISO = riyadhTodayISO();
     if (body.carryOver) {
       const prior = await fetchPriorPlan(supabaseUrl, serviceKey, userId, mealPlanId);
       if (prior) {
+        plannedIds = new Set(prior.members.map((m) => m.member_id));
+        // Where every newcomer's week starts — a member added mid-week, shared or
+        // independent, gets nothing of the days already passed or of today's
+        // answered meals — decided on the plan AS READ: before the strip below
+        // (a member stripped for their own regenerate is not a newcomer) and
+        // before prepareSharedGroupRegen clears today's table. Today's marks are
+        // read only when a join is actually being decided, not on every chain
+        // hop and sweeper firing. Mirrors triggerPlanGeneration.
+        const base = joinMarksNeeded(context, prior, todayISO)
+          ? prepareMemberJoins(
+              context,
+              prior,
+              await readJoinToday(supabaseUrl, serviceKey, userId),
+            )
+          : prior;
         existingPlan =
           body.regenerateMemberId && !body.regenScope && !body.regenerateSharedGroup
             ? {
-                ...prior,
-                members: prior.members.filter(
+                ...base,
+                members: base.members.filter(
                   (m) => m.member_id !== body.regenerateMemberId,
                 ),
               }
-            : prior;
+            : base;
       }
     }
 
@@ -1257,32 +1276,31 @@ const handler = async (req: Request): Promise<Response> => {
       context.family_members = context.family_members.filter((m) =>
         keep.has(m.id),
       );
-      // A newcomer (an independent add, or the queue reaching a pending member)
-      // joins only what is left of the week — no meals on days already eaten,
-      // none in a slot the household already answered today. Refills of an
-      // in-plan member skip the read: they are not joins.
-      if (!existingPlan.members.some((m) => m.member_id === body.onlyMemberId)) {
-        existingPlan = prepareMemberJoin(
-          context,
-          existingPlan,
-          body.onlyMemberId,
-          await readJoinToday(supabaseUrl, serviceKey, userId),
-        );
-      }
     }
 
-    // Shared-group regen (a new SHARED member was added): rebuild every shared
-    // beneficiary together, carrying independent members + the housekeeper. Mirrors
-    // triggerPlanGeneration. No single generating_member_id → the UI shows them all
-    // loading. With a newcomer joining, only what is LEFT of the week is rebuilt —
-    // the days already eaten and today's answered meals stay as they were — which
-    // is why today's marks are read here, in the run that acts on them.
-    if (body.regenerateSharedGroup && existingPlan) {
-      const prep = prepareSharedGroupRegen(
-        context,
-        existingPlan,
-        await readJoinToday(supabaseUrl, serviceKey, userId),
+    // A member's own regenerate (not the shared group's) leaves pending
+    // newcomers to the add path, which knows where to seat them. Mirrors
+    // triggerPlanGeneration.
+    if (body.regenerateMemberId && !body.regenerateSharedGroup && plannedIds) {
+      const planned = plannedIds;
+      context.family_members = context.family_members.filter(
+        (m) =>
+          m.role === "housekeeper" || planned.has(m.id) || m.id === body.regenerateMemberId,
       );
+    }
+
+    // Shared-group regen (a new SHARED member was added, or a shared member's
+    // regenerate re-merging with the group): rebuild every shared beneficiary
+    // together, carrying independent members + the housekeeper. Mirrors
+    // triggerPlanGeneration. No single generating_member_id → the UI shows them
+    // all loading. An ADD rebuilds only what is LEFT of the week (the days
+    // already eaten and today's menu stay as they were); a member's regenerate
+    // rebuilds the whole week, so an allergy edit reaches tonight's dinner.
+    if (body.regenerateSharedGroup && existingPlan) {
+      const prep = prepareSharedGroupRegen(context, existingPlan, {
+        todayISO,
+        memberRegenerate: !!body.regenerateMemberId,
+      });
       existingPlan = prep.existingPlan;
       context.family_members = prep.familyMembers;
     }

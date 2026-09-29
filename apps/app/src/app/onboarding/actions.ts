@@ -674,6 +674,36 @@ export async function drainDeferredMembers(): Promise<{
   const additionOrder = Array.isArray(profileRes.data?.member_addition_order)
     ? (profileRes.data.member_addition_order as string[])
     : [];
+
+  // Somebody's DATA may have moved on without the plan. `updateFamilyMember`
+  // regenerates on a substantive edit unless a run holds the lock, and in that
+  // case it returned ok with no generation under a comment saying "defer the
+  // regen". Nothing deferred it: an edited member still has all seven stale
+  // days, so an allergy added while any generation was in flight saved the row,
+  // left the old meals in place, and sent her to /plan as if it had worked —
+  // the exact failure memberEditIsSubstantive exists to prevent.
+  //
+  // That regenerate goes FIRST. Any run that completes — a newcomer's join, a
+  // gap refill — makes the plan newer than the edit and so clears the
+  // staleness signal without applying it: the allergy added to dad would never
+  // reach his plan. A join also keeps today's menu as it was (memberJoin.ts),
+  // so it cannot be the run that fixes today's dinner either. A shared
+  // member's regenerate seats pending shared newcomers as it rebuilds (from
+  // what is left of the week); anyone else waits a tick. Newcomers themselves
+  // are not "stale" — their row is simply newer than a plan they are not in
+  // yet.
+  const stale = staleMemberIds(membersRes.data ?? [], latest.generated_at).filter((id) =>
+    latest.plan_data!.members.some((m) => m.member_id === id),
+  );
+  if (stale.length > 0) {
+    const gen = await runFamilyGeneration(supabase, user.id, {
+      regenerateMemberId: stale[0]!,
+    });
+    // Busy again → the next tick retries; the staleness signal survives
+    // because only a completed regeneration can clear it.
+    return { fired: gen.ok, busy: !gen.ok && gen.kind === "busy" };
+  }
+
   const nextId = pickNextMemberId({
     plan: latest.plan_data,
     members: membersRes.data ?? [],
@@ -691,25 +721,7 @@ export async function drainDeferredMembers(): Promise<{
   // Observed on a real household: maid added mid-generation, plan finished
   // ready, no translation, no housekeeper view, and no signal that the product's
   // headline feature had silently not happened.
-  // Nobody is missing a day — but somebody's DATA may have moved on without the
-  // plan. `updateFamilyMember` regenerates on a substantive edit unless a run
-  // holds the lock, and in that case it returned ok with no generation under a
-  // comment saying "defer the regen". Nothing deferred it: the drain only looks
-  // for missing days, and an edited member still has all seven stale ones. So an
-  // allergy added while any generation was in flight saved the row, left the
-  // old meals in place, and sent her to /plan as if it had worked — the exact
-  // failure memberEditIsSubstantive exists to prevent, reachable again through a
-  // busy window that every /plan visit opens.
   if (!nextId) {
-    const stale = staleMemberIds(membersRes.data ?? [], latest.generated_at);
-    if (stale.length > 0) {
-      const gen = await runFamilyGeneration(supabase, user.id, {
-        regenerateMemberId: stale[0]!,
-      });
-      // Busy again → the next tick retries; the staleness signal survives
-      // because only a completed regeneration can clear it.
-      return { fired: gen.ok, busy: !gen.ok && gen.kind === "busy" };
-    }
     // A member removed while a run held the lock was never taken out of the
     // plan: the run in flight had already captured the roster and wrote them
     // back, and afterwards nobody was 'short' or 'pending', so nothing fired —
@@ -1204,21 +1216,49 @@ export async function addFamilyMember(
     return { ok: true, member_id: memberId, plan_generation_id: null };
   }
 
-  // Post-onboarding generation. A SHARED add rebuilds the whole shared group
-  // together so the existing shared members stream in day-by-day alongside the
-  // newcomer; an INDEPENDENT add (or no base plan) keeps the one-at-a-time drain.
+  // Post-onboarding generation. A SHARED add rebuilds the shared group's menu
+  // together with the newcomer, from what is left of the week; an INDEPENDENT
+  // add (or no base plan) keeps the one-at-a-time drain. Either way a member
+  // added mid-week gets nothing of the days already passed or of today's
+  // answered meals (plan-engine memberJoin.ts).
   const latest = await getLatestPlan(user.id);
   const basePlan =
     latest?.status === "ready" && latest.plan_data && planHasContent(latest.plan_data)
       ? latest.plan_data
       : null;
   const isSharedAdd = (input.meal_mode ?? "shared") === "shared";
+  const famRows = basePlan
+    ? ((
+        await supabase
+          .from("family_members")
+          .select("id, role, display_order, updated_at")
+          .eq("user_id", user.id)
+          .returns<
+            { id: string; role: string; display_order: number; updated_at: string | null }[]
+          >()
+      ).data ?? [])
+    : [];
+  // An edit still waiting on its regenerate (made while a run held the lock)
+  // goes first, exactly as in drainDeferredMembers: the join below would make
+  // the plan newer than the edit and bury it for good. A shared member's
+  // regenerate seats this newcomer too when they share; otherwise the drain
+  // adds them on the next tick.
+  const staleInPlan = basePlan
+    ? staleMemberIds(famRows, latest?.generated_at).filter((id) =>
+        basePlan.members.some((m) => m.member_id === id),
+      )
+    : [];
 
   let gen: FamilyGenResult;
-  if (isSharedAdd && basePlan) {
-    // Shared add: rebuild the WHOLE shared group together (mom + every shared member
-    // + the newcomer) so the new menu is genuinely shared and the existing shared
-    // members stream in day-by-day alongside the new one. Independent members + the
+  if (staleInPlan.length > 0) {
+    gen = await runFamilyGeneration(supabase, user.id, {
+      regenerateMemberId: staleInPlan[0]!,
+    });
+  } else if (isSharedAdd && basePlan) {
+    // Shared add: rebuild the shared group together (mom + every shared member +
+    // the newcomer) so the new menu is genuinely shared — for the days after
+    // today; past days and today's menu stay as they are, and the newcomer takes
+    // a portion of today's still-open dishes. Independent members + the
     // housekeeper are carried over verbatim. (A lone shared member — no one else
     // shares — just generates itself, handled downstream.)
     gen = await runFamilyGeneration(supabase, user.id, { regenerateSharedGroup: true });
@@ -1230,15 +1270,10 @@ export async function addFamilyMember(
     // generating at once.
     let target = memberId;
     if (basePlan) {
-      const { data: famRows } = await supabase
-        .from("family_members")
-        .select("id, role, display_order")
-        .eq("user_id", user.id)
-        .returns<{ id: string; role: string; display_order: number }[]>();
       target =
         pickNextMemberId({
           plan: basePlan,
-          members: famRows ?? [],
+          members: famRows,
           additionOrder: updatedOrder,
         }) ?? memberId;
     }

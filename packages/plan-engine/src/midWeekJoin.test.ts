@@ -8,7 +8,7 @@ vi.mock("./anthropic", async () => {
 });
 
 import { streamAnthropic } from "./anthropic";
-import { generateMealPlan, prepareMemberJoin, prepareSharedGroupRegen } from "./generate";
+import { generateMealPlan, prepareMemberJoins, prepareSharedGroupRegen } from "./generate";
 import { incompleteInPlanMemberIds } from "./chain";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "./constants";
 import type { PlanPromptContext, PlanPromptContextMember } from "./buildContext";
@@ -193,7 +193,7 @@ const breakfastDone: JoinToday = {
  * exactly (which keeps the band quiet). `strayBreakfastFor` makes the model
  * disobey and add a breakfast the member was not given.
  */
-function fakeModel(opts: { strayBreakfastFor?: string } = {}) {
+function fakeModel(opts: { strayBreakfastFor?: string; onlyStrayFor?: string } = {}) {
   return async ({ systemPrompt }: { systemPrompt: string }) => {
     const dayMatch = systemPrompt.match(/day_index=(\d+)/);
     let text: string;
@@ -245,6 +245,9 @@ function fakeModel(opts: { strayBreakfastFor?: string } = {}) {
           // the one the family already cooked.
           if (opts.strayBreakfastFor === id && dayIndex === 1)
             meals.unshift(dish("breakfast", `فطور-${dayIndex}`, 400, 150));
+          // Worse: nothing but the answered slot.
+          if (opts.onlyStrayFor === id && dayIndex === 1)
+            return { member_id: id!, meals: [dish("breakfast", `فطور-${dayIndex}`, 400, 150)] };
           return { member_id: id!, meals };
         }),
       };
@@ -259,7 +262,10 @@ async function joinGrandma(opts: { strayBreakfastFor?: string } = {}) {
   mockedStream.mockImplementation(fakeModel(opts) as typeof streamAnthropic);
   const prior = priorPlan();
   const ctx = household();
-  const prep = prepareSharedGroupRegen(ctx, prior, breakfastDone);
+  // The worker's order: record joins on the plan as read, then clear.
+  const prep = prepareSharedGroupRegen(ctx, prepareMemberJoins(ctx, prior, breakfastDone), {
+    todayISO: TODAY,
+  });
   ctx.family_members = prep.familyMembers;
   const result = await generateMealPlan({
     anthropicApiKey: "test-key",
@@ -396,10 +402,9 @@ describe("generateMealPlan — a shared member joining mid-week", () => {
       throw new Error("no model call may be made when nothing of the week is left");
     });
     const ctx = household();
-    const prep = prepareSharedGroupRegen(ctx, priorPlan(), {
-      dateISO: "2026-06-20",
-      checkins: [],
-      absences: [],
+    const later = { dateISO: "2026-06-20", checkins: [], absences: [] };
+    const prep = prepareSharedGroupRegen(ctx, prepareMemberJoins(ctx, priorPlan(), later), {
+      todayISO: later.dateISO,
     });
     ctx.family_members = prep.familyMembers;
     const { plan } = await generateMealPlan({
@@ -430,7 +435,7 @@ describe("generateMealPlan — an independent member joining mid-week", () => {
     mockedStream.mockImplementation(fakeModel() as typeof streamAnthropic);
     const prior = priorPlan();
     const ctx = withUncle();
-    const existingPlan = prepareMemberJoin(ctx, prior, "uncle", breakfastDone);
+    const existingPlan = prepareMemberJoins(ctx, prior, breakfastDone);
     const result = await generateMealPlan({
       anthropicApiKey: "test-key",
       context: ctx,
@@ -478,7 +483,7 @@ describe("generateMealPlan — an independent member joining mid-week", () => {
     });
     const ctx = withUncle();
     const prior = { ...priorPlan(), gen_attempts: { dad: 3 } };
-    const existingPlan = prepareMemberJoin(ctx, prior, "uncle", {
+    const existingPlan = prepareMemberJoins(ctx, prior, {
       dateISO: "2026-06-20",
       checkins: [],
       absences: [],
@@ -495,5 +500,135 @@ describe("generateMealPlan — an independent member joining mid-week", () => {
     expect(plan.member_joins?.uncle).toEqual({ day_index: WEEK.length });
     // The no-op path used to drop this, handing a capped member fresh retries.
     expect(plan.gen_attempts).toEqual({ dad: 3 });
+  });
+});
+
+// ── What the adversarial review found (09/2026) ─────────────────────────────
+describe("generateMealPlan — joins under refills and regenerates", () => {
+  const emptyDay = (d: Day): Day => ({
+    ...d,
+    meals: [],
+    day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  });
+  const withDays = (plan: MealPlan, id: string, f: (d: Day) => Day): MealPlan => ({
+    ...plan,
+    members: plan.members.map((m) => (m.member_id === id ? { ...m, days: m.days.map(f) } : m)),
+  });
+
+  it("never aligns a whole-day member to a joiner's partial day — they get a full day of their own", async () => {
+    const { plan } = await joinGrandma();
+    // Mom's and dad's day 1 lost; only grandma's lunch-only first day remains.
+    let gapped = withDays(plan, "mom", (d) => (d.day_index === 1 ? emptyDay(d) : d));
+    gapped = withDays(gapped, "dad", (d) => (d.day_index === 1 ? emptyDay(d) : d));
+
+    mockedStream.mockReset();
+    mockedStream.mockImplementation(fakeModel() as typeof streamAnthropic);
+    const refill = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: household(),
+      existingPlan: gapped,
+    });
+
+    expect(dayOf(refill.plan, "mom", 1).meals.map((m) => m.slot)).toEqual(["breakfast", "lunch"]);
+    expect(dayOf(refill.plan, "gma", 1).meals.map((m) => m.slot)).toEqual(["lunch"]);
+  });
+
+  it("a scoped regenerate of a joiner sizes her first day from the stored table, not a guess", async () => {
+    const { plan } = await joinGrandma();
+
+    mockedStream.mockReset();
+    mockedStream.mockImplementation(fakeModel() as typeof streamAnthropic);
+    await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: household(),
+      existingPlan: plan,
+      regenerateMemberId: "gma",
+      regenScope: "both",
+    });
+
+    const day1 = dayPrompts().find((p) => /day_index=1\b/.test(p))!;
+    // The live co-sharer days are being rebuilt in this call; the stored day
+    // still says lunch is 1200 of 1800 → 2/3 of her 2000.
+    expect(day1).toContain('member_id="gma" — الهدف: 1333 سعرة');
+  });
+
+  it("a joiner answered with nothing usable does not cost the others their day", async () => {
+    const { plan } = await joinGrandma();
+
+    mockedStream.mockReset();
+    mockedStream.mockImplementation(fakeModel({ onlyStrayFor: "gma" }) as typeof streamAnthropic);
+    const { plan: out, missingDays } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: household(),
+      existingPlan: plan,
+      regenerateMemberId: "gma",
+      regenScope: "both",
+    });
+
+    // Throwing on the emptied joiner used to re-roll the whole day until it
+    // was lost for everyone.
+    expect(missingDays).not.toContain(1);
+    // Mom's in-scope lunch landed fresh; her answered breakfast is untouched.
+    const momDay1 = dayOf(out, "mom", 1).meals;
+    expect(momDay1.find((m) => m.slot === "lunch")!.recipe_name_ar).not.toBe("غداء-1");
+    expect(momDay1.find((m) => m.slot === "breakfast")).toEqual(
+      dayOf(plan, "mom", 1).meals.find((m) => m.slot === "breakfast"),
+    );
+    // And grandma was not handed the answered breakfast.
+    expect(dayOf(out, "gma", 1).meals.map((m) => m.slot)).not.toContain("breakfast");
+  });
+
+  it("a refill of her empty first day hears what was answered since she joined", async () => {
+    const { plan } = await joinGrandma();
+    const gapped = withDays(plan, "gma", (d) => (d.day_index === 1 ? emptyDay(d) : d));
+    // Lunch was marked after she joined: nothing of day 1 is left for her.
+    const lunchSince = {
+      dateISO: TODAY,
+      checkins: [
+        { local_date: TODAY, slot: "breakfast", member_id: "mom" },
+        { local_date: TODAY, slot: "lunch", member_id: "dad" },
+      ],
+      absences: [],
+    };
+
+    mockedStream.mockReset();
+    mockedStream.mockImplementation(fakeModel() as typeof streamAnthropic);
+    const ctx = household();
+    const refill = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: ctx,
+      existingPlan: prepareMemberJoins(ctx, gapped, lunchSince),
+    });
+
+    expect(refill.plan.member_joins?.gma).toEqual({ day_index: 2 });
+    expect(dayOf(refill.plan, "gma", 1).meals).toEqual([]);
+    expect(dayPrompts().some((p) => /day_index=1\b/.test(p))).toBe(false);
+    expect(incompleteInPlanMemberIds({ plan: refill.plan, maxAttempts: MEMBER_GEN_MAX_ATTEMPTS })).toEqual([]);
+  });
+
+  it("someone joined after the week ended keeps a 0 target through later runs — no floored header", async () => {
+    const ctx = household();
+    const later = { dateISO: "2026-06-20", checkins: [], absences: [] };
+    const prep = prepareSharedGroupRegen(ctx, prepareMemberJoins(ctx, priorPlan(), later), {
+      todayISO: later.dateISO,
+    });
+    ctx.family_members = prep.familyMembers;
+    mockedStream.mockImplementation(fakeModel() as typeof streamAnthropic);
+    const { plan } = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: ctx,
+      existingPlan: prep.existingPlan,
+    });
+
+    // A later run for somebody else (dad lost a day).
+    const gapped = withDays(plan, "dad", (d) => (d.day_index === 2 ? emptyDay(d) : d));
+    const next = await generateMealPlan({
+      anthropicApiKey: "test-key",
+      context: household(),
+      existingPlan: gapped,
+    });
+
+    expect(memberOf(next.plan, "gma").daily_calories_target).toBe(0);
+    expect(dayOf(next.plan, "dad", 2).meals.length).toBeGreaterThan(0);
   });
 });

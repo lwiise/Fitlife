@@ -38,7 +38,8 @@ export {
   runMealPlanGeneration,
   generateMealPlan,
   prepareSharedGroupRegen,
-  prepareMemberJoin,
+  prepareMemberJoins,
+  joinMarksNeeded,
   reconcileChildTargets,
   translateMealPlan,
   runMealPlanTranslation,
@@ -78,6 +79,7 @@ export {
   memberIsShort,
   openDayShare,
   joinWindow,
+  planDayIndexOn,
   HOUSEHOLD_MARK_MEMBER,
 } from "./memberJoin";
 export type { MemberJoin, MealSlot, DayMarkRow, JoinToday } from "./memberJoin";

@@ -195,11 +195,14 @@ export function planSummary(plan: MealPlan): string {
     // generated yet" and the advisor promises meals that are never coming.
     const joinDay = memberJoinDayIndex(plan, member.member_id);
     const joinedAfterWeek = joinDay >= daysTotal;
+    // Joined after the week: said whatever the header holds — a target with
+    // no days under it is exactly the gap the advisor used to fill with an
+    // invented menu.
     lines.push(
-      targetKnown
-        ? `- ${member.member_name_ar}: هدف يومي ~${member.daily_calories_target} سعرة (بروتين ${macros.protein_g}جم · كارب ${macros.carbs_g}جم · دهون ${macros.fat_g}جم)`
-        : joinedAfterWeek
-          ? `- ${member.member_name_ar}: أُضيف بعد انقضاء أيام هذه الخطة — لا وجبات له فيها، وتبدأ وجباته وهدفه مع الخطة القادمة.`
+      joinedAfterWeek
+        ? `- ${member.member_name_ar}: أُضيف بعد انقضاء أيام هذه الخطة — لا وجبات له فيها، وتبدأ وجباته وهدفه مع الخطة القادمة.`
+        : targetKnown
+          ? `- ${member.member_name_ar}: هدف يومي ~${member.daily_calories_target} سعرة (بروتين ${macros.protein_g}جم · كارب ${macros.carbs_g}جم · دهون ${macros.fat_g}جم)`
           : `- ${member.member_name_ar}: هدفه اليومي لم يُحتسب بعد (قيد التحضير) — لا تقولي إنه بلا احتياج.`,
     );
     if (joinDay > 0 && !joinedAfterWeek) {

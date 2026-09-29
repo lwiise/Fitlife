@@ -240,6 +240,16 @@ describe("planSummary — a member added mid-week", () => {
     expect(out).not.toContain("أيام بلا وجبات بعد");
   });
 
+  it("…even when her header carries a target — a target over no days reads as a gap to fill", () => {
+    const out = planSummary(
+      plan([member("mom", "هند", [0, 1, 2, 3]), member("gma", "الجدة", [], 1500)], {
+        gma: { day_index: NAMES.length },
+      }),
+    );
+    expect(out).toContain("الجدة: أُضيف بعد انقضاء أيام هذه الخطة");
+    expect(out).not.toContain("الجدة: هدف يومي");
+  });
+
   it("leaves a plan with no joins exactly as before", () => {
     const out = planSummary(plan([member("mom", "هند", [0, 1])]));
     expect(out).toContain("أيام بلا وجبات بعد: الإثنين، الثلاثاء");

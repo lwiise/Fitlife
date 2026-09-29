@@ -163,17 +163,46 @@ describe("joinWindow", () => {
   });
 
   it("the whole-house row closes a slot — named or legacy null", () => {
+    for (const member_id of ["household", null]) {
+      const w = joinWindow({
+        plan: base,
+        tableIds: shared,
+        today: today("2026-06-09", {
+          checkins: [{ local_date: "2026-06-09", slot: "breakfast", member_id }],
+        }),
+      });
+      expect(w?.join.closed_slots, String(member_id)).toEqual(["breakfast"]);
+    }
+  });
+
+  it("a marked meal closes every main meal before it — unmarked is not 'still ahead'", () => {
     const w = joinWindow({
       plan: base,
       tableIds: shared,
       today: today("2026-06-09", {
-        checkins: [
-          { local_date: "2026-06-09", slot: "dinner", member_id: "household" },
-          { local_date: "2026-06-09", slot: "breakfast", member_id: null },
-        ],
+        checkins: [{ local_date: "2026-06-09", slot: "lunch", member_id: "m1" }],
       }),
     });
-    expect(w?.join.closed_slots).toEqual(["breakfast", "dinner"]);
+    expect(w?.join).toEqual({ day_index: 3, closed_slots: ["breakfast", "lunch"] });
+    // A marked dinner: the whole day is behind the household.
+    const late = joinWindow({
+      plan: base,
+      tableIds: shared,
+      today: today("2026-06-09", {
+        checkins: [{ local_date: "2026-06-09", slot: "dinner", member_id: "mom" }],
+      }),
+    });
+    expect(late?.join).toEqual({ day_index: 4 });
+  });
+
+  it("keeps slots already closed for a refill, whatever today's rows now say", () => {
+    const w = joinWindow({
+      plan: base,
+      tableIds: shared,
+      today: today("2026-06-09"),
+      alreadyClosed: ["breakfast"],
+    });
+    expect(w?.join).toEqual({ day_index: 3, closed_slots: ["breakfast"] });
   });
 
   it("an independent member's private meal does not close the shared table's slot", () => {

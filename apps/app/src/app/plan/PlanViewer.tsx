@@ -795,8 +795,13 @@ export function PlanViewer({
   // never a spinner, a «queued» line or the «failed — regenerate» box — and the
   // day they joined holds only what was left of it.
   const activeJoinDay = memberJoinDayIndex(plan, activeMember.member_id);
+  // Added after this week's last open meal: nothing of it is theirs, so their
+  // «إنشاء خطة جديدة» means a new week for the household — a per-member
+  // regenerate would rewrite everyone else's finished week and still give them
+  // nothing.
+  const joinedAfterWeek = activeJoinDay >= (plan.days_total ?? 7);
   const beforeJoinNote = isBeforeJoin(plan, activeMember.member_id, activeDayIndex)
-    ? activeJoinDay >= (plan.days_total ?? 7)
+    ? joinedAfterWeek
       ? t.joined_after_week
       : t.before_join.replace(
           "{day}",
@@ -879,8 +884,8 @@ export function PlanViewer({
                 {!readOnly && (
                   <RegenerateButton
                     appearance="menu-item"
-                    memberId={activeMember.member_id}
-                    memberName={activeMember.member_name_ar}
+                    memberId={joinedAfterWeek ? undefined : activeMember.member_id}
+                    memberName={joinedAfterWeek ? undefined : activeMember.member_name_ar}
                     hasSharedMeals={activeMemberHasShared}
                     memberCount={plan.members.length}
                     locale={locale}

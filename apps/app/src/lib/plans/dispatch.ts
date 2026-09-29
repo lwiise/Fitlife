@@ -11,7 +11,8 @@ import {
   runMealPlanGeneration,
   runMealPlanTranslation,
   prepareSharedGroupRegen,
-  prepareMemberJoin,
+  prepareMemberJoins,
+  joinMarksNeeded,
   OnboardingIncompleteError,
   MedicalGateError,
   PlanValidationError,
@@ -275,9 +276,25 @@ export async function triggerPlanGeneration(params: {
   // Carry over the prior plan's completed members. Fetched BEFORE createPlanRows so
   // it's the previous plan.
   let existingPlan: MealPlan | null = null;
+  // Who the prior plan already covered — before a member is stripped below.
+  let plannedIds: Set<string> | null = null;
+  const todayISO = riyadhTodayISO();
   if (carryOver) {
     const prior = await getLatestPlan(userId);
     if (prior?.status === "ready" && prior.plan_data) {
+      plannedIds = new Set(prior.plan_data.members.map((m) => m.member_id));
+      // Where every newcomer's week starts (a member added mid-week gets
+      // nothing of the days already passed or today's answered meals), decided
+      // on the plan AS READ: before the strip below, so a member stripped for
+      // their own regenerate is not mistaken for a newcomer, and before
+      // prepareSharedGroupRegen clears today's table. Only the dev-inline run
+      // generates from this plan; production re-reads it (and the marks) in the
+      // worker, so the read is skipped there.
+      const base =
+        process.env.NODE_ENV === "development" &&
+        joinMarksNeeded(context, prior.plan_data, todayISO)
+          ? prepareMemberJoins(context, prior.plan_data, await readJoinToday(supabase, userId))
+          : prior.plan_data;
       // A partial scope needs the WHOLE prior plan (to keep out-of-scope meals +
       // recompute co-sharers); a shared-group regen also needs it (prepareSharedGroupRegen
       // clears the shared members' meals itself, keeping day shells). Only an
@@ -285,12 +302,10 @@ export async function triggerPlanGeneration(params: {
       existingPlan =
         regenerateMemberId && !regenScope && !sharedGroupRegen
           ? {
-              ...prior.plan_data,
-              members: prior.plan_data.members.filter(
-                (m) => m.member_id !== regenerateMemberId,
-              ),
+              ...base,
+              members: base.members.filter((m) => m.member_id !== regenerateMemberId),
             }
-          : prior.plan_data;
+          : base;
     }
   }
 
@@ -303,21 +318,17 @@ export async function triggerPlanGeneration(params: {
     context.family_members = context.family_members.filter((m) =>
       keep.has(m.id),
     );
-    // A newcomer generated on their own — an independent add, or the queue
-    // reaching a pending member — joins only what is left of the week, like a
-    // shared add (prepareMemberJoin). Dev-inline only, for the same reason as
-    // the shared path below: production reads the marks in the worker.
-    if (
-      process.env.NODE_ENV === "development" &&
-      !existingPlan.members.some((m) => m.member_id === onlyMemberId)
-    ) {
-      existingPlan = prepareMemberJoin(
-        context,
-        existingPlan,
-        onlyMemberId,
-        await readJoinToday(supabase, userId),
-      );
-    }
+  }
+
+  // A member's own regenerate (not the shared group's) is about that member.
+  // Pending newcomers wait for the add path, which knows where to seat them — a
+  // shared newcomer joins the group's dishes there; pulled into an independent
+  // regenerate they would be planned apart from everyone. (The bg fn mirrors.)
+  if (regenerateMemberId && !sharedGroupRegen && plannedIds) {
+    const planned = plannedIds;
+    context.family_members = context.family_members.filter(
+      (m) => m.role === "housekeeper" || planned.has(m.id) || m.id === regenerateMemberId,
+    );
   }
 
   // Shared-group regen — a new SHARED member was added, OR a SHARED member's
@@ -325,18 +336,13 @@ export async function triggerPlanGeneration(params: {
   // shared beneficiary together, carrying independent members + the housekeeper
   // verbatim, so the menu is genuinely shared and the whole group streams in
   // day-by-day. No generating_member_id is stamped (>1 member regenerates) → the UI
-  // shows them all loading. See prepareSharedGroupRegen.
-  //
-  // A newcomer joining mid-week rebuilds only what is LEFT of the week, which
-  // needs today's marks. Only the dev-inline run generates from this prepared
-  // plan — production re-reads the plan and the marks in the worker — so the
-  // read is skipped there; the roster this also filters does not depend on it.
+  // shows them all loading. See prepareSharedGroupRegen: an ADD rebuilds only the
+  // days after today; a member's regenerate rebuilds the whole week.
   if (sharedGroupRegen && existingPlan) {
-    const today =
-      process.env.NODE_ENV === "development"
-        ? await readJoinToday(supabase, userId)
-        : undefined;
-    const prep = prepareSharedGroupRegen(context, existingPlan, today);
+    const prep = prepareSharedGroupRegen(context, existingPlan, {
+      todayISO,
+      memberRegenerate: !!regenerateMemberId,
+    });
     existingPlan = prep.existingPlan;
     context.family_members = prep.familyMembers;
   }
