@@ -6,8 +6,8 @@ import { loadSubscriberHealth, type MemberHealth } from "@/lib/admin/detail";
 import type { AdminLocale } from "@/lib/admin/format";
 import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { roleLabel, t } from "@/lib/admin/i18n";
-import { DetailHeader } from "../../../_components/DetailHeader";
-import { DetailCard, Field } from "../../../_components/DetailCard";
+import { DetailHeader } from "@/app/admin/_components/DetailHeader";
+import { DetailCard, Field } from "@/app/admin/_components/DetailCard";
 
 /**
  * Sensitive health detail — the "extra click" behind data minimization. Loading

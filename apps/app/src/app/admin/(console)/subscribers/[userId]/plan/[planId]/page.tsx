@@ -7,7 +7,7 @@ import { loadPlanForInspect } from "@/lib/admin/detail";
 import { fmtDate } from "@/lib/admin/format";
 import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { planStatusLabel, t } from "@/lib/admin/i18n";
-import { DetailHeader } from "../../../../_components/DetailHeader";
+import { DetailHeader } from "@/app/admin/_components/DetailHeader";
 import { PlanViewer } from "@/app/plan/PlanViewer";
 
 /**

@@ -30,13 +30,13 @@ import {
   roleLabel,
   t,
 } from "@/lib/admin/i18n";
-import { DetailHeader } from "../../_components/DetailHeader";
-import { DetailCard, Field } from "../../_components/DetailCard";
-import { DataTable, type DataColumn } from "../../_components/DataTable";
-import { Chip } from "../../_components/Chip";
-import { StatusBadge } from "../../_components/StatusBadge";
-import { TierBadge } from "../../_components/TierBadge";
-import { AccountDangerZone } from "../../_components/AccountDangerZone";
+import { DetailHeader } from "@/app/admin/_components/DetailHeader";
+import { DetailCard, Field } from "@/app/admin/_components/DetailCard";
+import { DataTable, type DataColumn } from "@/app/admin/_components/DataTable";
+import { Chip } from "@/app/admin/_components/Chip";
+import { StatusBadge } from "@/app/admin/_components/StatusBadge";
+import { TierBadge } from "@/app/admin/_components/TierBadge";
+import { AccountDangerZone } from "@/app/admin/_components/AccountDangerZone";
 
 export default async function SubscriberDetailPage({
   params,

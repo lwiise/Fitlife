@@ -4,13 +4,13 @@ import { logAdminAccess } from "@/lib/admin/audit";
 import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { buildInsightsView, loadInsightsDataset } from "@/lib/admin/insights";
 import { t } from "@/lib/admin/i18n";
-import { AdminTopBar } from "../_components/AdminTopBar";
-import { GrowthSection } from "../_components/insights/GrowthSection";
-import { RetentionSection } from "../_components/insights/RetentionSection";
-import { ConversionSection } from "../_components/insights/ConversionSection";
-import { EconomicsSection } from "../_components/insights/EconomicsSection";
-import { ProductSection } from "../_components/insights/ProductSection";
-import { flatten, type RawParams } from "../_components/searchParams";
+import { AdminTopBar } from "@/app/admin/_components/AdminTopBar";
+import { GrowthSection } from "@/app/admin/_components/insights/GrowthSection";
+import { RetentionSection } from "@/app/admin/_components/insights/RetentionSection";
+import { ConversionSection } from "@/app/admin/_components/insights/ConversionSection";
+import { EconomicsSection } from "@/app/admin/_components/insights/EconomicsSection";
+import { ProductSection } from "@/app/admin/_components/insights/ProductSection";
+import { flatten, type RawParams } from "@/app/admin/_components/searchParams";
 
 /**
  * Insights is temporarily hidden from the admin panel. The page (and all its

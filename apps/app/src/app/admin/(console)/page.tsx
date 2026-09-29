@@ -12,14 +12,14 @@ import type { SubscriberSortKey } from "@/lib/admin/types";
 import type { AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
 import { loadEngagementStats } from "@/lib/admin/engagement";
-import { AdminTopBar } from "./_components/AdminTopBar";
-import { EngagementStrip } from "./_components/EngagementStrip";
-import { RevenueChartSection } from "./_components/RevenueChartSection";
-import { AiCostStrip } from "./_components/AiCostStrip";
-import { FilterBar } from "./_components/FilterBar";
-import { SubscriberTable } from "./_components/SubscriberTable";
-import { Pagination } from "./_components/Pagination";
-import { flatten, type RawParams } from "./_components/searchParams";
+import { AdminTopBar } from "@/app/admin/_components/AdminTopBar";
+import { EngagementStrip } from "@/app/admin/_components/EngagementStrip";
+import { RevenueChartSection } from "@/app/admin/_components/RevenueChartSection";
+import { AiCostStrip } from "@/app/admin/_components/AiCostStrip";
+import { FilterBar } from "@/app/admin/_components/FilterBar";
+import { SubscriberTable } from "@/app/admin/_components/SubscriberTable";
+import { Pagination } from "@/app/admin/_components/Pagination";
+import { flatten, type RawParams } from "@/app/admin/_components/searchParams";
 
 const SORT_KEYS: SubscriberSortKey[] = [
   "signupAt",
