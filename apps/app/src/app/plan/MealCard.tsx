@@ -11,6 +11,7 @@ import {
 import { getPlanStrings, type PlanStrings } from "@/lib/plans/locales";
 import { getSlotNameInLocale } from "@/lib/plans/dayMapping";
 import { formatNameList } from "@/lib/plans/formatNames";
+import { arDec } from "@/lib/copy/numbers";
 import {
   absenceScaleFactor,
   adjustedBatchWeight,
@@ -24,23 +25,32 @@ const SLOT_STYLE: Record<Meal["slot"], { bg: string; text: string }> = {
   snack: { bg: "bg-brand-lavender/40", text: "text-brand-purple-900" },
 };
 
-function formatAmount(ing: Ingredient, units: PlanStrings["units"]): string {
+/** A figure in the reader's digits (see `num` in MealCard). */
+type FormatNum = (v: number) => string;
+
+function formatAmount(
+  ing: Ingredient,
+  units: PlanStrings["units"],
+  num: FormatNum,
+): string {
   if (ing.unit === "unlimited") return units.unlimited;
   const unit = units[ing.unit] ?? ing.unit;
   const hasRange =
     ing.amount_min != null &&
     ing.amount_max != null &&
     ing.amount_min !== ing.amount_max;
-  if (hasRange) return `${ing.amount_min}-${ing.amount_max} ${unit}`;
-  return `${ing.amount} ${unit}`;
+  if (hasRange) return `${num(ing.amount_min!)}-${num(ing.amount_max!)} ${unit}`;
+  return `${num(ing.amount)} ${unit}`;
 }
 
 function IngredientList({
   items,
   units,
+  num,
 }: {
   items: Ingredient[];
   units: PlanStrings["units"];
+  num: FormatNum;
 }) {
   return (
     <ul className="space-y-1.5">
@@ -50,8 +60,8 @@ function IngredientList({
           className="flex items-center justify-between gap-2 text-sm"
         >
           <span className="text-brand-ink">{ing.name_ar}</span>
-          <span className="text-brand-ink-muted tabular-nums text-xs">
-            {formatAmount(ing, units)}
+          <span className="text-brand-ink-muted tabular-nums text-meta">
+            {formatAmount(ing, units, num)}
           </span>
         </li>
       ))}
@@ -133,7 +143,7 @@ function CheckinChips({
               onChange(state?.status === c.value ? null : c.value, null)
             }
             aria-pressed={state?.status === c.value}
-            className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+            className={`min-h-11 px-3.5 rounded-full text-meta font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
               state?.status === c.value
                 ? "bg-brand-purple-900 text-white"
                 : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
@@ -153,7 +163,7 @@ function CheckinChips({
                 onChange(state.status, state.reason === r.value ? null : r.value)
               }
               aria-pressed={state.reason === r.value}
-              className={`min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+              className={`min-h-11 px-3 rounded-full text-meta font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                 state.reason === r.value
                   ? "bg-brand-lavender text-brand-purple-900"
                   : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
@@ -222,6 +232,11 @@ export function MealCard({
 
   const translated = !!locale && locale !== "ar";
   const t = getPlanStrings(locale ?? "ar");
+  // Every figure on the card in the reader's digits: Arabic-Indic on the
+  // Arabic view, matching the day line and strip above it (one digit system
+  // per screen); the cook's translated view keeps Western digits. arDec, not
+  // arNum — half a cup must not round to «١».
+  const num: FormatNum = (v) => (translated ? String(v) : arDec(v));
 
   const slotLabel = translated ? getSlotNameInLocale(meal.slot, locale) : meal.slot_name_ar;
   const recipeName = translated
@@ -285,16 +300,16 @@ export function MealCard({
 
   const metaBits: string[] = [];
   if (meal.prep_time_minutes != null)
-    metaBits.push(`${t.prep_time} ${meal.prep_time_minutes} ${t.min_abbr}`);
+    metaBits.push(`${t.prep_time} ${num(meal.prep_time_minutes)} ${t.min_abbr}`);
   if (meal.cook_time_minutes != null)
-    metaBits.push(`${t.cook_time} ${meal.cook_time_minutes} ${t.min_abbr}`);
+    metaBits.push(`${t.cook_time} ${num(meal.cook_time_minutes)} ${t.min_abbr}`);
   if (meal.servings_count != null) {
     // When servings clearly meant "one per sharer", show the adjusted count.
     const servings =
       hasAbsence && meal.servings_count === sharedPortions!.length
         ? presentPortions!.length
         : meal.servings_count;
-    metaBits.push(`${servings} ${t.servings_unit}`);
+    metaBits.push(`${num(servings)} ${t.servings_unit}`);
   }
 
   // Who this meal is split between — named so the cook knows exactly who
@@ -345,7 +360,7 @@ export function MealCard({
           </div>
           {checkin && (
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0 mt-0.5 ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-meta font-bold flex-shrink-0 mt-0.5 ${
                 checkin.reason === "guests"
                   ? "bg-brand-yellow text-brand-ink"
                   : checkin.status === "cooked"
@@ -361,7 +376,7 @@ export function MealCard({
           )}
           <div className="flex flex-col items-end flex-shrink-0">
             <span className="font-bold text-brand-ink text-base tabular-nums">
-              {meal.calories}
+              {num(meal.calories)}
             </span>
             <span className="text-meta text-brand-ink-muted">{t.calories_unit}</span>
           </div>
@@ -411,9 +426,9 @@ export function MealCard({
             <div className="px-5 pb-5 pt-3 border-t border-brand-line space-y-4">
               <p className="text-meta text-brand-ink-muted tabular-nums">
                 {[
-                  `${meal.macros.protein_g} ${t.grams} ${t.protein}`,
-                  `${meal.macros.carbs_g} ${t.grams} ${t.carbs}`,
-                  `${meal.macros.fat_g} ${t.grams} ${t.fat}`,
+                  `${num(meal.macros.protein_g)} ${t.grams} ${t.protein}`,
+                  `${num(meal.macros.carbs_g)} ${t.grams} ${t.carbs}`,
+                  `${num(meal.macros.fat_g)} ${t.grams} ${t.fat}`,
                   ...metaBits,
                 ].join(" · ")}
               </p>
@@ -425,8 +440,8 @@ export function MealCard({
                     {sharedPortions ? ` (${t.base_recipe})` : ""}
                   </span>
                   {sharedPortions && displayBatchWeight != null && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-purple-900/10 text-brand-purple-900 text-[11px] font-bold tabular-nums">
-                      {t.batch_total} {displayBatchWeight} {t.units.g}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-purple-900/10 text-brand-purple-900 text-meta font-bold tabular-nums">
+                      {t.batch_total} {num(displayBatchWeight)} {t.units.g}
                     </span>
                   )}
                 </h4>
@@ -435,7 +450,7 @@ export function MealCard({
                     It used to be gated on `!translated` — which excluded the one
                     reader who is literally measuring the ingredients. */}
                 {hasAbsence && (
-                  <p className="mb-2 rounded-xl bg-brand-lavender/25 px-3 py-2 text-brand-purple-900 text-xs font-bold leading-relaxed">
+                  <p className="mb-2 rounded-xl bg-brand-lavender/25 px-3 py-2 text-brand-purple-900 text-meta font-bold leading-relaxed">
                     {translated ? (
                       `${t.meal_adjusted_for} ${absentNames}`
                     ) : (
@@ -446,14 +461,18 @@ export function MealCard({
                     )}
                   </p>
                 )}
-                <IngredientList items={displayIngredients} units={t.units} />
+                <IngredientList items={displayIngredients} units={t.units} num={num} />
               </section>
 
               <section>
                 <h4 className="font-bold text-brand-ink text-sm mb-2">
                   {t.prep_steps}
                 </h4>
-                <ol className="space-y-2 list-decimal list-inside marker:text-brand-purple-900 marker:font-bold">
+                <ol
+                  className={`space-y-2 list-inside marker:text-brand-purple-900 marker:font-bold ${
+                    translated ? "list-decimal" : "list-[arabic-indic]"
+                  }`}
+                >
                   {steps.map((step, i) => (
                     <li
                       key={i}
@@ -496,7 +515,7 @@ export function MealCard({
                         >
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <p
-                              className={`font-bold text-xs min-w-0 truncate ${
+                              className={`font-bold text-meta min-w-0 truncate ${
                                 isAbsent ? "text-brand-ink-muted" : "text-brand-ink"
                               }`}
                             >
@@ -507,7 +526,7 @@ export function MealCard({
                                 </span>
                               )}
                               {isAbsent && (
-                                <span className="ms-1.5 inline-flex items-center px-2 py-0.5 rounded-full bg-brand-ink/10 text-brand-ink-muted text-[11px] font-bold">
+                                <span className="ms-1.5 inline-flex items-center px-2 py-0.5 rounded-full bg-brand-ink/10 text-brand-ink-muted text-meta font-bold">
                                   خارج الوجبة
                                 </span>
                               )}
@@ -515,13 +534,13 @@ export function MealCard({
                             <span className="flex items-center gap-2 flex-shrink-0">
                               {portion.portion_grams != null && !isAbsent && (
                                 <span className="font-extrabold text-brand-purple-900 text-sm tabular-nums whitespace-nowrap">
-                                  {portion.portion_grams} {t.units.g}
+                                  {num(portion.portion_grams)} {t.units.g}
                                   {/* The stored % is a share of the ORIGINAL
                                       batch — beside an absence-adjusted total
                                       it would lie, so it hides; the grams stay
                                       exact either way. */}
                                   {portion.portion_percentage != null && !hasAbsence
-                                    ? ` · ${portion.portion_percentage}%`
+                                    ? ` · ${num(portion.portion_percentage)}${translated ? "%" : "٪"}`
                                     : ""}
                                 </span>
                               )}
@@ -534,7 +553,7 @@ export function MealCard({
                                   onClick={() =>
                                     onToggleAbsence(portion.member_id, false)
                                   }
-                                  className="min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center bg-brand-purple-900 text-white hover:bg-brand-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+                                  className="min-h-11 px-3 rounded-full text-meta font-bold inline-flex items-center justify-center bg-brand-purple-900 text-white hover:bg-brand-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
                                 >
                                   إعادة إلى الوجبة
                                 </button>
@@ -545,7 +564,7 @@ export function MealCard({
                                   onClick={() =>
                                     onToggleAbsence?.(portion.member_id, true)
                                   }
-                                  className="min-h-11 px-3 rounded-full text-xs font-bold inline-flex items-center justify-center border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
+                                  className="min-h-11 px-3 rounded-full text-meta font-bold inline-flex items-center justify-center border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2"
                                 >
                                   إزالة من الوجبة
                                 </button>
@@ -556,11 +575,11 @@ export function MealCard({
                             portion.ingredients &&
                             portion.ingredients.length > 0 && (
                               <div className="mt-2">
-                                <IngredientList items={portion.ingredients} units={t.units} />
+                                <IngredientList items={portion.ingredients} units={t.units} num={num} />
                               </div>
                             )}
                           {!translated && !isAbsent && portion.notes_ar && (
-                            <p className="mt-1.5 text-brand-ink-muted text-xs leading-relaxed">
+                            <p className="mt-1.5 text-brand-ink-muted text-meta leading-relaxed">
                               {portion.notes_ar}
                             </p>
                           )}
@@ -591,7 +610,7 @@ export function MealCard({
               )}
 
               {!translated && meal.notes_ar && (
-                <p className="text-brand-ink-muted text-xs leading-relaxed bg-brand-surface/60 rounded-xl p-3">
+                <p className="text-brand-ink-muted text-meta leading-relaxed bg-brand-surface/60 rounded-xl p-3">
                   {meal.notes_ar}
                 </p>
               )}
@@ -611,12 +630,12 @@ export function MealCard({
                     // (owner directive 07/2026) — what is left is بديل or
                     // تجاوز. The mark is theirs alone: it never speaks for the
                     // dish the others shared, and never for the kitchen.
-                    <p className="text-xs font-bold text-brand-purple-900 leading-relaxed">
+                    <p className="text-meta font-bold text-brand-purple-900 leading-relaxed">
                       {viewerName} خارج هذه الوجبة — التسجيل هنا: بديل أو تجاوز
                     </p>
                   ) : (
                     sharedPortions && (
-                      <p className="text-xs font-bold text-brand-purple-900">
+                      <p className="text-meta font-bold text-brand-purple-900">
                         تسجيل واحد للوجبة المشتركة — يشمل كل من شاركها
                       </p>
                     )
@@ -637,7 +656,7 @@ export function MealCard({
                       role="group"
                       aria-label="رأي العائلة في الطبق"
                     >
-                      <p className="text-[11px] font-bold text-brand-ink-muted">
+                      <p className="text-meta font-bold text-brand-ink-muted">
                         كيف كانت؟
                       </p>
                       <div className="flex flex-wrap gap-1.5">
@@ -649,7 +668,7 @@ export function MealCard({
                               onVerdict(verdict === v.value ? null : v.value)
                             }
                             aria-pressed={verdict === v.value}
-                            className={`min-h-11 px-3.5 rounded-full text-xs font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
+                            className={`min-h-11 px-3.5 rounded-full text-meta font-bold inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 ${
                               verdict === v.value
                                 ? "bg-brand-lavender text-brand-purple-900"
                                 : "border border-brand-ink/15 text-brand-ink-muted hover:bg-brand-lavender/20"
@@ -661,7 +680,7 @@ export function MealCard({
                       </div>
                     </div>
                   )}
-                  <p className="text-[11px] text-brand-ink-muted leading-relaxed">
+                  <p className="text-meta text-brand-ink-muted leading-relaxed">
                     تسجيلك يُحسّن خطة الأسبوع القادم — والضغط مرة أخرى يمسح الاختيار.
                   </p>
                 </div>

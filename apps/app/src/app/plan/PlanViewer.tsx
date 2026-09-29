@@ -1,14 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, TrendingUp } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 import { MealCard } from "./MealCard";
-import { SaraChangesCard } from "./SaraChangesCard";
-import { PartialWeekNotice } from "./PartialWeekNotice";
+import { DayLine } from "./DayLine";
+import {
+  PlanBar,
+  PlanBarEnd,
+  PlanBarIdentity,
+  PlanBarMore,
+  PlanBarPill,
+  PlanBarRail,
+  PlanBarRow,
+} from "./bar/PlanBar";
+import { WeekStrip, type WeekStripDay } from "./bar/WeekStrip";
+import { MemberSheet, type MemberSheetMember } from "./bar/MemberSheet";
+import { MoreSheet } from "./bar/MoreSheet";
+import { RecipesSheet, type RecipesSheetDish } from "./bar/RecipesSheet";
+import { PLAN_MENU_ICON_CLASS, PLAN_MENU_ITEM_CLASS } from "./bar/menuItem";
+import { SaraToast } from "./sara/SaraToast";
+import { SaraChangesSheet } from "./sara/SaraChangesSheet";
+import { useSaraUnread } from "./sara/useSaraUnread";
+import { Avatar } from "@/components/ui/avatar";
+import { Notice } from "@/components/ui/notice";
+import { SaraAvatar } from "@/components/ui/SaraAvatar";
 import {
   setMealAbsence as setMealAbsenceAction,
   setMealCheckin as setMealCheckinAction,
@@ -26,19 +45,22 @@ import {
   OUT_OF_MEAL_CHECKIN_STATUSES,
 } from "@/lib/engagement/types";
 import { RegenerateButton } from "./RegenerateButton";
-import { PlanActionsMenu, PLAN_MENU_ITEM_CLASS } from "./PlanActionsMenu";
 // @react-pdf is dynamically imported inside this button's click handler, so it
 // doesn't enter the page bundle and never renders during the React tree render.
 import { DownloadPDFButton } from "./pdf/DownloadPDFButton";
+import { dayIndexFromWeekStart, formatWeekRange } from "@/lib/plans/dayMapping";
 import {
-  dayIndexFromWeekStart,
-  dayNameFromWeekStart,
-  formatWeekRange,
-  getLocalizedDayNameFromWeekStart,
-} from "@/lib/plans/dayMapping";
-import { getPlanStrings, getLocaleInfo } from "@/lib/plans/locales";
+  getPlanStrings,
+  getLocaleInfo,
+  isLocaleCode,
+  LOCALE_INFO,
+} from "@/lib/plans/locales";
 import { orderDayMeals } from "@/lib/plans/mealOrder";
+import { dayLineDate, mealStripDays } from "@/lib/plans/weekStrip";
+import { householdDayDishes } from "@/lib/plans/householdDishes";
+import { memberSheetStatus } from "@/lib/plans/memberSheetStatus";
 import { genderPick } from "@/lib/copy/gender";
+import { arNum } from "@/lib/copy/numbers";
 
 // A day stuck "preparing" this long with no new write means the worker died —
 // far longer than a healthy day stream (~1-2 min), far shorter than the 15-min
@@ -113,16 +135,20 @@ export function PlanViewer({
   absences,
   journeyMembers,
   planTypeToggle,
+  notice,
   ownerSex,
-  partialWeek = false,
+  partialWeekMemberIds = [],
 }: {
   plan: MealPlan;
   planId: string;
   generating?: boolean;
   // The week came back short — a household too big for one invocation's budget,
-  // or a run that died. The drain refills it; this only announces that, so the
-  // missing days don't read as a broken plan. Interactive Arabic view only.
-  partialWeek?: boolean;
+  // or a run that died. These are the members the mounted drain WILL refill
+  // (short, under the attempt cap, drain mounted): their empty days say they
+  // are on their way instead of offering a retry. Anyone else's empty day keeps
+  // the failed box and its retry — nothing automatic will fill it. Interactive
+  // Arabic view only.
+  partialWeekMemberIds?: readonly string[];
   // Last write to the plan row. If a day stays "preparing" while this stops
   // advancing, the background worker died — surface the retry box instead of
   // spinning until the 15-min server-side dead-man's switch.
@@ -134,12 +160,13 @@ export function PlanViewer({
   // Hide the PDF export (the admin plan view: read-only, no customer export).
   hideExport?: boolean;
   // Set (to a non-Arabic locale) when the household has a housekeeper who reads
-  // another language → show the "housekeeper recipes" entry link.
+  // another language → the bar's «الوصفات» door opens HER translated view
+  // (without one it opens the day's recipes in a sheet).
   housekeeperLocale?: string;
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
   // No workout plan exists yet → offer the add-exercise-plan entry in the
-  // action bar (main /plan page only; read-only views never pass it).
+  // ••• sheet (main /plan page only; read-only views never pass it).
   showWorkoutOptIn?: boolean;
   // Inline per-meal tracking (main /plan page only): current marks for this
   // plan. Presence of the prop enables the controls; read-only/translated
@@ -174,13 +201,17 @@ export function PlanViewer({
   // null for the mom). The entry renders on the ACTIVE member's tab only;
   // read-only/translated views never pass it. `sex` genders the entry copy.
   journeyMembers?: Array<{ id: string; name: string | null; sex?: string | null }>;
-  // The meal/workout plan-type toggle, rendered by the server page and hosted
-  // here as the FIRST item of the top strip's action cluster, so in RTL it sits
-  // to the RIGHT of the action buttons (owner directive). Null when no workout
-  // plan exists (nothing to toggle) or on read-only/translated views.
+  // The meal/workout plan-type switch, rendered by the server page and placed
+  // full-width under the plan bar (and the notice), in the same slot the
+  // workout viewer gives it. Null when no workout plan exists (nothing to
+  // toggle) or on read-only/translated views.
   planTypeToggle?: ReactNode;
+  // The page's ONE notice (or its onboarding banner), rendered right under the
+  // plan bar — the bar is the top of the screen on phones, so anything the
+  // page put above the viewer would sit above the header it replaced.
+  notice?: ReactNode;
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
-  // page (the «أنتِ/أنتَ» tab marker). Absent on read-only/translated views.
+  // page (the «أنتِ/أنتَ» marker beside her name). Absent on translated views.
   ownerSex?: string | null;
 }) {
   const router = useRouter();
@@ -741,33 +772,57 @@ export function PlanViewer({
 
   // Real generation progress for the active member: days with meals vs total
   // expected. Days are generated atomically (a whole day lands at once), so
-  // day-granularity is the truthful unit — drives the progress strip + current
-  // day name so the wait reads as active, not stalled.
+  // day-granularity is the truthful unit — drives the bar's progress rail so
+  // the wait reads as active, not stalled.
   const genProgress = useMemo(() => {
     const total = plan.days_total ?? activeMember?.days.length ?? 7;
     const ready = activeMember
       ? activeMember.days.filter((d) => d.meals.length > 0).length
       : 0;
-    const pct = total > 0 ? Math.min(100, Math.round((100 * ready) / total)) : 0;
-    const dayName =
-      currentPreparingIndex >= 0
-        ? translated
-          ? getLocalizedDayNameFromWeekStart(
-              plan.week_start_date,
-              currentPreparingIndex,
-              locale ?? "ar",
-            )
-          : dayNameFromWeekStart(plan.week_start_date, currentPreparingIndex)
-        : "";
-    return { ready, total, pct, dayName };
-  }, [
-    activeMember,
-    plan.days_total,
+    return { ready, total };
+  }, [activeMember, plan.days_total]);
+
+  // ─── The plan bar (concept «شريط الأسبوع», 09/2026) ─────────────────────
+  // One sheet at a time: opening one replaces whichever was open, and the
+  // Sara toast waits while any is up.
+  const [openSheet, setOpenSheet] = useState<
+    "member" | "more" | "recipes" | "sara" | null
+  >(null);
+  // Spoken after a member switch when focus did NOT land back on the renamed
+  // identity trigger (see selectMember) — otherwise nothing says the plan
+  // below changed.
+  const [announcement, setAnnouncement] = useState("");
+  // The bar's sheet triggers, handed to each sheet as its focus-return target
+  // (a tapped button is never focused on Safari, so "whatever was focused"
+  // would be <body> there).
+  const identityRef = useRef<HTMLButtonElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const recipesRef = useRef<HTMLButtonElement>(null);
+  // The failed day's own «إنشاء خطة جديدة» opens a ConfirmDialog that is not
+  // one of the sheets, so it reports itself: the Sara toast must wait it out
+  // too, or its once-a-week note times out (and is marked seen) behind the
+  // dialog's scrim.
+  const [regenDialogOpen, setRegenDialogOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const dayLineRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  // The strip's seven dated cells, rebuilt only when the WEEK changes: a poll's
+  // refresh within the week (drain, chain, a member's regeneration — each a
+  // new plan row) keeps the same cells under her finger.
+  const stripBase = useMemo(
+    () => mealStripDays(plan.week_start_date, locale ?? "ar"),
+    [plan.week_start_date, locale],
+  );
+  // «سارة عدّلت خطتكِ» is the owner's own فصحى narrative: the interactive
+  // Arabic view only — never history, the cook's view, or admin.
+  const saraChanges =
+    !readOnly && !translated && plan.week_changes && plan.week_changes.length > 0
+      ? plan.week_changes
+      : null;
+  const { unread: saraUnread, markOpened: markSaraOpened } = useSaraUnread(
     plan.week_start_date,
-    currentPreparingIndex,
-    translated,
-    locale,
-  ]);
+    saraChanges,
+  );
 
   if (!activeMember) {
     return (
@@ -777,513 +832,688 @@ export function PlanViewer({
     );
   }
 
+  const g = genderPick(ownerSex);
+  // The owner's own page. History, the cook's view and the admin view are
+  // read-only variants of the same bar: identity + strip, and at most the PDF.
+  const interactive = !readOnly && !translated;
+  const activeName = memberLabel(activeMember);
+  // Roster position = the avatar colour everywhere in the app.
+  const activeRosterIndex = Math.max(
+    0,
+    plan.members.findIndex((m) => m.member_id === activeMember.member_id),
+  );
+  const weekRange = formatWeekRange(plan.week_start_date, locale);
+  // Joins the name and «switch person» in the cook's aria-label.
+  const listSep = locale === "ur" ? "، " : ", ";
+
   // The private «الوزن والمتابعة» journey link for the ACTIVE member (eligible
-  // members, interactive Arabic view only). Owner directive 07/2026: for a
-  // family it now sits at the END of the member-tab row (the slot «إضافة فرد»
-  // used to hold), freeing the top strip; a solo plan (no tab row) keeps it up
-  // top inline with the plan-type toggle.
+  // members, interactive Arabic view only) — a row of the ••• sheet, under the
+  // name of the person it belongs to.
   const journeyEntry =
     journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
   const showJourney = !!journeyEntry && !readOnly && !translated;
-  const journeyLink =
-    showJourney && journeyEntry ? (
-      <Link
-        href={
-          journeyEntry.id === "mom"
-            ? "/journey"
-            : `/journey?member=${journeyEntry.id}`
-        }
-        className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border border-brand-purple-900/25 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-      >
-        <TrendingUp className="size-4" aria-hidden="true" />
-        الوزن والمتابعة
-      </Link>
-    ) : null;
 
   // The «المزيد» menu only earns its slot when it has something to hold: a
   // read-only history view with the export hidden has no secondaries at all.
   const hasMenuActions =
     !readOnly || (!translated && !hideExport);
 
+  // With a cook who reads another language, «الوصفات» opens HER view — the
+  // translated one she cooks from; without one, the day's dishes in a sheet.
+  const cookLanguage =
+    housekeeperLocale && isLocaleCode(housekeeperLocale)
+      ? LOCALE_INFO[housekeeperLocale].ar_name
+      : null;
+  // «بالفلبينية»: every ar_name carries its «ال», so «ب» is the whole join.
+  const inCookLanguage = cookLanguage ? `ب${cookLanguage}` : null;
+
+  const hasAnyMeals = plan.members.some((m) =>
+    m.days.some((d) => d.meals.length > 0),
+  );
+
+  // Per-cell state for the active member: the day being prepared (or, on the
+  // cook's view, translated) spins; a day with no meals is dashed.
+  const stripDays: WeekStripDay[] = stripBase.map((d) => {
+    const day = activeMember.days.find((x) => x.day_index === d.index);
+    const pending =
+      (memberIsGenerating && d.index === currentPreparingIndex) ||
+      (translated &&
+        activeMemberTranslation === "translating" &&
+        dayNeedsTranslation(day));
+    return {
+      ...d,
+      state: pending ? "pending" : day && day.meals.length > 0 ? "ready" : "empty",
+    };
+  });
+  const activeStripDay =
+    stripBase.find((d) => d.index === activeDayIndex) ?? stripBase[0];
+  const { date: activeDate, relative: activeRelative } = activeStripDay
+    ? dayLineDate(activeStripDay)
+    : { date: "", relative: null };
+
+  function selectDay(index: number) {
+    setActiveDayIndex(index);
+    // Picking a day from the pinned strip while deep in a long day of recipes:
+    // start the new day at its top instead of mid-way down. Instant, not
+    // smooth (restrained motion); the html scroll-padding clears the bar.
+    const line = dayLineRef.current;
+    const bar = document.querySelector("[data-plan-bar]");
+    if (
+      line &&
+      bar &&
+      line.getBoundingClientRect().top < bar.getBoundingClientRect().bottom
+    ) {
+      line.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+  }
+
+  function selectMember(id: string) {
+    const next = plan.members.find((m) => m.member_id === id);
+    // The open day stays: switching person answers «what does he eat today».
+    setActiveMemberId(id);
+    setOpenSheet(null);
+    if (next) {
+      const name = memberLabel(next);
+      const text = translated
+        ? t.showing_member.replace("{name}", name)
+        : `${g("تعرضين", "تعرض")} خطة ${name}`;
+      // The closing sheet hands focus back to the identity trigger, whose label
+      // already names the new person — a live message on top would say it
+      // twice. Checked after that hand-back (a frame later); where focus did
+      // not land there, the region is the only thing that speaks.
+      requestAnimationFrame(() => {
+        if (document.activeElement !== identityRef.current) setAnnouncement(text);
+      });
+    }
+  }
+
+  function openSaraSheet() {
+    markSaraOpened();
+    setOpenSheet("sara");
+  }
+
+  // «أفراد البيت»: one status line per person, most urgent true thing first
+  // (memberSheetStatus pins the priority).
+  const memberRows: MemberSheetMember[] = plan.members.map((m, i) => {
+    const kind = memberSheetStatus({
+      memberId: m.member_id,
+      translation: memberTranslationStatus(m),
+      generating: generating && !preparingStalled,
+      generatingMemberId: plan.generating_member_id,
+      weekComplete:
+        m.days.filter((d) => d.meals.length > 0).length >= (plan.days_total ?? 7),
+      dayHasMeals: !!m.days.find((d) => d.day_index === activeDayIndex)?.meals
+        .length,
+      isChild: !translated && !!m.is_child,
+    });
+    const target = m.daily_calories_target;
+    const status: MemberSheetMember["status"] =
+      kind === "translating"
+        ? { text: t.member_translating, icon: "spinner" }
+        : kind === "queued"
+          ? { text: t.member_queued, icon: "clock" }
+          : kind === "generating"
+            ? { text: t.day_pending, icon: "spinner" }
+            : kind === "day_empty"
+              ? {
+                  text: activeStripDay?.weekdayFull
+                    ? `${activeStripDay.weekdayFull} · ${t.day_empty}`
+                    : t.day_empty,
+                }
+              : kind === "portions"
+                ? { text: "بالحصص حسب العمر" }
+                : {
+                    text: translated
+                      ? `${t.daily_calories}: ${target} ${t.calories_unit}`
+                      : `${arNum(target)} سعرة يومياً`,
+                  };
+    return {
+      id: m.member_id,
+      name: memberLabel(m),
+      prefix:
+        !translated && m.member_id === "mom" ? `${g("أنتِ", "أنتَ")} ·` : undefined,
+      rosterIndex: i,
+      status,
+    };
+  });
+
+  // «الوصفات» (no cook): every dish of the open day for the whole house, a
+  // shared pot once. «حصتك» marks the owner's portion — she is the reader.
+  const recipeDishes: RecipesSheetDish[] =
+    interactive && !housekeeperLocale
+      ? householdDayDishes(plan.members, activeDayIndex).map(
+          ({ meal, memberId, sharerIds }) => ({
+            meal,
+            forName: isSolo || sharerIds ? null : (memberNames[memberId] ?? null),
+            currentMemberId: sharerIds?.includes("mom") ? "mom" : undefined,
+            absentMemberIds: sharerIds
+              ? sharerIds.filter((id) =>
+                  absenceSet.has(`${activeDayIndex}|${meal.slot}|${id}`),
+                )
+              : undefined,
+          }),
+        )
+      : [];
+
+  // The ••• sheet: first what concerns the person on screen, then the week.
+  const personItems: ReactNode[] = [];
+  if (showJourney && journeyEntry) {
+    personItems.push(
+      <Link
+        key="journey"
+        href={
+          journeyEntry.id === "mom"
+            ? "/journey"
+            : `/journey?member=${journeyEntry.id}`
+        }
+        className={PLAN_MENU_ITEM_CLASS}
+      >
+        <TrendingUp className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+        الوزن والمتابعة
+      </Link>,
+    );
+  }
+  if (!translated && !hideExport) {
+    personItems.push(
+      <DownloadPDFButton
+        key="pdf"
+        memberPlan={activeMember}
+        planMetadata={{ week_start_date: plan.week_start_date }}
+        memberNames={memberNames}
+        absentKeys={absenceSet}
+      />,
+    );
+  }
+  const weekItems: ReactNode[] = [];
+  if (saraChanges) {
+    weekItems.push(
+      <button
+        key="sara"
+        type="button"
+        onClick={openSaraSheet}
+        aria-haspopup="dialog"
+        className={PLAN_MENU_ITEM_CLASS}
+      >
+        <SaraAvatar size={24} />
+        <span className="min-w-0 flex-1">ما عدّلته سارة هذا الأسبوع</span>
+        {saraUnread && (
+          <span className="shrink-0 rounded-full bg-brand-purple-900 px-2 py-0.5 text-meta font-bold text-white">
+            جديد
+          </span>
+        )}
+      </button>,
+    );
+  }
+  if (!readOnly) {
+    weekItems.push(
+      <Link key="history" href="/plan/history" className={PLAN_MENU_ITEM_CLASS}>
+        <History className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+        الخطط السابقة
+      </Link>,
+    );
+  }
+  if (!readOnly && !translated && showWorkoutOptIn) {
+    weekItems.push(
+      <Link key="workout" href="/onboarding/workout" className={PLAN_MENU_ITEM_CLASS}>
+        <Dumbbell className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+        {g("أضيفي خطة التمارين", "أضِف خطة التمارين")}
+      </Link>,
+    );
+  }
+  // A family adds people from the member sheet; a solo plan has none.
+  if (!readOnly && isSolo) {
+    weekItems.push(
+      <Link key="add" href="/family" className={PLAN_MENU_ITEM_CLASS}>
+        <UserPlus className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+        إضافة فرد
+      </Link>,
+    );
+  }
+
   return (
-    <div className="space-y-6" dir={dir} lang={translated ? locale : undefined}>
-      {/* Unified header band: one white card holding the week context, the view
-          toggle, the primary CTA and the member chips. The action row used to
-          carry up to five same-weight pills that wrapped unpredictably at
-          laptop widths — every secondary now lives in the «المزيد» menu, so
-          the row is two controls wide no matter how many the account
-          qualifies for. Every control here is 44px tall. */}
-      <div className="rounded-3xl bg-brand-card border border-brand-line px-4 py-4 sm:px-6 sm:py-5">
-        {/* Line 1: week range on the start side; the action cluster on the end
-            side, led by the meals/exercise toggle — it is the FIRST item, so in
-            RTL it sits to the RIGHT of the CTA (owner directive). The workout
-            viewer renders the same band with the toggle in the same slot. */}
-        <div className="flex items-center justify-between gap-3">
-          {/* This is the page's <h1>. /plan, /plan/housekeeper and
-              /plan/history/[planId] all render PlanViewer and had NO h1 at all
-              — the main screen of the product gave a screen reader nothing to
-              announce and no heading to navigate to. The week range is what
-              the page actually is, and it is already translated for all seven
-              locales, so this needs no new copy and changes nothing visually
-              (h1 carries the same classes the <p> did). */}
-          <div>
-            <p className="text-brand-ink-muted text-xs">{t.this_week}</p>
-            <h1 className="font-extrabold text-brand-ink text-lg leading-snug tabular-nums">
-              {formatWeekRange(plan.week_start_date, locale)}
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {planTypeToggle}
-            {hasMenuActions && (
-              <PlanActionsMenu>
+    <div dir={dir} lang={translated ? locale : undefined}>
+      <PlanBar>
+        {/* The page's <h1>. On phones the bar IS the top of the screen — it
+            replaced the app header — so the heading lives in it; visually the
+            name and the dated strip already say what the page is. /plan,
+            /plan/housekeeper and /plan/history/[planId] all get it from here. */}
+        <h1 className="sr-only">
+          {translated ? `${t.this_week} ${weekRange}` : `خطة الوجبات، ${weekRange}`}
+        </h1>
+        <PlanBarRow>
+          <PlanBarIdentity
+            avatar={
+              <Avatar
+                name={activeName}
+                rosterIndex={activeRosterIndex}
+                size="lg"
+                className="ring-2 ring-brand-lavender"
+              />
+            }
+            name={activeName}
+            suffix={
+              !translated && activeMember.member_id === "mom"
+                ? g("أنتِ", "أنتَ")
+                : undefined
+            }
+            ref={identityRef}
+            onOpen={isSolo ? undefined : () => setOpenSheet("member")}
+            expanded={openSheet === "member"}
+            openLabel={
+              translated
+                ? `${activeName}${listSep}${t.switch_member}`
+                : `خطة ${activeName}، تبديل الفرد`
+            }
+          />
+          {(interactive || hasMenuActions) && (
+            <PlanBarEnd>
+              {interactive &&
+                (housekeeperLocale ? (
+                  <PlanBarPill
+                    href="/plan/housekeeper"
+                    icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
+                    ariaLabel={inCookLanguage ? `الوصفات ${inCookLanguage}` : undefined}
+                  >
+                    الوصفات
+                  </PlanBarPill>
+                ) : (
+                  <PlanBarPill
+                    ref={recipesRef}
+                    onClick={() => setOpenSheet("recipes")}
+                    expanded={openSheet === "recipes"}
+                    icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
+                  >
+                    الوصفات
+                  </PlanBarPill>
+                ))}
+              {hasMenuActions && (
+                <PlanBarMore
+                  ref={moreRef}
+                  onClick={() => setOpenSheet("more")}
+                  expanded={openSheet === "more"}
+                  unread={saraUnread}
+                />
+              )}
+            </PlanBarEnd>
+          )}
+        </PlanBarRow>
+        <WeekStrip
+          days={stripDays}
+          selected={activeDayIndex}
+          onSelect={selectDay}
+          todayLabel={translated ? undefined : "اليوم"}
+          label={t.week_days}
+          stateLabels={{ empty: t.day_empty, pending: t.day_pending }}
+          panelId={panelId}
+        />
+        {/* Generation progress — real "N of M days" while the week streams in,
+            as a rail over the bar's hairline rather than a card that pushed
+            the meals down. Gone once the viewed member is complete. */}
+        {memberIsGenerating &&
+          !preparingStalled &&
+          genProgress.ready < genProgress.total && (
+            <PlanBarRail
+              ready={genProgress.ready}
+              total={genProgress.total}
+              label={
+                translated
+                  ? `${t.preparing_title}: ${genProgress.ready}/${genProgress.total}`
+                  : `${arNum(genProgress.ready)} من ${arNum(genProgress.total)} أيام جاهزة`
+              }
+            />
+          )}
+      </PlanBar>
+
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
+      {notice && <div className="mt-3">{notice}</div>}
+      {planTypeToggle && <div className="mt-3">{planTypeToggle}</div>}
+
+      {/* The strip's panel: the open day's numbers and its meals. */}
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-label={activeDate || undefined}
+        className="mt-4"
+      >
+        <div ref={dayLineRef}>
+          <DayLine
+            date={activeDate}
+            relative={activeRelative}
+            total={activeDay && activeDay.meals.length > 0 ? activeDay.day_total : null}
+            target={activeMember.daily_calories_target}
+            // Children are planned by PORTIONS (healthy-plate servings), not a
+            // calorie target, so a day's total naturally varies. Arabic view
+            // only — the cook's view shows the numbers as they are.
+            child={
+              !translated && activeMember.is_child
+                ? {
+                    note: `خطة ${activeMember.member_name_ar} محسوبة بالحصص المناسبة للعمر، لا بهدف سعرات ثابت، فيختلف إجمالي كل يوم حسب أطباقه.`,
+                  }
+                : null
+            }
+            strings={t}
+            arabic={!translated}
+          />
+        </div>
+
+        {/* Meal list — a short cross-fade between days and people; none at
+            all under reduced motion. */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${activeMemberId}-${activeDayIndex}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.15 }}
+            className="mt-3 space-y-3"
+          >
+            {translated && activeMemberTranslation === "queued" ? (
+              // This member's turn hasn't come yet — translation runs one member at
+              // a time, in order. Show a calm waiting state, not a spinner (which
+              // read as "loading randomly").
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <Clock className="size-6 text-brand-purple-900 opacity-60" aria-hidden="true" />
+                <p className="text-brand-ink-muted text-sm">{t.translation_queued}</p>
+              </div>
+            ) : translated && activeMemberTranslation === "translating" && dayNeedsTranslation(activeDay) ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <Loader2
+                  className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
+                  aria-hidden="true"
+                />
+                <p className="text-brand-ink-muted text-sm">{t.translating}</p>
+              </div>
+            ) : activeDay && activeDay.meals.length > 0 ? (
+              <>
+                {checkinError && (
+                  <p role="alert" className="text-sm font-bold text-red-700">
+                    {checkinError}
+                  </p>
+                )}
+                {orderedMeals.map((meal, i) => {
+                  // A shared dish: one status for everyone who shares it, and an
+                  // absence toggle per sharer (the batch re-scales for the rest).
+                  const sharerIds =
+                    meal.shared_recipe && meal.per_member_portions?.length
+                      ? meal.per_member_portions.map((p) => p.member_id)
+                      : null;
+                  const absentIds = sharerIds
+                    ? sharerIds.filter((id) =>
+                        absenceSet.has(`${activeDayIndex}|${meal.slot}|${id}`),
+                      )
+                    : [];
+                  const presentIds = sharerIds
+                    ? sharerIds.filter((id) => !absentIds.includes(id))
+                    : null;
+                  // The open tab belongs to a sharer who is OUT of this
+                  // occurrence (owner directive 07/2026): their controls become
+                  // PERSONAL — their own row, read without the whole-house
+                  // fallback, and MealCard drops «طبختها كما هي» from the chips.
+                  // The everyone-absent edge (data only — the UI refuses to
+                  // remove the last sharer) keeps the shared path.
+                  const viewerOutOfMeal =
+                    !!presentIds &&
+                    presentIds.length > 0 &&
+                    absentIds.includes(activeMember.member_id);
+                  // The dish's own roster: the present sharers. Absentees are
+                  // excluded from BOTH sides — their row is a personal record, so
+                  // it neither lights the shared chip nor gets swept when the
+                  // dish is un-marked. (Everyone-absent is a data-only edge: the
+                  // status still needs someone to land on, so it keeps the full
+                  // roster.)
+                  const dishIds =
+                    presentIds && presentIds.length > 0 ? presentIds : sharerIds;
+                  return (
+                    <MealCard
+                      key={i}
+                      meal={meal}
+                      memberNames={memberNames}
+                      locale={locale}
+                      currentMemberId={activeMember.member_id}
+                      checkin={
+                        viewerOutOfMeal
+                          ? outOfMealCheckinFor(
+                              activeDayIndex,
+                              meal.slot,
+                              activeMember.member_id,
+                            )
+                          : dishIds
+                            ? sharedCheckinFor(activeDayIndex, meal.slot, dishIds)
+                            : checkinFor(
+                                activeDayIndex,
+                                meal.slot,
+                                activeMember.member_id,
+                              )
+                      }
+                      onCheckin={
+                        canCheckinActiveDay
+                          ? (status, reason) =>
+                              dishIds && !viewerOutOfMeal
+                                ? handleSharedCheckin(
+                                    // One roster for set AND clear: the sharers
+                                    // this dish actually belongs to. Setting gives
+                                    // each of them the same status; clearing takes
+                                    // it back from all of them (plus the
+                                    // whole-house fallback), so an un-tap really
+                                    // leaves the dish unmarked.
+                                    dishIds,
+                                    meal.slot,
+                                    status,
+                                    reason,
+                                  )
+                                : handleCheckin(
+                                    activeMember.member_id,
+                                    meal.slot,
+                                    status,
+                                    reason,
+                                    viewerOutOfMeal,
+                                  )
+                          : undefined
+                      }
+                      absentMemberIds={sharerIds ? absentIds : undefined}
+                      onToggleAbsence={
+                        canToggleAbsence && sharerIds
+                          ? (memberId, absent) =>
+                              handleToggleAbsence(
+                                memberId,
+                                meal.slot,
+                                absent,
+                                sharerIds,
+                              )
+                          : undefined
+                      }
+                      verdict={verdictFor(
+                        activeDayIndex,
+                        meal.slot,
+                        activeMember.member_id,
+                      )}
+                      onVerdict={
+                        canCheckinActiveDay
+                          ? (verdict) =>
+                              handleVerdict(
+                                activeMember.member_id,
+                                meal.slot,
+                                meal.recipe_name_ar,
+                                verdict,
+                              )
+                          : undefined
+                      }
+                    />
+                  );
+                })}
+              </>
+            ) : memberIsGenerating &&
+              !preparingStalled &&
+              activeDayIndex === currentPreparingIndex ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <Loader2
+                  className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
+                  aria-hidden="true"
+                />
+                <p className="text-brand-ink-muted text-sm">
+                  {t.preparing_steps[stepTick % t.preparing_steps.length] ??
+                    t.generating}
+                </p>
+              </div>
+            ) : generating && !preparingStalled ? (
+              // A run completes EVERY incomplete beneficiary, not just
+              // generating_member_id — so while the plan is still generating, any
+              // member's unfilled day is genuinely queued, not failed. Only fall
+              // through to the failed box once generation stops or stalls.
+              <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
+                {t.day_queued}
+              </div>
+            ) : partialWeekMemberIds.includes(activeMember.member_id) &&
+              !generating &&
+              !translated &&
+              !readOnly ? (
+              // A short week: the drain fills this day with no action from her,
+              // so it says the day is coming instead of offering a retry that
+              // would only race the refill.
+              <Notice tone="info" title="هذا اليوم في الطريق">
+                {g(
+                  "يكتمل تلقائياً خلال دقائق، دون أي إجراء منكِ.",
+                  "يكتمل تلقائياً خلال دقائق، دون أي إجراء منك.",
+                )}
+              </Notice>
+            ) : activeDay ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-brand-pink bg-brand-pink/5 py-8 px-4 text-center">
+                <AlertTriangle className="size-6 text-brand-pink" aria-hidden="true" />
+                <p className="text-brand-ink font-bold text-sm leading-relaxed">
+                  {t.day_failed}
+                </p>
                 {!readOnly && (
                   <RegenerateButton
-                    appearance="menu-item"
                     memberId={activeMember.member_id}
                     memberName={activeMember.member_name_ar}
                     hasSharedMeals={activeMemberHasShared}
                     memberCount={plan.members.length}
                     locale={locale}
                     ownerSex={ownerSex}
+                    onDialogOpenChange={setRegenDialogOpen}
                   />
                 )}
-                {!readOnly && (
-                  <Link href="/plan/history" className={PLAN_MENU_ITEM_CLASS}>
-                    <History className="size-4 text-brand-purple-900" aria-hidden="true" />
-                    الخطط السابقة
-                  </Link>
-                )}
-                {!translated && !hideExport && (
-                  <DownloadPDFButton
-                    memberPlan={activeMember}
-                    planMetadata={{ week_start_date: plan.week_start_date }}
-                    memberNames={memberNames}
-                    absentKeys={absenceSet}
-                  />
-                )}
-                {!readOnly && isSolo && (
-                  <Link href="/family" className={PLAN_MENU_ITEM_CLASS}>
-                    <UserPlus className="size-4 text-brand-purple-900" aria-hidden="true" />
-                    إضافة فرد
-                  </Link>
-                )}
-                {!readOnly && !translated && showWorkoutOptIn && (
-                  <Link href="/onboarding/workout" className={PLAN_MENU_ITEM_CLASS}>
-                    <Dumbbell className="size-4 text-brand-purple-900" aria-hidden="true" />
-                    {genderPick(ownerSex)("أضيفي خطة التمارين", "أضِف خطة التمارين")}
-                  </Link>
-                )}
-                {!readOnly && housekeeperLocale && (
-                  <Link href="/plan/housekeeper" className={PLAN_MENU_ITEM_CLASS}>
-                    <ChefHat className="size-4 text-brand-purple-900" aria-hidden="true" />
-                    وصفات الخدامة
-                  </Link>
-                )}
-              </PlanActionsMenu>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-brand-ink-muted text-sm">
+                {t.no_meals}
+              </div>
             )}
-          </div>
-        </div>
-
-        {/* Line 2: the private weight record for the viewed member. The member
-            chips moved into the sticky switcher below (09/2026 redesign), so
-            «who» and «which day» stay reachable together at any scroll depth. */}
-        {journeyLink && (
-          <>
-            <div className="h-px bg-brand-line my-4" aria-hidden="true" />
-            <div className="flex justify-end">{journeyLink}</div>
-          </>
-        )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* «سارة عدّلت خطتك» — the engagement-loop payoff: what Sara changed this
-          week and why, citing the family's real logged marks. Plan-wide (below
-          the header band). The minimum-signal guard already ran in the engine,
-          so a present week_changes is safe to show. Hidden on the housekeeper's
-          translated view — it is the mom's فصحى adaptation narrative. */}
-      {!translated && plan.week_changes && plan.week_changes.length > 0 && (
-        <SaraChangesCard changes={plan.week_changes} />
-      )}
-
-      {/* Children are planned by PORTIONS (healthy-plate servings), not a calorie
-          target — so the figures above are an APPROXIMATE weekly average and each
-          day naturally varies. Say so, so the numbers don't read as a fixed daily
-          goal every day misses. Interactive Arabic view only (the housekeeper view
-          just shows the averaged number). */}
-      {!translated && activeMember.is_child && (
-        <p className="text-brand-ink-muted text-xs leading-relaxed -mt-2">
-          خطة {activeMember.member_name_ar} بالحصص المناسبة للعمر — الأرقام أعلاه
-          متوسّط تقريبي للأسبوع، ويختلف إجمالي كل يوم حسب أطباق اليوم.
-        </p>
-      )}
-
-      {/* Generation progress — real "day N of M" while the plan streams in.
-          Hidden once the viewed member is complete (ready === total) so a full
-          bar never sits there spinning. */}
-      {memberIsGenerating && !preparingStalled && genProgress.ready < genProgress.total && (
-        <div className="bg-brand-card rounded-2xl border border-brand-line px-4 py-3.5 space-y-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="flex items-center gap-2 text-brand-ink font-bold text-sm leading-relaxed">
-              <Loader2
-                className="size-4 animate-spin motion-reduce:animate-none text-brand-purple-900 flex-shrink-0"
-                aria-hidden="true"
-              />
-              <span>{t.preparing_title}</span>
-              {genProgress.dayName && (
-                <span className="text-brand-purple-900">· {genProgress.dayName}</span>
-              )}
-            </p>
-            <span className="flex-shrink-0 text-brand-ink-muted text-xs font-bold tabular-nums">
-              {genProgress.ready}/{genProgress.total}
-            </span>
-          </div>
-          <div
-            className="h-1.5 bg-brand-surface rounded-full overflow-hidden"
-            role="progressbar"
-            aria-busy="true"
-            aria-label={t.preparing_title}
-            aria-valuenow={genProgress.ready}
-            aria-valuemin={0}
-            aria-valuemax={genProgress.total}
-          >
-            <div
-              className="h-full rounded-full bg-gradient-to-l from-brand-purple-900 via-brand-pink to-brand-yellow transition-[width] duration-700 ease-out"
-              style={{ width: `${Math.max(6, genProgress.pct)}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* A short week, explained. Never on the housekeeper's translated view (it
-          is the mom's notice) nor while the loader is already saying the same
-          thing — `generating` means days ARE still arriving in this run. */}
-      {!translated && !readOnly && partialWeek && !generating && <PartialWeekNotice />}
-
-      {/* The switcher — whose plan and which day — sticky under the app
-          header so neither means scrolling back up past a long day of
-          recipes. */}
-      <div className="sticky top-[var(--app-header-h)] z-20 -mx-4 space-y-2 bg-brand-surface/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-brand-surface/85 sm:mx-0 sm:px-0">
-        {!isSolo && (
-          <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
-            <div className="flex min-w-max items-center gap-2">
-                {plan.members.map((m) => {
-                  const isActive = m.member_id === activeMemberId;
-                  const isMom = m.member_id === "mom";
-                  const transStatus = memberTranslationStatus(m);
-                  return (
-                    <button
-                      key={m.member_id}
-                      type="button"
-                      onClick={() => setActiveMemberId(m.member_id)}
-                      aria-pressed={isActive}
-                      className={`relative inline-flex items-center min-h-11 px-4 rounded-full text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                        isActive
-                          ? "text-white"
-                          : "bg-brand-lavender/25 text-brand-purple-900 hover:bg-brand-lavender/40"
-                      }`}
-                    >
-                      {/* The selected pill slides between chips rather than
-                          cross-fading — the same single-element move the
-                          tab underline used to make. */}
-                      {isActive && (
-                        <motion.span
-                          layoutId="member-chip-fill"
-                          className="absolute inset-0 rounded-full bg-brand-purple-900"
-                        />
-                      )}
-                      <span className="relative">
-                        {/* «أنتِ» stays visible TEXT — the mom chip is never
-                            marked by color alone. It carries no pink dot:
-                            pink on the selected purple fill would vanish. */}
-                        {isMom && !translated && (
-                          <span className="me-1">
-                            {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
-                          </span>
-                        )}
-                        {memberLabel(m)}
-                        {translated && transStatus === "translating" && (
-                          <Loader2
-                            className={`inline-block ms-1.5 size-3 animate-spin motion-reduce:animate-none align-[-1px] ${
-                              isActive ? "text-white" : "text-brand-purple-900"
-                            }`}
-                            aria-hidden="true"
-                          />
-                        )}
-                        {translated && transStatus === "queued" && (
-                          <Clock
-                            className="inline-block ms-1.5 size-3 align-[-1px] opacity-40"
-                            aria-hidden="true"
-                          />
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-                {!readOnly && (
-                  <Link
-                    href="/family"
-                    className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                  >
-                    <UserPlus className="size-4" aria-hidden="true" />
-                    إضافة فرد
+      {!isSolo && (
+        <MemberSheet
+          open={openSheet === "member"}
+          onClose={() => setOpenSheet(null)}
+          title={t.household}
+          subtitle={weekRange}
+          members={memberRows}
+          selectedId={activeMember.member_id}
+          onSelect={selectMember}
+          footer={
+            interactive ? (
+              <>
+                <Link href="/family" className={PLAN_MENU_ITEM_CLASS}>
+                  <UserPlus className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+                  إضافة فرد
+                </Link>
+                {housekeeperLocale && (
+                  <Link href="/plan/housekeeper" className={PLAN_MENU_ITEM_CLASS}>
+                    <ChefHat className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+                    {inCookLanguage
+                      ? `وصفات الخدامة · ${inCookLanguage}`
+                      : "وصفات الخدامة"}
                   </Link>
                 )}
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-7 gap-1.5">
-        {Array.from({ length: 7 }, (_, i) => {
-          const day = activeMember.days.find((d) => d.day_index === i);
-          const label = translated
-            ? getLocalizedDayNameFromWeekStart(plan.week_start_date, i, locale)
-            : day?.day_name_ar || dayNameFromWeekStart(plan.week_start_date, i) || `${i + 1}`;
-          const isActive = i === activeDayIndex;
-          const pending =
-            (memberIsGenerating && i === currentPreparingIndex) ||
-            (translated &&
-              activeMemberTranslation === "translating" &&
-              dayNeedsTranslation(day));
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setActiveDayIndex(i)}
-              aria-pressed={isActive}
-              className={`relative rounded-xl py-2.5 font-bold text-xs transition-colors min-h-[2.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface ${
-                isActive
-                  ? "bg-brand-purple-900 text-white"
-                  : "bg-brand-lavender/30 text-brand-purple-900 hover:bg-brand-lavender/50"
-              }`}
-            >
-              {label}
-              {pending && (
-                <Loader2
-                  className="absolute top-1 end-1 size-3 animate-spin motion-reduce:animate-none opacity-70"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
-      </div>
-
-      {/* The day's numbers, ONCE (09/2026 redesign): the day's total against
-          the member's target, then the macros. Four target tiles, a total
-          pill and a macro line on every meal used to repeat the same figures
-          three times over. */}
-      {activeDay ? (
-        <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3">
-          <p className="flex flex-wrap items-baseline gap-x-2 text-brand-ink">
-            <span className="text-meta text-brand-ink-muted">{t.day_total}</span>
-            <b className="text-lg font-extrabold tabular-nums">
-              {activeDay.day_total.calories}
-            </b>
-            <span className="text-meta text-brand-ink-muted tabular-nums">
-              / {activeMember.daily_calories_target} {t.calories_unit}
-            </span>
-          </p>
-          <p className="mt-0.5 text-meta text-brand-ink-muted tabular-nums">
-            {activeDay.day_total.protein_g} {t.grams} {t.protein} ·{" "}
-            {activeDay.day_total.carbs_g} {t.grams} {t.carbs} ·{" "}
-            {activeDay.day_total.fat_g} {t.grams} {t.fat}
-          </p>
-        </div>
-      ) : (
-        <p className="text-meta text-brand-ink-muted tabular-nums">
-          {t.daily_calories}: {activeMember.daily_calories_target} {t.calories_unit}
-        </p>
+              </>
+            ) : undefined
+          }
+          dir={dir}
+          lang={translated ? locale : undefined}
+          closeLabel={t.close}
+          returnFocusRef={identityRef}
+        />
       )}
 
-      {/* Meal list */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={`${activeMemberId}-${activeDayIndex}`}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-          className="space-y-3"
-        >
-          {translated && activeMemberTranslation === "queued" ? (
-            // This member's turn hasn't come yet — translation runs one member at
-            // a time, in order. Show a calm waiting state, not a spinner (which
-            // read as "loading randomly").
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <Clock className="size-6 text-brand-purple-900 opacity-60" aria-hidden="true" />
-              <p className="text-brand-ink-muted text-sm">{t.translation_queued}</p>
-            </div>
-          ) : translated && activeMemberTranslation === "translating" && dayNeedsTranslation(activeDay) ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <Loader2
-                className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
-                aria-hidden="true"
+      {hasMenuActions && (
+        <MoreSheet
+          open={openSheet === "more"}
+          onClose={() => setOpenSheet(null)}
+          groups={[
+            {
+              key: "person",
+              label: (
+                <>
+                  <Avatar name={activeName} rosterIndex={activeRosterIndex} size="sm" />
+                  {activeName}
+                </>
+              ),
+              items: personItems,
+            },
+            { key: "week", label: "هذا الأسبوع", items: weekItems },
+          ]}
+          tail={
+            // Opens its ConfirmDialog ABOVE the sheet, so the sheet stays
+            // mounted underneath (a button row never closes it).
+            !readOnly ? (
+              <RegenerateButton
+                appearance="menu-item"
+                memberId={activeMember.member_id}
+                memberName={activeMember.member_name_ar}
+                hasSharedMeals={activeMemberHasShared}
+                memberCount={plan.members.length}
+                locale={locale}
+                ownerSex={ownerSex}
+                onStarted={() => setOpenSheet(null)}
               />
-              <p className="text-brand-ink-muted text-sm">{t.translating}</p>
-            </div>
-          ) : activeDay && activeDay.meals.length > 0 ? (
-            <>
-              {checkinError && (
-                <p role="alert" className="text-sm font-bold text-red-700">
-                  {checkinError}
-                </p>
-              )}
-              {orderedMeals.map((meal, i) => {
-                // A shared dish: one status for everyone who shares it, and an
-                // absence toggle per sharer (the batch re-scales for the rest).
-                const sharerIds =
-                  meal.shared_recipe && meal.per_member_portions?.length
-                    ? meal.per_member_portions.map((p) => p.member_id)
-                    : null;
-                const absentIds = sharerIds
-                  ? sharerIds.filter((id) =>
-                      absenceSet.has(`${activeDayIndex}|${meal.slot}|${id}`),
-                    )
-                  : [];
-                const presentIds = sharerIds
-                  ? sharerIds.filter((id) => !absentIds.includes(id))
-                  : null;
-                // The open tab belongs to a sharer who is OUT of this
-                // occurrence (owner directive 07/2026): their controls become
-                // PERSONAL — their own row, read without the whole-house
-                // fallback, and MealCard drops «طبختها كما هي» from the chips.
-                // The everyone-absent edge (data only — the UI refuses to
-                // remove the last sharer) keeps the shared path.
-                const viewerOutOfMeal =
-                  !!presentIds &&
-                  presentIds.length > 0 &&
-                  absentIds.includes(activeMember.member_id);
-                // The dish's own roster: the present sharers. Absentees are
-                // excluded from BOTH sides — their row is a personal record, so
-                // it neither lights the shared chip nor gets swept when the
-                // dish is un-marked. (Everyone-absent is a data-only edge: the
-                // status still needs someone to land on, so it keeps the full
-                // roster.)
-                const dishIds =
-                  presentIds && presentIds.length > 0 ? presentIds : sharerIds;
-                return (
-                  <MealCard
-                    key={i}
-                    meal={meal}
-                    memberNames={memberNames}
-                    locale={locale}
-                    currentMemberId={activeMember.member_id}
-                    checkin={
-                      viewerOutOfMeal
-                        ? outOfMealCheckinFor(
-                            activeDayIndex,
-                            meal.slot,
-                            activeMember.member_id,
-                          )
-                        : dishIds
-                          ? sharedCheckinFor(activeDayIndex, meal.slot, dishIds)
-                          : checkinFor(
-                              activeDayIndex,
-                              meal.slot,
-                              activeMember.member_id,
-                            )
-                    }
-                    onCheckin={
-                      canCheckinActiveDay
-                        ? (status, reason) =>
-                            dishIds && !viewerOutOfMeal
-                              ? handleSharedCheckin(
-                                  // One roster for set AND clear: the sharers
-                                  // this dish actually belongs to. Setting gives
-                                  // each of them the same status; clearing takes
-                                  // it back from all of them (plus the
-                                  // whole-house fallback), so an un-tap really
-                                  // leaves the dish unmarked.
-                                  dishIds,
-                                  meal.slot,
-                                  status,
-                                  reason,
-                                )
-                              : handleCheckin(
-                                  activeMember.member_id,
-                                  meal.slot,
-                                  status,
-                                  reason,
-                                  viewerOutOfMeal,
-                                )
-                        : undefined
-                    }
-                    absentMemberIds={sharerIds ? absentIds : undefined}
-                    onToggleAbsence={
-                      canToggleAbsence && sharerIds
-                        ? (memberId, absent) =>
-                            handleToggleAbsence(
-                              memberId,
-                              meal.slot,
-                              absent,
-                              sharerIds,
-                            )
-                        : undefined
-                    }
-                    verdict={verdictFor(
-                      activeDayIndex,
-                      meal.slot,
-                      activeMember.member_id,
-                    )}
-                    onVerdict={
-                      canCheckinActiveDay
-                        ? (verdict) =>
-                            handleVerdict(
-                              activeMember.member_id,
-                              meal.slot,
-                              meal.recipe_name_ar,
-                              verdict,
-                            )
-                        : undefined
-                    }
-                  />
-                );
-              })}
-            </>
-          ) : memberIsGenerating &&
-            !preparingStalled &&
-            activeDayIndex === currentPreparingIndex ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <Loader2
-                className="size-6 animate-spin motion-reduce:animate-none text-brand-purple-900"
-                aria-hidden="true"
-              />
-              <p className="text-brand-ink-muted text-sm">
-                {t.preparing_steps[stepTick % t.preparing_steps.length] ??
-                  t.generating}
-              </p>
-            </div>
-          ) : generating && !preparingStalled ? (
-            // A run completes EVERY incomplete beneficiary, not just
-            // generating_member_id — so while the plan is still generating, any
-            // member's unfilled day is genuinely queued, not failed. Only fall
-            // through to the failed box once generation stops or stalls.
-            <div className="text-center py-10 text-brand-ink-muted text-sm leading-relaxed">
-              {t.day_queued}
-            </div>
-          ) : activeDay ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-brand-pink bg-brand-pink/5 py-8 px-4 text-center">
-              <AlertTriangle className="size-6 text-brand-pink" aria-hidden="true" />
-              <p className="text-brand-ink font-bold text-sm leading-relaxed">
-                {t.day_failed}
-              </p>
-              {!readOnly && (
-                <RegenerateButton
-                  memberId={activeMember.member_id}
-                  memberName={activeMember.member_name_ar}
-                  hasSharedMeals={activeMemberHasShared}
-                  memberCount={plan.members.length}
-                  locale={locale}
-                  ownerSex={ownerSex}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-brand-ink-muted text-sm">
-              {t.no_meals}
-            </div>
+            ) : undefined
+          }
+          closeLabel={t.close}
+          returnFocusRef={moreRef}
+        />
+      )}
+
+      {interactive && !housekeeperLocale && (
+        <RecipesSheet
+          open={openSheet === "recipes"}
+          onClose={() => setOpenSheet(null)}
+          title={`وصفات ${activeDate}`}
+          note={isSolo ? undefined : "وصفات كل أطباق اليوم للبيت كله"}
+          dishes={recipeDishes}
+          memberNames={memberNames}
+          emptyText="لم يُجهَّز هذا اليوم بعد."
+          returnFocusRef={recipesRef}
+        />
+      )}
+
+      {saraChanges && (
+        <>
+          <SaraChangesSheet
+            open={openSheet === "sara"}
+            onClose={() => setOpenSheet(null)}
+            changes={saraChanges}
+            ownerSex={ownerSex}
+            // ••• even when the toast opened it — the toast is gone by then.
+            returnFocusRef={moreRef}
+          />
+          {/* Once per plan week, and only over a plan that has something to
+              show — never over a week that is still entirely empty. */}
+          {hasAnyMeals && (
+            <SaraToast
+              changes={saraChanges}
+              weekStart={plan.week_start_date}
+              ownerSex={ownerSex}
+              onView={openSaraSheet}
+              blocked={openSheet !== null || regenDialogOpen}
+            />
           )}
-        </motion.div>
-      </AnimatePresence>
+        </>
+      )}
     </div>
   );
 }

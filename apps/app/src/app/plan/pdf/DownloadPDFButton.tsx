@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import type { MemberPlan } from "@fitlife/plan-engine";
-import { PLAN_MENU_ITEM_CLASS } from "../PlanActionsMenu";
+import { PLAN_MENU_ICON_CLASS, PLAN_MENU_ITEM_CLASS } from "../bar/menuItem";
 
 export interface DownloadPDFButtonProps {
   memberPlan: MemberPlan;
@@ -74,20 +74,23 @@ export function DownloadPDFButton({
       type="button"
       onClick={handleDownload}
       disabled={loading}
-      // Renders as a row of the plan header's «المزيد» menu — its only caller.
-      // The menu deliberately stays open while this generates, so the spinner
-      // and the error label below are visible where the user clicked.
+      // Renders as a row of the plan bar's ••• sheet — its only caller. The
+      // sheet deliberately stays open while this generates (MoreSheet closes
+      // only on links), so the spinner and the error label below are visible
+      // where the user tapped.
       className={`${PLAN_MENU_ITEM_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
     >
       {loading ? (
         <Loader2
-          className="size-4 animate-spin motion-reduce:animate-none text-brand-purple-900"
+          className={`${PLAN_MENU_ICON_CLASS} animate-spin motion-reduce:animate-none`}
           aria-hidden="true"
         />
       ) : (
-        <Download className="size-4 text-brand-purple-900" aria-hidden="true" />
+        <Download className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
       )}
-      <span className="truncate max-w-[14rem]">
+      {/* Wraps rather than truncates: the row is a full-width sheet row now,
+          and the error sentence is the one line that must be read whole. */}
+      <span className="min-w-0 flex-1">
         {status === "error"
           ? "تعذّر التحميل، يرجى المحاولة مرة أخرى"
           : `تحميل PDF لـ ${memberPlan.member_name_ar}`}

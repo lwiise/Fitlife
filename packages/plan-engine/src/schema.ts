@@ -223,7 +223,11 @@ export const MealPlanSchema = z.object({
   // response to the engagement digest, each `because_ar` citing a real logged
   // event. TOLERANT BY DESIGN: extras are trimmed and a malformed value becomes
   // undefined — a bad week_changes must never fail a whole plan. Absent on
-  // older plans and on runs with no digest (minimum-signal guard).
+  // older plans and on a week whose runs had no digest (minimum-signal guard).
+  // A later run in the SAME plan week whose skeleton says nothing (drain,
+  // chain hop, sweeper refill, per-member regenerate) carries the week's
+  // existing changes forward — resolveWeekChanges in generate.ts — so Sara's
+  // note survives the week's many plan rows; it never crosses into a new week.
   week_changes: WeekChangesField,
 });
 export type MealPlan = z.infer<typeof MealPlanSchema>;

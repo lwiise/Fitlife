@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Loader2 } from "lucide-react";
+import { trapTab } from "@/components/ui/focusTrap";
 
 /**
  * Centered, brand-styled confirmation dialog — replaces native window.confirm.
- * Backdrop + ESC cancel, focus moves to the confirm button on open, body scroll
- * locked while open, motion respects prefers-reduced-motion.
+ * Backdrop + ESC cancel, body scroll locked while open, motion respects
+ * prefers-reduced-motion. Modal for the keyboard too: focus moves in on open
+ * (the confirm button; the panel itself when there is a form), Tab stays
+ * inside, and focus returns to the opener on close. A Sheet it opens above
+ * stands its own trap down while this is up and relies on exactly that.
  */
 export function ConfirmDialog({
   open,
@@ -35,6 +39,7 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const reduceMotion = useReducedMotion();
 
@@ -49,14 +54,36 @@ export function ConfirmDialog({
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Don't steal focus to the confirm button when there's a form to fill in.
-    const t = children ? undefined : setTimeout(() => confirmRef.current?.focus(), 50);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
-      if (t) clearTimeout(t);
     };
-  }, [open, isPending, onCancel, children]);
+  }, [open, isPending, onCancel]);
+
+  // With a form, the panel takes focus rather than the confirm button (a stray
+  // Enter would submit) or a textarea (it would raise the phone keyboard); the
+  // first Tab then lands on the first control. An event, so the choice reads
+  // the current `children` without re-running the effect below on every
+  // keystroke of the form.
+  const focusInitial = useEffectEvent(() =>
+    (children ? panelRef.current : confirmRef.current)?.focus({ preventScroll: true }),
+  );
+
+  // Its own effect, keyed on open alone: callers pass inline onCancel and fresh
+  // children, so the effect above re-runs on every render — here that would
+  // steal focus back and forget the opener mid-typing.
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const t = setTimeout(() => focusInitial(), 50);
+    const onKey = (e: KeyboardEvent) => trapTab(e, panelRef.current);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [open, mounted]);
 
   if (!mounted) return null;
 
@@ -79,10 +106,12 @@ export function ConfirmDialog({
             aria-hidden="true"
           />
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
-            className="relative w-full max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl border border-brand-line bg-brand-card p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-3xl md:p-7"
+            tabIndex={-1}
+            className="relative w-full max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl border border-brand-line bg-brand-card p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-purple-900 sm:max-w-md sm:rounded-3xl md:p-7"
             initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}

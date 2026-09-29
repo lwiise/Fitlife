@@ -93,6 +93,21 @@ export interface PlanStrings {
   allergy_title: string;
   allergy_for: string;
   allergy_disclaimer: string;
+  // The /plan bar (09/2026). The cook's view shows the bar too — who, which
+  // day — so its accessible names and the member sheet need her language.
+  household: string;
+  switch_member: string;
+  close: string;
+  week_days: string;
+  // Spoken after a day cell's date, and a person's status line in the sheet.
+  day_empty: string;
+  day_pending: string;
+  // Short on purpose: one truncated line under a name, where `translating` /
+  // `translation_queued` are full sentences.
+  member_translating: string;
+  member_queued: string;
+  // Announced after switching person. `{name}` is interpolated.
+  showing_member: string;
   units: Record<UnitKey, string>;
 }
 
@@ -151,6 +166,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ حساسية — لا تقدّمي هذه الأصناف",
     allergy_for: "لـ",
     allergy_disclaimer: "هذه معلومات مساعِدة فقط — تحقّقي دائماً من المكونات بنفسك",
+    household: "أفراد البيت",
+    switch_member: "تبديل الفرد",
+    close: "إغلاق",
+    week_days: "أيام الأسبوع",
+    day_empty: "لم يُجهَّز بعد",
+    day_pending: "قيد التحضير",
+    member_translating: "قيد الترجمة",
+    member_queued: "في الانتظار",
+    showing_member: "خطة {name} معروضة الآن",
     units: { g: "جم", kg: "كجم", ml: "مل", l: "لتر", cup: "كوب", tbsp: "ملعقة كبيرة", tsp: "ملعقة صغيرة", piece: "حبة", serving: "حصة", unlimited: "حسب الرغبة" },
   },
   en: {
@@ -202,6 +226,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ Allergies — do not serve these",
     allergy_for: "For",
     allergy_disclaimer: "This is decision-support only — always check the ingredients yourself",
+    household: "Household",
+    switch_member: "Switch person",
+    close: "Close",
+    week_days: "Days of the week",
+    day_empty: "Not ready yet",
+    day_pending: "Being prepared",
+    member_translating: "Translating",
+    member_queued: "Waiting",
+    showing_member: "Showing {name}'s plan",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cup", tbsp: "tbsp", tsp: "tsp", piece: "pc", serving: "serving", unlimited: "as desired" },
   },
   tl: {
@@ -253,6 +286,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ Allergy — huwag ihain ang mga ito",
     allergy_for: "Para kay",
     allergy_disclaimer: "Gabay-impormasyon lamang ito — laging suriin mismo ang mga sangkap",
+    household: "Sambahayan",
+    switch_member: "Palitan ang tao",
+    close: "Isara",
+    week_days: "Mga araw ng linggo",
+    day_empty: "Hindi pa handa",
+    day_pending: "Inihahanda",
+    member_translating: "Isinasalin",
+    member_queued: "Naghihintay",
+    showing_member: "Ipinapakita ang plano ni {name}",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "tasa", tbsp: "kutsara", tsp: "kutsarita", piece: "piraso", serving: "serving", unlimited: "ayon sa gusto" },
   },
   id: {
@@ -304,6 +346,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ Alergi — jangan sajikan ini",
     allergy_for: "Untuk",
     allergy_disclaimer: "Ini hanya informasi pendukung — selalu periksa sendiri bahannya",
+    household: "Anggota rumah",
+    switch_member: "Ganti orang",
+    close: "Tutup",
+    week_days: "Hari dalam sepekan",
+    day_empty: "Belum siap",
+    day_pending: "Sedang disiapkan",
+    member_translating: "Sedang diterjemahkan",
+    member_queued: "Menunggu",
+    showing_member: "Menampilkan rencana {name}",
     units: { g: "g", kg: "kg", ml: "ml", l: "L", cup: "cangkir", tbsp: "sdm", tsp: "sdt", piece: "buah", serving: "porsi", unlimited: "sesukanya" },
   },
   bn: {
@@ -355,6 +406,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ অ্যালার্জি — এগুলো পরিবেশন করবেন না",
     allergy_for: "জন্য",
     allergy_disclaimer: "এটি শুধুমাত্র সহায়ক তথ্য — সর্বদা উপাদানগুলো নিজে যাচাই করুন",
+    household: "পরিবারের সদস্যরা",
+    switch_member: "সদস্য বদলান",
+    close: "বন্ধ করুন",
+    week_days: "সপ্তাহের দিনগুলো",
+    day_empty: "এখনও প্রস্তুত নয়",
+    day_pending: "প্রস্তুত হচ্ছে",
+    member_translating: "অনুবাদ হচ্ছে",
+    member_queued: "অপেক্ষমাণ",
+    showing_member: "{name}-এর পরিকল্পনা দেখানো হচ্ছে",
     units: { g: "গ্রাম", kg: "কেজি", ml: "মিলি", l: "লিটার", cup: "কাপ", tbsp: "টেবিল চামচ", tsp: "চা চামচ", piece: "টুকরা", serving: "পরিবেশন", unlimited: "ইচ্ছেমতো" },
   },
   am: {
@@ -406,6 +466,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ አለርጂ — እነዚህን አታቅርቡ",
     allergy_for: "ለ",
     allergy_disclaimer: "ይህ የድጋፍ መረጃ ብቻ ነው — ሁልጊዜ ንጥረ ነገሮቹን እራስዎ ያረጋግጡ",
+    household: "የቤት አባላት",
+    switch_member: "ሰው ይቀይሩ",
+    close: "ዝጋ",
+    week_days: "የሳምንቱ ቀናት",
+    day_empty: "ገና አልተዘጋጀም",
+    day_pending: "በዝግጅት ላይ",
+    member_translating: "በመተርጎም ላይ",
+    member_queued: "በመጠባበቅ ላይ",
+    showing_member: "የ{name} ዕቅድ እየታየ ነው",
     units: { g: "ግራም", kg: "ኪግ", ml: "ሚሊ", l: "ሊትር", cup: "ኩባያ", tbsp: "የሾርባ ማንኪያ", tsp: "የሻይ ማንኪያ", piece: "ቁራጭ", serving: "ድርሻ", unlimited: "እንደ ፍላጎት" },
   },
   ur: {
@@ -457,6 +526,15 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     allergy_title: "⚠ الرجی — یہ چیزیں پیش نہ کریں",
     allergy_for: "برائے",
     allergy_disclaimer: "یہ صرف معاون معلومات ہے — اجزاء ہمیشہ خود جانچ لیں",
+    household: "گھر کے افراد",
+    switch_member: "فرد تبدیل کریں",
+    close: "بند کریں",
+    week_days: "ہفتے کے دن",
+    day_empty: "ابھی تیار نہیں",
+    day_pending: "تیار ہو رہا ہے",
+    member_translating: "ترجمہ ہو رہا ہے",
+    member_queued: "انتظار میں",
+    showing_member: "{name} کا پلان دکھایا جا رہا ہے",
     units: { g: "گرام", kg: "کلوگرام", ml: "ملی لیٹر", l: "لیٹر", cup: "کپ", tbsp: "کھانے کا چمچ", tsp: "چائے کا چمچ", piece: "عدد", serving: "سرونگ", unlimited: "حسبِ خواہش" },
   },
 };

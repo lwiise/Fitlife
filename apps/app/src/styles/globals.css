@@ -778,6 +778,60 @@ body:has([data-app-header]) {
   }
 }
 
+/* /plan phones: the plan bar REPLACES the AppShell header (owner directive
+   09/2026). Fail-safe: the shell header hides ONLY when a plan bar actually
+   rendered, so a branch that forgets its bar degrades to the normal shell,
+   never to no header. Same specificity as the rules above, so source order
+   wins. */
+@media (width < 64rem) {
+  body:has([data-plan-bar]) [data-app-header] {
+    display: none;
+  }
+  body:has([data-plan-bar]) {
+    --app-header-h: 0px;
+  }
+}
+/* The cook's view keeps its own kitchen header (h-16 + 1px border); the plan
+   bar sticks beneath it instead of under the (absent) app header. Set on
+   <html>, not body: it is a literal, so inheritance carries it to the bar, and
+   the scroll-padding below resolves at <html> where body's rules never reach. */
+html:has([data-kitchen-header]) {
+  --plan-bar-offset: 65px;
+}
+/* Focus and day jumps land clear of the pinned bar (bar ≈ 108px). The
+   viewport takes scroll-padding from <html>, which only ever sees :root's 0
+   for --app-header-h (body sets the real value), so the desktop header is
+   added explicitly; on phones the plan bar replaced it, so 0 is right. */
+html:has([data-plan-bar]) {
+  scroll-padding-top: calc(var(--plan-bar-offset, 0px) + 7rem);
+}
+@media (width >= 64rem) {
+  html:has([data-plan-bar]):has([data-app-header]) {
+    scroll-padding-top: calc(4.5rem + 7rem);
+  }
+}
+/* A plan sheet is open. An attribute, not a saved/restored inline overflow:
+   the regenerate ConfirmDialog opens ABOVE a sheet and saves/restores the
+   inline value itself, and when both unmount in one commit (a refresh that
+   swaps the viewer for the generating screen) the parent's cleanup runs
+   first — a second inline save/restore would then leave the page locked. */
+body[data-sheet-lock] {
+  overflow: hidden;
+}
+/* Toasts on /plan clear the tab bar AND the «وضع الاختبار» badge. */
+.plan-toast-pos {
+  bottom: calc(var(--app-tabbar-h) + 2rem);
+}
+/* Generation progress rail widths (n of 7 days) — no inline styles. */
+.plan-rail-0 { inline-size: 0%; }
+.plan-rail-1 { inline-size: 14.2857%; }
+.plan-rail-2 { inline-size: 28.5714%; }
+.plan-rail-3 { inline-size: 42.8571%; }
+.plan-rail-4 { inline-size: 57.1429%; }
+.plan-rail-5 { inline-size: 71.4286%; }
+.plan-rail-6 { inline-size: 85.7143%; }
+.plan-rail-7 { inline-size: 100%; }
+
 /* ── «تذكرة المطبخ» home (09/2026) ─────────────────────────────────────────
    Transcribed from the owner-approved mockup (options/kitchen/phone.html and
    desktop.html), value for value: phone first, desktop from 1024px. The ticket

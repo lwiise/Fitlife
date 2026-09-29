@@ -32,7 +32,11 @@ export function Avatar({
 }: {
   name: string;
   rosterIndex: number;
-  size?: "sm" | "md";
+  /** sm 24px (stacks), md 32px (lists), lg 40px (the plan bar's identity).
+   * A className size override only wins when it is LARGER than the variant's
+   * (Tailwind emits size-* in numeric order, text-* not), so take the nearest
+   * variant below and override the box only — e.g. lg + "size-11". */
+  size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   return (
@@ -40,7 +44,7 @@ export function Avatar({
       aria-hidden="true"
       className={clsx(
         "grid shrink-0 place-items-center rounded-full font-extrabold text-white",
-        size === "sm" ? "size-6 text-[11px]" : "size-8 text-sm",
+        size === "sm" ? "size-6 text-[11px]" : size === "lg" ? "size-10 text-base" : "size-8 text-sm",
         avatarColor(rosterIndex),
         className,
       )}

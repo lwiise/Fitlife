@@ -120,8 +120,13 @@ export function HousekeeperPlanView({
   return (
     <main dir={info.direction} lang={locale} className="min-h-screen bg-brand-surface">
       {/* A focus route: AppShell renders it bare, so the kitchen screen keeps
-          its own minimal bar — logo, her language, the way back. */}
-      <header className="sticky top-0 z-30 border-b border-brand-line bg-brand-card/95 backdrop-blur supports-[backdrop-filter]:bg-brand-card/85 print:hidden">
+          its own minimal bar — logo, her language, the way back.
+          data-kitchen-header tells the plan bar below (globals.css) to stick
+          beneath this header rather than at the top of the screen. */}
+      <header
+        data-kitchen-header=""
+        className="sticky top-0 z-30 border-b border-brand-line bg-brand-card/95 backdrop-blur supports-[backdrop-filter]:bg-brand-card/85 print:hidden"
+      >
         <div className="container-shell flex h-16 items-center justify-between gap-3">
           <Logo variant="compact" className="h-9 w-auto" priority />
           <div className="flex items-center gap-2">
@@ -137,12 +142,14 @@ export function HousekeeperPlanView({
       </header>
 
       <div className="container-shell space-y-4 py-6 lg:py-10">
-        {/* The plan itself carries the page's <h1> (PlanViewer's week range),
-            but the preparing/translating states render instead of it — so
-            those screens had no heading at all. Visually hidden because the
-            design deliberately leads with the status card; `preparing_title`
-            already exists in all seven locales, so this needs no new copy. */}
-        {(preparing || needsTranslation || !plan) && (
+        {/* The plan itself carries the page's <h1> (the sr-only heading in
+            PlanViewer's plan bar), but the preparing state renders instead of
+            it — so that screen had no heading at all. Only when the viewer is
+            NOT rendered: while a translation is landing the plan still shows,
+            and a second <h1> here gave the page two. Visually hidden because
+            the design deliberately leads with the status card;
+            `preparing_title` already exists in all seven locales. */}
+        {(preparing || !plan) && (
           <h1 className="sr-only">{t.preparing_title}</h1>
         )}
         <AllergyBackstop entries={allergyEntries} locale={locale} />
