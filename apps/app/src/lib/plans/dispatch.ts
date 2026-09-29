@@ -16,7 +16,10 @@ import {
   PlanValidationError,
   type MealPlan,
   type LocaleCode,
+  type DayMarkRow,
+  type JoinToday,
 } from "@fitlife/plan-engine";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEngagementDigest } from "@/lib/engagement/digest";
@@ -307,8 +310,17 @@ export async function triggerPlanGeneration(params: {
   // verbatim, so the menu is genuinely shared and the whole group streams in
   // day-by-day. No generating_member_id is stamped (>1 member regenerates) → the UI
   // shows them all loading. See prepareSharedGroupRegen.
+  //
+  // A newcomer joining mid-week rebuilds only what is LEFT of the week, which
+  // needs today's marks. Only the dev-inline run generates from this prepared
+  // plan — production re-reads the plan and the marks in the worker — so the
+  // read is skipped there; the roster this also filters does not depend on it.
   if (sharedGroupRegen && existingPlan) {
-    const prep = prepareSharedGroupRegen(context, existingPlan);
+    const today =
+      process.env.NODE_ENV === "development"
+        ? await readJoinToday(supabase, userId)
+        : undefined;
+    const prep = prepareSharedGroupRegen(context, existingPlan, today);
     existingPlan = prep.existingPlan;
     context.family_members = prep.familyMembers;
   }
@@ -494,6 +506,46 @@ export async function triggerPlanGeneration(params: {
   }
 
   return { ok: true, mealPlanId, status: "generating" };
+}
+
+/**
+ * What the household has already recorded TODAY (meal_checkins + meal_absences,
+ * keyed by Riyadh local_date) — the input a shared add needs to rebuild only
+ * what is left of the week (plan-engine memberJoin.ts). Mirrors the worker's
+ * readJoinToday, including its degradation: an unreadable table reads as
+ * "nothing marked yet", which still keeps every past day intact.
+ */
+async function readJoinToday(supabase: ServerClient, userId: string): Promise<JoinToday> {
+  const dateISO = riyadhTodayISO();
+  const read = async (table: "meal_checkins" | "meal_absences"): Promise<DayMarkRow[]> => {
+    try {
+      // meal_absences (00021) is not in the generated types yet — untyped, as
+      // everywhere else it is read.
+      const { data, error } = await (supabase as unknown as SupabaseClient)
+        .from(table)
+        .select("slot, member_id, local_date")
+        .eq("user_id", userId)
+        .eq("local_date", dateISO)
+        .limit(200);
+      if (error) throw error;
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        local_date: typeof r.local_date === "string" ? r.local_date : null,
+        slot: String(r.slot ?? ""),
+        member_id: typeof r.member_id === "string" ? r.member_id : null,
+      }));
+    } catch (err) {
+      console.warn(`[readJoinToday] ${table} unreadable — treating today as unmarked`, err);
+      Sentry.captureException(err, {
+        tags: { area: "plan-generation", step: `join-today-${table}`, userId },
+      });
+      return [];
+    }
+  };
+  const [checkins, absences] = await Promise.all([
+    read("meal_checkins"),
+    read("meal_absences"),
+  ]);
+  return { dateISO, checkins, absences };
 }
 
 /**

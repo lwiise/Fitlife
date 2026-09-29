@@ -68,6 +68,18 @@ export {
   incompleteInPlanMemberIds,
   shouldChainContinuation,
 } from "./chain";
+export {
+  memberJoinOf,
+  memberJoinDayIndex,
+  isBeforeJoin,
+  closedSlotsOn,
+  memberMissingDayCount,
+  memberIsShort,
+  openDayShare,
+  joinWindow,
+  HOUSEHOLD_MARK_MEMBER,
+} from "./memberJoin";
+export type { MemberJoin, MealSlot, DayMarkRow, JoinToday } from "./memberJoin";
 
 export {
   planRunBudgetMs,

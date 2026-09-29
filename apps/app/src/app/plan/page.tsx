@@ -29,6 +29,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import {
   planHasContent,
+  memberIsShort,
   MEMBER_GEN_MAX_ATTEMPTS,
   ownerRequiresDoctorSignOff,
 } from "@fitlife/plan-engine";
@@ -296,14 +297,15 @@ export default async function PlanPage({
     .slice(1)
     .map((m) => m.name)
     .join("، ");
-  // An in-plan member with a failed/missing day (fewer mealed days than the plan's
-  // day count) that's still under the retry cap — the drain re-targets it to
-  // completion before starting the next member, so keep the drain mounted for it.
-  const daysTotal = latest?.plan_data?.days_total ?? 7;
-  const genAttempts = latest?.plan_data?.gen_attempts ?? {};
-  const hasIncompleteMember = !!latest?.plan_data?.members.some(
+  // An in-plan member with a failed/missing day that's still under the retry
+  // cap — the drain re-targets it to completion before starting the next member,
+  // so keep the drain mounted for it. A newcomer's days before they joined the
+  // week are not missing (memberIsShort), and must not keep the drain mounted.
+  const planData = latest?.plan_data;
+  const genAttempts = planData?.gen_attempts ?? {};
+  const hasIncompleteMember = !!planData?.members.some(
     (m) =>
-      m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
+      memberIsShort(planData, m) &&
       (genAttempts[m.member_id] ?? 0) < MEMBER_GEN_MAX_ATTEMPTS,
   );
   // Members still in the plan but no longer on the roster: a removal that

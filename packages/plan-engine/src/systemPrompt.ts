@@ -1045,6 +1045,11 @@ export function buildDayPrompt(
   skeleton: PlanSkeleton,
   dayIndex: number,
   dayNameOverride?: string,
+  opts?: {
+    // Members added partway through this day (memberJoin.ts): their line lists
+    // only the dishes still open and states a target already scaled to them.
+    joinedMidDay?: ReadonlySet<string>;
+  },
 ): string {
   const dayName = dayNameOverride ?? DAY_NAMES_AR[dayIndex] ?? `اليوم ${dayIndex + 1}`;
   const isSolo = skeleton.members.length === 1;
@@ -1117,6 +1122,13 @@ export function buildDayPrompt(
         sm.member_id === "mom" ? context.mom.meal_mode : ctxMember?.meal_mode;
       if (mealMode === "independent")
         constraints.push("وجبات مستقلة (طبق خاص باسم مختلف)");
+      // Added to the plan partway through this day: the meals before that
+      // already happened without them. Without saying so the model sees a
+      // short list and a small target and "helpfully" completes the day.
+      if (opts?.joinedMidDay?.has(sm.member_id))
+        constraints.push(
+          "انضمّ إلى الخطة أثناء هذا اليوم: أعطيه الوجبات المذكورة له فقط، ولا تضيفي وجبة قبلها — الهدف المذكور هو لهذه الوجبات وحدها",
+        );
 
       const day = sm.days.find((d) => d.day_index === dayIndex);
       const meals = (day?.meals ?? [])

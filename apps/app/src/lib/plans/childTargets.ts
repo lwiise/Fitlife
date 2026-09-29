@@ -1,6 +1,7 @@
 import {
   reconcileChildTargets,
   isChildByBirthYear,
+  closedSlotsOn,
   type MealPlan,
 } from "@fitlife/plan-engine";
 
@@ -35,7 +36,13 @@ export function applyChildDisplayTargets(
   let changed = false;
   const members = plan.members.map((m) => {
     if (!(childById.get(m.member_id) ?? m.is_child ?? false)) return m;
-    const display = reconcileChildTargets(m.days, {
+    // The day a child joined partway through holds only what was left of it
+    // (memberJoin.ts) — averaging it in would understate their day. Same
+    // exclusion the engine applies at write time.
+    const wholeDays = m.days.filter(
+      (d) => closedSlotsOn(plan, m.member_id, d.day_index).size === 0,
+    );
+    const display = reconcileChildTargets(wholeDays, {
       daily_calories_target: m.daily_calories_target,
       macros_target: m.macros_target,
     });

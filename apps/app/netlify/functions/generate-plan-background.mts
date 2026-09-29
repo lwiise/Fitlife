@@ -30,6 +30,8 @@ import {
 } from "../../../../packages/plan-engine/src/budget";
 import { LOCALE_CODES, MealPlanSchema } from "../../../../packages/plan-engine/src/schema";
 import type { MealPlan, LocaleCode } from "../../../../packages/plan-engine/src/schema";
+import { riyadhTodayISO } from "../../../../packages/plan-engine/src/dates";
+import type { DayMarkRow, JoinToday } from "../../../../packages/plan-engine/src/memberJoin";
 import type {
   PlanPromptContext,
   PlanPromptContextMember,
@@ -501,6 +503,49 @@ async function fetchPriorReadyRow(
   if (!row || typeof row.id !== "string" || !row.plan_data || typeof row.plan_data !== "object")
     return null;
   return { id: row.id, plan_data: row.plan_data as Record<string, unknown> };
+}
+
+/**
+ * What the household has already recorded TODAY — the input a shared add needs
+ * so it rebuilds only what is left of the week (memberJoin.ts): a meal already
+ * cooked, swapped or skipped stays exactly as it was, and the newcomer is kept
+ * off it. PostgREST flavour of dispatch.ts's readJoinToday.
+ *
+ * A failed read degrades to "nothing marked yet" rather than failing the add:
+ * the past days are still kept (that needs only the date), and the worst left
+ * is adding the newcomer to a dish cooked minutes ago — against the whole-week
+ * rewrite this replaces.
+ */
+async function readJoinToday(
+  base: string,
+  serviceKey: string,
+  userId: string,
+): Promise<JoinToday> {
+  const dateISO = riyadhTodayISO();
+  const read = async (table: "meal_checkins" | "meal_absences"): Promise<DayMarkRow[]> => {
+    try {
+      const rows = await sbSelectMany(
+        base,
+        serviceKey,
+        table,
+        `user_id=eq.${userId}&local_date=eq.${dateISO}&select=slot,member_id,local_date&limit=200`,
+      );
+      return rows.map((r) => ({
+        local_date: typeof r.local_date === "string" ? r.local_date : null,
+        slot: String(r.slot ?? ""),
+        member_id: typeof r.member_id === "string" ? r.member_id : null,
+      }));
+    } catch (err) {
+      console.warn(`[generate-plan-background] ${table} unreadable — treating today as unmarked`, err);
+      await captureToSentry(err, { step: `join-today-${table}`, userId });
+      return [];
+    }
+  };
+  const [checkins, absences] = await Promise.all([
+    read("meal_checkins"),
+    read("meal_absences"),
+  ]);
+  return { dateISO, checkins, absences };
 }
 
 async function fetchPriorPlan(
@@ -1215,9 +1260,15 @@ const handler = async (req: Request): Promise<Response> => {
     // Shared-group regen (a new SHARED member was added): rebuild every shared
     // beneficiary together, carrying independent members + the housekeeper. Mirrors
     // triggerPlanGeneration. No single generating_member_id → the UI shows them all
-    // loading.
+    // loading. With a newcomer joining, only what is LEFT of the week is rebuilt —
+    // the days already eaten and today's answered meals stay as they were — which
+    // is why today's marks are read here, in the run that acts on them.
     if (body.regenerateSharedGroup && existingPlan) {
-      const prep = prepareSharedGroupRegen(context, existingPlan);
+      const prep = prepareSharedGroupRegen(
+        context,
+        existingPlan,
+        await readJoinToday(supabaseUrl, serviceKey, userId),
+      );
       existingPlan = prep.existingPlan;
       context.family_members = prep.familyMembers;
     }

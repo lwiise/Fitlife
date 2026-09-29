@@ -6,6 +6,8 @@
  * directly.
  */
 
+import { isBeforeJoin, memberJoinDayIndex, type MealPlan } from "@fitlife/plan-engine";
+
 /**
  * Stored enums rendered in Arabic. The advisor used to receive the raw value,
  * so it answered a lactose-intolerant user with «بما إنك مسجّلة lactose_free» —
@@ -167,4 +169,62 @@ export function measurements(
   if (p.weight_kg != null) out.push(`- الوزن الحالي: ${Number(p.weight_kg)} كجم`);
   if (p.activity_level) out.push(`- مستوى النشاط: ${label(ACTIVITY_AR, p.activity_level)}`);
   return out;
+}
+
+/**
+ * The current plan, as the advisor reads it: each member's targets and dish
+ * NAMES per day (never the raw plan_data), with every gap named.
+ */
+export function planSummary(plan: MealPlan): string {
+  const lines: string[] = [`الخطة الحالية (أسبوع يبدأ ${plan.week_start_date}):`];
+  if (plan.generating) {
+    // Without this the model sees targets and no dishes and fills the gap
+    // itself: asked «الكبار بس — وش عندهم اليوم؟» during a regeneration it
+    // invented a full day's menu for two adults, while the same context in the
+    // same minute correctly told other questions it had no meal details.
+    lines.push(
+      "  (الخطة قيد التوليد الآن — الأيام الفارغة أدناه لم تُنشأ بعد، وستظهر تلقائياً)",
+    );
+  }
+  const daysTotal = plan.days_total ?? 7;
+  for (const member of plan.members) {
+    const macros = member.macros_target;
+    const targetKnown = member.daily_calories_target > 0;
+    // A member added mid-week (plan-engine memberJoin.ts) has no meals before
+    // the day they joined — by design. Unnamed, those days read as "not
+    // generated yet" and the advisor promises meals that are never coming.
+    const joinDay = memberJoinDayIndex(plan, member.member_id);
+    const joinedAfterWeek = joinDay >= daysTotal;
+    lines.push(
+      targetKnown
+        ? `- ${member.member_name_ar}: هدف يومي ~${member.daily_calories_target} سعرة (بروتين ${macros.protein_g}جم · كارب ${macros.carbs_g}جم · دهون ${macros.fat_g}جم)`
+        : joinedAfterWeek
+          ? `- ${member.member_name_ar}: أُضيف بعد انقضاء أيام هذه الخطة — لا وجبات له فيها، وتبدأ وجباته وهدفه مع الخطة القادمة.`
+          : `- ${member.member_name_ar}: هدفه اليومي لم يُحتسب بعد (قيد التحضير) — لا تقولي إنه بلا احتياج.`,
+    );
+    if (joinDay > 0 && !joinedAfterWeek) {
+      const first = member.days.find((d) => d.day_index === joinDay)?.day_name_ar;
+      lines.push(
+        `    أُضيف إلى الخطة أثناء الأسبوع: وجباته تبدأ${first ? ` من ${first}` : ""}، والأيام التي قبله ليست ضمن خطته (وهذا مقصود، لا نقص).`,
+      );
+    }
+    const filled = member.days.filter((d) => d.meals.length > 0);
+    for (const day of filled) {
+      const meals = day.meals
+        .map((meal) => `${meal.slot_name_ar}: ${meal.recipe_name_ar}`)
+        .join(" / ");
+      lines.push(`    ${day.day_name_ar}: ${meals}`);
+    }
+    // Name the gaps explicitly. A day that is simply absent from the list reads
+    // as "not mentioned"; a day named as empty cannot be answered from memory.
+    const empty = member.days.filter(
+      (d) => d.meals.length === 0 && !isBeforeJoin(plan, member.member_id, d.day_index),
+    );
+    if (empty.length) {
+      lines.push(
+        `    أيام بلا وجبات بعد: ${empty.map((d) => d.day_name_ar).join("، ")}`,
+      );
+    }
+  }
+  return lines.join("\n");
 }

@@ -222,3 +222,146 @@ describe("prepareSharedGroupRegen", () => {
     expect(ctx.family_members).toHaveLength(1);
   });
 });
+
+// ── A newcomer joining a week already under way (owner directive 09/2026) ────
+// Four-day week starting 2026-06-06, so "today" 2026-06-07 is day 1.
+describe("prepareSharedGroupRegen — mid-week join rebuilds only what is left", () => {
+  const WEEK = [0, 1, 2, 3];
+  const LUNCH: Meal = { ...MEAL, slot: "lunch", slot_name_ar: "الغداء", recipe_name_ar: "كبسة" };
+  // Every day's table: breakfast + lunch.
+  const tableDay = (di: number): Day => ({ ...day(di), meals: [MEAL, LUNCH] });
+  const weekMember = (member_id: string): MemberPlan => ({
+    ...planMember(member_id),
+    days: WEEK.map(tableDay),
+  });
+  const weekPlan = (members: MemberPlan[], extra: Partial<MealPlan> = {}): MealPlan =>
+    MealPlanSchema.parse({
+      week_start_date: "2026-06-06",
+      members,
+      days_total: WEEK.length,
+      ...extra,
+    });
+  const mealedDayIndices = (plan: MealPlan, memberId: string) =>
+    plan.members
+      .find((m) => m.member_id === memberId)!
+      .days.filter((d) => d.meals.length > 0)
+      .map((d) => d.day_index);
+  const joinCtx = () =>
+    makeCtx("shared", [
+      ctxMember("m-shared", "shared"),
+      ctxMember("m-indep", "independent"),
+      ctxMember("m-new", "shared"), // the newcomer, not in the plan yet
+    ]);
+  const today = (checkins: { slot: string; member_id: string | null }[] = []) => ({
+    dateISO: "2026-06-07",
+    checkins: checkins.map((c) => ({ ...c, local_date: "2026-06-07" })),
+    absences: [],
+  });
+
+  it("keeps past days AND today for the shared table; clears only the days after today", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared"), weekMember("m-indep")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, today());
+
+    // Day 0 (past) and day 1 (today) stay exactly as they were…
+    for (const id of ["mom", "m-shared"]) {
+      expect(mealedDayIndices(existingPlan, id)).toEqual([0, 1]);
+      const before = plan.members.find((m) => m.member_id === id)!.days.slice(0, 2);
+      const after = existingPlan.members.find((m) => m.member_id === id)!.days.slice(0, 2);
+      expect(after).toEqual(before);
+    }
+    // …the rest of the week is what the group rebuilds, shells kept.
+    expect(dayShells(existingPlan, "mom")).toBe(WEEK.length);
+    // The independent member is untouched either way.
+    expect(mealedDayIndices(existingPlan, "m-indep")).toEqual(WEEK);
+  });
+
+  it("stamps where the newcomer's week starts, with today's answered slots closed", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(
+      joinCtx(),
+      plan,
+      today([{ slot: "breakfast", member_id: "mom" }]),
+    );
+
+    expect(existingPlan.member_joins).toEqual({
+      "m-new": { day_index: 1, closed_slots: ["breakfast"] },
+    });
+    // Nobody else gets a join record.
+    expect(existingPlan.member_joins?.mom).toBeUndefined();
+  });
+
+  it("a fully answered today means the newcomer starts tomorrow — and today is still kept", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(
+      joinCtx(),
+      plan,
+      today([
+        { slot: "breakfast", member_id: "m-shared" },
+        { slot: "lunch", member_id: "household" },
+      ]),
+    );
+
+    expect(existingPlan.member_joins?.["m-new"]).toEqual({ day_index: 2 });
+    expect(mealedDayIndices(existingPlan, "mom")).toEqual([0, 1]);
+  });
+
+  it("keeps join records already on the plan", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")], {
+      member_joins: { "m-shared": { day_index: 1 } },
+    });
+
+    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, today());
+
+    expect(existingPlan.member_joins?.["m-shared"]).toEqual({ day_index: 1 });
+    expect(existingPlan.member_joins?.["m-new"]).toEqual({ day_index: 1 });
+  });
+
+  it("a week that is already over clears nothing and records the newcomer for next week", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, {
+      dateISO: "2026-06-15",
+      checkins: [],
+      absences: [],
+    });
+
+    expect(mealedDayIndices(existingPlan, "mom")).toEqual(WEEK);
+    expect(existingPlan.member_joins?.["m-new"]).toEqual({ day_index: WEEK.length });
+  });
+
+  it("joining on the week's first day with nothing answered needs no record — they are a whole-week member", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan, {
+      dateISO: "2026-06-06",
+      checkins: [],
+      absences: [],
+    });
+
+    expect(existingPlan.member_joins).toBeUndefined();
+    // Today's dishes are still kept (the newcomer joins them); the rest rebuilds.
+    expect(mealedDayIndices(existingPlan, "mom")).toEqual([0]);
+  });
+
+  it("no newcomer (a shared member's regenerate re-merging) keeps the whole-week rebuild", () => {
+    const ctx = makeCtx("shared", [ctxMember("m-shared", "shared")]);
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(ctx, plan, today());
+
+    expect(mealedDayIndices(existingPlan, "mom")).toEqual([]);
+    expect(existingPlan.member_joins).toBeUndefined();
+  });
+
+  it("without today's marks it is the whole-week rebuild it always was", () => {
+    const plan = weekPlan([weekMember("mom"), weekMember("m-shared")]);
+
+    const { existingPlan } = prepareSharedGroupRegen(joinCtx(), plan);
+
+    expect(mealedDayIndices(existingPlan, "mom")).toEqual([]);
+    expect(existingPlan.member_joins).toBeUndefined();
+  });
+});

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { conditionLabels, type MealPlan } from "@fitlife/plan-engine";
+import { conditionLabels } from "@fitlife/plan-engine";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -16,6 +16,7 @@ import {
   measurements,
   todayLine,
   ageOrderLine,
+  planSummary,
 } from "./contextFormat";
 
 /** Render a jsonb-ish value (usually a string[]) as a compact comma list. */
@@ -48,44 +49,6 @@ function lifeStage(m: {
   }
   if (m.member_type === "child") return "طفل";
   return "";
-}
-
-function planSummary(plan: MealPlan): string {
-  const lines: string[] = [`الخطة الحالية (أسبوع يبدأ ${plan.week_start_date}):`];
-  if (plan.generating) {
-    // Without this the model sees targets and no dishes and fills the gap
-    // itself: asked «الكبار بس — وش عندهم اليوم؟» during a regeneration it
-    // invented a full day's menu for two adults, while the same context in the
-    // same minute correctly told other questions it had no meal details.
-    lines.push(
-      "  (الخطة قيد التوليد الآن — الأيام الفارغة أدناه لم تُنشأ بعد، وستظهر تلقائياً)",
-    );
-  }
-  for (const member of plan.members) {
-    const macros = member.macros_target;
-    const targetKnown = member.daily_calories_target > 0;
-    lines.push(
-      targetKnown
-        ? `- ${member.member_name_ar}: هدف يومي ~${member.daily_calories_target} سعرة (بروتين ${macros.protein_g}جم · كارب ${macros.carbs_g}جم · دهون ${macros.fat_g}جم)`
-        : `- ${member.member_name_ar}: هدفه اليومي لم يُحتسب بعد (قيد التحضير) — لا تقولي إنه بلا احتياج.`,
-    );
-    const filled = member.days.filter((d) => d.meals.length > 0);
-    for (const day of filled) {
-      const meals = day.meals
-        .map((meal) => `${meal.slot_name_ar}: ${meal.recipe_name_ar}`)
-        .join(" / ");
-      lines.push(`    ${day.day_name_ar}: ${meals}`);
-    }
-    // Name the gaps explicitly. A day that is simply absent from the list reads
-    // as "not mentioned"; a day named as empty cannot be answered from memory.
-    const empty = member.days.filter((d) => d.meals.length === 0);
-    if (empty.length) {
-      lines.push(
-        `    أيام بلا وجبات بعد: ${empty.map((d) => d.day_name_ar).join("، ")}`,
-      );
-    }
-  }
-  return lines.join("\n");
 }
 
 /**

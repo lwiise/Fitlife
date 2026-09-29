@@ -111,6 +111,26 @@ describe("decideSweep", () => {
     ).toBe("skip");
   });
 
+  it("never refills the days before a mid-week newcomer joined — they are history, not a gap", () => {
+    // Grandma joined on day 3: days 0-2 are empty on purpose. Counting them
+    // would have this cron buy a model call every five minutes to put her into
+    // meals the family already ate.
+    const gma = {
+      ...member("gma", 7),
+      days: member("gma", 7).days.map((d) => (d.day_index < 3 ? { ...d, meals: [] } : d)),
+    } as Member;
+    expect(
+      decideSweep({
+        ...base,
+        beneficiaryIds: ["mom", "dad", "gma"],
+        newestReadyPlan: {
+          ...plan([member("mom", 7), member("dad", 7), gma]),
+          member_joins: { gma: { day_index: 3 } },
+        },
+      }),
+    ).toMatchObject({ action: "skip", reason: "week complete or attempts capped" });
+  });
+
   it("never chases an absent member — that is the drain's routing, not a wide fill", () => {
     expect(
       decideSweep({

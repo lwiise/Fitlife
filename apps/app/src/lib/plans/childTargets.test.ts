@@ -87,4 +87,17 @@ describe("applyChildDisplayTargets", () => {
     expect(out).toBe(plan);
     expect(out.members[0]!).toBe(reconciled);
   });
+  it("leaves out the day a child joined partway through — it holds only what was left of it", () => {
+    // Joined partway through day 2: that day holds only its last meal (400).
+    const plan: MealPlan = {
+      ...planWith([member("member-2", 2730, [...childDays, day(2, 400, 20, 50, 10)])]),
+      member_joins: { "member-2": { day_index: 2, closed_slots: ["breakfast"] } },
+    };
+    const out = applyChildDisplayTargets(plan, {
+      mom: { member_type: "adult", birth_year: 1990 },
+      members: [{ id: "member-2", member_type: "child", birth_year: 2016 }],
+    });
+    // Still the mean of the two whole days.
+    expect(out.members[0]!.daily_calories_target).toBe(1000);
+  });
 });

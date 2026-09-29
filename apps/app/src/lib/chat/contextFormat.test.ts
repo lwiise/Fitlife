@@ -9,7 +9,9 @@ import {
   measurements,
   todayLine,
   ageOrderLine,
+  planSummary,
 } from "./contextFormat";
+import type { MealPlan } from "@fitlife/plan-engine";
 
 /**
  * These cover the two omissions that made the advisor unable to answer basic
@@ -170,5 +172,77 @@ describe("ageOrderLine", () => {
     const line = ageOrderLine([{ name: "هند", birth_year: 1990 }], NOW);
     expect(line).toContain("هند");
     expect(line).toContain("الأصغر هو هند");
+  });
+});
+
+describe("planSummary — a member added mid-week", () => {
+  const NAMES = ["السبت", "الأحد", "الإثنين", "الثلاثاء"];
+  const member = (id: string, name: string, mealed: number[], target = 1800) => ({
+    member_id: id,
+    member_name_ar: name,
+    daily_calories_target: target,
+    macros_target: { protein_g: 110, carbs_g: 200, fat_g: 60 },
+    days: NAMES.map((day_name_ar, day_index) => ({
+      day_index,
+      day_name_ar,
+      meals: mealed.includes(day_index)
+        ? [
+            {
+              slot: "lunch",
+              slot_name_ar: "الغداء",
+              recipe_name_ar: `كبسة-${day_index}`,
+              ingredients: [],
+              prep_steps_ar: [],
+              calories: 900,
+              macros: { protein_g: 50, carbs_g: 100, fat_g: 30 },
+            },
+          ]
+        : [],
+      day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+    })),
+  });
+  const plan = (members: unknown[], member_joins?: MealPlan["member_joins"]) =>
+    ({
+      week_start_date: "2026-06-06",
+      days_total: NAMES.length,
+      members,
+      ...(member_joins ? { member_joins } : {}),
+    }) as unknown as MealPlan;
+
+  it("names the day their meals start, and does not list earlier days as 'not yet generated'", () => {
+    const out = planSummary(
+      plan([member("mom", "هند", [0, 1, 2, 3]), member("gma", "الجدة", [2, 3])], {
+        gma: { day_index: 2 },
+      }),
+    );
+    expect(out).toContain("أُضيف إلى الخطة أثناء الأسبوع: وجباته تبدأ من الإثنين");
+    expect(out).not.toContain("أيام بلا وجبات بعد");
+  });
+
+  it("still names a real gap after the join day", () => {
+    const out = planSummary(
+      plan([member("mom", "هند", [0, 1, 2, 3]), member("gma", "الجدة", [2])], {
+        gma: { day_index: 2 },
+      }),
+    );
+    expect(out).toContain("أيام بلا وجبات بعد: الثلاثاء");
+    expect(out).not.toContain("أيام بلا وجبات بعد: السبت");
+  });
+
+  it("says a member added after the week ended joins the next plan — not 'still preparing'", () => {
+    const out = planSummary(
+      plan([member("mom", "هند", [0, 1, 2, 3]), member("gma", "الجدة", [], 0)], {
+        gma: { day_index: NAMES.length },
+      }),
+    );
+    expect(out).toContain("أُضيف بعد انقضاء أيام هذه الخطة");
+    expect(out).not.toContain("قيد التحضير");
+    expect(out).not.toContain("أيام بلا وجبات بعد");
+  });
+
+  it("leaves a plan with no joins exactly as before", () => {
+    const out = planSummary(plan([member("mom", "هند", [0, 1])]));
+    expect(out).toContain("أيام بلا وجبات بعد: الإثنين، الثلاثاء");
+    expect(out).not.toContain("أُضيف");
   });
 });

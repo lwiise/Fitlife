@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, TrendingUp } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
+// The leaf subpath, not the package root: this is a client component, and the
+// root would drag the whole engine into the /plan bundle.
+import {
+  closedSlotsOn,
+  isBeforeJoin,
+  memberJoinDayIndex,
+} from "@fitlife/plan-engine/memberJoin";
 import { MealCard } from "./MealCard";
 import { SaraChangesCard } from "./SaraChangesCard";
 import { PartialWeekNotice } from "./PartialWeekNotice";
@@ -600,9 +607,14 @@ export function PlanViewer({
     if (!generating) return;
     // Belt-and-suspenders: even if the `generating` flag were stranded true,
     // stop polling once every member's every day actually has meals — the plan
-    // is complete, so there is nothing left to pull in.
+    // is complete, so there is nothing left to pull in. A newcomer's days before
+    // they joined the week stay empty for good, so they don't count.
     const allContentComplete = plan.members.every(
-      (m) => m.days.length > 0 && m.days.every((d) => d.meals.length > 0),
+      (m) =>
+        m.days.length > 0 &&
+        m.days.every(
+          (d) => d.meals.length > 0 || isBeforeJoin(plan, m.member_id, d.day_index),
+        ),
     );
     if (allContentComplete) return;
     const t = setInterval(async () => {
@@ -616,7 +628,7 @@ export function PlanViewer({
       }
     }, 4000);
     return () => clearInterval(t);
-  }, [generating, plan.members, router, updatedAt]);
+  }, [generating, plan, router, updatedAt]);
 
   // Ticking clock so `preparingStalled` re-evaluates without a server round-trip:
   // if the worker died, updatedAt stops advancing and no refresh changes props.
@@ -733,20 +745,28 @@ export function PlanViewer({
     const today = start >= 0 && start <= 6 ? start : 0;
     const order = Array.from({ length: 7 }, (_, k) => (today + k) % 7);
     for (const di of order) {
+      // Never "preparing" a day the member was added after — nothing is coming.
+      if (isBeforeJoin(plan, activeMember.member_id, di)) continue;
       const day = activeMember.days.find((d) => d.day_index === di);
       if (!day || day.meals.length === 0) return di;
     }
     return -1;
-  }, [memberIsGenerating, activeMember, plan.week_start_date]);
+  }, [memberIsGenerating, activeMember, plan]);
 
   // Real generation progress for the active member: days with meals vs total
   // expected. Days are generated atomically (a whole day lands at once), so
   // day-granularity is the truthful unit — drives the progress strip + current
-  // day name so the wait reads as active, not stalled.
+  // day name so the wait reads as active, not stalled. Expected days start at
+  // the member's join day (every day, for anyone there from the start).
   const genProgress = useMemo(() => {
-    const total = plan.days_total ?? activeMember?.days.length ?? 7;
+    const joinFrom = activeMember ? memberJoinDayIndex(plan, activeMember.member_id) : 0;
+    const total = Math.max(
+      0,
+      (plan.days_total ?? activeMember?.days.length ?? 7) - joinFrom,
+    );
     const ready = activeMember
-      ? activeMember.days.filter((d) => d.meals.length > 0).length
+      ? activeMember.days.filter((d) => d.day_index >= joinFrom && d.meals.length > 0)
+          .length
       : 0;
     const pct = total > 0 ? Math.min(100, Math.round((100 * ready) / total)) : 0;
     const dayName =
@@ -760,14 +780,7 @@ export function PlanViewer({
           : dayNameFromWeekStart(plan.week_start_date, currentPreparingIndex)
         : "";
     return { ready, total, pct, dayName };
-  }, [
-    activeMember,
-    plan.days_total,
-    plan.week_start_date,
-    currentPreparingIndex,
-    translated,
-    locale,
-  ]);
+  }, [activeMember, plan, currentPreparingIndex, translated, locale]);
 
   if (!activeMember) {
     return (
@@ -776,6 +789,33 @@ export function PlanViewer({
       </div>
     );
   }
+
+  // A member added mid-week (plan-engine memberJoin.ts). The days before they
+  // joined are empty ON PURPOSE — a note that says when their meals start,
+  // never a spinner, a «queued» line or the «failed — regenerate» box — and the
+  // day they joined holds only what was left of it.
+  const activeJoinDay = memberJoinDayIndex(plan, activeMember.member_id);
+  const beforeJoinNote = isBeforeJoin(plan, activeMember.member_id, activeDayIndex)
+    ? activeJoinDay >= (plan.days_total ?? 7)
+      ? t.joined_after_week
+      : t.before_join.replace(
+          "{day}",
+          translated
+            ? getLocalizedDayNameFromWeekStart(plan.week_start_date, activeJoinDay, locale)
+            : dayNameFromWeekStart(plan.week_start_date, activeJoinDay),
+        )
+    : null;
+  const joinedPartwayThroughDay =
+    closedSlotsOn(plan, activeMember.member_id, activeDayIndex).size > 0;
+  // The PDF is one page per day; a page for a day before they joined would be
+  // an empty sheet with zero totals.
+  const pdfMember: MemberPlan =
+    activeJoinDay > 0
+      ? {
+          ...activeMember,
+          days: activeMember.days.filter((d) => d.day_index >= activeJoinDay),
+        }
+      : activeMember;
 
   // The private «الوزن والمتابعة» journey link for the ACTIVE member (eligible
   // members, interactive Arabic view only). Owner directive 07/2026: for a
@@ -855,7 +895,7 @@ export function PlanViewer({
                 )}
                 {!translated && !hideExport && (
                   <DownloadPDFButton
-                    memberPlan={activeMember}
+                    memberPlan={pdfMember}
                     planMetadata={{ week_start_date: plan.week_start_date }}
                     memberNames={memberNames}
                     absentKeys={absenceSet}
@@ -1070,8 +1110,9 @@ export function PlanViewer({
       {/* The day's numbers, ONCE (09/2026 redesign): the day's total against
           the member's target, then the macros. Four target tiles, a total
           pill and a macro line on every meal used to repeat the same figures
-          three times over. */}
-      {activeDay ? (
+          three times over. A day before the member joined has no numbers to
+          show — its note below says why. */}
+      {beforeJoinNote ? null : activeDay ? (
         <div className="rounded-2xl border border-brand-line bg-brand-card px-4 py-3">
           <p className="flex flex-wrap items-baseline gap-x-2 text-brand-ink">
             <span className="text-meta text-brand-ink-muted">{t.day_total}</span>
@@ -1104,7 +1145,14 @@ export function PlanViewer({
           transition={{ duration: 0.2 }}
           className="space-y-3"
         >
-          {translated && activeMemberTranslation === "queued" ? (
+          {beforeJoinNote ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <UserPlus className="size-6 text-brand-purple-900 opacity-60" aria-hidden="true" />
+              <p className="max-w-prose text-brand-ink-muted text-sm leading-relaxed">
+                {beforeJoinNote}
+              </p>
+            </div>
+          ) : translated && activeMemberTranslation === "queued" ? (
             // This member's turn hasn't come yet — translation runs one member at
             // a time, in order. Show a calm waiting state, not a spinner (which
             // read as "loading randomly").
@@ -1126,6 +1174,9 @@ export function PlanViewer({
                 <p role="alert" className="text-sm font-bold text-red-700">
                   {checkinError}
                 </p>
+              )}
+              {joinedPartwayThroughDay && (
+                <p className="text-meta text-brand-ink-muted">{t.join_first_day}</p>
               )}
               {orderedMeals.map((meal, i) => {
                 // A shared dish: one status for everyone who shares it, and an

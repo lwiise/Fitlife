@@ -87,6 +87,15 @@ describe("what the cook is actually blocked on", () => {
     expect(isPreparing(p)).toBe(false);
     expect(isPartial(p, ["m1"])).toBe(true);
   });
+
+  it("a member added mid-week is not 'still coming' for the days before they joined", () => {
+    const joined = {
+      ...member("m1", 7),
+      days: member("m1", 7).days.map((d) => (d.day_index < 4 ? { ...d, meals: [] } : d)),
+    } as Member;
+    const p = { ...plan([member("mom", 7), joined]), member_joins: { m1: { day_index: 4 } } };
+    expect(isPartial(p, ["m1"])).toBe(false);
+  });
 });
 
 describe("both waiting messages exist in every language she can pick", () => {

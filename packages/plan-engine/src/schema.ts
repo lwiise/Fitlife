@@ -219,6 +219,23 @@ export const MealPlanSchema = z.object({
   // button) — persisted so the weekly per-member regen quota can be counted from
   // plan_data. Absent on new plans, member-adds, and drains.
   regenerated_for: z.string().optional(),
+  // Members added while the week was already under way (see memberJoin.ts):
+  // member_id → where their week starts. Days before `day_index` predate them
+  // and stay empty BY DESIGN; on that day itself they never get the slots in
+  // `closed_slots` (already cooked / swapped / skipped when they joined).
+  // `day_index` may equal the week's length: added after its last open meal.
+  // Absent on plans where everyone started on day 0.
+  member_joins: z
+    .record(
+      z.string(),
+      z.object({
+        day_index: z.number().int().min(0).max(7),
+        closed_slots: z
+          .array(z.enum(["breakfast", "lunch", "dinner", "snack"]))
+          .optional(),
+      }),
+    )
+    .optional(),
   // «سارة عدّلت خطتك» — up to 3 {change, because} pairs the skeleton emitted in
   // response to the engagement digest, each `because_ar` citing a real logged
   // event. TOLERANT BY DESIGN: extras are trimmed and a malformed value becomes

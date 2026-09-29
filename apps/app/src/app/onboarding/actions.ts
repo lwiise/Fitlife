@@ -21,6 +21,7 @@ import { memberEditIsSubstantive, staleMemberIds } from "@/lib/plans/memberEdit"
 import { incompleteInPlanMemberIds } from "@/lib/plans/drainScope";
 import {
   planHasContent,
+  memberIsShort,
   MEMBER_GEN_MAX_ATTEMPTS,
   ownerRequiresDoctorSignOff,
   memberRequiresDoctorSignOff,
@@ -794,7 +795,9 @@ function planIsTranslated(plan: MealPlan, locale: string): boolean {
  * The single member a generation run should target next, in STRICT order — shared
  * by the deferred drain and addFamilyMember so adds never jump the queue:
  *  1. an in-plan member still missing a mealed day (a day that failed after in-run
- *     retries), under the retry cap → finish it before starting anyone new;
+ *     retries), under the retry cap → finish it before starting anyone new. The
+ *     days before a mid-week join are not missing (memberIsShort) — otherwise
+ *     every visit would dispatch a run to fill a newcomer into days already eaten;
  *  2. else the first ABSENT pending member by member_addition_order (then
  *     display_order);
  *  3. else null (nothing to do).
@@ -806,11 +809,10 @@ function pickNextMemberId(params: {
   additionOrder: string[];
 }): string | null {
   const { plan, members, additionOrder } = params;
-  const daysTotal = plan.days_total ?? 7;
   const genAttempts = plan.gen_attempts ?? {};
   const incomplete = plan.members.find(
     (m) =>
-      m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
+      memberIsShort(plan, m) &&
       (genAttempts[m.member_id] ?? 0) < MEMBER_GEN_MAX_ATTEMPTS,
   );
   if (incomplete) return incomplete.member_id;

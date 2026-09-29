@@ -66,6 +66,14 @@ export interface PlanStrings {
   preparing_steps: string[];
   day_queued: string;
   no_meals: string;
+  // A member added mid-week (plan-engine memberJoin.ts). The days before they
+  // joined are empty on purpose — never "loading" or "failed". `{day}` is
+  // replaced with the localized name of their first day.
+  before_join: string;
+  // Added after the week's last open meal: nothing of this plan is theirs.
+  joined_after_week: string;
+  // Their first day holds only what was left of it when they were added.
+  join_first_day: string;
   empty_plan: string;
   prep_time: string;
   cook_time: string;
@@ -127,6 +135,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "نجهّز الأيام يوماً بعد يوم، وهذا اليوم قادم",
     no_meals: "لا توجد وجبات لهذا اليوم",
+    before_join: "هذا اليوم سبق الإضافة إلى الخطة، فلا وجبات فيه. تبدأ الوجبات من يوم {day}.",
+    joined_after_week: "كانت الإضافة بعد انقضاء أيام هذه الخطة، فتبدأ الوجبات مع الخطة القادمة.",
+    join_first_day: "أول يوم في الخطة: تبدأ الوجبات مما تبقّى من هذا اليوم.",
     empty_plan: "الخطة فارغة. يرجى إعادة الإنشاء.",
     prep_time: "تحضير",
     cook_time: "طبخ",
@@ -178,6 +189,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "We're preparing your days one after another — this one's turn is coming",
     no_meals: "No meals for this day",
+    before_join: "This day came before joining the plan, so it has no meals. Meals start on {day}.",
+    joined_after_week: "Added after this plan's days ended. Meals start with the next plan.",
+    join_first_day: "First day in the plan: meals start from what was left of this day.",
     empty_plan: "The plan is empty. Try regenerating.",
     prep_time: "Prep",
     cook_time: "Cook",
@@ -229,6 +243,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "Inihahanda namin ang mga araw nang isa-isa — malapit nang dumating ang araw na ito",
     no_meals: "Walang pagkain sa araw na ito",
+    before_join: "Nauna ang araw na ito sa pagsali sa plano, kaya walang pagkain dito. Magsisimula ang mga pagkain sa {day}.",
+    joined_after_week: "Naidagdag matapos ang mga araw ng planong ito. Magsisimula ang mga pagkain sa susunod na plano.",
+    join_first_day: "Unang araw sa plano: nagsisimula ang mga pagkain sa natitira sa araw na ito.",
     empty_plan: "Walang laman ang plano.",
     prep_time: "Paghahanda",
     cook_time: "Pagluluto",
@@ -280,6 +297,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "Kami menyiapkan hari-harimu satu per satu — giliran hari ini akan segera tiba",
     no_meals: "Tidak ada makanan untuk hari ini",
+    before_join: "Hari ini sebelum bergabung dengan rencana, jadi tidak ada makanan. Makanan dimulai pada hari {day}.",
+    joined_after_week: "Ditambahkan setelah hari-hari rencana ini berakhir. Makanan dimulai dengan rencana berikutnya.",
+    join_first_day: "Hari pertama dalam rencana: makanan dimulai dari sisa hari ini.",
     empty_plan: "Rencana kosong.",
     prep_time: "Persiapan",
     cook_time: "Memasak",
@@ -331,6 +351,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "আমরা আপনার দিনগুলো একে একে প্রস্তুত করছি — এই দিনটির পালা আসছে",
     no_meals: "এই দিনের জন্য কোনো খাবার নেই",
+    before_join: "এই দিনটি পরিকল্পনায় যোগ দেওয়ার আগের, তাই এতে কোনো খাবার নেই। খাবার শুরু হবে {day} থেকে।",
+    joined_after_week: "এই পরিকল্পনার দিনগুলো শেষ হওয়ার পরে যোগ করা হয়েছে। খাবার শুরু হবে পরবর্তী পরিকল্পনা থেকে।",
+    join_first_day: "পরিকল্পনার প্রথম দিন: এই দিনের বাকি অংশ থেকে খাবার শুরু।",
     empty_plan: "পরিকল্পনা খালি।",
     prep_time: "প্রস্তুতি",
     cook_time: "রান্না",
@@ -382,6 +405,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "ቀኖችዎን አንድ በአንድ እያዘጋጀን ነው — የዚህ ቀን ተራ በቅርቡ ይደርሳል",
     no_meals: "ለዚህ ቀን ምግብ የለም",
+    before_join: "ይህ ቀን ወደ እቅዱ ከመቀላቀል በፊት ነው፣ ስለዚህ ምግብ የለበትም። ምግቦች የሚጀምሩት ከ{day} ነው።",
+    joined_after_week: "የዚህ እቅድ ቀናት ካለቁ በኋላ ተጨምሯል። ምግቦች ከሚቀጥለው እቅድ ጋር ይጀምራሉ።",
+    join_first_day: "በእቅዱ የመጀመሪያ ቀን፦ ምግቦች ከዚህ ቀን ቀሪ ክፍል ይጀምራሉ።",
     empty_plan: "ዕቅዱ ባዶ ነው።",
     prep_time: "ዝግጅት",
     cook_time: "ማብሰል",
@@ -433,6 +459,9 @@ export const PLAN_STRINGS: Record<LocaleCode, PlanStrings> = {
     ],
     day_queued: "ہم آپ کے دن یکے بعد دیگرے تیار کر رہے ہیں — اس دن کی باری آنے والی ہے",
     no_meals: "اس دن کے لیے کوئی کھانا نہیں",
+    before_join: "یہ دن منصوبے میں شامل ہونے سے پہلے کا ہے، اس لیے اس میں کوئی کھانا نہیں۔ کھانے {day} سے شروع ہوں گے۔",
+    joined_after_week: "اس منصوبے کے دن ختم ہونے کے بعد شامل کیا گیا۔ کھانے اگلے منصوبے سے شروع ہوں گے۔",
+    join_first_day: "منصوبے کا پہلا دن: کھانے اس دن کے باقی حصے سے شروع ہوتے ہیں۔",
     empty_plan: "پلان خالی ہے۔",
     prep_time: "تیاری",
     cook_time: "پکانا",

@@ -1,5 +1,6 @@
 import type { MealPlan } from "./schema";
 import { MEMBER_GEN_MAX_ATTEMPTS } from "./constants";
+import { memberIsShort } from "./memberJoin";
 
 /**
  * Continuation chaining — the decision half.
@@ -47,19 +48,20 @@ export const PLAN_CHAIN_MAX_HOPS = 3;
  * The list is deliberately restricted to members already in the plan. An ABSENT
  * member is a different job (skeleton + possibly a shared-group rebuild), and
  * mixing the two into one run is what `regenerateSharedGroup` exists to handle.
+ *
+ * "Short" is memberIsShort: the days before a mid-week join are empty by
+ * design, and counting them would have this chain, the drain and the sweeper
+ * refill history on every hop, visit and firing.
  */
 export function incompleteInPlanMemberIds(params: {
   plan: MealPlan;
   maxAttempts: number;
 }): string[] {
   const { plan, maxAttempts } = params;
-  const daysTotal = plan.days_total ?? 7;
   const attempts = plan.gen_attempts ?? {};
   return plan.members
     .filter(
-      (m) =>
-        m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
-        (attempts[m.member_id] ?? 0) < maxAttempts,
+      (m) => memberIsShort(plan, m) && (attempts[m.member_id] ?? 0) < maxAttempts,
     )
     .map((m) => m.member_id);
 }

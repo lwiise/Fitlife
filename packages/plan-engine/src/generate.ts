@@ -72,6 +72,14 @@ import {
 } from "./buildContext";
 import { isChildByAge } from "./childRule";
 import { riyadhTodayISO, khaleejiDayName } from "./dates";
+import {
+  closedSlotsOn,
+  joinWindow,
+  memberIsShort,
+  memberJoinDayIndex,
+  openDayShare,
+  type JoinToday,
+} from "./memberJoin";
 import { canonicalRecipeKey } from "./canonicalRecipeKey";
 import { captureToSentry } from "./sentryReport";
 import { SLOT_NAME_AR } from "./slotNames";
@@ -1240,15 +1248,38 @@ function extractInScopeFresh(
  * regenerate, already-in-plan independent members + the housekeeper are kept (carried),
  * and pending NON-shared members not yet in the plan are dropped so they still
  * generate later, one at a time. Pure — does not mutate its inputs.
+ *
+ * With `today` (what the household has already recorded today) and a newcomer
+ * actually joining, only what is LEFT of the week is rebuilt (owner directive
+ * 09/2026 — see memberJoin.ts). Days that have passed and today's menu stay
+ * exactly as they are; the newcomer takes a portion of today's still-open
+ * dishes (the engine aligns them to today's table), is kept off every dish
+ * already answered, and joins the rebuilt shared menu from tomorrow. Before,
+ * the whole week was rebuilt: days already eaten were rewritten with the
+ * newcomer in them, and a «طبختها كما هي» mark — calendar-keyed, so it
+ * survives regeneration — ended up lit on a dish nobody cooked. Without a
+ * newcomer (a shared member's regenerate re-merging with the group) or
+ * without `today`, the whole-week rebuild is unchanged.
  */
 export function prepareSharedGroupRegen(
   context: PlanPromptContext,
   existingPlan: MealPlan,
+  today?: JoinToday,
 ): { existingPlan: MealPlan; familyMembers: PlanPromptContextMember[] } {
   const sharedIds = new Set<string>();
   if (context.mom.meal_mode === "shared") sharedIds.add("mom");
   for (const m of context.family_members)
     if (m.role !== "housekeeper" && m.meal_mode === "shared") sharedIds.add(m.id);
+
+  const inPlan = new Set(existingPlan.members.map((m) => m.member_id));
+  const newcomers = [...sharedIds].filter((id) => !inPlan.has(id));
+  const joining =
+    today && newcomers.length > 0
+      ? joinWindow({ plan: existingPlan, sharedIds, today })
+      : null;
+  // What this run rebuilds for a shared member: the whole week, or — when a
+  // newcomer joins mid-week — only the days after today.
+  const rebuilds = (dayIndex: number) => !joining || dayIndex > joining.todayIndex;
 
   const clearedPlan: MealPlan = {
     ...existingPlan,
@@ -1258,17 +1289,35 @@ export function prepareSharedGroupRegen(
             ...m,
             // Keep the day shells (preserves week_grid / day-by-day loading), drop
             // the meals so the engine regenerates this member.
-            days: m.days.map((d) => ({
-              ...d,
-              meals: [],
-              day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-            })),
+            days: m.days.map((d) =>
+              rebuilds(d.day_index)
+                ? {
+                    ...d,
+                    meals: [],
+                    day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+                  }
+                : d,
+            ),
           }
         : m,
     ),
   };
+  // A join from day 0 with nothing answered is an ordinary whole-week member —
+  // no record needed.
+  if (joining && (joining.join.day_index > 0 || joining.join.closed_slots?.length)) {
+    clearedPlan.member_joins = {
+      ...(existingPlan.member_joins ?? {}),
+      ...Object.fromEntries(
+        newcomers.map((id) => [
+          id,
+          joining.join.closed_slots
+            ? { ...joining.join, closed_slots: [...joining.join.closed_slots] }
+            : { ...joining.join },
+        ]),
+      ),
+    };
+  }
 
-  const inPlan = new Set(clearedPlan.members.map((m) => m.member_id));
   const familyMembers = context.family_members.filter(
     (m) => m.role === "housekeeper" || m.meal_mode === "shared" || inPlan.has(m.id),
   );
@@ -1424,6 +1473,12 @@ export async function generateMealPlan(params: {
   const priorById = new Map(
     (existingPlan?.members ?? []).map((m) => [m.member_id, m] as const),
   );
+  // Mid-week joins (memberJoin.ts): where each member's week starts, and on
+  // that first day the slots already answered when they joined. Both are read
+  // from the plan, so a refill run honours them exactly like the join run did.
+  const joinDayOf = (memberId: string) => memberJoinDayIndex(existingPlan, memberId);
+  const closedOn = (memberId: string, dayIndex: number) =>
+    closedSlotsOn(existingPlan, memberId, dayIndex);
   let familyDayIndices: number[] = [];
   const familyDishGrid = new Map<
     number,
@@ -1436,26 +1491,34 @@ export async function generateMealPlan(params: {
       ),
     ).sort((a, b) => a - b);
     for (const di of familyDayIndices) {
-      for (const m of existingPlan.members) {
-        // Only a SHARED member's dishes define the family menu. An independent
-        // member has their own private dishes; if we seeded the grid from them, a
-        // newly-added shared member would align to the independent member's menu
-        // instead of the actual shared members'. When no shared member has this
-        // day, the grid stays empty for it — a lone shared member then gets a
-        // skeleton (fresh dishes), correct since there's no one to share with.
-        if (mealModeById.get(m.member_id) === "independent") continue;
-        const day = m.days.find((d) => d.day_index === di);
-        if (day && day.meals.length > 0) {
-          familyDishGrid.set(
-            di,
-            day.meals.map((mm) => ({
-              slot: mm.slot,
-              slot_name_ar: mm.slot_name_ar,
-              recipe_name_ar: mm.recipe_name_ar,
-            })),
-          );
-          break;
+      // Only a SHARED member's dishes define the family menu. An independent
+      // member has their own private dishes; if we seeded the grid from them, a
+      // newly-added shared member would align to the independent member's menu
+      // instead of the actual shared members'. When no shared member has this
+      // day, the grid stays empty for it — a lone shared member then gets a
+      // skeleton (fresh dishes), correct since there's no one to share with.
+      // A member who joined partway through this day holds only its later
+      // dishes, so a whole day is preferred: aligning anyone else to the
+      // partial one would silently drop the meals that came before.
+      const tableDay = (allowPartialJoin: boolean) => {
+        for (const m of existingPlan.members) {
+          if (mealModeById.get(m.member_id) === "independent") continue;
+          if (!allowPartialJoin && closedOn(m.member_id, di).size > 0) continue;
+          const day = m.days.find((d) => d.day_index === di);
+          if (day && day.meals.length > 0) return day;
         }
+        return undefined;
+      };
+      const day = tableDay(false) ?? tableDay(true);
+      if (day) {
+        familyDishGrid.set(
+          di,
+          day.meals.map((mm) => ({
+            slot: mm.slot,
+            slot_name_ar: mm.slot_name_ar,
+            recipe_name_ar: mm.recipe_name_ar,
+          })),
+        );
       }
     }
   }
@@ -1484,13 +1547,17 @@ export async function generateMealPlan(params: {
     }
   }
 
-  // A member is complete iff it carried every family day. Fresh plan (no prior) →
-  // everyone generates. Concrete missing-day lists are derived later, once the
-  // day grid is known (it comes from the skeleton on a from-scratch plan).
+  // A member is complete iff it carried every family day from the day it joined
+  // (days before a mid-week join are empty by design, never "missing"). Fresh
+  // plan (no prior) → everyone generates. Concrete missing-day lists are derived
+  // later, once the day grid is known (it comes from the skeleton on a
+  // from-scratch plan).
   const isComplete = (b: { member_id: string }) =>
     existingPlan != null &&
     familyDayIndices.length > 0 &&
-    familyDayIndices.every((di) => carriedDays.get(b.member_id)!.has(di));
+    familyDayIndices.every(
+      (di) => di < joinDayOf(b.member_id) || carriedDays.get(b.member_id)!.has(di),
+    );
   // When a run targets ONE member (one-at-a-time add/complete), generate only it;
   // every other member is carried verbatim — including any empty/failed days,
   // which a later member's run must never re-touch (UI shows them "failed").
@@ -1510,16 +1577,49 @@ export async function generateMealPlan(params: {
       ? membersToGenerate[0]!.member_id
       : undefined);
 
+  // Join records travel with the plan, for the people still in it.
+  const beneficiaryIds = new Set(beneficiaries.map((b) => b.member_id));
+  const memberJoinsOut = (() => {
+    const kept = Object.entries(existingPlan?.member_joins ?? {}).filter(([id]) =>
+      beneficiaryIds.has(id),
+    );
+    return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+  })();
+  const emptyDay = (di: number): Day => ({
+    day_index: di,
+    day_name_ar: khaleejiDayName(weekStart, di),
+    meals: [],
+    day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  });
+  // A child's header is the mean of their real days; the day they joined
+  // partway through holds only what was left of it and would drag that down.
+  const childTargetDays = (memberId: string, days: Day[]) =>
+    days.filter((d) => closedOn(memberId, d.day_index).size === 0);
+
   // ── Fast path: every member complete → return the prior plan untouched ──
   if (existingPlan && membersToGenerate.length === 0) {
     const members = beneficiaries.map((b) => {
-      const m = priorById.get(b.member_id)!;
+      const isChild = isChildById.get(b.member_id) ?? false;
+      const m = priorById.get(b.member_id);
+      if (!m) {
+        // Only reachable for someone whose week starts after this plan's last
+        // day — added once the week was over. Nothing of it is theirs; they
+        // join the next week's plan. No skeleton was needed, so no target yet.
+        return {
+          member_id: b.member_id,
+          member_name_ar: nameById.get(b.member_id) ?? "",
+          primary_goal: undefined,
+          daily_calories_target: 0,
+          macros_target: { protein_g: 0, carbs_g: 0, fat_g: 0 },
+          is_child: isChild,
+          days: familyDayIndices.map(emptyDay),
+        };
+      }
       // Keep a carried child's header consistent with its portion-based days,
       // and re-stamp is_child in case the member's age/type changed since the
       // prior plan was written (or the prior plan predates the flag).
-      const isChild = isChildById.get(b.member_id) ?? false;
       const display = isChild
-        ? reconcileChildTargets(m.days, {
+        ? reconcileChildTargets(childTargetDays(b.member_id, m.days), {
             daily_calories_target: m.daily_calories_target,
             macros_target: m.macros_target,
           })
@@ -1539,6 +1639,7 @@ export async function generateMealPlan(params: {
       safety_disclaimer_ar: existingPlan?.safety_disclaimer_ar,
       days_total: familyDayIndices.length || members[0]?.days.length || 7,
       generating: false,
+      member_joins: memberJoinsOut,
     });
     if (onProgress)
       await Promise.resolve(onProgress(plan, { readyDays: 0, totalDays: 0 }));
@@ -1601,21 +1702,15 @@ export async function generateMealPlan(params: {
     const preMembers: MemberPlan[] = beneficiaries.map((b) => {
       const prior = priorById.get(b.member_id);
       const carried = carriedDays.get(b.member_id)!;
-      const days = familyDayIndices.map(
-        (di) =>
-          carried.get(di) ?? {
-            day_index: di,
-            day_name_ar: khaleejiDayName(weekStart, di),
-            meals: [],
-            day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-          },
-      );
+      const days = familyDayIndices.map((di) => carried.get(di) ?? emptyDay(di));
       const isChild = isChildById.get(b.member_id) ?? false;
       const estimate = {
         daily_calories_target: prior?.daily_calories_target ?? 0,
         macros_target: prior?.macros_target ?? { protein_g: 0, carbs_g: 0, fat_g: 0 },
       };
-      const display = isChild ? reconcileChildTargets(days, estimate) : estimate;
+      const display = isChild
+        ? reconcileChildTargets(childTargetDays(b.member_id, days), estimate)
+        : estimate;
       return {
         member_id: b.member_id,
         member_name_ar: nameById.get(b.member_id) ?? prior?.member_name_ar ?? "",
@@ -1639,6 +1734,9 @@ export async function generateMealPlan(params: {
       // Manual per-member regenerate marker (counted for the weekly per-member
       // regen quota). Undefined for new plans / adds / drains.
       regenerated_for: regenerateMemberId,
+      // From the first emit, so a newcomer's pre-join days never flash as
+      // "loading" while the skeleton runs.
+      member_joins: memberJoinsOut,
     };
     await Promise.resolve(
       onProgress(preShell, { readyDays: 0, totalDays: familyDayIndices.length }),
@@ -1653,7 +1751,10 @@ export async function generateMealPlan(params: {
   const needsSkeleton = membersToGenerate.filter((b) => {
     if (!existingPlan || !priorById.has(b.member_id)) return true; // fresh / new
     return familyDayIndices.some(
-      (di) => !carriedDays.get(b.member_id)!.has(di) && !familyDishGrid.get(di)?.length,
+      (di) =>
+        di >= joinDayOf(b.member_id) &&
+        !carriedDays.get(b.member_id)!.has(di) &&
+        !familyDishGrid.get(di)?.length,
     );
   });
 
@@ -1968,13 +2069,15 @@ export async function generateMealPlan(params: {
   }
 
   // Concrete missing-day lists, now that the day grid is known. Carried days are
-  // never in this list, so they're never regenerated.
+  // never in this list, so they're never regenerated — and neither are the days
+  // before a member joined the week (empty by design, see memberJoin.ts).
   const missingByMember = new Map<string, number[]>();
   for (const b of beneficiaries) {
     const carried = carriedDays.get(b.member_id)!;
+    const from = joinDayOf(b.member_id);
     missingByMember.set(
       b.member_id,
-      dayIndices.filter((di) => !carried.has(di)),
+      dayIndices.filter((di) => di >= from && !carried.has(di)),
     );
   }
 
@@ -2016,15 +2119,23 @@ export async function generateMealPlan(params: {
         return {
           member_id: b.member_id,
           ...withCalorieFloor(b.member_id, targets),
-          days: dayIndices.map((di) => ({
-            day_index: di,
-            day_name_ar: dayNameByIndex.get(di)!,
-            meals: alignThis
+          days: dayIndices.map((di) => {
+            const dishes = alignThis
               ? (familyDishGrid.get(di) ??
                 skM?.days.find((d) => d.day_index === di)?.meals ??
                 [])
-              : (skM?.days.find((d) => d.day_index === di)?.meals ?? []),
-          })),
+              : (skM?.days.find((d) => d.day_index === di)?.meals ?? []);
+            // The day they joined: only the dishes still open at the time. A
+            // meal already answered is never theirs — asked for here, and
+            // enforced on the reply in generateDay.
+            const closed = closedOn(b.member_id, di);
+            return {
+              day_index: di,
+              day_name_ar: dayNameByIndex.get(di)!,
+              meals:
+                closed.size > 0 ? dishes.filter((m) => !closed.has(m.slot)) : dishes,
+            };
+          }),
         };
       }),
   };
@@ -2042,13 +2153,17 @@ export async function generateMealPlan(params: {
   for (const b of beneficiaries) {
     const dmap = new Map<number, Day>();
     for (const [di, day] of carriedDays.get(b.member_id)!) dmap.set(di, day);
-    for (const di of missingByMember.get(b.member_id)!)
-      dmap.set(di, {
-        day_index: di,
-        day_name_ar: dayNameByIndex.get(di)!,
-        meals: [],
-        day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-      });
+    // Every other day of the grid gets an empty shell: the missing days fill in
+    // as they land; a newcomer's pre-join days stay empty, keeping their week
+    // grid the same shape as everyone else's.
+    for (const di of dayIndices)
+      if (!dmap.has(di))
+        dmap.set(di, {
+          day_index: di,
+          day_name_ar: dayNameByIndex.get(di)!,
+          meals: [],
+          day_total: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        });
     daysByMember.set(b.member_id, dmap);
     const prior = priorById.get(b.member_id);
     const skM = skeletonById.get(b.member_id);
@@ -2137,7 +2252,9 @@ export async function generateMealPlan(params: {
       // Children are portion-based: show the average of their real days, not the
       // meaningless skeleton estimate (see reconcileChildTargets).
       const isChild = isChildById.get(b.member_id) ?? false;
-      const display = isChild ? reconcileChildTargets(days, t) : t;
+      const display = isChild
+        ? reconcileChildTargets(childTargetDays(b.member_id, days), t)
+        : t;
       return {
         member_id: b.member_id,
         member_name_ar: nameById.get(b.member_id) ?? "",
@@ -2148,6 +2265,7 @@ export async function generateMealPlan(params: {
         days,
       };
     }),
+    member_joins: memberJoinsOut,
     methodology_notes_ar:
       skeleton.methodology_notes_ar ?? existingPlan?.methodology_notes_ar,
     safety_disclaimer_ar:
@@ -2213,6 +2331,17 @@ export async function generateMealPlan(params: {
     membersToGenerate.length,
     hasTranslation,
   );
+  // How much of `dayIndex` is still ahead for someone joining partway through
+  // it, measured on the table they join — every member whose day is whole.
+  const joinDayShare = (dayIndex: number, closed: ReadonlySet<Meal["slot"]>) =>
+    openDayShare(
+      beneficiaries.flatMap((b) =>
+        closedOn(b.member_id, dayIndex).size > 0
+          ? []
+          : (daysByMember.get(b.member_id)?.get(dayIndex)?.meals ?? []),
+      ),
+      closed,
+    );
   const generateDay = async (dayIndex: number): Promise<void> => {
     const dayMemberIds = new Set(
       membersToGenerate
@@ -2251,11 +2380,56 @@ export async function generateMealPlan(params: {
       return;
     }
     attemptedDays.add(dayIndex);
+    // Someone who joined partway through this day eats what is LEFT of it: for
+    // this call their targets are scaled to the open meals' share of the day —
+    // the figure the prompt states and the band checks — never a whole day's
+    // food squeezed into the meals that remain. Their stored header keeps the
+    // full-day target.
+    const joinedMidDay = new Set<string>();
     const daySkeleton: PlanSkeleton = {
       ...workingSkeleton,
-      members: workingSkeleton.members.filter((m) =>
-        dayMemberIds.has(m.member_id),
-      ),
+      members: workingSkeleton.members
+        .filter((m) => dayMemberIds.has(m.member_id))
+        .map((m) => {
+          const closed = closedOn(m.member_id, dayIndex);
+          if (closed.size === 0) return m;
+          joinedMidDay.add(m.member_id);
+          const share = joinDayShare(dayIndex, closed);
+          if (share >= 1) return m;
+          return {
+            ...m,
+            daily_calories_target: Math.round(m.daily_calories_target * share),
+            macros_target: {
+              protein_g: Math.round(m.macros_target.protein_g * share),
+              carbs_g: Math.round(m.macros_target.carbs_g * share),
+              fat_g: Math.round(m.macros_target.fat_g * share),
+            },
+          };
+        }),
+    };
+    // The prompt ASKS a mid-day joiner for the open dishes only; this ENFORCES
+    // it on the reply. A stray breakfast would otherwise merge them into a batch
+    // that was cooked before they were added — the one thing a join must never
+    // do. A joiner left with nothing is a bad reply, re-rolled like any other.
+    const dropClosedJoinSlots = (s: DaySlice): DaySlice => {
+      if (joinedMidDay.size === 0) return s;
+      let changed = false;
+      const members = s.members.map((m) => {
+        const closed = closedOn(m.member_id, dayIndex);
+        if (closed.size === 0) return m;
+        const meals = m.meals.filter((meal) => !closed.has(meal.slot));
+        if (meals.length === m.meals.length) return m;
+        changed = true;
+        return { ...m, meals };
+      });
+      if (!changed) return s;
+      const emptied = members.find((m) => m.meals.length === 0);
+      if (emptied) {
+        throw new PlanValidationError(
+          `Day ${dayIndex} failed validation: ${emptied.member_id} has no meal in the slots still open when they joined`,
+        );
+      }
+      return { ...s, members };
     };
     // Dish-once applies to MULTI-member day calls only (nothing is shared on a
     // solo day) and only behind its env flag; the prompt (buildDayPrompt reads
@@ -2270,6 +2444,7 @@ export async function generateMealPlan(params: {
       daySkeleton,
       dayIndex,
       dayNameByIndex.get(dayIndex),
+      { joinedMidDay },
     );
     let prompt = basePrompt; // band re-rolls append a corrective block
     // Size this day's cap + timeout to the members actually missing it, then
@@ -2437,6 +2612,7 @@ export async function generateMealPlan(params: {
           }
           slice = rec.slice;
         }
+        slice = dropClosedJoinSlots(slice);
 
         // The day each member will actually END UP with, reconstructed the same
         // way the splice below does it: the out-of-scope meals carried verbatim
@@ -3378,12 +3554,10 @@ export function hasPendingGeneration(params: {
   maxAttempts: number;
 }): boolean {
   const { plan, familyMemberIds, maxAttempts } = params;
-  const daysTotal = plan.days_total ?? 7;
   const genAttempts = plan.gen_attempts ?? {};
   const anyIncomplete = plan.members.some(
     (m) =>
-      m.days.filter((d) => d.meals.length > 0).length < daysTotal &&
-      (genAttempts[m.member_id] ?? 0) < maxAttempts,
+      memberIsShort(plan, m) && (genAttempts[m.member_id] ?? 0) < maxAttempts,
   );
   if (anyIncomplete) return true;
   const inPlan = new Set(plan.members.map((m) => m.member_id));

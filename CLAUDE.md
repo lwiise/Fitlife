@@ -1491,3 +1491,68 @@ open section, not a card. Workout is one row that opens the session. «اطبع�
 /plan/housekeeper?print=1 (`PrintOnOpen`). Frame: 60px phone header, avatar + chevron
 (no name), a speech-bubble advisor icon, and `container-shell` widened to a 1184px
 content column (lg padding 48px).
+
+---
+
+## A member added mid-week joins only what is left (09/2026)
+
+Owner directive: when a SHARED member is added, days that have already passed and meals
+already marked (cooked as planned, swapped, skipped) are not touched, and the newcomer is
+not added to them — only to what is left of the week. Before, a shared add ran
+`prepareSharedGroupRegen`, which cleared every shared member's meals on ALL seven days:
+days already eaten were rewritten with the newcomer at the table, and because
+`meal_checkins` are calendar-keyed, Monday's «طبختها كما هي» stayed lit on a dish nobody
+cooked.
+
+**The rule** (`packages/plan-engine/src/memberJoin.ts`, the one definition):
+- days before today: kept byte-for-byte for everyone; the newcomer has no meals on them;
+- today: the menu stays as planned; the newcomer is aligned to today's still-OPEN dishes
+  (a portion is added, the dish is not changed) and never given a slot already answered;
+- days after today: rebuilt for the whole shared group with the newcomer, as a shared add
+  always did.
+
+A slot of today is "answered" when a present sharer at the shared table has a mark, or a
+`'household'` row exists — an absentee's mark is personal and an independent member's
+private meal says nothing about the table (the same reading /plan gives them). Slot-keyed
+like every engagement row. If every dish of today's table is answered, the newcomer starts
+tomorrow; after the week is over they are recorded with no meals and no model call (they
+join the next week's plan). "Today" is the Riyadh date. The marks are read at run time by
+the worker (`readJoinToday` in generate-plan-background.mts — the production path) and by
+dispatch.ts only on the dev-inline path; a failed read degrades to "nothing marked yet",
+which still keeps every past day.
+
+**`plan_data.member_joins`** (`{ [member_id]: { day_index, closed_slots? } }`,
+schema-optional, no migration) records where each newcomer's week starts, and every run
+honours it: pre-join days are never "missing" (never generated; kept as empty shells so
+the week grid keeps its shape), the join day's dish list excludes `closed_slots`, the
+joiner's first-day target is pro-rated to the open meals' share of the table's calories
+(`openDayShare` — they eat what is left of the day, not a whole day squeezed into it), a
+reply that puts them in a closed slot has that meal dropped (a joiner left with nothing is
+re-rolled), the family dish grid prefers a whole day over a partial-join day, and a child's
+header average skips the partial join day (engine AND `applyChildDisplayTargets`).
+**Every "is this member short?" check must use `memberIsShort`** — chain
+`incompleteInPlanMemberIds`, `hasPendingGeneration`, `pickNextMemberId`, /plan's
+`hasIncompleteMember`, `daysReady`. Counting mealed days against `days_total` would send
+the drain, the chain and the sweeper to refill history on every visit, hop and firing — a
+paid call that puts the newcomer into meals already eaten.
+
+**UI:** PlanViewer shows a note on a pre-join day («هذا اليوم سبق الإضافة إلى الخطة… تبدأ
+الوجبات من يوم …») instead of a spinner, the «queued» line or the «failed — regenerate»
+box; a first-day line when they joined partway through; polling, progress and the PDF are
+join-aware. New strings `before_join` (with a `{day}` placeholder), `joined_after_week`
+and `join_first_day` in all 7 locales (non-Arabic best-effort, like the rest of the
+table). The advisor's plan summary (moved to the pure `contextFormat.ts` so it is tested)
+names the join day and no longer lists pre-join days as "not generated yet". PlanViewer
+imports the helpers from the new subpath `@fitlife/plan-engine/memberJoin` — a leaf module
+— so the client bundle never pulls the engine barrel.
+
+**Scope, deliberately:** only a SHARED add. An independent add (`onlyMemberId`) still
+generates the newcomer's whole week (their meals are private — nobody else's history
+changes); a shared member's REGENERATE (re-merging with the group) still rebuilds the whole
+week; and a refill of the joiner's own join day uses the closed slots recorded at join
+time, so a meal marked between the add and a delayed refill is not re-checked. Guarded by
+`memberJoin.test.ts`, `prepareSharedGroupRegen.test.ts` and `midWeekJoin.test.ts` (a real
+`generateMealPlan` run with a mocked model: past days untouched, the answered breakfast
+byte-identical without the newcomer, today's open lunch re-portioned with them, later days
+rebuilt, nobody left "short", a stray closed-slot meal dropped, a refill honouring the
+join, and a week-over add making no model call).
