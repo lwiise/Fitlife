@@ -12,18 +12,20 @@ import type { Entry } from "./strings/types";
 import { SHELL_STRINGS } from "./strings/shell";
 import { FAMILIES_STRINGS } from "./strings/families";
 import { FAMILY_STRINGS } from "./strings/family";
+import { FAMILY_PAGE_STRINGS } from "./strings/familyPage";
 import { OVERVIEW_STRINGS } from "./strings/overview";
 export type { AdminLocale };
 
 /**
  * The console's newer surfaces keep their strings in ./strings/<surface>.ts,
- * each with its own key prefix (sh_ / fl_ / fm_ / ov_), merged here so every
+ * each with its own key prefix (sh_ / fl_ / fm_ / fp_ / ov_), merged here so every
  * string still goes through the one typed `t()`.
  */
 const STRINGS = {
   ...SHELL_STRINGS,
   ...FAMILIES_STRINGS,
   ...FAMILY_STRINGS,
+  ...FAMILY_PAGE_STRINGS,
   ...OVERVIEW_STRINGS,
   app_title: { ar: "لوحة تحكم Fit Life", en: "Fit Life Admin" },
   // ── Admin auth (login screen) ──
