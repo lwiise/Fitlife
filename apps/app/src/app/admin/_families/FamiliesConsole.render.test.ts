@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { FamilyRow } from "@/lib/admin/console-types";
+import { subscriptionCancelState } from "@/lib/admin/familyFlags";
 import { parseFamilyListQuery, parseFamilyPanelState } from "@/lib/admin/familyList";
 
 /**
@@ -35,6 +36,7 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     signupAt: "2026-06-01T00:00:00Z",
     trialEndsAt: null,
     currentPeriodEnd: "2026-10-01T00:00:00Z",
+    endsAt: null,
     cancelAtPeriodEnd: false,
     beneficiaries: 2,
     hasHousekeeper: false,
@@ -47,6 +49,7 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     meal: { state: "ready", daysReady: 7, daysTotal: 7, masked: false },
     workout: { state: "none", masked: false },
     flags: [],
+    cancelState: "none",
     ...p,
   };
 }
@@ -85,7 +88,16 @@ describe("FamiliesConsole (server render)", () => {
   it("renders the head, the table rows, the phone cards and the footer", () => {
     const html = render(rows);
     expect(html).toContain("كل العائلات");
-    expect(html).toContain("٣ عائلات · ١ مدفوعة · ١ تجريبية");
+    // The head's figures with a drawn separator between them; the live region
+    // reads them as one text, joined with the Arabic comma.
+    expect(html).toMatch(
+      /٣ عائلات(<!-- -->)? <span class="ad-sep" aria-hidden="true"><\/span> (<!-- -->)?١ مدفوعة/,
+    );
+    expect(html).toContain("٣ عائلات، ١ مدفوعة، ١ تجريبية");
+    // A count keeps its label company as its own element, never behind «·»:
+    // beside an Arabic-Indic digit a middle dot reads as the digit zero.
+    expect(html).toMatch(/كل العائلات(<!-- -->)? <span class="ad-count">٣<\/span>/);
+    expect(html).not.toContain("·");
     expect(count(html, /<tr data-id=/g)).toBe(3);
     expect(count(html, /class="ad-pcard"/g)).toBe(3);
     expect(html).toContain("١–٣ من ٣");
@@ -120,5 +132,58 @@ describe("FamiliesConsole (server render)", () => {
   it("says when there are no families at all", () => {
     const html = render([]);
     expect(html).toContain("لا توجد عائلات بعد");
+  });
+
+  it("renewal column: the date the rule judges by, «إلغاء مجدول» only while the cancellation is scheduled", () => {
+    // Each row judged as the loader judges it, at the render's "now".
+    const judged = (p: Partial<FamilyRow>): FamilyRow => {
+      const row = fam(p);
+      return { ...row, cancelState: subscriptionCancelState(row, Date.parse("2026-09-30T09:00:00Z")) };
+    };
+    // Cancelled in the LemonSqueezy portal with no period end: paid through ends_at.
+    const portal = judged({
+      status: "cancelled",
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: null,
+      endsAt: "2026-10-20T00:00:00Z",
+    });
+    const lapsed = judged({
+      status: "cancelled",
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: null,
+      endsAt: "2026-09-01T00:00:00Z",
+    });
+    const trial = judged({
+      status: "trialing",
+      cancelAtPeriodEnd: true,
+      trialEndsAt: "2026-10-04T00:00:00Z",
+      currentPeriodEnd: null,
+    });
+    expect([portal, lapsed, trial].map((row) => row.cancelState)).toEqual([
+      "scheduled",
+      "ended",
+      "scheduled",
+    ]);
+
+    const html = render([portal, lapsed, trial]).replace(/<!-- -->/g, "");
+    // The renewal <td> of each row, found by the header's column order.
+    const columns = [...html.matchAll(/<th [^>]*data-col="(\w+)"/g)].map((m) => m[1]);
+    const at = columns.indexOf("renewal");
+    expect(at).toBeGreaterThan(0);
+    const cell = (id: string) => {
+      const tr = html.match(new RegExp(`<tr data-id="${id}"[^>]*>([\\s\\S]*?)</tr>`))?.[1] ?? "";
+      return tr.split(/<td[\s>]/)[at + 1]?.replace(/<\/td>$/, "") ?? "";
+    };
+    const SEP = '<span class="ad-sep" aria-hidden="true"></span>';
+    const CANCEL = '<span class="ad-bad">إلغاء مجدول</span>';
+    expect(cell(portal.userId)).toMatch(
+      new RegExp(`^<time dateTime="2026-10-20T00:00:00Z">[^<]+</time> ${SEP} ${CANCEL}$`),
+    );
+    expect(cell(lapsed.userId)).toMatch(/^<time dateTime="2026-09-01T00:00:00Z">[^<]+<\/time>$/);
+    expect(cell(trial.userId)).toMatch(
+      new RegExp(
+        `^<span class="ad-muted">تنتهي التجربة</span> <time dateTime="2026-10-04T00:00:00Z">[^<]+</time> ${SEP} ${CANCEL}$`,
+      ),
+    );
   });
 });

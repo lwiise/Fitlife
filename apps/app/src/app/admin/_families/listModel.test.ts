@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { FAMILY_COLUMNS, type FamilyListQuery, type FamilyRow } from "@/lib/admin/console-types";
+import {
+  FAMILY_COLUMNS,
+  type FamilyListQuery,
+  type FamilyRow,
+  type MealPlanCell,
+} from "@/lib/admin/console-types";
+import { subscriptionCancelState } from "@/lib/admin/familyFlags";
 import {
   DEFAULT_FAMILY_LIST_QUERY,
   filterFamilies,
@@ -14,6 +20,7 @@ import {
   buildSearchIndex,
   countFamilies,
   countsLine,
+  countsParts,
   defaultSortDir,
   familyPageHref,
   filterRows,
@@ -21,7 +28,7 @@ import {
   isPanelTab,
   listCounts,
   listSearch,
-  mealCardText,
+  mealCardParts,
   nextSort,
   pageOf,
   pageRange,
@@ -40,10 +47,15 @@ import {
   workoutCardText,
 } from "./listModel";
 
+/** When the fixtures' dataset was "read" — the cancellation state is judged at it. */
+const NOW = Date.parse("2026-09-30T09:00:00Z");
+
 let seq = 0;
+/** A row as buildFamilyRows makes it: cancelState follows the subscription unless given. */
 function fam(p: Partial<FamilyRow> = {}): FamilyRow {
   seq += 1;
-  return {
+  const { cancelState, ...fields } = p;
+  const row: Omit<FamilyRow, "cancelState"> = {
     userId: `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`,
     displayName: `عائلة ${seq}`,
     email: `f${seq}@example.com`,
@@ -53,6 +65,7 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     signupAt: "2026-06-01T00:00:00Z",
     trialEndsAt: null,
     currentPeriodEnd: null,
+    endsAt: null,
     cancelAtPeriodEnd: false,
     beneficiaries: 2,
     hasHousekeeper: false,
@@ -65,8 +78,9 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     meal: { state: "ready", daysReady: 7, daysTotal: 7, masked: false },
     workout: { state: "none", masked: false },
     flags: [],
-    ...p,
+    ...fields,
   };
+  return { ...row, cancelState: cancelState ?? subscriptionCancelState(row, NOW) };
 }
 
 const query = (p: Partial<FamilyListQuery> = {}): FamilyListQuery => ({
@@ -139,11 +153,34 @@ describe("filterRows", () => {
     fam({ displayName: "هِنْد العتيبي", email: "hind.o@example.com", status: "active" }),
     fam({ displayName: "أمل السبيعي", email: "amal@example.com", tier: "pro", status: "trialing" }),
     fam({ displayName: null, email: "ZOË@Example.com", status: "past_due" }),
+    // Cancelled with no paid-through date: ended.
     fam({ displayName: "منى", email: null, status: "cancelled", cancelAtPeriodEnd: true }),
+    // Cancelled in the LemonSqueezy portal, still paid up: cancelling.
+    fam({
+      displayName: "نوف",
+      status: "cancelled",
+      cancelAtPeriodEnd: true,
+      endsAt: "2026-10-20T00:00:00Z",
+      flags: ["cancel_scheduled"],
+    }),
     fam({ displayName: "ريم", flags: ["failed_meal_run"], status: "expired" }),
-    fam({ displayName: "سارة", status: "active", cancelAtPeriodEnd: true, tier: "starter" }),
+    // Set to cancel through our own route: cancelling.
+    fam({
+      displayName: "سارة",
+      status: "active",
+      cancelAtPeriodEnd: true,
+      tier: "starter",
+      flags: ["cancel_scheduled"],
+    }),
   ];
   const index = buildSearchIndex(rows);
+
+  it("puts each cancellation in its view, so the equivalence below covers both", () => {
+    const names = (view: "cancelling" | "ended") =>
+      filterRows(rows, index, { view, q: "", tier: "", status: "" }).map((r) => r.displayName);
+    expect(names("cancelling")).toEqual(["نوف", "سارة"]);
+    expect(names("ended")).toEqual(["منى", "ريم"]);
+  });
 
   it("matches exactly what filterFamilies matches, for any view, search and filter", () => {
     const searches = ["", "هند عتيبي", "امل", "zoe", "EXAMPLE", "مني", "  ", "غير موجود", "hind amal"];
@@ -151,7 +188,7 @@ describe("filterRows", () => {
     for (const q of searches) {
       for (const view of views) {
         for (const tier of ["", "pro", "family"]) {
-          for (const status of ["", "active", "trialing"]) {
+          for (const status of ["", "active", "trialing", "cancelled"]) {
             const narrow = { view, q, tier, status };
             expect(filterRows(rows, index, narrow)).toEqual(filterFamilies(rows, narrow));
           }
@@ -362,8 +399,15 @@ describe("texts", () => {
   });
 
   it("reads the head line and the footer range", () => {
+    expect(countsParts({ families: 10, paying: 6, trialing: 3 }, "ar")).toEqual([
+      "١٠ عائلات",
+      "٦ مدفوعة",
+      "٣ تجريبية",
+    ]);
+    // The live region's text: Arabic joins with its comma — beside an
+    // Arabic-Indic digit «·» reads as «٠» («٦ مدفوعة ·٣» → «٣٠»).
     expect(countsLine({ families: 10, paying: 6, trialing: 3 }, "ar")).toBe(
-      "١٠ عائلات · ٦ مدفوعة · ٣ تجريبية",
+      "١٠ عائلات، ٦ مدفوعة، ٣ تجريبية",
     );
     expect(countsLine({ families: 10, paying: 6, trialing: 3 }, "en")).toBe(
       "10 families · 6 paying · 3 in trial",
@@ -373,16 +417,19 @@ describe("texts", () => {
   });
 
   it("writes a card's meal line from what is known, never a guessed day count", () => {
-    expect(mealCardText({ state: "none", daysReady: null, daysTotal: 7, masked: false }, "ar")).toBe("لا يوجد");
-    expect(mealCardText({ state: "ready", daysReady: 6, daysTotal: 7, masked: false }, "ar")).toBe("٦/٧");
-    expect(mealCardText({ state: "ready", daysReady: null, daysTotal: 7, masked: false }, "ar")).toBe("جاهزة");
-    expect(mealCardText({ state: "generating", daysReady: 4, daysTotal: 7, masked: false }, "ar")).toBe(
-      "قيد الإنشاء · ٤/٧",
-    );
-    expect(mealCardText({ state: "generating", daysReady: null, daysTotal: 7, masked: false }, "en")).toBe(
-      "Generating",
-    );
-    expect(mealCardText({ state: "failed", daysReady: 0, daysTotal: 7, masked: true }, "ar")).toBe("فشلت");
+    const cell = (state: MealPlanCell["state"], daysReady: number | null, masked = false) => ({
+      state,
+      daysReady,
+      daysTotal: 7,
+      masked,
+    });
+    expect(mealCardParts(cell("none", null), "ar")).toEqual({ state: "لا يوجد", days: null });
+    expect(mealCardParts(cell("ready", 6), "ar")).toEqual({ state: null, days: "٦/٧" });
+    expect(mealCardParts(cell("ready", null), "ar")).toEqual({ state: "جاهزة", days: null });
+    // The state and the days stay two parts: the card sets the days apart as a count.
+    expect(mealCardParts(cell("generating", 4), "ar")).toEqual({ state: "قيد الإنشاء", days: "٤/٧" });
+    expect(mealCardParts(cell("generating", null), "en")).toEqual({ state: "Generating", days: null });
+    expect(mealCardParts(cell("failed", 0, true), "ar")).toEqual({ state: "فشلت", days: null });
     expect(workoutCardText({ state: "none", masked: false }, "ar")).toBe("لا يوجد");
     expect(workoutCardText({ state: "ready", masked: false }, "ar")).toBe("جاهزة");
     expect(workoutCardText({ state: "failed", masked: true }, "en")).toBe("Failed");

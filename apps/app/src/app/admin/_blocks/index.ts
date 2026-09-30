@@ -36,7 +36,6 @@ export {
   mealPlanHref,
   programHref,
   reasonSentence,
-  showsCancelScheduled,
   todayWeekdayFrom,
   workoutCellFromSection,
 } from "./helpers";

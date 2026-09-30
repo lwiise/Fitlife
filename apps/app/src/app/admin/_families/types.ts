@@ -20,7 +20,7 @@ export interface FamilyRowText {
   last: string | null;
   /** Last activity's calendar date, for the tooltip. */
   lastDay: string | null;
-  /** The renewal cell's date: the trial end while trialing, else the period end («—» when unset). */
+  /** The renewal cell's date (`renewalDateAt`): the trial end while trialing, else the paid-through date («—» when unset). */
   renewal: string;
 }
 

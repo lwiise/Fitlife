@@ -118,6 +118,7 @@ describe("buildOverviewModel — metrics", () => {
     expect(gross.cur).toEqual([100, 100, 150]);
     expect(gross.pri).toEqual([60, 60, 120]);
     expect(gross.value).toBe(`SAR${NBSP}150`);
+    expect(gross.subParts).toEqual(["Running total over the period", "Last 30 days"]);
     expect(gross.sub).toBe("Running total over the period · Last 30 days");
     const mrr = model.board.metrics.find((m) => m.key === "mrr")!;
     expect(mrr.cur).toEqual([815, 874, 944]);
@@ -212,7 +213,10 @@ describe("buildOverviewModel — metrics", () => {
     expect(mrr.value).toMatch(/٩٤٤/);
     expect(mrr.value).not.toMatch(/ /);
     expect(mrr.ticks[4]).toBe("١٬٢٠٠");
-    expect(mrr.sub).toBe("المستوى في نهاية كل يوم · آخر ٣٠ يوم");
+    // Beside an Arabic-Indic digit «·» reads as «٠»: Arabic text joins with its comma.
+    expect(mrr.subParts).toEqual(["المستوى في نهاية كل يوم", "آخر ٣٠ يوم"]);
+    expect(mrr.sub).toBe("المستوى في نهاية كل يوم، آخر ٣٠ يوم");
+    expect(JSON.stringify(model)).not.toContain("·");
     expect(mrr.delta!.text).toMatch(/١٦/);
   });
 });
@@ -318,9 +322,11 @@ describe("buildOverviewModel — AI cost", () => {
     expect(cost.total.spark).toEqual([10, 20, 8.03]);
     expect(cost.tiles.map((t) => t.value)).toEqual(["$4.75", "$1.30", "$2.46", "$0.52"]);
     expect(cost.tiles[0]!.hint).toBe("Accounts that used AI: 8");
-    expect(cost.note).toBe(
-      "12.5% of revenue (est.) · Averages cover the accounts that used AI in the period · Billed in USD",
-    );
+    expect(cost.notes).toEqual([
+      "12.5% of revenue (est.)",
+      "Averages cover the accounts that used AI in the period",
+      "Billed in USD",
+    ]);
   });
 
   it("says SAR is converted, and leaves out a share of revenue it cannot compute", () => {
@@ -331,9 +337,10 @@ describe("buildOverviewModel — AI cost", () => {
       currency: "sar",
       now: NOW,
     });
-    expect(model.cost.note).toBe(
-      "Averages cover the accounts that used AI in the period · Billed in USD, shown in SAR at the platform rate",
-    );
+    expect(model.cost.notes).toEqual([
+      "Averages cover the accounts that used AI in the period",
+      "Billed in USD, shown in SAR at the platform rate",
+    ]);
     expect(model.cost.tiles[2]!.value).toBe("—");
   });
 });

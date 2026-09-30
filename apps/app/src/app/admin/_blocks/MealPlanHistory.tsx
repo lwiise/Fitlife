@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { MealPlanListItem } from "@/lib/admin/console-types";
 import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { joinSep } from "../_ui/Sep";
 import { mealPlanHref } from "./helpers";
 import { DateText, Ltr, PlanStatePill } from "./parts";
 
@@ -53,8 +54,10 @@ export function MealPlanHistory({
             <PlanStatePill state={p.status} locale={locale} />
           </span>
           <span className="ad-num ad-muted">
-            {daysText(p, locale)} ·{" "}
-            {p.costUsd != null ? fmtMoney(p.costUsd, currency, locale, 2) : "—"}
+            {joinSep(
+              daysText(p, locale),
+              p.costUsd != null ? fmtMoney(p.costUsd, currency, locale, 2) : "—",
+            )}
           </span>
         </li>
       ))}

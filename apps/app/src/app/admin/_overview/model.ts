@@ -20,6 +20,7 @@ import {
   type Currency,
 } from "@/lib/admin/format";
 import { intervalLabel, metricLabel, t, type AdminStringKey } from "@/lib/admin/i18n";
+import { joinText } from "@/lib/admin/separators";
 import { METRIC_POOL, type MetricUnit } from "@/lib/admin/timeseries";
 import type { EngagementStats } from "@/lib/admin/engagement";
 import type {
@@ -79,7 +80,11 @@ export interface OvMetric {
   yMax: number;
   /** Five tick labels, baseline first. */
   ticks: string[];
-  /** «Running total over the period · Last 30 days». */
+  /** What the line plots and over which range — «Running total over the
+   * period», «Last 30 days». The card draws a separator between the two. */
+  subParts: string[];
+  /** The same as one text, for the chart's accessible name: joined with
+   * listSep («…، آخر ٣٠ يوم» — never «·», which beside an Arabic digit reads «٠»). */
   sub: string;
 }
 
@@ -137,7 +142,9 @@ export interface OvCost {
   range: string;
   total: { label: string; value: string; long: boolean; delta: OvDelta | null; spark: number[] };
   tiles: OvCostTile[];
-  note: string;
+  /** The footnote's sentences (share of revenue, how averages are taken, the
+   * currency) — drawn with a separator between them. */
+  notes: string[];
 }
 
 export interface OvEngageTile {
@@ -373,7 +380,8 @@ function metricModel(
     pri,
     yMax,
     ticks: [0, 0.25, 0.5, 0.75, 1].map((f) => fmtTick(yMax * f, yMax, locale)),
-    sub: `${kind} · ${rangeText}`,
+    subParts: [kind, rangeText],
+    sub: joinText([kind, rangeText], locale),
   };
 }
 
@@ -384,15 +392,13 @@ function money(usd: number | null, currency: Currency, locale: AdminLocale, prec
 function costModel(view: OverviewView, rangeText: string, locale: AdminLocale, currency: Currency): OvCost {
   const total = money(view.aiCostUsd, currency, locale, 0);
   const prior = money(view.aiCostPriorUsd, currency, locale, 0);
-  const note = [
+  const notes = [
     view.aiPctOfRevenue != null
       ? fill(t("ov_cost_pct", locale), { pct: fmtPct(view.aiPctOfRevenue, locale) })
       : null,
     t("ov_cost_note_avg", locale),
     t(currency === "usd" ? "ov_cost_note_usd" : "ov_cost_note_sar", locale),
-  ]
-    .filter((s): s is string => !!s)
-    .join(" · ");
+  ].filter((s): s is string => !!s);
   return {
     title: t("cost_efficiency", locale),
     range: rangeText,
@@ -432,7 +438,7 @@ function costModel(view: OverviewView, rangeText: string, locale: AdminLocale, c
         hint: t("ov_hint_per_member_plan", locale),
       },
     ],
-    note,
+    notes,
   };
 }
 

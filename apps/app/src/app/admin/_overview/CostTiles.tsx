@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
 import { clsx } from "clsx";
+import { joinSep } from "../_ui/Sep";
 import type { OvCost } from "./model";
 import { DeltaPill } from "./DeltaPill";
 import { Sparkline } from "./Sparkline";
@@ -48,7 +49,8 @@ export function CostTiles({
       </div>
       <p className="ad-ov-foot">
         <Info className="ad-ic" aria-hidden="true" />
-        {cost.note}
+        {/* One flex item, so the sentences wrap as one paragraph. */}
+        <span>{joinSep(...cost.notes)}</span>
       </p>
     </section>
   );

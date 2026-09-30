@@ -1,6 +1,7 @@
 import type { FamilyHeaderData } from "@/lib/admin/console-types";
 import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { localeName, t } from "@/lib/admin/i18n";
+import { joinSep } from "../_ui/Sep";
 import { fmtDay, fmtRelativeTo } from "./helpers";
 import { DateText, Field, FlagChip, Ltr, Pill } from "./parts";
 
@@ -38,10 +39,10 @@ export function AccountFields({
       </Field>
       <Field label={t("field_onboarding", locale)}>
         {header.onboardingCompletedAt ? (
-          <>
-            {t("onboarding_complete", locale)} ·{" "}
-            <DateText iso={header.onboardingCompletedAt} locale={locale} />
-          </>
+          joinSep(
+            t("onboarding_complete", locale),
+            <DateText iso={header.onboardingCompletedAt} locale={locale} />,
+          )
         ) : (
           <FlagChip tone="warn">{t("fm_flag_onboarding", locale)}</FlagChip>
         )}

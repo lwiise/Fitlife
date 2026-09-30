@@ -1,5 +1,6 @@
 import type { SubscriptionRow } from "@/lib/admin/detail";
 import type { FamilyHeaderData } from "@/lib/admin/console-types";
+import { paidThroughAt } from "@/lib/admin/familyFlags";
 import type { AdminLocale } from "@/lib/admin/format";
 import { cadenceLabel, t } from "@/lib/admin/i18n";
 import { rangeArrow } from "./helpers";
@@ -15,12 +16,18 @@ function LsId({ id }: { id: string | null }) {
  * billing cycle, trial range, period end, cancel scheduled, the cancellation
  * date when there is one, and the three LemonSqueezy ids. A family that never
  * subscribed reads «بدون اشتراك».
+ *
+ * The cancel_scheduled reason sends the operator here, so the two
+ * cancellation fields say what the header and the list say: «إلغاء مجدول»
+ * is the header's `cancelState` (subscriptionCancelState), never the raw
+ * flag, and the period end is what the subscription is paid through — its
+ * ends_at when a portal cancellation arrived without a period end.
  */
 export function BillingFields({
   header,
   locale,
 }: {
-  header: Pick<FamilyHeaderData, "subscription">;
+  header: Pick<FamilyHeaderData, "subscription" | "cancelState">;
   locale: AdminLocale;
 }) {
   const sub = header.subscription;
@@ -46,10 +53,10 @@ export function BillingFields({
         )}
       </Field>
       <Field label={t("field_period_end", locale)}>
-        <DateText iso={sub.currentPeriodEnd} locale={locale} />
+        <DateText iso={paidThroughAt(sub)} locale={locale} />
       </Field>
       <Field label={t("cancel_scheduled", locale)}>
-        {sub.cancelAtPeriodEnd ? t("yes", locale) : t("no", locale)}
+        {header.cancelState === "scheduled" ? t("yes", locale) : t("no", locale)}
       </Field>
       {sub.cancelledAt ? (
         <Field label={t("fm_cancelled_at", locale)}>

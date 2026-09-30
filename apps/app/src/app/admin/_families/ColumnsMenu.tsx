@@ -5,10 +5,11 @@ import { Columns3 } from "lucide-react";
 import { FAMILY_COLUMNS, type FamilyColumn } from "@/lib/admin/console-types";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { Count } from "../_ui";
 import { COLUMN_LABEL } from "./listModel";
 
 /**
- * «الأعمدة · N»: a toggle button and its checkbox popover (the prototype's
+ * «الأعمدة N»: a toggle button and its checkbox popover (the prototype's
  * `aColumnsPop`). The family column is always shown, so it is listed checked
  * and disabled. N counts the visible columns, the family column included.
  *
@@ -74,7 +75,8 @@ export function ColumnsMenu({
         onKeyDown={onKeyDown}
       >
         <Columns3 className="ad-ic" aria-hidden="true" />
-        {t("fl_columns", locale)} · {fmtNumber(shown, locale)}
+        {t("fl_columns", locale)}
+        <Count>{fmtNumber(shown, locale)}</Count>
       </button>
       {open ? (
         <div

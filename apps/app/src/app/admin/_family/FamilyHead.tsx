@@ -3,7 +3,7 @@ import type { AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { FamilyFlagChips, HealthLink } from "../_blocks";
 import { fmtDay } from "../_blocks/helpers";
-import { LinkTabs, Ltr, Pill, StatusPill, TierBadge, type LinkTab } from "../_ui";
+import { LinkTabs, Ltr, Pill, StatusPill, TierBadge, joinSep, type LinkTab } from "../_ui";
 import { FamiliesCrumb } from "./FamiliesCrumb";
 import { familyName, familyTabHref, familyTabLabel } from "./model";
 
@@ -75,8 +75,13 @@ export function FamilyDeskHead({
             <bdi>{name}</bdi>
           </h1>
           <p className="ad-sub">
-            {header.email ? <Ltr>{header.email}</Ltr> : "—"} · {t("fm_customer_since", locale)}{" "}
-            <time dateTime={header.signupAt}>{fmtDay(header.signupAt, locale)}</time>
+            {joinSep(
+              header.email ? <Ltr>{header.email}</Ltr> : "—",
+              <>
+                {t("fm_customer_since", locale)}{" "}
+                <time dateTime={header.signupAt}>{fmtDay(header.signupAt, locale)}</time>
+              </>,
+            )}
           </p>
           <div className="ad-chipsrow">
             <HeadChips header={header} locale={locale} />

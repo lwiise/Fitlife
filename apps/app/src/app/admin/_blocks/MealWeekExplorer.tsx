@@ -10,6 +10,8 @@ import type {
 } from "@/lib/admin/console-types";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { joinText } from "@/lib/admin/separators";
+import { Count, joinSep } from "../_ui/Sep";
 import {
   fraction,
   initialMealDay,
@@ -117,13 +119,10 @@ function Week({
         {tabs.map((d) => {
           const ready = memberDay(member, d.dayIndex) !== null;
           const isToday = d.dayIndex === todayIndex;
-          const label = [
-            d.long,
-            isToday ? t("fm_today", locale) : null,
-            ready ? null : t("fm_day_not_ready", locale),
-          ]
-            .filter(Boolean)
-            .join(" · ");
+          const label = joinText(
+            [d.long, isToday && t("fm_today", locale), !ready && t("fm_day_not_ready", locale)],
+            locale,
+          );
           return (
             <button
               key={d.dayIndex}
@@ -144,7 +143,7 @@ function Week({
         <DayMeals
           day={current}
           member={member}
-          label={`${member.name} · ${tab?.long ?? ""}`}
+          label={joinText([member.name, tab?.long], locale)}
           locale={locale}
         />
       ) : (
@@ -182,7 +181,8 @@ function DayMeals({
           <span className="ad-share">
             {meal.sharedBy > 1 ? (
               <span className="ad-pill ad-pur ad-plain">
-                {t("fm_shared", locale)} · {fmtNumber(meal.sharedBy, locale)}
+                {t("fm_shared_by", locale)}
+                <Count>{fmtNumber(meal.sharedBy, locale)}</Count>
               </span>
             ) : null}
           </span>
@@ -220,10 +220,9 @@ function DayTotal({
   if (total == null) {
     calories = <>—</>;
   } else if (member.isChild) {
-    calories = (
-      <>
-        {n(total)} {kcal} · <span className="ad-muted">{t("fm_portions", locale)}</span>
-      </>
+    calories = joinSep(
+      `${n(total)} ${kcal}`,
+      <span className="ad-muted">{t("fm_portions", locale)}</span>,
     );
   } else if (target != null && target > 0) {
     calories = (

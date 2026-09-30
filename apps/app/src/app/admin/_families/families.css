@@ -70,7 +70,9 @@
 
 /* ── The side panel ─────────────────────────────────────────────────────── */
 .admin-root .ad-fl .ad-fl-sh-id { min-width: 0; }
-.admin-root .ad-fl .ad-fl-sh-id h2 { overflow-wrap: anywhere; border-radius: 6px; }
+/* The heading takes focus when a family opens, for the reader's sake; it is
+   not a control, so admin.css draws it no ring. */
+.admin-root .ad-fl .ad-fl-sh-id h2 { overflow-wrap: anywhere; }
 .admin-root .ad-fl .ad-fl-sh-id .ad-meta { overflow-wrap: anywhere; }
 /* The prototype's `.sp p`, on a span: a button holds phrasing content only. */
 .admin-root .ad-fl .ad-sp .ad-fl-sp-line {

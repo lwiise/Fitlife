@@ -116,6 +116,16 @@
   outline: 2px solid var(--purple);
   outline-offset: 2px;
 }
+/* Focus that script moves for the reader's sake — to a heading, a region,
+   <main> — lands on something that is not a control (tabindex="-1" and no
+   widget role), so it draws no ring: the side panel's heading, focused when a
+   family opens, read as a selected text field. Every control keeps its ring,
+   roving ones included (a table row or a tab sits at -1 until it is the
+   current one), and so does anything in the tab order (tabindex="0"). The
+   embedded consumer viewers keep their own focus styling. */
+:where(.admin-root) [tabindex="-1"]:where(:not(.ad-viewer *)):not(a[href], button, input, select, textarea, summary, tr, [role="tab"], [role="row"], [role="option"], [role="button"], [role="link"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"]):focus {
+  outline: none;
+}
 
 /* ── Icons, text helpers ────────────────────────────────────────────────── */
 .admin-root .ad-ic {
@@ -681,7 +691,16 @@
 .admin-root .ad-days7 button.ad-missing:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 /* ── Meals ──────────────────────────────────────────────────────────────── */
-.admin-root .ad-meals { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+/* The meals box is a size container: a narrow one — the 440px side panel, a
+   phone, the week column of a narrow page — lays each meal out compactly
+   (see the @container rule under Responsive), whatever the viewport. */
+.admin-root .ad-meals {
+  container: ad-meals / inline-size;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
 .admin-root .ad-meal {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr) auto 96px;
@@ -1623,6 +1642,7 @@
   display: inline-flex;
   flex: none;
   align-items: center;
+  gap: 6px; /* between a view's name and its count */
   height: 36px;
   padding-inline: 14px;
   border-radius: 999px;
@@ -1813,6 +1833,38 @@
    scrim or drawer is in the document. */
 html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
 
+/* ── Separators and counts (_ui/Sep.tsx) ────────────────────────────────── */
+/* The one mark between inline items, in both languages: a thin vertical rule
+   in the text's own colour. Never «·» — beside an Arabic-Indic digit a middle
+   dot reads as the digit zero «٠». joinSep keeps a word space on each side,
+   so with the 4px margin the rule sits ~7–8px from each item; in a flex row
+   those spaces do not render and the row's gap spaces it instead, so the
+   margin goes. This block sits late on purpose: the `span` rules of the rows
+   a rule sits in (`.ad-daytot span` …) must not restyle it.
+   The rule is a BORDER, not a filled box: forced colors (Windows High
+   Contrast) repaint every background as Canvas, which erased a filled rule
+   against the page, while a border takes the forced text colour and stays —
+   and there the rule is drawn at full strength, as the text around it is. */
+.admin-root span.ad-sep {
+  display: inline-block;
+  flex: none;
+  width: 0;
+  height: .8em;
+  margin-inline: 4px;
+  border-inline-start: 1px solid currentColor;
+  opacity: .3;
+  vertical-align: middle;
+}
+.admin-root :is(.ad-pill, .ad-flag, .ad-kv dd, .ad-daytot span, .ad-chips .ad-cx, .ad-a-foot .ad-kb) > .ad-sep {
+  margin-inline: 0;
+}
+@media (forced-colors: active) {
+  .admin-root span.ad-sep { opacity: 1; }
+}
+/* A count beside its label («كل العائلات ١٤»): its own element with no mark,
+   spaced by its flex row's gap (or the plain space Count puts before it). */
+.admin-root .ad-count { font-variant-numeric: tabular-nums; }
+
 /* ── Width utilities (meters, skeletons): .ad-w0 … .ad-w100 = 0% … 100% ─── */
 .admin-root .ad-w0{width:0%} .admin-root .ad-w1{width:1%} .admin-root .ad-w2{width:2%} .admin-root .ad-w3{width:3%} .admin-root .ad-w4{width:4%}
 .admin-root .ad-w5{width:5%} .admin-root .ad-w6{width:6%} .admin-root .ad-w7{width:7%} .admin-root .ad-w8{width:8%} .admin-root .ad-w9{width:9%}
@@ -1922,10 +1974,6 @@ html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
   .admin-root .ad-tile.ad-big,
   .admin-root .ad-tiles.ad-c6 .ad-tile.ad-big { grid-column: 1 / -1; }
   .admin-root .ad-days7 { gap: 4px; }
-  .admin-root .ad-meal { grid-template-columns: 64px minmax(0, 1fr) auto; row-gap: 4px; padding: 12px; }
-  .admin-root .ad-meal .ad-share { grid-column: 2; justify-self: start; }
-  .admin-root .ad-meal .ad-share:empty { display: none; }
-  .admin-root .ad-meal .ad-kc { grid-row: 1; grid-column: 3; }
   /* Scrolls sideways on phones: pad for the focus ring (see .ad-ph-chips). */
   .admin-root .ad-wk {
     grid-template-columns: repeat(7, minmax(88px, 1fr));
@@ -1948,6 +1996,17 @@ html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
   .admin-root .ad-modal-h { padding: 16px 16px 12px; }
   .admin-root .ad-modal-b { padding: 4px 16px 16px; }
   .admin-root .ad-modal-f { padding: 12px 16px 16px; }
+}
+
+/* A narrow meals box (the side panel, a phone, a narrow column): slot, dish
+   and calories share the first line, and the shared marker sits under the
+   dish — so the dish name gets the width instead of wrapping word by word
+   beside an empty cell. */
+@container ad-meals (max-width: 559px) {
+  .admin-root .ad-meal { grid-template-columns: 64px minmax(0, 1fr) auto; row-gap: 4px; padding: 12px; }
+  .admin-root .ad-meal .ad-share { grid-column: 2; justify-self: start; }
+  .admin-root .ad-meal .ad-share:empty { display: none; }
+  .admin-root .ad-meal .ad-kc { grid-row: 1; grid-column: 3; }
 }
 
 /* ── Print: the content, not the chrome ─────────────────────────────────── */

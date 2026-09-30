@@ -15,6 +15,7 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     signupAt: "2026-06-01T09:00:00Z",
     trialEndsAt: "2026-06-08T09:00:00Z",
     currentPeriodEnd: "2026-10-01T09:00:00Z",
+    endsAt: null,
     cancelAtPeriodEnd: false,
     beneficiaries: 2,
     hasHousekeeper: false,
@@ -27,6 +28,7 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     meal: { state: "ready", daysReady: 7, daysTotal: 7, masked: false },
     workout: { state: "none", masked: false },
     flags: [],
+    cancelState: "none",
     ...p,
   };
 }
@@ -53,6 +55,21 @@ describe("familyRowText", () => {
   it("uses the trial end while trialing", () => {
     const text = familyRowText(fam({ status: "trialing" }), { locale: "en", currency: "sar", nowIso: NOW });
     expect(text.renewal).toBe(fmtDay("2026-06-08T09:00:00Z", "en"));
+  });
+
+  it("dates a portal cancellation by the day it is paid through", () => {
+    // Status 'cancelled' with no new period end and LemonSqueezy's ends_at set.
+    const text = familyRowText(
+      fam({
+        status: "cancelled",
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: null,
+        endsAt: "2026-10-20T09:00:00Z",
+        cancelState: "scheduled",
+      }),
+      { locale: "ar", currency: "sar", nowIso: NOW },
+    );
+    expect(text.renewal).toBe(fmtDay("2026-10-20T09:00:00Z", "ar"));
   });
 
   it("leaves what is not there empty rather than inventing it", () => {

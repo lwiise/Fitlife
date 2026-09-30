@@ -1,12 +1,14 @@
 import type { MealPlanCell, WorkoutPlanCell } from "@/lib/admin/console-types";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { Count } from "../_ui/Sep";
 import { fraction, planStateLabel, planStateTone, widthClass } from "./helpers";
 import { MaskedMark, Pill } from "./parts";
 
 /**
  * The meal-plan cell (families list, panel summary cards): a days meter with
- * «٧/٧» when ready, «قيد الإنشاء · ٤/٧» while generating, a failed pill, or
+ * «٧/٧» when ready, «قيد الإنشاء ٤/٧» while generating (the days set apart
+ * as a count, never behind a separator), a failed pill, or
  * «لا يوجد». A served plan behind a failed newer run carries a warning mark.
  * When the day count is unknown (outside the probe window) the state pill
  * stands in for the meter — never a guessed number.
@@ -46,7 +48,7 @@ export function MealPlanPill({ cell, locale }: { cell: MealPlanCell; locale: Adm
         {meter("pur")}
         <Pill tone="pur">
           {planStateLabel("generating", locale)}
-          {days ? ` · ${days}` : null}
+          {days ? <Count>{days}</Count> : null}
           {days ? <span className="ad-sr"> {t("fm_days_ready", locale)}</span> : null}
         </Pill>
         {masked}

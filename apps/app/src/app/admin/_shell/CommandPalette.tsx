@@ -16,6 +16,7 @@ import { FAMILY_VIEWS, type FamilyView } from "@/lib/admin/console-types";
 import { normalizeSearch } from "@/lib/admin/familyList";
 import { initialOf } from "../_ui/Avatar";
 import { IconBtn } from "../_ui/Button";
+import { joinSep } from "../_ui/Sep";
 import { trapTab, useEscapedKeys } from "../_ui/modalFocus";
 import { PALETTE_OPEN_EVENT, requestFamiliesView, requestFamilyOpen } from "./events";
 import type { ShellLabels } from "./labels";
@@ -442,8 +443,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
             {familyItems.length ? (
               <div role="group" aria-labelledby={familyGroupId}>
                 <p id={familyGroupId} role="presentation" className="ad-grp">
-                  {labels.palFamilies}
-                  {showing ? <small> · {showing}</small> : null}
+                  {joinSep(labels.palFamilies, showing ? <small>{showing}</small> : null)}
                 </p>
                 {familyItems.map((item, i) => option(item, i))}
               </div>

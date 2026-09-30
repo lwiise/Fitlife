@@ -13,6 +13,7 @@
  */
 
 import type { FamilyRow } from "@/lib/admin/console-types";
+import { renewalDateAt } from "@/lib/admin/familyFlags";
 import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { usdToSar } from "@/lib/admin/revenue";
 import { isIsoDay } from "../_blocks/helpers";
@@ -86,7 +87,7 @@ export function rowTextFormatter({ locale, currency, nowIso }: RowTextOptions): 
       signup: day(row.signupAt),
       last: last ? ago(last) : null,
       lastDay: last ? day(last) : null,
-      renewal: day(row.status === "trialing" ? row.trialEndsAt : row.currentPeriodEnd),
+      renewal: day(renewalDateAt(row)),
     };
   };
 }

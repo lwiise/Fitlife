@@ -1,6 +1,7 @@
 import type { HouseholdMember } from "@/lib/admin/console-types";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { goalLabel, t } from "@/lib/admin/i18n";
+import { joinSep } from "../_ui/Sep";
 import { isPlannedByPortions, macrosText, memberRoleLabel } from "./helpers";
 import { FlagChip } from "./parts";
 
@@ -52,8 +53,7 @@ export function HouseholdTable({
                     <bdi>{m.name}</bdi>
                   </b>{" "}
                   <span className="ad-sub">
-                    {role}
-                    {child && m.age != null ? ` · ${fmtNumber(m.age, locale)}` : null}
+                    {joinSep(role, child && m.age != null ? fmtNumber(m.age, locale) : null)}
                   </span>
                 </td>
                 <td>{m.isHousekeeper ? "—" : goalLabel(m.primaryGoal, locale)}</td>

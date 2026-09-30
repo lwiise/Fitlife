@@ -5,7 +5,7 @@ import type { AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { PlanStatePill } from "../_blocks";
 import { fmtDay } from "../_blocks/helpers";
-import { AuditLine, LinkPending } from "../_ui";
+import { AuditLine, LinkPending, joinSep } from "../_ui";
 import { familyTabHref } from "./model";
 
 /**
@@ -50,8 +50,13 @@ export function ViewerHead({
         <div>
           <h1>{title}</h1>
           <p className="ad-sub">
-            {t(generatedAt ? "fm_generated" : "fm_started", locale)}{" "}
-            <time dateTime={at}>{fmtDay(at, locale)}</time> · {t("fp_read_only", locale)}
+            {joinSep(
+              <>
+                {t(generatedAt ? "fm_generated" : "fm_started", locale)}{" "}
+                <time dateTime={at}>{fmtDay(at, locale)}</time>
+              </>,
+              t("fp_read_only", locale),
+            )}
           </p>
           <div className="ad-chipsrow">
             <PlanStatePill state={status} locale={locale} />

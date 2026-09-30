@@ -34,6 +34,7 @@ import {
   StatusPill,
   TextLink,
   TierBadge,
+  joinSep,
 } from "../_ui";
 import {
   AccountFields,
@@ -292,13 +293,10 @@ export const FamilySheet = memo(function FamilySheet({
           </h2>
           {known ? (
             <p className="ad-meta">
-              {email ? <Ltr>{email}</Ltr> : "—"}
-              {signup ? (
-                <>
-                  {" · "}
-                  {t("fl_customer_since", locale)} {signup}
-                </>
-              ) : null}
+              {joinSep(
+                email ? <Ltr>{email}</Ltr> : "—",
+                signup ? `${t("fm_customer_since", locale)} ${signup}` : null,
+              )}
             </p>
           ) : (
             <Skeleton shape="text" className="ad-fl-skel-meta" />

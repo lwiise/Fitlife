@@ -10,6 +10,7 @@ import type {
 } from "@/lib/admin/console-types";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { joinSep } from "../_ui/Sep";
 import {
   addDaysIso,
   countMinutes,
@@ -109,19 +110,24 @@ function Explorer({
               }}
             >
               <bdi>{tr.name}</bdi>
-              {meta.length > 0 ? <small>{meta.join(" · ")}</small> : null}
+              {meta.length > 0 ? <small>{joinSep(...meta)}</small> : null}
             </button>
           );
         })}
         {excluded.length > 0 ? (
           <span className="ad-cx ad-na">
-            {excluded.map((m, i) => (
-              <Fragment key={m.memberId}>
-                {i > 0 ? (locale === "ar" ? "، " : ", ") : null}
-                {m.reason === "housekeeper" ? t("fm_role_cook", locale) : <bdi>{m.name}</bdi>}
-              </Fragment>
-            ))}{" "}
-            · {t("fm_not_incl_short", locale)}
+            {joinSep(
+              // One flex item, so the names read as one list, not spaced apart by the chip's gap.
+              <span>
+                {excluded.map((m, i) => (
+                  <Fragment key={m.memberId}>
+                    {i > 0 ? (locale === "ar" ? "، " : ", ") : null}
+                    {m.reason === "housekeeper" ? t("fm_role_cook", locale) : <bdi>{m.name}</bdi>}
+                  </Fragment>
+                ))}
+              </span>,
+              t("fm_not_incl_short", locale),
+            )}
           </span>
         ) : null}
       </div>
@@ -183,7 +189,7 @@ function Explorer({
 function MarkPill({ mark }: { mark: MarkView }) {
   return (
     <Pill tone={mark.tone} plain={mark.plain}>
-      {mark.label}
+      {joinSep(mark.label, mark.detail)}
     </Pill>
   );
 }
@@ -233,13 +239,15 @@ function SessionDetail({
     <div className="ad-box">
       <div className="ad-panel-h">
         <div>
-          <b>
-            <ArText>{session.name}</ArText>
-          </b>{" "}
-          <span className="ad-muted">
-            · {fmtWeekday(session.dayIndex, locale)}
-            {session.durationMin != null ? ` · ${countMinutes(session.durationMin, locale)}` : null}
-          </span>
+          {joinSep(
+            <b>
+              <ArText>{session.name}</ArText>
+            </b>,
+            <span className="ad-muted">{fmtWeekday(session.dayIndex, locale)}</span>,
+            session.durationMin != null ? (
+              <span className="ad-muted">{countMinutes(session.durationMin, locale)}</span>
+            ) : null,
+          )}
         </div>
         {mark ? <MarkPill mark={mark} /> : null}
       </div>
@@ -254,12 +262,13 @@ function SessionDetail({
 
       {facts.length > 0 ? (
         <p className="ad-pl-sum">
-          {facts.map(([label, value], i) => (
-            <Fragment key={label}>
-              {i > 0 ? " · " : null}
-              {label}: <b>{value}</b>
-            </Fragment>
-          ))}
+          {joinSep(
+            ...facts.map(([label, value]) => (
+              <>
+                {label}: <b>{value}</b>
+              </>
+            )),
+          )}
         </p>
       ) : null}
       {session.warmup ? (
@@ -290,19 +299,14 @@ function ExerciseRow({
   exercise: WorkoutExerciseView;
   locale: AdminLocale;
 }) {
-  const details: Array<{ key: string; node: ReactNode }> = [];
-  if (exercise.targetMuscles) {
-    details.push({ key: "muscles", node: <ArText>{exercise.targetMuscles}</ArText> });
-  }
-  if (exercise.restSeconds != null) {
-    details.push({
-      key: "rest",
-      node: fill(t("fm_rest_s", locale), { n: fmtNumber(exercise.restSeconds, locale) }),
-    });
-  }
-  if (exercise.rir) {
-    details.push({ key: "rir", node: <ArText>{localizeDigits(exercise.rir, locale)}</ArText> });
-  }
+  // Muscles, rest, effort — whichever the program states, in that order.
+  const details: ReactNode[] = joinSep(
+    exercise.targetMuscles ? <ArText>{exercise.targetMuscles}</ArText> : null,
+    exercise.restSeconds != null
+      ? fill(t("fm_rest_s", locale), { n: fmtNumber(exercise.restSeconds, locale) })
+      : null,
+    exercise.rir ? <ArText>{localizeDigits(exercise.rir, locale)}</ArText> : null,
+  );
 
   return (
     <li>
@@ -311,16 +315,7 @@ function ExerciseRow({
         <b>
           <ArText>{exercise.name}</ArText>
         </b>
-        {details.length > 0 ? (
-          <small>
-            {details.map((d, i) => (
-              <Fragment key={d.key}>
-                {i > 0 ? " · " : null}
-                {d.node}
-              </Fragment>
-            ))}
-          </small>
-        ) : null}
+        {details.length > 0 ? <small>{details}</small> : null}
         {exercise.homeVariant ? (
           <small>
             {t("fm_home_variant", locale)}: <ArText>{exercise.homeVariant}</ArText>

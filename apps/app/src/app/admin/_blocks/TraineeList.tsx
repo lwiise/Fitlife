@@ -7,6 +7,7 @@ import type {
 } from "@/lib/admin/console-types";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { joinSep } from "../_ui/Sep";
 import {
   doneThisWeek,
   effectiveMark,
@@ -22,11 +23,11 @@ import { ArText } from "./parts";
 const WEEK = [0, 1, 2, 3, 4, 5, 6] as const;
 
 /**
- * Who trains in the served program: per trainee their role, location ·
- * equipment · level · split, sessions done this week, and a Sunday-first week
- * of day marks (purple = training day, green = done). Children and the cook
- * — never given a program — are named in a note below. Renders nothing when
- * no program is served.
+ * Who trains in the served program: per trainee their role, a line of
+ * location, equipment, level and split, sessions done this week, and a
+ * Sunday-first week of day marks (purple = training day, green = done).
+ * Children and the cook — never given a program — are named in a note below.
+ * Renders nothing when no program is served.
  *
  * `todayWeekday` (0 = Sunday, Riyadh) is the caller's — see ProgramWeekExplorer.
  */
@@ -90,13 +91,10 @@ function Trainee({
       </span>
       <p>
         {parts.length === 0 && !trainee.splitName ? t("fm_no_answers", locale) : null}
-        {parts.join(" · ")}
-        {trainee.splitName ? (
-          <>
-            {parts.length > 0 ? " · " : null}
-            <ArText>{localizeDigits(trainee.splitName, locale)}</ArText>
-          </>
-        ) : null}
+        {joinSep(
+          ...parts,
+          trainee.splitName ? <ArText>{localizeDigits(trainee.splitName, locale)}</ArText> : null,
+        )}
       </p>
       <div className="ad-wdays" aria-hidden="true">
         {WEEK.map((d) => (

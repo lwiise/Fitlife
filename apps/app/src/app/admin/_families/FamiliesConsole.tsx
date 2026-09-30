@@ -39,7 +39,7 @@ import {
 } from "@/lib/admin/familyList";
 import { fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
-import { Btn, Empty, IconBtn, Kbd, Ltr, Note } from "../_ui";
+import { Btn, Count, Empty, IconBtn, Kbd, Ltr, Note, joinSep } from "../_ui";
 import {
   FAMILIES_VIEW_EVENT,
   FAMILY_OPEN_EVENT,
@@ -60,6 +60,7 @@ import { FamilyTable } from "./FamilyTable";
 import {
   buildSearchIndex,
   countsLine,
+  countsParts,
   familyPageHref,
   filterRows,
   hasFilters,
@@ -724,7 +725,7 @@ export function FamiliesConsole({
         <div className="ad-a-head ad-desk-only">
           <div>
             <h1>{viewLabel}</h1>
-            <p>{line}</p>
+            <p>{joinSep(...countsParts(head, locale))}</p>
           </div>
         </div>
 
@@ -740,7 +741,8 @@ export function FamiliesConsole({
                 aria-pressed={view === query.view}
                 onClick={() => changeView(view)}
               >
-                {t(VIEW_LABEL_KEY[view], locale)} · {fmtNumber(counts[view], locale)}
+                {t(VIEW_LABEL_KEY[view], locale)}
+                <Count>{fmtNumber(counts[view], locale)}</Count>
               </button>
             ))}
           </div>
@@ -872,9 +874,18 @@ export function FamiliesConsole({
               ) : null}
             </div>
             <span className="ad-kb ad-desk-only">
-              <Kbd>↑</Kbd>
-              <Kbd>↓</Kbd> {t("fl_kb_rows", locale)} · <Kbd>⏎</Kbd> {t("fl_kb_full", locale)} ·{" "}
-              <Kbd>esc</Kbd> {t("fl_kb_close", locale)}
+              {joinSep(
+                <>
+                  <Kbd>↑</Kbd>
+                  <Kbd>↓</Kbd> {t("fl_kb_rows", locale)}
+                </>,
+                <>
+                  <Kbd>⏎</Kbd> {t("fl_kb_full", locale)}
+                </>,
+                <>
+                  <Kbd>esc</Kbd> {t("fl_kb_close", locale)}
+                </>,
+              )}
             </span>
           </div>
         ) : null}

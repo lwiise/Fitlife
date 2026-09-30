@@ -18,6 +18,7 @@ export { Kv, KvItem } from "./Kv";
 export { Stats3, type Stat } from "./Stats3";
 export { Note, Empty, AuditLine, type NoteTone } from "./Note";
 export { Kbd, Ltr, ArText } from "./Text";
+export { Sep, joinSep, Count } from "./Sep";
 export { Meter, widthClass } from "./Meter";
 export { LinkTabs, type LinkTab } from "./LinkTabs";
 export { LinkPending } from "./LinkPending";

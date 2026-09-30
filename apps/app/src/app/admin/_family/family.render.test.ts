@@ -10,6 +10,7 @@ import {
   type WorkoutSection,
 } from "@/lib/admin/console-types";
 import type { MemberHealth, SubscriptionRow } from "@/lib/admin/detail";
+import { subscriptionCancelState } from "@/lib/admin/familyFlags";
 
 /**
  * Server-render tests for the family page's pieces: every view must render
@@ -55,13 +56,18 @@ const { BillingView, ExerciseView, HouseholdView, MealView, RunsView, SummaryVie
   "./views"
 );
 const { AccountDangerZone } = await import("../_components/AccountDangerZone");
+const { SummaryFacts } = await import("../_blocks");
 const { HealthCards } = await import("./HealthCards");
 const { ViewerHead } = await import("./ViewerHead");
 const { FamilyPageSkeleton, TabSkeleton } = await import("./skeletons");
 const { SubscriberRouteSkeleton } = await import("./RouteSkeleton");
 
 function html<P extends object>(component: ComponentType<P>, props: P): string {
-  return renderToString(createElement(component, props));
+  const out = renderToString(createElement(component, props));
+  // Every Arabic render: no «·» — beside an Arabic-Indic digit a middle dot
+  // reads as the digit zero «٠». Items are set apart by <Sep/> instead.
+  if ((props as { locale?: unknown }).locale === "ar") expect(out).not.toContain("·");
+  return out;
 }
 
 const ID = "00000000-0000-4000-8000-0000000000aa";
@@ -81,6 +87,7 @@ const sub = (p: Partial<SubscriptionRow> = {}): SubscriptionRow => ({
   trialStartedAt: "2026-08-01T00:00:00Z",
   trialEndsAt: "2026-08-08T00:00:00Z",
   currentPeriodEnd: "2026-10-01T00:00:00Z",
+  endsAt: null,
   cancelAtPeriodEnd: false,
   cancelledAt: null,
   lemonsqueezySubscriptionId: "sub_123",
@@ -107,6 +114,7 @@ function header(p: Partial<FamilyHeaderData> = {}): FamilyHeaderData {
     tierMaxPeople: 6,
     overLimit: false,
     flags: ["past_due", "failed_meal_run", "onboarding_incomplete"],
+    cancelState: "none",
     medicalGateBlocked: true,
     reasons: [
       { flag: "past_due", severity: "high", at: "2026-09-26T00:00:00Z", tab: "billing" },
@@ -498,6 +506,75 @@ describe("summary", () => {
     expect(calm).not.toContain("التنبيهات");
     expect(calm).toContain("لا توجد خطة غذائية بعد");
     expect(calm).toContain("لم تشترك الأسرة في خطة التمارين");
+  });
+});
+
+// ── The renewal cell (the page's and the panel's key figures) ───────────────
+
+describe("renewal cell", () => {
+  /** The «التجديد» figure for `subscription`, judged the way the loader judges it. */
+  function renewal(subscription: SubscriptionRow): string {
+    const cancelState = subscriptionCancelState(subscription, Date.parse(NOW));
+    const out = html(SummaryFacts, {
+      header: header({ subscription, cancelState }),
+      locale: "ar",
+      currency: "sar",
+      nowIso: NOW,
+    }).replace(/<!-- -->/g, "");
+    const cell = out.match(/<dt>التجديد<\/dt><dd>(.*?)<\/dd>/)?.[1];
+    expect(cell).toBeDefined();
+    return cell ?? "";
+  }
+  const CANCEL = "إلغاء مجدول";
+
+  it("a portal cancellation still paid up: the day it runs out (its ends_at), then «إلغاء مجدول»", () => {
+    // Cancelled in the LemonSqueezy portal: status 'cancelled', no period end.
+    const cell = renewal(
+      sub({
+        status: "cancelled",
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: null,
+        endsAt: "2026-10-20T00:00:00Z",
+      }),
+    );
+    expect(cell).toMatch(
+      /^<time dateTime="2026-10-20T00:00:00Z">[^<]+<\/time> <span class="ad-sep"[^>]*><\/span> <span class="ad-bad">إلغاء مجدول<\/span>$/,
+    );
+  });
+
+  it("a cancellation that has run out: the day it ended, and no label", () => {
+    const cell = renewal(
+      sub({
+        status: "cancelled",
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: null,
+        endsAt: "2026-09-01T00:00:00Z",
+      }),
+    );
+    expect(cell).toMatch(/^<time dateTime="2026-09-01T00:00:00Z">[^<]+<\/time>$/);
+    // Set to cancel but past its period end (a missed expiry webhook): the
+    // flag is still raw on the row, and the label follows the verdict instead.
+    expect(
+      renewal(sub({ status: "active", cancelAtPeriodEnd: true, currentPeriodEnd: "2026-09-01T00:00:00Z" })),
+    ).not.toContain(CANCEL);
+  });
+
+  it("a trial set to cancel: the trial's end, then «إلغاء مجدول»", () => {
+    const cell = renewal(
+      sub({
+        status: "trialing",
+        cancelAtPeriodEnd: true,
+        trialEndsAt: "2026-10-04T00:00:00Z",
+        currentPeriodEnd: null,
+      }),
+    );
+    expect(cell).toMatch(
+      /^<span class="ad-muted">تنتهي التجربة<\/span> <time dateTime="2026-10-04T00:00:00Z">[^<]+<\/time> <span class="ad-sep"[^>]*><\/span> <span class="ad-bad">إلغاء مجدول<\/span>$/,
+    );
+    // A trial that runs on shows its end and nothing else.
+    expect(
+      renewal(sub({ status: "trialing", trialEndsAt: "2026-10-04T00:00:00Z", currentPeriodEnd: null })),
+    ).not.toContain(CANCEL);
   });
 });
 

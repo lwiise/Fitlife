@@ -32,6 +32,7 @@ const sub = (p: Partial<SubscriptionRow> = {}): SubscriptionRow => ({
   trialStartedAt: "2026-08-01T00:00:00Z",
   trialEndsAt: "2026-08-08T00:00:00Z",
   currentPeriodEnd: "2026-10-01T00:00:00Z",
+  endsAt: null,
   cancelAtPeriodEnd: false,
   cancelledAt: null,
   lemonsqueezySubscriptionId: "123",
@@ -68,6 +69,7 @@ const PANEL: FamilyPanelData = {
     tierMaxPeople: 6,
     overLimit: false,
     flags: ["past_due", "failed_meal_run"],
+    cancelState: "none",
     medicalGateBlocked: true,
     reasons: [
       { flag: "past_due", severity: "high", at: "2026-09-26T00:00:00Z", tab: "billing" },
@@ -282,7 +284,11 @@ describe("FamilySheet (render)", () => {
     for (const tab of PANEL_TABS) {
       const html = render(tab, ready);
       expect(html).toContain("هند العتيبي");
-      expect(html).toContain("عميلة منذ");
+      // The full page's words, with a drawn separator after the email.
+      expect(html).toContain("مشترك منذ");
+      expect(html).toContain('class="ad-sep"');
+      // No «·» anywhere in the Arabic panel: beside an Arabic-Indic digit it reads as «٠».
+      expect(html).not.toContain("·");
       expect(html).not.toContain('aria-busy="true"');
       expect(html).toContain(`aria-selected="true"`);
       // The footer's links carry their (idle) pending hint.

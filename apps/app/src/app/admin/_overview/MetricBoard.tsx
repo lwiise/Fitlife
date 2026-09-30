@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { ChartLine, Info, Table } from "lucide-react";
 import { clsx } from "clsx";
 import type { AdminLocale, Currency } from "@/lib/admin/format";
+import { joinSep } from "../_ui/Sep";
 import type { BoardLabels, OvBoard, OvChartMeta, OvMetric } from "./model";
 import { DeltaPill } from "./DeltaPill";
 import { useOverviewNav } from "./OverviewScope";
@@ -112,7 +113,7 @@ function ChartCard({
       <div className="ad-chart-top">
         <div>
           <h2 id={titleId}>{metric.label}</h2>
-          <p>{metric.sub}</p>
+          <p>{joinSep(...metric.subParts)}</p>
         </div>
         <div className="ad-filters">
           <div className="ad-legend ad-ov-legend">
