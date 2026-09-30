@@ -164,3 +164,36 @@ describe("the plan prompt introduces a man's wife as his wife", () => {
     expect(buildCompositionSummary([husband], false)).toContain("الأم، الأب");
   });
 });
+
+describe("an adult member's sex reaches the prompt with its BMR formula", () => {
+  const roster = (m: PlanPromptContextMember) => buildSkeletonPrompt(ctx("male", m));
+
+  it("for a woman who is not the spouse (a grandmother)", () => {
+    const out = roster(member({ name: "فاطمة", role: "other_adult", age: 64 }));
+    expect(out).toContain("فرد بالغ: فاطمة، أنثى — استخدمي معادلة BMR للأنثى");
+  });
+
+  it("for a man", () => {
+    const out = roster(member({ name: "خالد", role: "other_adult", sex: "male" }));
+    expect(out).toContain("فرد بالغ: خالد، ذكر — استخدمي معادلة BMR للذكر");
+  });
+
+  it("for the wife too", () => {
+    expect(roster(member())).toContain("الزوجة: نورة، أنثى — استخدمي معادلة BMR للأنثى");
+  });
+
+  it("never for a child, who is planned by portions", () => {
+    const out = roster(
+      member({ name: "لمى", role: "daughter", member_type: "child", is_child: true, age: 10 }),
+    );
+    expect(out).toContain("ابنة: لمى");
+    expect(out).not.toContain("BMR للأنثى —");
+    expect(out).not.toMatch(/لمى، أنثى/);
+  });
+
+  it("never guessed when the sex is unanswered", () => {
+    const out = roster(member({ name: "سلمى", role: "other_adult", sex: null }));
+    expect(out).toContain("فرد بالغ: سلمى، ");
+    expect(out).not.toMatch(/سلمى، (أنثى|ذكر)/);
+  });
+});

@@ -1780,5 +1780,12 @@ the raw role token), and the admin `roleLabel`. The background function now IMPO
 **Not migrated:** wives saved before this change stay `other_adult` (nothing tells them
 apart from a mother or a sister), so for those households the «زوجة» row still shows. A
 pregnant or breastfeeding wife is still added through «امرأة حامل/مرضعة»
-(`other_adult`), because the spouse wizard has no pregnancy branch. Guarded by
-`familyRole.test.ts`.
+(`other_adult`), because the spouse wizard has no pregnancy branch.
+
+**Every adult member's roster line now states their sex and BMR formula** (owner-approved,
+same change). The owner's line always did («ذكر — استخدمي معادلة BMR للذكر»), but
+`describeMember` never did, so a grandmother or a sister introduced as «فرد بالغ» with
+«طوله/وزنه» left the model only her name to guess from. The two formulas are about 166
+kcal/day apart. The clause is skipped for children (planned by portions, never BMR) and
+for an unanswered sex (never guessed). It sits in the dynamic skeleton roster, so the
+cached static block is untouched. Guarded by `familyRole.test.ts`.

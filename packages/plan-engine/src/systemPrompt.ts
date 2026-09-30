@@ -413,6 +413,18 @@ function describeMember(member: PlanPromptContextMember): string {
   const roleLabel = familyRoleLabelAr(member.role, member.sex);
   const parts: string[] = [];
   parts.push(`${roleLabel}: ${member.name}`);
+  // The BMR formula differs by sex (+5 vs −161, ~166 kcal/day). The owner's line
+  // always said which; a member's never did, so a grandmother or a sister,
+  // introduced as «فرد بالغ» with «طوله/وزنه», left the model only her name to
+  // go on. Children are planned by portions, never BMR, so they get no clause;
+  // an unanswered sex gets none either (never guess).
+  if (!member.is_child && member.sex) {
+    parts.push(
+      member.sex === "female"
+        ? "أنثى — استخدمي معادلة BMR للأنثى"
+        : "ذكر — استخدمي معادلة BMR للذكر",
+    );
+  }
   // Arabic counts 3-10 in the plural. The roster said «10 سنة» while the minor
   // clause three fields later said «10 سنوات» — one line disagreeing with itself
   // is exactly the sloppiness the model imitates in the plan it writes back.
