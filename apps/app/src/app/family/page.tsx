@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { CardHeader } from "@/components/ui/card";
-import { Avatar } from "@/components/ui/avatar";
 import { ButtonLink } from "@/components/ui/button";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
+  getCurrentUserProfilePhotos,
 } from "@/lib/supabase/queries";
+import { householdPhotoSrcs } from "@/lib/profilePhoto/shared";
+import { AvatarPhotoButton } from "@/components/profile-photo/ProfilePhotoTriggers";
 import { FamilyMemberCard } from "./FamilyMemberCard";
 import { HousekeeperCard } from "./HousekeeperCard";
 import { FamilyAddBuilder } from "./FamilyAddBuilder";
@@ -17,9 +19,10 @@ export const metadata = { title: "عائلتك" };
 export default async function FamilyPage() {
   // Fetched together — the redirect guards below only need profile, and the
   // members read is wasted only on the (rare) redirect path.
-  const [profile, allMembers] = await Promise.all([
+  const [profile, allMembers, photoPaths] = await Promise.all([
     getCurrentUserProfile(),
     getCurrentUserFamilyMembers(),
+    getCurrentUserProfilePhotos(),
   ]);
   if (!profile) redirect("/auth/login");
   // Mom must finish her own profile before managing the family.
@@ -30,6 +33,8 @@ export default async function FamilyPage() {
   const housekeeper = allMembers.find((m) => m.role === "housekeeper");
 
   const ownerName = profile.display_name?.trim() || g("أنتِ", "أنتَ");
+  // Everyone in «أهل البيت» can have a photo; the cook's row keeps its icon.
+  const photos = householdPhotoSrcs(photoPaths, allMembers);
 
   return (
     <main className="container-shell py-6 lg:py-10">
@@ -55,7 +60,10 @@ export default async function FamilyPage() {
           <ul className="divide-y divide-brand-line">
             {/* The owner edits via her own profile flow (/profile), not the member wizard. */}
             <li className="flex min-h-16 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5">
-              <Avatar name={ownerName} rosterIndex={0} />
+              <AvatarPhotoButton
+                person={{ id: "mom", name: ownerName, rosterIndex: 0, src: photos.mom ?? null }}
+                ownerSex={profile.sex}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-bold text-brand-ink">
                   {g("أنتِ", "أنتَ")}
@@ -79,6 +87,7 @@ export default async function FamilyPage() {
                 memberType={m.member_type ?? "adult"}
                 primaryGoal={m.primary_goal}
                 rosterIndex={i + 1}
+                photoSrc={photos[m.id] ?? null}
                 ownerSex={profile.sex}
               />
             ))}

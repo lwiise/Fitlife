@@ -13,6 +13,8 @@ export interface MemberSheetMember {
   prefix?: string;
   /** Position in the plan's roster — the avatar colour everywhere in the app. */
   rosterIndex: number;
+  /** Their profile photo, when they have one. */
+  src?: string | null;
   /** One line under the name: calories, «قيد التحضير», a translation state. */
   status?: { text: string; icon?: "spinner" | "clock" };
 }
@@ -79,7 +81,13 @@ export function MemberSheet({
                 )}
               >
                 {/* lg + a larger box: an override only wins upward (see Avatar). */}
-                <Avatar name={m.name} rosterIndex={m.rosterIndex} size="lg" className="size-11" />
+                <Avatar
+                  name={m.name}
+                  rosterIndex={m.rosterIndex}
+                  src={m.src}
+                  size="lg"
+                  className="size-11"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-bold leading-snug text-brand-ink">
                     {m.prefix && (

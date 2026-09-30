@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import { initialOf } from "@/components/ui/avatar";
+import { AvatarPhoto, initialOf } from "@/components/ui/avatar";
 import { activeNavKey, isFocusRoute, NAV_ITEMS, type NavKey } from "./nav";
 
 const ICONS: Record<NavKey, typeof Home> = {
@@ -39,9 +39,12 @@ const ICONS: Record<NavKey, typeof Home> = {
 export function AppShell({
   children,
   displayName,
+  photoSrc,
 }: {
   children: ReactNode;
   displayName: string | null;
+  /** The owner's profile photo, or null for the initial. */
+  photoSrc: string | null;
 }) {
   const pathname = usePathname() ?? "";
   if (isFocusRoute(pathname)) return <>{children}</>;
@@ -92,7 +95,11 @@ export function AppShell({
               </ul>
             </nav>
           </div>
-          <AccountMenu displayName={displayName} active={active === "account"} />
+          <AccountMenu
+            displayName={displayName}
+            photoSrc={photoSrc}
+            active={active === "account"}
+          />
         </div>
       </header>
 
@@ -151,9 +158,11 @@ const MENU_LINKS = [
  * to sit in the top bar of three pages, one tap from a mis-press). */
 function AccountMenu({
   displayName,
+  photoSrc,
   active,
 }: {
   displayName: string | null;
+  photoSrc: string | null;
   active: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -204,9 +213,10 @@ function AccountMenu({
       >
         <span
           aria-hidden="true"
-          className="grid size-9 place-items-center rounded-full bg-brand-pink text-[15px] font-extrabold text-white lg:size-10 lg:text-base"
+          className="relative grid size-9 place-items-center rounded-full bg-brand-pink text-[15px] font-extrabold text-white lg:size-10 lg:text-base"
         >
           {initial}
+          {photoSrc && <AvatarPhoto src={photoSrc} px={40} />}
         </span>
         <ChevronDown className="size-4 text-brand-ink-muted" aria-hidden="true" />
         <span className="sr-only">حساب {displayName ?? ""}، القائمة</span>

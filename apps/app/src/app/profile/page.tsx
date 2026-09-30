@@ -2,7 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, Utensils, ClipboardList, Dumbbell, ChevronLeft } from "lucide-react";
-import { getCurrentUserProfile } from "@/lib/supabase/queries";
+import {
+  getCurrentUserProfile,
+  getCurrentUserProfilePhotos,
+} from "@/lib/supabase/queries";
+import { OWNER_PHOTO_SUBJECT, profilePhotoSrc } from "@/lib/profilePhoto/shared";
+import { ProfilePhotoCard } from "@/components/profile-photo/ProfilePhotoTriggers";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
 import { genderPick } from "@/lib/copy/gender";
 import { PageHeader } from "@/components/ui/page-header";
@@ -71,7 +76,10 @@ function SectionGroup({ id, title, rows }: { id: string; title: string; rows: Ro
 }
 
 export default async function ProfilePage() {
-  const profile = await getCurrentUserProfile();
+  const [profile, photoPaths] = await Promise.all([
+    getCurrentUserProfile(),
+    getCurrentUserProfilePhotos(),
+  ]);
   if (!profile) redirect("/onboarding");
 
   const g = genderPick(profile.sex);
@@ -131,6 +139,16 @@ export default async function ProfilePage() {
         <Suspense fallback={null}>
           <ProfileEditedBanner ownerSex={profile.sex} />
         </Suspense>
+
+        <ProfilePhotoCard
+          person={{
+            id: OWNER_PHOTO_SUBJECT,
+            name: profile.display_name?.trim() || g("أنتِ", "أنتَ"),
+            rosterIndex: 0,
+            src: profilePhotoSrc(photoPaths[OWNER_PHOTO_SUBJECT]),
+          }}
+          ownerSex={profile.sex}
+        />
 
         <SectionGroup
           id="profile-me"

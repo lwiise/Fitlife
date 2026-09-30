@@ -1021,6 +1021,11 @@ body[data-sheet-lock] {
 .kt-lead-top { display: flex; align-items: center; gap: 10px; }
 .kt-crown { display: grid; place-items: center; inline-size: 40px; block-size: 40px; flex-shrink: 0; border-radius: 12px; background: var(--color-brand-card); box-shadow: inset 0 0 0 1px var(--color-gold-line); }
 .kt-crown svg { inline-size: 24px; block-size: 24px; }
+/* A leader with a profile photo: their face on the gold stage, the crown as a
+   badge on its top corner (the crown alone when there is no photo). */
+.kt-lead-face { position: relative; flex-shrink: 0; inline-size: 44px; block-size: 44px; border-radius: 999px; box-shadow: 0 0 0 2px var(--color-gold-line); }
+.kt-lead-face > .kt-crown { position: absolute; inset-block-start: -9px; inset-inline-end: -9px; inline-size: 24px; block-size: 24px; border-radius: 999px; }
+.kt-lead-face > .kt-crown svg { inline-size: 15px; block-size: 15px; }
 .kt-lead-nm { flex: 1; min-inline-size: 0; }
 .kt-lead-nm strong { display: block; font-size: 22px; font-weight: 800; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kt-lead-nm small { display: block; font-size: 13px; font-weight: 700; color: var(--color-gold-700); }

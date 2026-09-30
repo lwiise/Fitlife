@@ -12,7 +12,9 @@ import {
   getCurrentUserFamilyMembers,
   getCurrentUserLatestPlan,
   getCurrentUserCookablePlan,
+  getCurrentUserProfilePhotos,
 } from "@/lib/supabase/queries";
+import { householdPhotoSrcs } from "@/lib/profilePhoto/shared";
 import { getLatestWorkoutPlan } from "@/lib/plans/getLatestWorkoutPlan";
 import {
   dayIndexFromWeekStart,
@@ -66,14 +68,16 @@ export const metadata = {
  */
 export default async function DashboardPage() {
   // Independent reads in one round-trip (auth is deduped via React.cache).
-  const [profile, familyMembers, latestPlan, cookable, user, supabase] = await Promise.all([
-    getCurrentUserProfile(),
-    getCurrentUserFamilyMembers(),
-    getCurrentUserLatestPlan(),
-    getCurrentUserCookablePlan(),
-    getAuthUser(),
-    createClient(),
-  ]);
+  const [profile, familyMembers, latestPlan, cookable, user, supabase, photoPaths] =
+    await Promise.all([
+      getCurrentUserProfile(),
+      getCurrentUserFamilyMembers(),
+      getCurrentUserLatestPlan(),
+      getCurrentUserCookablePlan(),
+      getAuthUser(),
+      createClient(),
+      getCurrentUserProfilePhotos(),
+    ]);
 
   if (!profile) {
     return (
@@ -559,7 +563,13 @@ export default async function DashboardPage() {
           )}
         </div>
         <aside className="kt-aside">
-          {seasonProps && stats && isFamily && <SeasonBoard props={seasonProps} stats={stats} />}
+          {seasonProps && stats && isFamily && (
+            <SeasonBoard
+              props={seasonProps}
+              stats={stats}
+              photos={householdPhotoSrcs(photoPaths, familyMembers)}
+            />
+          )}
           {seasonProps && stats && !isFamily && stats.ranked[0] && (
             <SoloWeekCard me={stats.ranked[0]} ownerSex={profile.sex ?? null} />
           )}

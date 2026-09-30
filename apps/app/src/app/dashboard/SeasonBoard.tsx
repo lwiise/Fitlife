@@ -31,6 +31,17 @@ function Star() {
   );
 }
 
+function Crown() {
+  return (
+    <span className="kt-crown" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path d="M3.5 17.5 2 7.5l5.2 3.8L12 4l4.8 7.3L22 7.5l-1.5 10z" fill="#F2BB16" />
+        <rect x="3.5" y="19" width="17" height="2.2" rx="1.1" fill="#D4A017" />
+      </svg>
+    </span>
+  );
+}
+
 const pctClass = (frac: number) => `kt-p${Math.round(Math.min(1, Math.max(0, frac)) * 100)}`;
 
 function Sep() {
@@ -40,9 +51,12 @@ function Sep() {
 export function SeasonBoard({
   props,
   stats,
+  photos,
 }: {
   props: FamilySeasonProps;
   stats: SeasonStats;
+  /** Profile photo URL per member id (householdPhotoSrcs). */
+  photos?: Readonly<Record<string, string>>;
 }) {
   const { followedMeals, activeDays, fillFrac, hasActivity, days, ranked, hasWinner } = stats;
   const sexById = new Map(props.members.map((m) => [m.id, m.sex ?? null]));
@@ -157,12 +171,20 @@ export function SeasonBoard({
           {leader && (
             <Link href={`/plan?member=${leader.id}`} className="kt-lead-card">
               <div className="kt-lead-top">
-                <span className="kt-crown" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M3.5 17.5 2 7.5l5.2 3.8L12 4l4.8 7.3L22 7.5l-1.5 10z" fill="#F2BB16" />
-                    <rect x="3.5" y="19" width="17" height="2.2" rx="1.1" fill="#D4A017" />
-                  </svg>
-                </span>
+                {photos?.[leader.id] ? (
+                  <span className="kt-lead-face" aria-hidden="true">
+                    <Avatar
+                      name={leader.name}
+                      rosterIndex={leader.rosterIndex}
+                      src={photos[leader.id]}
+                      size="lg"
+                      className="size-11"
+                    />
+                    <Crown />
+                  </span>
+                ) : (
+                  <Crown />
+                )}
                 <div className="kt-lead-nm">
                   <strong>{leader.name}</strong>
                   <small>{sexById.get(leader.id) === "male" ? "فائز هذا الأسبوع" : "فائزة هذا الأسبوع"}</small>
@@ -190,7 +212,7 @@ export function SeasonBoard({
             return (
               <Link key={m.id} href={`/plan?member=${m.id}`} className="kt-rk">
                 <span className="n">{arNum(rank)}</span>
-                <Avatar name={m.name} rosterIndex={m.rosterIndex} />
+                <Avatar name={m.name} rosterIndex={m.rosterIndex} src={photos?.[m.id]} />
                 <strong>{m.name}</strong>
                 <span className="p">{arPct(m.pct)}</span>
                 <span className="sbar">

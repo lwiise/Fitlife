@@ -1,4 +1,5 @@
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, getAuthUser } from "./server";
 import type { Database } from "./database.types";
 import { getCookablePlan, getLatestPlan, type LatestPlanSummary } from "@/lib/plans/getLatestPlan";
@@ -46,6 +47,38 @@ export const getCurrentUserFamilyMembers = cache(
 
     if (error) return [];
     return data;
+  },
+);
+
+/**
+ * The current user's profile photos: member_id ("mom" | family_members.id) →
+ * object path in the private profile-photos bucket (00028). Turn it into
+ * <img> URLs with householdPhotoSrcs (lib/profilePhoto/shared.ts). Read by
+ * the signed-in layout (the header's avatar) and the pages that draw people,
+ * so it is cached per request like the profile.
+ *
+ * A read error — including the table not existing before 00028 is applied —
+ * is "no photos": every avatar falls back to its initial, nothing breaks.
+ */
+export const getCurrentUserProfilePhotos = cache(
+  async (): Promise<Record<string, string>> => {
+    const user = await getAuthUser();
+    if (!user) return {};
+
+    const supabase = await createClient();
+    // profile_photos is newer than the generated types → untyped read.
+    const { data, error } = await (supabase as unknown as SupabaseClient)
+      .from("profile_photos")
+      .select("member_id, path")
+      .eq("user_id", user.id);
+    if (error || !data) return {};
+    const out: Record<string, string> = {};
+    for (const row of data as Array<{ member_id: unknown; path: unknown }>) {
+      if (typeof row.member_id === "string" && typeof row.path === "string") {
+        out[row.member_id] = row.path;
+      }
+    }
+    return out;
   },
 );
 

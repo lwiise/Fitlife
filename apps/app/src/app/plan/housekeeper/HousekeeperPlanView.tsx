@@ -30,6 +30,7 @@ export function HousekeeperPlanView({
   superseded = false,
   absences = [],
   allergyEntries = [],
+  photos,
 }: {
   plan: MealPlan | null;
   planId: string;
@@ -52,6 +53,8 @@ export function HousekeeperPlanView({
   // the one measuring it out.
   absences?: Array<{ day_index: number; slot: string; member_id: string }>;
   allergyEntries?: AllergyEntry[];
+  // Profile photo URL per member_id, for the member switcher.
+  photos?: Readonly<Record<string, string>>;
 }) {
   const router = useRouter();
   const info = getLocaleInfo(locale);
@@ -165,6 +168,7 @@ export function HousekeeperPlanView({
             readOnly
             locale={locale}
             absences={absences}
+            photos={photos}
           />
         )}
       </div>

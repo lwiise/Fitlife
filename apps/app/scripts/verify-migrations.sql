@@ -7,7 +7,7 @@
 -- If anything shows MISSING: open apps/app/supabase/migrations/ and run the
 -- missing files in numeric order. Every migration from 00008 onward is
 -- idempotent (IF NOT EXISTS / guarded drops), so re-running an
--- already-applied file is a harmless no-op — when in doubt, run 00008→00027
+-- already-applied file is a harmless no-op — when in doubt, run 00008→00028
 -- in order.
 -- ============================================================================
 
@@ -181,6 +181,10 @@ select * from (values
         and conrelid='public.body_logs'::regclass
         and pg_get_constraintdef(oid) like '%(5)::numeric%')
       then 'APPLIED' else 'MISSING' end)),
+  -- Profile photos for the owner and every family member.
+  ('00028 profile_photos table',
+    (select case when to_regclass('public.profile_photos') is not null
+      then 'APPLIED' else 'MISSING' end)),
   -- ── Class guards (09/2026 pre-launch audit) ──────────────────────────────
   -- The script asserted per-migration fingerprints only; nothing said whether
   -- the invariants the app's security rests on still hold after a hand-run in
@@ -215,6 +219,17 @@ select * from (values
       where schemaname='storage' and tablename='objects'
         and policyname like '%own body photos%'
     ) = 4 then 'APPLIED' else 'MISSING' end)),
+  -- 00028: profile-photos is PRIVATE (served only through /api/profile-photo)
+  -- with its 1 MB cap and the same four owner-scoped policies.
+  ('00028 profile-photos bucket private, 1 MB, four owner policies',
+    (select case when exists (
+      select 1 from storage.buckets
+      where id='profile-photos' and public=false and file_size_limit=1048576
+    ) and (
+      select count(*) from pg_policies
+      where schemaname='storage' and tablename='objects'
+        and policyname like '%own profile photo files%'
+    ) = 4 then 'APPLIED' else 'MISSING' end)),
   -- ── Class guard ───────────────────────────────────────────────────────────
   -- Every RLS-enabled table the app DELETEs from must carry a DELETE policy.
   -- Without one, Postgres filters the statement to zero rows and returns NO
@@ -226,7 +241,8 @@ select * from (values
     (select case when not exists (
       select 1 from unnest(array[
         'meal_checkins','meal_verdicts','meal_absences',
-        'workout_checkins','member_exceptions','body_logs','family_members'
+        'workout_checkins','member_exceptions','body_logs','family_members',
+        'profile_photos'
       ]) as t(tbl)
       where exists (
         select 1 from pg_tables

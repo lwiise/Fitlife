@@ -1,5 +1,5 @@
 import { User, Baby, HeartPulse, Milk } from "lucide-react";
-import { Avatar } from "@/components/ui/avatar";
+import { AvatarPhotoButton } from "@/components/profile-photo/ProfilePhotoTriggers";
 import { ButtonLink } from "@/components/ui/button";
 import { RemoveMemberButton } from "./RemoveMemberButton";
 
@@ -31,7 +31,8 @@ const GOAL_LABELS: Record<string, string> = {
 /**
  * One member's row inside the /family household list (an <li> of the grouped
  * card). The avatar colour follows the ROSTER position (owner 0), so the
- * person keeps the colour the home screen's season board gives them.
+ * person keeps the colour the home screen's season board gives them; tapping
+ * the avatar sets their profile photo.
  */
 export function FamilyMemberCard({
   id,
@@ -39,6 +40,7 @@ export function FamilyMemberCard({
   memberType,
   primaryGoal,
   rosterIndex,
+  photoSrc,
   ownerSex,
 }: {
   id: string;
@@ -46,6 +48,8 @@ export function FamilyMemberCard({
   memberType: string;
   primaryGoal: string | null;
   rosterIndex: number;
+  /** Their profile photo; the avatar opens the sheet that sets it. */
+  photoSrc: string | null;
   ownerSex?: string | null;
 }) {
   const meta = TYPE_META[memberType] ?? TYPE_META.adult!;
@@ -54,7 +58,7 @@ export function FamilyMemberCard({
 
   return (
     <li className="flex min-h-16 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5">
-      <Avatar name={name} rosterIndex={rosterIndex} />
+      <AvatarPhotoButton person={{ id, name, rosterIndex, src: photoSrc }} ownerSex={ownerSex} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-bold text-brand-ink">{name}</p>
         <p className="mt-0.5 flex items-center gap-1 text-meta text-brand-ink-muted">

@@ -7,7 +7,9 @@ import {
   getCurrentUserLatestPlan,
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
+  getCurrentUserProfilePhotos,
 } from "@/lib/supabase/queries";
+import { householdPhotoSrcs } from "@/lib/profilePhoto/shared";
 import { canGenerateForFamilyChange } from "@/lib/subscription/access";
 import {
   getCurrentSubscription,
@@ -69,12 +71,14 @@ export default async function PlanPage({
 }: {
   searchParams: Promise<{ member?: string; view?: string }>;
 }) {
-  const [{ member, view }, profile, latest, familyMembers] = await Promise.all([
+  const [{ member, view }, profile, latest, familyMembers, photoPaths] = await Promise.all([
     searchParams,
     getCurrentUserProfile(),
     getCurrentUserLatestPlan(),
     getCurrentUserFamilyMembers(),
+    getCurrentUserProfilePhotos(),
   ]);
+  const photos = householdPhotoSrcs(photoPaths, familyMembers);
   // Live-roster names to overlay onto the frozen plan snapshot at read time, so
   // a member/mom rename in Settings is reflected immediately without a
   // regenerate — the snapshot keeps whatever name it captured at generation.
@@ -634,6 +638,7 @@ export default async function PlanPage({
                 journeyMembers={journeyMembers}
                 roster={workoutRoster}
                 addTraineeHref={addTraineeHref}
+                photos={photos}
               />
             )}
           </>
@@ -702,6 +707,7 @@ export default async function PlanPage({
               planTypeToggle={planTypeToggle}
               ownerSex={profile?.sex}
               partialWeekMemberIds={partialWeekMemberIds}
+              photos={photos}
             />
           </>
         )}

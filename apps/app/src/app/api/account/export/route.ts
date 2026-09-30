@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
+import { PROFILE_PHOTOS_BUCKET } from "@/lib/profilePhoto/shared";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -19,6 +20,43 @@ const UNTYPED_TABLES = [
   "meal_absences",
   "chat_messages",
 ] as const;
+
+/**
+ * Attach a 24-hour signed URL to every row that names an object in a private
+ * bucket (the bucket is private — a bare path downloads nothing). Signing is
+ * an enrichment: the rows themselves are already in the file, so a signing
+ * failure is logged, not fatal.
+ */
+async function withSignedUrls(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bucket: string,
+  rows: unknown[],
+  pathKey: string,
+  urlKey: string,
+): Promise<unknown[]> {
+  try {
+    const records = rows as Array<Record<string, unknown>>;
+    const paths = records
+      .map((r) => r[pathKey])
+      .filter((p): p is string => typeof p === "string" && p.length > 0);
+    if (paths.length === 0) return rows;
+    const { data: signed } = await supabase.storage
+      .from(bucket)
+      .createSignedUrls(paths, 60 * 60 * 24);
+    const urlByPath = new Map(
+      (signed ?? [])
+        .filter((s) => s.signedUrl)
+        .map((s) => [s.path, s.signedUrl] as const),
+    );
+    return records.map((r) => {
+      const p = r[pathKey];
+      return typeof p === "string" && urlByPath.has(p) ? { ...r, [urlKey]: urlByPath.get(p) } : r;
+    });
+  } catch (err) {
+    console.error(`[export] ${bucket} signing failed`, err);
+    return rows;
+  }
+}
 
 // Internal billing identifiers — not the user's own data, so they're stripped
 // from the subscription before it goes into the portability export.
@@ -126,6 +164,18 @@ export async function GET() {
             .order("created_at", { ascending: false })
             .then((r) => must(table, r) ?? []),
         ),
+        // 00028. Before it is applied the table does not exist; that is not a
+        // hollow export — there are no photos to lose — so it reads as none.
+        untyped
+          .from("profile_photos")
+          .select("*")
+          .eq("user_id", user.id)
+          .then((r) =>
+            // 42P01 from Postgres, PGRST205 from PostgREST's schema cache.
+            r.error?.code === "42P01" || r.error?.code === "PGRST205"
+              ? []
+              : (must("profile_photos", r) ?? []),
+          ),
       ]);
 
     const [
@@ -136,36 +186,24 @@ export async function GET() {
       workoutCheckins,
       mealAbsences,
       chatMessages,
+      profilePhotoRows,
     ] = untypedRows as unknown[][];
-    let bodyLogs: unknown[] = bodyLogRows ?? [];
-
-    // Portability covers the photos too: each body log with a photo_path gets
-    // a 24-hour signed URL (the bucket is private — a bare path downloads
-    // nothing). Signing is an enrichment: the rows themselves are already in
-    // the file, so a signing failure is logged, not fatal.
-    try {
-      const logRows = bodyLogs as Array<Record<string, unknown>>;
-      const photoPaths = logRows
-        .map((r) => r.photo_path)
-        .filter((p): p is string => typeof p === "string" && p.length > 0);
-      if (photoPaths.length > 0) {
-        const { data: signed } = await supabase.storage
-          .from(BODY_PHOTOS_BUCKET)
-          .createSignedUrls(photoPaths, 60 * 60 * 24);
-        const urlByPath = new Map(
-          (signed ?? [])
-            .filter((s) => s.signedUrl)
-            .map((s) => [s.path, s.signedUrl] as const),
-        );
-        bodyLogs = logRows.map((r) =>
-          typeof r.photo_path === "string" && urlByPath.has(r.photo_path)
-            ? { ...r, photo_url: urlByPath.get(r.photo_path) }
-            : r,
-        );
-      }
-    } catch (err) {
-      console.error("[export] photo signing failed", err);
-    }
+    // Portability covers the photos too: progress photos on body logs and
+    // each person's profile photo, as 24-hour signed URLs.
+    const bodyLogs = await withSignedUrls(
+      supabase,
+      BODY_PHOTOS_BUCKET,
+      bodyLogRows ?? [],
+      "photo_path",
+      "photo_url",
+    );
+    const profilePhotos = await withSignedUrls(
+      supabase,
+      PROFILE_PHOTOS_BUCKET,
+      profilePhotoRows ?? [],
+      "path",
+      "photo_url",
+    );
 
     const data = {
       exported_at: new Date().toISOString(),
@@ -186,6 +224,7 @@ export async function GET() {
       body_logs: bodyLogs,
       workout_checkins: workoutCheckins ?? [],
       chat_messages: chatMessages ?? [],
+      profile_photos: profilePhotos,
     };
 
     const date = new Date().toISOString().slice(0, 10);

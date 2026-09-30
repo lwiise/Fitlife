@@ -7,7 +7,9 @@ import {
   getCurrentUserCookablePlan,
   getCurrentUserFamilyMembers,
   getCurrentUserProfile,
+  getCurrentUserProfilePhotos,
 } from "@/lib/supabase/queries";
+import { householdPhotoSrcs } from "@/lib/profilePhoto/shared";
 import {
   planHasContent,
   hasPendingGeneration,
@@ -26,10 +28,11 @@ export const metadata = {
 };
 
 export default async function HousekeeperPage() {
-  const [cookable, familyMembers, profile] = await Promise.all([
+  const [cookable, familyMembers, profile, photoPaths] = await Promise.all([
     getCurrentUserCookablePlan(),
     getCurrentUserFamilyMembers(),
     getCurrentUserProfile(),
+    getCurrentUserProfilePhotos(),
   ]);
 
   // No plan at all → there's nothing for her page yet; /plan owns the empty state.
@@ -180,6 +183,9 @@ export default async function HousekeeperPage() {
         superseded={superseded}
         absences={absences}
         allergyEntries={allergyEntries}
+        // Faces help most here: she may not read the Arabic names on the
+        // member switcher, and the photo says whose plate it is.
+        photos={householdPhotoSrcs(photoPaths, familyMembers)}
       />
     </>
   );

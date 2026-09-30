@@ -285,6 +285,7 @@ export function WorkoutViewer({
   roster,
   addMemberHref = "/family",
   addTraineeHref = "/onboarding/workout",
+  photos,
 }: {
   plan: WorkoutPlan;
   /** workout_plans.id — needed to write session marks. */
@@ -315,6 +316,9 @@ export function WorkoutViewer({
    * gets an add-plan CTA, an ineligible one (child) an adults-only note. Absent
    * → fall back to the workout plan's own members (every tab has content). */
   roster?: Array<{ member_id: string; member_name_ar: string; eligible: boolean }>;
+  /** Profile photo URL per member_id (householdPhotoSrcs); a miss draws the
+   * initial. */
+  photos?: Readonly<Record<string, string>>;
   /** The member sheet's «إضافة فرد» target — /family, exactly like the meal
    * view (adding a household member, not the workout opt-in). */
   addMemberHref?: string;
@@ -509,6 +513,7 @@ export function WorkoutViewer({
       name: t.member_name_ar,
       prefix: t.member_id === "mom" ? `${pick("أنتِ", "أنتَ")} ·` : undefined,
       rosterIndex: i,
+      src: photos?.[t.member_id],
       status: {
         text: program
           ? `${countAr(program.weekly_sessions.length, SESSION_FORMS, arNum)} أسبوعياً`
@@ -557,6 +562,7 @@ export function WorkoutViewer({
               <Avatar
                 name={activeTab.member_name_ar}
                 rosterIndex={activeRosterIndex}
+                src={photos?.[activeTab.member_id]}
                 size="lg"
                 className="ring-2 ring-brand-lavender"
               />
@@ -915,6 +921,7 @@ export function WorkoutViewer({
                 <Avatar
                   name={activeTab.member_name_ar}
                   rosterIndex={activeRosterIndex}
+                  src={photos?.[activeTab.member_id]}
                   size="sm"
                 />
                 {activeTab.member_name_ar}

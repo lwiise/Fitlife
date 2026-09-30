@@ -30,6 +30,7 @@ import {
 } from "@fitlife/plan-engine";
 import { isLocaleCode } from "@/lib/plans/locales";
 import { BODY_PHOTOS_BUCKET } from "@/lib/engagement/types";
+import { PROFILE_PHOTOS_BUCKET } from "@/lib/profilePhoto/shared";
 import { mapUserGoalToSara, type UserGoal } from "@/lib/plans/goalMapping";
 import {
   activityLevelFrom,
@@ -1410,8 +1411,8 @@ export async function addHousekeeper(rawInput: {
 }
 
 /**
- * Delete every engagement row a removed member owns, and drop them from the
- * addition order.
+ * Delete every engagement row a removed member owns — and their profile photo —
+ * and drop them from the addition order.
  *
  * `member_id` on the engagement tables is TEXT with NO foreign key — it has to
  * be, because it also carries the "mom" and "household" sentinels — so nothing
@@ -1441,6 +1442,8 @@ async function purgeMemberEngagementRows(
     // Keyed by the EXCEPTED member; the checkin it hangs off may belong to
     // another member (or the household row), so the cascade never reaches it.
     "member_exceptions",
+    // Their profile photo's row (00028); the object itself is removed below.
+    "profile_photos",
   ] as const;
 
   // Progress photos FIRST, while the body_logs rows that name them still
@@ -1465,6 +1468,26 @@ async function purgeMemberEngagementRows(
     if (photoError) {
       Sentry.captureException(photoError, {
         tags: { area: "family", step: "removeFamilyMember.purge.photos", userId },
+      });
+    }
+  }
+
+  // Their profile photo(s), found by the path prefix <user_id>/<member_id>-
+  // rather than through the row, so an object orphaned by an interrupted
+  // save goes too. Tolerant of a prod where the bucket does not exist yet.
+  const { data: profilePhotoObjects } = await supabase.storage
+    .from(PROFILE_PHOTOS_BUCKET)
+    .list(userId, { limit: 100, search: `${memberId}-` });
+  const profilePhotoPaths = (profilePhotoObjects ?? [])
+    .filter((o) => o.name.startsWith(`${memberId}-`))
+    .map((o) => `${userId}/${o.name}`);
+  if (profilePhotoPaths.length > 0) {
+    const { error: profilePhotoError } = await supabase.storage
+      .from(PROFILE_PHOTOS_BUCKET)
+      .remove(profilePhotoPaths);
+    if (profilePhotoError) {
+      Sentry.captureException(profilePhotoError, {
+        tags: { area: "family", step: "removeFamilyMember.purge.profilePhoto", userId },
       });
     }
   }

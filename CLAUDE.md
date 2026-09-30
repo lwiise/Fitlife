@@ -100,7 +100,7 @@ Before building ANY section, you must:
 
 **Database migration baseline**: Production Supabase has migrations 00001 through 00007 applied (verified 06/09/2026 — 00007 `meal_mode` column confirmed present via a read-only REST probe of `family_members`). Migration 00005 added per-member fields (member_type, sex, allergies, dislikes, trimester, school_meal_handling, picky_eater) and family-wide preferences (cuisine, dietary_restrictions, cooking_methods, meal_out_frequency). Migration 00006 added `chat_messages`; 00007 added `family_members.meal_mode` ('shared' default / 'independent'). Migrations are applied MANUALLY (no CI/Netlify runner) — when adding a migration, apply it to prod yourself. Migrations 00008–00011 (admin_users, profiles.meal_mode, admin audit log), 00012 (superseded by 00014's composite index; see below), 00013 (Coach Sara questionnaire columns: target_weight_kg, day_nature/exercise_days/exercise_type, water_cups, sleep_hours, medications/supplements/nausea_foods jsonb, notes, family_members.feeding_mode, plus the optional deep-dive columns + profiles.deep_dive_completed_at — all nullable/additive, code works before it's applied but new answers won't persist) and 00014 (workout_plans table + workout_profile jsonb + plan_generations.plan_kind/workout_plan_id; REPLACES 00012's lock with UNIQUE (user_id, plan_kind) WHERE status='started' so one meal run and one workout run may coexist — apply BEFORE relying on workout generation) are NOT yet verified against prod — verify/apply before relying on the admin panel, the mom health-save (`profiles.meal_mode`), the generation race fix, or the new questionnaire fields.
 
-**Migration state: everything through 00027 is applied to prod (00026 + 00027 applied by the owner 09/24/2026 after the deploy that carries them, verify rows APPLIED; 00023 + 00024 applied 07/31/2026; 00025 confirmed 08/2026; 00001–00022 verified 07/26/2026).** 00026 makes `meal_plans`/`workout_plans`/`plan_generations`/`chat_messages` read-only for the browser; 00027 lowers the `body_logs` weight floor to 5 kg for children. 00023 widens the `subscriptions.status` CHECK to accept `'paused'` (00004 had dropped it, so every «استراحة» pause wrote a value the DB rejected). 00024 is the engineering-audit migration — see the audit section at the end of this file. Re-run `apps/app/scripts/verify-migrations.sql` after any new migration; it now also asserts a CLASS GUARD that every RLS table the app deletes from has a DELETE policy, because that omission has shipped twice (meal_checkins, fixed in 00019; meal_verdicts, fixed in 00024).
+**Migration state: everything through 00027 is applied to prod (00026 + 00027 applied by the owner 09/24/2026 after the deploy that carries them, verify rows APPLIED; 00023 + 00024 applied 07/31/2026; 00025 confirmed 08/2026; 00001–00022 verified 07/26/2026). 00028 (profile photos, 09/30/2026) is NOT YET APPLIED — see «Profile photos» at the end of this file; the app runs without it (no photos shown, a save fails with a plain message).** 00026 makes `meal_plans`/`workout_plans`/`plan_generations`/`chat_messages` read-only for the browser; 00027 lowers the `body_logs` weight floor to 5 kg for children. 00023 widens the `subscriptions.status` CHECK to accept `'paused'` (00004 had dropped it, so every «استراحة» pause wrote a value the DB rejected). 00024 is the engineering-audit migration — see the audit section at the end of this file. Re-run `apps/app/scripts/verify-migrations.sql` after any new migration; it now also asserts a CLASS GUARD that every RLS table the app deletes from has a DELETE policy, because that omission has shipped twice (meal_checkins, fixed in 00019; meal_verdicts, fixed in 00024).
 
 **Historical note (superseded):** the paragraph below was the 07/26 verification and is kept for its per-column evidence. Its closing claim that "the engagement code's pre-apply fallbacks are dormant" is now literally true for the ones that remain — the three `onConflict: "meal_plan_id,day_index,slot"` write fallbacks were DELETED in the audit, since 00019 drops that constraint and they could therefore only ever fail.
 
@@ -1583,10 +1583,8 @@ The viewer's "today" is Riyadh's (`riyadhWeekday`), not the device's.
 **Also in this change.** On the Arabic view MealCard and WorkoutViewer figures are
 Arabic-Indic (`arDec`/`arDigits` in lib/copy/numbers.ts; the cook's view keeps her digits),
 and their sub-13px `text-xs` became `text-meta`. Deleted: `SaraChangesCard.tsx`,
-`PartialWeekNotice.tsx`, `PlanActionsMenu.tsx`. Next steps from the owner's brief not yet
-built: profile photos (owner/member upload, shown everywhere a person appears) — the Avatar
-component is ready for a `src`; decisions on children's photos on shared screens and the
-housekeeper's photo are still open.
+`PartialWeekNotice.tsx`, `PlanActionsMenu.tsx`. Profile photos, the
+next step from the owner's brief, shipped 09/2026 — see «Profile photos» below.
 
 ---
 
@@ -1683,3 +1681,72 @@ Guarded by `memberJoin.test.ts`, `prepareSharedGroupRegen.test.ts` (including
 `generateMealPlan` runs with a mocked model: shared and independent joins, refills that
 honour and refresh the join, a scoped regenerate of a joiner, a partial day never used as
 the grid, a week-over add making no model call and keeping a 0 target).
+
+---
+
+## Profile photos (09/2026)
+
+Owner request: a profile picture for the main user and each member of the family, shown
+wherever that person appears. **Migration 00028 must be applied to prod** (then re-run
+`scripts/verify-migrations.sql`, rows «00028 …»); until then no photo is read and a save
+fails with «تعذّر حفظ الصورة».
+
+**Who.** The owner (`"mom"`) and every beneficiary — adults AND children (the request
+covers "each member of the family"). Never the housekeeper: the privacy policy keeps her
+data to a name and a reading language, and her /family row keeps the chef-hat icon. The
+server action refuses her id.
+
+**Storage — a separate table, NOT a column.** `public.profile_photos` (user_id, member_id
+TEXT "mom" | family_members.id, path) + the PRIVATE `profile-photos` bucket (1 MB, jpeg/png/
+webp, four owner-scoped storage policies like body-photos). A photo column on
+`family_members` would have been a trap: the generic `updated_at` trigger bumps the row on
+any write, `staleMemberIds` reads a member row newer than the plan as an unapplied edit,
+and the drain dispatches a PAID regeneration — so every new photo would have rebuilt the
+plan. `shared.test.ts` pins that `lib/profilePhoto/actions.ts` writes only
+`profile_photos`. Types: the table is newer than the generated types → untyped client casts.
+
+**Upload.** The browser prepares the photo (`lib/profilePhoto/prepare.ts`): decode with EXIF
+orientation, square crop (`squareCrop` — portraits a little above centre, where the face
+is), downscale in halving steps to 384 px (first stage capped at 4× the target: a 48 MP
+square is past iOS Safari's canvas limit), re-encode WebP (JPEG where the browser can't),
+which also drops metadata incl. GPS. The sheet previews exactly what will be stored. The
+server action (`saveProfilePhoto`, FormData) sniffs the BYTES (`sniffImageType` — never
+the claimed type), writes a NEW object `<user_id>/<member_id>-<uuid>.<ext>` (never an
+overwrite), upserts the row, removes the replaced object, rolls back the object if the row
+write fails, and `revalidatePath("/", "layout")` (the header shows the owner's photo on
+every page). `removeProfilePhoto` deletes row + object.
+
+**Serving.** `GET /api/profile-photo?p=<path>` — the path must parse
+(`parseProfilePhotoPath`) and sit in the caller's own folder; the read runs through the
+caller's client (storage RLS again); content type is re-sniffed; response is
+`private, max-age=31536000, immutable` (safe because paths are never overwritten, and
+`private` keeps it out of the CDN). A query parameter, not a path segment, on purpose:
+`proxy.ts` skips the session refresh for any pathname ending in an image extension. Not
+signed URLs: a fresh token per render would re-download every avatar on every page. Not
+next/image: its optimizer would copy private photos into a shared server cache — the
+`<img>` lives in `AvatarPhoto` (components/ui/avatar.tsx) with a documented lint disable.
+
+**Display.** `Avatar` takes `src`; the photo sits OVER the initial, so the initial shows
+while loading and whenever the photo can't load. `AvatarPhoto` (components/ui/
+avatar-photo.tsx) is a tiny client island for exactly that: Chromium draws a broken-image
+glyph for a sized `<img>` even with an empty alt, so a failed photo sets `hidden` on itself
+(onError, plus a mount check for an error that happened before hydration). `getCurrentUserProfilePhotos()` (queries.ts, React.cache'd, any error = no photos) →
+`householdPhotoSrcs(paths, members)` (drops the housekeeper and rows of removed members)
+→ a `photos` map passed to: the header account button (SignedInLayout → AppShell),
+/family rows, PlanViewer (bar identity, member sheet, ••• sheet) on /plan, history and the
+cook's view (faces help most there — she may not read the Arabic names), WorkoutViewer,
+and «موسم بيتنا» ranks + the leader (face on the gold stage, crown as a corner badge —
+crown alone without a photo). The admin PlanViewer never gets photos. The kitchen ticket
+shows names only, unchanged.
+
+**Where it is set.** `components/profile-photo/`: `ProfilePhotoSheet` (bottom sheet:
+choose → preview → «حفظ الصورة»; change; «إزالة الصورة»), `AvatarPhotoButton` (44 px
+avatar with a camera badge, every «أهل البيت» row on /family incl. the owner) and
+`ProfilePhotoCard` (top of /profile and /family/edit/[id]; the whole card is one button).
+
+**PDPL.** Rows cascade; storage does not: `eraseUserAccount` clears both buckets' folders,
+`removeFamilyMember`'s purge deletes the row and every object with the member's prefix
+(orphans from an interrupted save included), and the delete dialog now says «والصور».
+`/api/account/export` ships `profile_photos` with 24h signed `photo_url`s (pre-00028 the
+missing table reads as none, not a 503). /privacy and /terms disclose it (09/30/2026).
+Guarded by `lib/profilePhoto/shared.test.ts`.

@@ -1,4 +1,5 @@
 import { clsx } from "clsx";
+import { AvatarPhoto } from "./avatar-photo";
 
 // Stable member colours by ROSTER position (never by rank or sort order), so a
 // person keeps their colour everywhere in the app. Brand hues plus one warm
@@ -24,14 +25,21 @@ export function avatarColor(rosterIndex: number) {
   return AVATAR_BG[((rosterIndex % AVATAR_BG.length) + AVATAR_BG.length) % AVATAR_BG.length]!;
 }
 
+// The photo layer (a small client island, see its note); re-exported so the
+// avatar vocabulary stays one import.
+export { AvatarPhoto };
+
 export function Avatar({
   name,
   rosterIndex,
+  src,
   size = "md",
   className,
 }: {
   name: string;
   rosterIndex: number;
+  /** The person's profile photo URL (householdPhotoSrcs); the initial when absent. */
+  src?: string | null;
   /** sm 24px (stacks), md 32px (lists), lg 40px (the plan bar's identity).
    * A className size override only wins when it is LARGER than the variant's
    * (Tailwind emits size-* in numeric order, text-* not), so take the nearest
@@ -43,23 +51,24 @@ export function Avatar({
     <span
       aria-hidden="true"
       className={clsx(
-        "grid shrink-0 place-items-center rounded-full font-extrabold text-white",
+        "relative grid shrink-0 place-items-center rounded-full font-extrabold text-white",
         size === "sm" ? "size-6 text-[11px]" : size === "lg" ? "size-10 text-base" : "size-8 text-sm",
         avatarColor(rosterIndex),
         className,
       )}
     >
       {initialOf(name)}
+      {src && <AvatarPhoto src={src} px={size === "sm" ? 24 : size === "lg" ? 40 : 32} />}
     </span>
   );
 }
 
-/** Overlapping initials: who eats this dish, at a glance. */
+/** Overlapping avatars: who eats this dish, at a glance. */
 export function AvatarStack({
   people,
   max = 5,
 }: {
-  people: Array<{ id: string; name: string; rosterIndex: number }>;
+  people: Array<{ id: string; name: string; rosterIndex: number; src?: string | null }>;
   max?: number;
 }) {
   const shown = people.slice(0, max);
@@ -71,6 +80,7 @@ export function AvatarStack({
           key={p.id}
           name={p.name}
           rosterIndex={p.rosterIndex}
+          src={p.src}
           size="sm"
           className={clsx("ring-2 ring-brand-card", i > 0 && "-ms-1.5")}
         />

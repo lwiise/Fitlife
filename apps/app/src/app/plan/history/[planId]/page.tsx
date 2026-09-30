@@ -1,5 +1,10 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getCurrentUserFamilyMembers,
+  getCurrentUserProfilePhotos,
+} from "@/lib/supabase/queries";
+import { householdPhotoSrcs } from "@/lib/profilePhoto/shared";
 import { getPlanById } from "@/lib/plans/getPlanHistory";
 import { BackButton } from "@/components/BackButton";
 import { PlanViewer } from "../../PlanViewer";
@@ -28,12 +33,14 @@ export default async function HistoryPlanViewPage({
   const result = await getPlanById(user.id, planId);
   if (!result) notFound();
 
-  const { data: ownerProfile } = await supabase
-    .from("profiles")
-    .select("sex")
-    .eq("id", user.id)
-    .single();
+  const [{ data: ownerProfile }, members, photoPaths] = await Promise.all([
+    supabase.from("profiles").select("sex").eq("id", user.id).single(),
+    getCurrentUserFamilyMembers(),
+    getCurrentUserProfilePhotos(),
+  ]);
   const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;
+  // Today's photos on an old week: the person is the same person.
+  const photos = householdPhotoSrcs(photoPaths, members);
 
   return (
     <main className="min-h-screen bg-brand-surface">
@@ -58,6 +65,7 @@ export default async function HistoryPlanViewPage({
           readOnly
           preselectedMember={member}
           ownerSex={ownerSex}
+          photos={photos}
         />
       </div>
     </main>

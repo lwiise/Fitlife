@@ -3,6 +3,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserRound, HeartPulse, ChevronLeft } from "lucide-react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import {
+  getCurrentUserFamilyMembers,
+  getCurrentUserProfilePhotos,
+} from "@/lib/supabase/queries";
+import { profilePhotoSrc } from "@/lib/profilePhoto/shared";
+import { ProfilePhotoCard } from "@/components/profile-photo/ProfilePhotoTriggers";
 import type { Database } from "@/lib/supabase/database.types";
 import { PageHeader } from "@/components/ui/page-header";
 import { mapSaraGoalToUser, type SaraGoal } from "@/lib/plans/goalMapping";
@@ -71,8 +77,9 @@ export default async function EditMemberPage({
   ]);
   if (!user) redirect("/auth/login");
 
-  // Member row + owner profile are independent — one parallel round-trip.
-  const [{ data: row }, { data: ownerProfile }] = await Promise.all([
+  // Member row + owner profile + the roster/photos for the photo card are
+  // independent — one parallel round-trip.
+  const [{ data: row }, { data: ownerProfile }, allMembers, photoPaths] = await Promise.all([
     supabase
       .from("family_members")
       .select("*")
@@ -80,6 +87,8 @@ export default async function EditMemberPage({
       .eq("user_id", user.id)
       .single(),
     supabase.from("profiles").select("sex").eq("id", user.id).single(),
+    getCurrentUserFamilyMembers(),
+    getCurrentUserProfilePhotos(),
   ]);
   const m = row as FamilyMemberRow | null;
 
@@ -148,6 +157,9 @@ export default async function EditMemberPage({
       .join("، ") || g("أضيفي التفاصيل الصحية", "أضِف التفاصيل الصحية");
 
   const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex;
+  // The avatar colour /family gives them: owner 0, members in list order.
+  const rosterIndex =
+    allMembers.filter((x) => x.role !== "housekeeper").findIndex((x) => x.id === m.id) + 1;
 
   return (
     <main className="container-shell py-6 lg:py-10">
@@ -165,6 +177,16 @@ export default async function EditMemberPage({
         <Suspense fallback={null}>
           <MemberEditedBanner memberId={memberId} ownerSex={ownerSex} />
         </Suspense>
+
+        <ProfilePhotoCard
+          person={{
+            id: m.id,
+            name: m.name,
+            rosterIndex: Math.max(1, rosterIndex),
+            src: profilePhotoSrc(photoPaths[m.id]),
+          }}
+          ownerSex={ownerSex}
+        />
 
         <nav
           aria-label={`أقسام بيانات ${m.name}`}

@@ -145,6 +145,7 @@ export function PlanViewer({
   notice,
   ownerSex,
   partialWeekMemberIds = [],
+  photos,
 }: {
   plan: MealPlan;
   planId: string;
@@ -220,6 +221,10 @@ export function PlanViewer({
   // The account owner's sex (profiles.sex) → owner-directed Arabic copy on this
   // page (the «أنتِ/أنتَ» marker beside her name). Absent on translated views.
   ownerSex?: string | null;
+  // Profile photo URL per member_id ("mom" | family_members.id), from
+  // householdPhotoSrcs. A miss draws the initial. The admin view never passes
+  // it — photos stay inside the account.
+  photos?: Readonly<Record<string, string>>;
 }) {
   const router = useRouter();
   const translated = !!locale && locale !== "ar";
@@ -1037,6 +1042,7 @@ export function PlanViewer({
       prefix:
         !translated && m.member_id === "mom" ? `${g("أنتِ", "أنتَ")} ·` : undefined,
       rosterIndex: i,
+      src: photos?.[m.member_id],
       status,
     };
   });
@@ -1134,6 +1140,7 @@ export function PlanViewer({
               <Avatar
                 name={activeName}
                 rosterIndex={activeRosterIndex}
+                src={photos?.[activeMember.member_id]}
                 size="lg"
                 className="ring-2 ring-brand-lavender"
               />
@@ -1502,7 +1509,12 @@ export function PlanViewer({
               key: "person",
               label: (
                 <>
-                  <Avatar name={activeName} rosterIndex={activeRosterIndex} size="sm" />
+                  <Avatar
+                    name={activeName}
+                    rosterIndex={activeRosterIndex}
+                    src={photos?.[activeMember.member_id]}
+                    size="sm"
+                  />
                   {activeName}
                 </>
               ),
