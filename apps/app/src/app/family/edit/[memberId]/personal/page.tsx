@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { MemberPersonalEditForm } from "./MemberPersonalEditForm";
+import { isSpouseRole } from "@fitlife/plan-engine/familyRole";
 
 type FamilyMemberRow = Database["public"]["Tables"]["family_members"]["Row"];
 
@@ -38,8 +39,9 @@ export default async function MemberPersonalEditPage({
   if (m.role === "housekeeper") redirect(`/family/edit/${memberId}`);
 
   const type = m.member_type ?? "adult";
-  // Sex is fixed for the husband (male); everyone else can set it.
-  const showSex = !(type === "adult" && m.role === "dad");
+  // Sex is fixed for the spouse (the owner's opposite: a wife or a husband);
+  // everyone else can set it.
+  const showSex = !(type === "adult" && isSpouseRole(m.role));
 
   // The form addresses the account OWNER, so its copy follows the owner's sex.
   const ownerSex = (ownerProfile as { sex?: string | null } | null)?.sex ?? null;

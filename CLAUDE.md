@@ -1750,3 +1750,35 @@ avatar with a camera badge, every «أهل البيت» row on /family incl. the
 `/api/account/export` ships `profile_photos` with 24h signed `photo_url`s (pre-00028 the
 missing table reads as none, not a 503). /privacy and /terms disclose it (09/30/2026).
 Guarded by `lib/profilePhoto/shared.test.ts`.
+
+---
+
+## The spouse role is a wife as well as a husband (09/2026)
+
+Found by a male owner adding his wife from /family: the wizard was titled «إضافة فرد
+بالغ» and asked her sex. Both builders gave a man's spouse `role: "other_adult"`,
+because `'dad'` was read as "a man" in three places (the wizard's sex default, the
+prompt's «الزوج» label, the family summary's «الأب»). That workaround had costs of its
+own. The model met her as «فرد بالغ», the advisor as `(other_adult)`, and the «زوجة» row
+never hid once she was saved, since the guard looks for the spouse role.
+
+**`family_members.role = 'dad'` now means the owner's SPOUSE, of either sex.** No
+migration: 00001's CHECK has no other spouse value, and the member's own `sex` says
+which. `packages/plan-engine/src/familyRole.ts` is the one definition (`SPOUSE_ROLE`,
+`isSpouseRole`, `spouseSexFor` = the owner's opposite, with a husband for an unanswered
+owner, and `familyRoleLabelAr`). It is a leaf module on the `@fitlife/plan-engine/familyRole`
+subpath so client components can import it. **Any label derived from the role must
+read `sex` too**, because a wife is «الزوجة», never «الزوج» or «الأب». Consumers:
+`MemberWizard` (no sex step for the spouse, sex preset from the owner, title
+«إضافة الزوجة»/«إضافة الزوج», and member copy that follows the member's sex), both family
+builders, `/family/add?type=husband` (now threads `ownerSex`), the /family row
+(«زوجة»/«زوج» instead of «بالغ»), the personal edit page (spouse sex not editable),
+`describeMember` and `buildCompositionSummary`, the advisor roster (which used to print
+the raw role token), and the admin `roleLabel`. The background function now IMPORTS
+`buildCompositionSummary` instead of keeping its own copy.
+
+**Not migrated:** wives saved before this change stay `other_adult` (nothing tells them
+apart from a mother or a sister), so for those households the «زوجة» row still shows. A
+pregnant or breastfeeding wife is still added through «امرأة حامل/مرضعة»
+(`other_adult`), because the spouse wizard has no pregnancy branch. Guarded by
+`familyRole.test.ts`.

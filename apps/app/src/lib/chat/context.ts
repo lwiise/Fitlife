@@ -1,6 +1,6 @@
 import "server-only";
 
-import { conditionLabels } from "@fitlife/plan-engine";
+import { conditionLabels, familyRoleLabelAr } from "@fitlife/plan-engine";
 import {
   getCurrentUserProfile,
   getCurrentUserFamilyMembers,
@@ -119,7 +119,9 @@ export async function buildHouseholdContext(userId: string): Promise<string> {
         .map((s) => s.replace(/^- /, ""))
         .join("، ");
       return [
-        `- ${m.name} (${m.role}${stage ? `، ${stage}` : ""}):`,
+        // The Arabic relation, never the raw role token: a wife is stored as
+        // 'dad' (familyRole.ts), which the advisor would read as a man.
+        `- ${m.name} (${familyRoleLabelAr(m.role, m.sex)}${stage ? `، ${stage}` : ""}):`,
         physical ? `${physical}.` : "",
         m.primary_goal ? `الهدف: ${label(GOAL_AR, m.primary_goal)}.` : "",
         `حساسيات: ${list(m.allergies)}`,

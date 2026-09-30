@@ -6,6 +6,7 @@ import {
 } from "@/lib/supabase/queries";
 import { Logo } from "@/components/Logo";
 import { genderPick } from "@/lib/copy/gender";
+import { isSpouseRole } from "@fitlife/plan-engine/familyRole";
 import { OnboardingFamilyBuilder } from "./OnboardingFamilyBuilder";
 
 export const metadata = { title: "عائلتك" };
@@ -86,10 +87,10 @@ export default async function OnboardingMembersPage() {
       <OnboardingFamilyBuilder
         sex={sex}
         // The spouse is singular. /family computes exactly this guard
-        // (canAddHusband) before offering the row; the onboarding copy of the
+        // (canAddSpouse) before offering the row; the onboarding copy of the
         // same screen never did, so returning to it after a partial run offered
-        // the checkbox again and a second role="dad" could be created.
-        canAddSpouse={!allMembers.some((m) => m.role === "dad")}
+        // the checkbox again and a second spouse could be created.
+        canAddSpouse={!allMembers.some((m) => isSpouseRole(m.role))}
       />
     </main>
   );

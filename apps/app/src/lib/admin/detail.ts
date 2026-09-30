@@ -40,6 +40,8 @@ export interface MemberSummary {
   id: string;
   name: string;
   role: string;
+  /** Names the spouse (role 'dad' is a wife as well as a husband). */
+  sex: string | null;
   memberType: string;
   isHousekeeper: boolean;
   pickyEater: boolean | null;
@@ -202,7 +204,7 @@ export async function loadSubscriberDetail(
     db
       .from("family_members")
       .select(
-        "id, name, role, member_type, primary_goal, picky_eater, high_risk_pregnancy, consulted_doctor, medical_conditions",
+        "id, name, role, sex, member_type, primary_goal, picky_eater, high_risk_pregnancy, consulted_doctor, medical_conditions",
       )
       .eq("user_id", userId)
       .order("display_order", { ascending: true }),
@@ -260,6 +262,7 @@ export async function loadSubscriberDetail(
     id: "mom",
     name: profile.display_name ?? "—",
     role: "mom",
+    sex: null,
     memberType: "adult",
     isHousekeeper: false,
     pickyEater: null,
@@ -281,6 +284,7 @@ export async function loadSubscriberDetail(
       id: m.id,
       name: m.name,
       role: m.role,
+      sex: m.sex ?? null,
       memberType: m.member_type,
       isHousekeeper: m.role === "housekeeper",
       pickyEater: m.picky_eater ?? null,
@@ -383,6 +387,8 @@ export interface MemberHealth {
   id: string;
   name: string;
   role: string;
+  /** Names the spouse (role 'dad' is a wife as well as a husband). */
+  sex: string | null;
   isPregnant: boolean | null;
   trimester: number | null;
   monthsPostpartum: number | null;
@@ -417,7 +423,7 @@ export async function loadSubscriberHealth(
   const { data: members } = await db
     .from("family_members")
     .select(
-      "id, name, role, trimester, months_postpartum, high_risk_pregnancy, consulted_doctor, medical_conditions, allergies, dislikes",
+      "id, name, role, sex, trimester, months_postpartum, high_risk_pregnancy, consulted_doctor, medical_conditions, allergies, dislikes",
     )
     .eq("user_id", userId)
     .order("display_order", { ascending: true });
@@ -426,6 +432,7 @@ export async function loadSubscriberHealth(
     id: "mom",
     name: profile.display_name ?? "—",
     role: "mom",
+    sex: null,
     isPregnant: profile.is_pregnant ?? null,
     trimester: profile.pregnancy_trimester ?? null,
     monthsPostpartum: profile.months_postpartum ?? null,
@@ -440,6 +447,7 @@ export async function loadSubscriberHealth(
     id: m.id,
     name: m.name,
     role: m.role,
+    sex: m.sex ?? null,
     isPregnant: null,
     trimester: m.trimester ?? null,
     monthsPostpartum: m.months_postpartum ?? null,

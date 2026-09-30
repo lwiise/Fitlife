@@ -76,7 +76,7 @@ function MemberHealthCard({
     v == null ? "—" : v ? t("yes", locale) : t("no", locale);
 
   return (
-    <DetailCard title={`${member.name} — ${roleLabel(member.role, locale)}`}>
+    <DetailCard title={`${member.name} — ${roleLabel(member.role, locale, member.sex)}`}>
       <dl className="grid gap-x-6 sm:grid-cols-2">
         {member.id === "mom" ? (
           <Field label={t("field_pregnant", locale)} value={yn(member.isPregnant)} />

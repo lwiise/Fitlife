@@ -42,7 +42,10 @@ import {
   ownerRequiresDoctorSignOff,
   memberRequiresDoctorSignOff,
 } from "../../../../packages/plan-engine/src/medicalGate";
-import { getBeneficiaries } from "../../../../packages/plan-engine/src/buildContext";
+import {
+  buildCompositionSummary,
+  getBeneficiaries,
+} from "../../../../packages/plan-engine/src/buildContext";
 import {
   shouldChainContinuation,
   PLAN_CHAIN_MAX_HOPS,
@@ -572,45 +575,6 @@ async function fetchPriorPlan(
 function ageFromBirthYear(birthYear: number | null): number | null {
   if (!birthYear) return null;
   return new Date().getFullYear() - birthYear;
-}
-function arabicNumber(n: number): string {
-  return new Intl.NumberFormat("ar-SA", { useGrouping: false }).format(n);
-}
-function pluralizeAr(c: number, s: string, d: string, p: string) {
-  if (c === 1) return s;
-  if (c === 2) return d;
-  return p;
-}
-function buildCompositionSummary(
-  members: PlanPromptContextMember[],
-  ownerIsMale: boolean,
-): string {
-  const partners = members.filter((m) => m.role === "dad");
-  const kids = members.filter((m) => m.role === "son" || m.role === "daughter");
-  const housekeepers = members.filter((m) => m.role === "housekeeper");
-  const total = 1 + partners.length + kids.length;
-  const parts: string[] = [
-    `عائلة من ${arabicNumber(total)} ${pluralizeAr(total, "فرد", "فردين", "أفراد")}: ${ownerIsMale ? "الأب" : "الأم"}`,
-  ];
-  if (partners.length > 0) parts.push("الأب");
-  if (kids.length > 0) {
-    const ages = kids.map((k) => k.age).filter((a): a is number => a !== null);
-    if (ages.length === kids.length) {
-      parts.push(
-        `و${pluralizeAr(kids.length, "طفل", "طفلان", "أطفال")} (${ages.map((a) => `${arabicNumber(a)} سنة`).join("، ")})`,
-      );
-    } else {
-      parts.push(
-        `و${arabicNumber(kids.length)} ${pluralizeAr(kids.length, "طفل", "طفلان", "أطفال")}`,
-      );
-    }
-  }
-  let summary = parts.join("، ") + ".";
-  if (housekeepers.length > 0) {
-    summary +=
-      " يوجد خادمة تطبخ للعائلة وتنفذ الوصفات (ليست من المستفيدين من الخطة الغذائية).";
-  }
-  return summary;
 }
 
 class GateError extends Error {}

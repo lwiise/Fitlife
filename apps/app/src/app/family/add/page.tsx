@@ -4,6 +4,7 @@ import { AdultWizard } from "./wizards/AdultWizard";
 import { ChildWizard } from "./wizards/ChildWizard";
 import { PregLactSwitch } from "./PregLactSwitch";
 import { HousekeeperForm } from "./HousekeeperForm";
+import { SPOUSE_ROLE } from "@fitlife/plan-engine/familyRole";
 
 export const metadata = { title: "إضافة فرد" };
 
@@ -27,15 +28,21 @@ export default async function AddMemberPage({
   const parsed = Number(countParam);
   const count = Number.isFinite(parsed) ? Math.min(8, Math.max(1, Math.trunc(parsed))) : 1;
 
+  // The wizards address the owner, and the spouse wizard takes the spouse's
+  // sex from the owner's (a man's wife is never asked hers).
+  const ownerSex = profile.sex;
+
   switch (type) {
     case "husband":
-      return <AdultWizard role="dad" onboarding={onboarding} />;
+      return <AdultWizard role={SPOUSE_ROLE} onboarding={onboarding} ownerSex={ownerSex} />;
     case "adult":
-      return <AdultWizard role="other_adult" onboarding={onboarding} count={count} />;
+      return (
+        <AdultWizard role="other_adult" onboarding={onboarding} count={count} ownerSex={ownerSex} />
+      );
     case "child":
-      return <ChildWizard role="son" onboarding={onboarding} count={count} />;
+      return <ChildWizard role="son" onboarding={onboarding} count={count} ownerSex={ownerSex} />;
     case "preg":
-      return <PregLactSwitch onboarding={onboarding} count={count} />;
+      return <PregLactSwitch onboarding={onboarding} count={count} ownerSex={ownerSex} />;
     case "housekeeper":
       return <HousekeeperForm onboarding={onboarding} />;
     default:

@@ -316,7 +316,7 @@ function HouseholdTable({
         <>
           <span className="font-medium text-brand-ink">{m.name}</span>
           <span className="ms-1.5 text-xs text-brand-ink-muted">
-            {roleLabel(m.role, locale)}
+            {roleLabel(m.role, locale, m.sex)}
           </span>
         </>
       ),

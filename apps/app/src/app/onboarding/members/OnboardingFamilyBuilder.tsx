@@ -7,12 +7,13 @@ import { PregLactSwitch } from "@/app/family/add/PregLactSwitch";
 import { HousekeeperForm } from "@/app/family/add/HousekeeperForm";
 import { CheckRow, StepperRow } from "@/app/family/add/FamilyComposerControls";
 import { genderPick } from "@/lib/copy/gender";
+import { SPOUSE_ROLE } from "@fitlife/plan-engine/familyRole";
 import { capture } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 
-// One step of the guided sequence. Husband and maid are singular; the rest carry a count.
+// One step of the guided sequence. Spouse and maid are singular; the rest carry a count.
 type Task =
-  | { kind: "husband" }
+  | { kind: "spouse" }
   | { kind: "adult"; count: number }
   | { kind: "child"; count: number }
   | { kind: "preg"; count: number }
@@ -21,7 +22,7 @@ type Task =
 /**
  * The onboarding family builder. Reached after mom finishes her profile. She first
  * SELECTS who's in the household (no navigation on tap), then a single CTA walks her
- * through each selected member's details in order — husband → adults → children →
+ * through each selected member's details in order — spouse → adults → children →
  * pregnant/lactating → maid — and only at the very end finalizes onboarding and
  * generates the whole family at once. Each member is saved as it's completed;
  * generation stays deferred until the sequence ends.
@@ -31,19 +32,18 @@ export function OnboardingFamilyBuilder({
   canAddSpouse = true,
 }: {
   sex?: "female" | "male";
-  /** False once the household already holds a role="dad" — the spouse row is
-   * hidden, mirroring /family's canAddHusband. */
+  /** False once the household already holds a spouse — the spouse row is
+   * hidden, mirroring /family's canAddSpouse. */
   canAddSpouse?: boolean;
 }) {
   const g = genderPick(sex);
-  const isMale = sex === "male";
   const [phase, setPhase] = useState<"select" | "fill" | "finalizing">("select");
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
   const router = useRouter();
 
-  // Selection: husband/maid are checkmarks; the rest are 0-default steppers.
-  const [husband, setHusband] = useState(false);
+  // Selection: spouse/maid are checkmarks; the rest are 0-default steppers.
+  const [spouse, setSpouse] = useState(false);
   const [maid, setMaid] = useState(false);
   const [adult, setAdult] = useState(0);
   const [child, setChild] = useState(0);
@@ -51,7 +51,7 @@ export function OnboardingFamilyBuilder({
 
   // A spouse that already exists can never be queued, even if stale state says
   // otherwise (the row is hidden, so it can no longer be toggled off).
-  const wantsSpouse = husband && canAddSpouse;
+  const wantsSpouse = spouse && canAddSpouse;
 
   const totalSelected =
     (wantsSpouse ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
@@ -89,7 +89,7 @@ export function OnboardingFamilyBuilder({
 
   const start = () => {
     const q: Task[] = [];
-    if (wantsSpouse) q.push({ kind: "husband" });
+    if (wantsSpouse) q.push({ kind: "spouse" });
     if (adult > 0) q.push({ kind: "adult", count: adult });
     if (child > 0) q.push({ kind: "child", count: child });
     if (preg > 0) q.push({ kind: "preg", count: preg });
@@ -129,13 +129,13 @@ export function OnboardingFamilyBuilder({
     const terminalLabel = isLastTask ? g("أنشئي الخطة", "أنشئ الخطة") : "التالي";
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-brand-surface">
-        {task.kind === "husband" && (
+        {task.kind === "spouse" && (
           <MemberWizard
-            key={`husband-${index}`}
+            key={`spouse-${index}`}
             type="adult"
-            // A male owner's spouse must not carry role="dad" — the engine
-            // labels that role الأب in the family summary.
-            role={isMale ? "other_adult" : "dad"}
+            // A wife as well as a husband: the wizard takes the spouse's sex
+            // from the owner's, so it titles her «إضافة الزوجة» and never asks.
+            role={SPOUSE_ROLE}
             ownerSex={sex}
             onboarding
             count={1}
@@ -220,8 +220,8 @@ export function OnboardingFamilyBuilder({
             <CheckRow
               label={g("زوج", "زوجة")}
               Icon={User}
-              checked={husband}
-              onToggle={() => setHusband((v) => !v)}
+              checked={spouse}
+              onToggle={() => setSpouse((v) => !v)}
             />
           )}
           <StepperRow label="بالغ ثاني" Icon={UserPlus} value={adult} onChange={setAdult} />

@@ -9,6 +9,7 @@ import { engagementText } from "./engagementDigest";
 import { isChildByAge, minorStage } from "./childRule";
 import { DISH_ONCE_EMISSION } from "./constants";
 import { conditionLabels } from "./medicalConditionLabels";
+import { familyRoleLabelAr } from "./familyRole";
 
 /**
  * Standalone translation prompt — translates an existing plan's meals into the
@@ -100,15 +101,6 @@ const HK_LANG_NAMES: Record<LocaleCode, string> = {
   bn: "Bengali (বাংলা)",
   am: "Amharic (አማርኛ)",
   ur: "Urdu (اردو)",
-};
-
-const ROLE_LABELS_AR: Record<string, string> = {
-  dad: "الزوج",
-  son: "ابن",
-  daughter: "ابنة",
-  housekeeper: "الخادمة",
-  other_adult: "فرد بالغ",
-  other_child: "طفل آخر",
 };
 
 // MOH-aligned bucket names — identical wording to the methodology's multiplier
@@ -417,7 +409,8 @@ function describeMom(c: PlanPromptContext): string {
 }
 
 function describeMember(member: PlanPromptContextMember): string {
-  const roleLabel = labeled(ROLE_LABELS_AR, member.role);
+  // The spouse's label follows their sex: a man's wife is «الزوجة».
+  const roleLabel = familyRoleLabelAr(member.role, member.sex);
   const parts: string[] = [];
   parts.push(`${roleLabel}: ${member.name}`);
   // Arabic counts 3-10 in the plural. The roster said «10 سنة» while the minor

@@ -5,6 +5,7 @@ import {
   memberRequiresDoctorSignOff,
 } from "./medicalGate";
 import { isChildByAge } from "./childRule";
+import { isSpouseRole } from "./familyRole";
 import type { EngagementDigest } from "./engagementDigest";
 import { LOCALE_CODES, type LocaleCode } from "./schema";
 import { WorkoutProfileSchema, type WorkoutProfile } from "./workout/schema";
@@ -202,11 +203,15 @@ function pluralizeAr(count: number, singular: string, dual: string, plural: stri
   return plural;
 }
 
-function buildCompositionSummary(
+/**
+ * One line naming the household for the prompt. Exported so the background
+ * function uses this one instead of keeping its own copy.
+ */
+export function buildCompositionSummary(
   members: PlanPromptContextMember[],
   ownerIsMale: boolean,
 ): string {
-  const partners = members.filter((m) => m.role === "dad");
+  const partners = members.filter((m) => isSpouseRole(m.role));
   const kids = members.filter((m) => m.role === "son" || m.role === "daughter");
   const housekeepers = members.filter((m) => m.role === "housekeeper");
 
@@ -215,7 +220,9 @@ function buildCompositionSummary(
   const parts: string[] = [
     `عائلة من ${arabicNumber(totalCount)} ${pluralizeAr(totalCount, "فرد", "فردين", "أفراد")}: ${ownerIsMale ? "الأب" : "الأم"}`,
   ];
-  if (partners.length > 0) parts.push("الأب");
+  // The spouse is the other parent, named by their own sex: a man's wife has
+  // the same role as a woman's husband (familyRole.ts).
+  if (partners.length > 0) parts.push(partners[0]!.sex === "female" ? "الأم" : "الأب");
   if (kids.length > 0) {
     const ages = kids.map((k) => k.age).filter((a): a is number => a !== null);
     if (ages.length === kids.length && kids.length > 0) {

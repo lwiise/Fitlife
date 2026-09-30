@@ -31,6 +31,7 @@ import {
 } from "@/app/onboarding/actions";
 import { genderPick } from "@/lib/copy/gender";
 import { capture } from "@/lib/analytics";
+import { isSpouseRole, spouseSexFor } from "@fitlife/plan-engine/familyRole";
 
 const GOALS: { value: UserGoal; label: string }[] = [
   { value: "lose_weight", label: "خسارة الدهون" },
@@ -244,6 +245,10 @@ export function MemberWizard({
 }) {
   const router = useRouter();
   const g = genderPick(ownerSex);
+  // The owner's spouse (role 'dad', a wife as well as a husband — see
+  // familyRole.ts). Their sex is the owner's opposite, so it is never asked.
+  const spouse = isSpouseRole(role);
+  const spouseSex = spouseSexFor(ownerSex);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
@@ -259,9 +264,9 @@ export function MemberWizard({
 
   const [name, setName] = useState(initial?.name ?? "");
   const [birthYear, setBirthYear] = useState(initial?.birth_year?.toString() ?? "");
-  // Unanswered for the two types that ASK (adult and child both carry a "sex"
-  // step). It used to default to "female" for everything that was not a
-  // non-dad adult, which pre-answered the child step: a mother adding three
+  // Unanswered for the flows that ASK (a non-spouse adult and a child both
+  // carry a "sex" step). It used to default to "female" for everything that was
+  // not a husband, which pre-answered the child step: a mother adding three
   // sons saw أنثى already selected, tapped «التالي» three times, and all three
   // landed as sex='female' role='daughter' — after which the plan and the tabs
   // called her sons البنت, updateMemberPersonal re-derived the wrong role on
@@ -269,12 +274,19 @@ export function MemberWizard({
   // of the row memberEditIsSubstantive diffs). The `sex ? goNext() : setError`
   // guard on that step only works if the field starts empty.
   //
-  // pregnant/lactating KEEP "female": those flows have no sex step at all, so
-  // there would be no way to answer it.
-  const [sex, setSex] = useState<string>(
-    initial?.sex ??
-      (role === "dad" ? "male" : type === "adult" || type === "child" ? "" : "female"),
-  );
+  // pregnant/lactating KEEP "female", and the spouse takes the owner's
+  // opposite: those flows have no sex step at all, so there would be no way to
+  // answer it.
+  const blankSex = spouse
+    ? spouseSex
+    : type === "adult" || type === "child"
+      ? ""
+      : "female";
+  const [sex, setSex] = useState<string>(initial?.sex ?? blankSex);
+  // Copy ABOUT the member follows their sex once known; masculine is the
+  // default for a member not yet answered (the house convention for member text).
+  const about = (feminine: string, masculine: string) =>
+    sex === "female" ? feminine : masculine;
   const [heightCm, setHeightCm] = useState(initial?.height_cm?.toString() ?? "");
   const [weightKg, setWeightKg] = useState(initial?.weight_kg?.toString() ?? "");
   const [activity, setActivity] = useState(initial?.activity_level ?? "");
@@ -321,9 +333,9 @@ export function MemberWizard({
   const baseSteps: string[] = useMemo(() => {
     switch (type) {
       case "adult":
-        // Husband is male by default — no gender question. The abstract activity
-        // radio became the concrete exercise step (coach questionnaire).
-        return role === "dad"
+        // The spouse's sex is already known — no gender question. The abstract
+        // activity radio became the concrete exercise step (coach questionnaire).
+        return spouse
           ? ["identity", "physical", "exercise", "goal", "allergies", "medsSupps", "lifestyle", "mealMode", "medical"]
           : ["identity", "sex", "physical", "exercise", "goal", "allergies", "medsSupps", "lifestyle", "mealMode", "medical"];
       case "child":
@@ -342,7 +354,7 @@ export function MemberWizard({
         // replaced by the structured medsSupps step.
         return ["identity", "physical", "exercise", "monthsPP", "feeding", "lactConditions", "allergies", "medsSupps", "water", "mealMode"];
     }
-  }, [type, role]);
+  }, [type, spouse]);
 
   const doctorNeeded = useMemo(() => {
     if (type === "pregnant" || type === "lactating") return true;
@@ -421,9 +433,7 @@ export function MemberWizard({
   const resetForNext = () => {
     setName("");
     setBirthYear("");
-    setSex(
-      role === "dad" ? "male" : type === "adult" || type === "child" ? "" : "female",
-    );
+    setSex(blankSex);
     setHeightCm("");
     setWeightKg("");
     setActivity("");
@@ -609,7 +619,11 @@ export function MemberWizard({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <h1 className="font-bold text-base text-brand-ink truncate">
-                {role === "dad" ? "إضافة الزوج" : TYPE_TITLES[type]}
+                {spouse
+                  ? spouseSex === "female"
+                    ? "إضافة الزوجة"
+                    : "إضافة الزوج"
+                  : TYPE_TITLES[type]}
               </h1>
               {count > 1 && (
                 <span className="flex-shrink-0 rounded-full bg-brand-lavender/40 text-brand-purple-900 text-xs font-bold px-2.5 py-1 tabular-nums">
@@ -661,7 +675,13 @@ export function MemberWizard({
                     نحسب العمر منها لنخصّص الخطة.
                   </p>
                 </header>
-                <TextField id="m-name" label="الاسم" value={name} onChange={setName} placeholder="مثلاً: خالد" />
+                <TextField
+                  id="m-name"
+                  label="الاسم"
+                  value={name}
+                  onChange={setName}
+                  placeholder={spouse && spouseSex === "female" ? "مثلاً: نورة" : "مثلاً: خالد"}
+                />
                 <NumberField id="m-by" label="سنة الميلاد" value={birthYear} onChange={setBirthYear} placeholder="1988" />
                 <PrimaryButton
                   onClick={() => {
@@ -702,7 +722,10 @@ export function MemberWizard({
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
                     {type === "child"
                       ? "نستخدمها للسياق العام فقط، خطة الطفل بالحصص لا بالسعرات."
-                      : "نستخدمها لحساب احتياجه الغذائي بدقة."}
+                      : about(
+                          "نستخدمها لحساب احتياجها الغذائي بدقة.",
+                          "نستخدمها لحساب احتياجه الغذائي بدقة.",
+                        )}
                   </p>
                 </header>
                 <NumberField id="m-h" label="الطول (سم)" value={heightCm} onChange={setHeightCm} placeholder="120" />
@@ -838,7 +861,7 @@ export function MemberWizard({
                 <header>
                   <h2 className="font-extrabold text-3xl text-brand-ink leading-tight">الهدف الرئيسي</h2>
                   <p className="mt-2 text-brand-ink-muted text-base leading-relaxed">
-                    نبني خطته حول هدفه.
+                    {about("نبني خطتها حول هدفها.", "نبني خطته حول هدفه.")}
                   </p>
                 </header>
                 <div className="space-y-2">

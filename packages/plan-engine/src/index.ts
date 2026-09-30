@@ -19,6 +19,13 @@ export {
 export type { MinorStage } from "./childRule";
 
 export {
+  SPOUSE_ROLE,
+  isSpouseRole,
+  spouseSexFor,
+  familyRoleLabelAr,
+} from "./familyRole";
+
+export {
   GATE_CONDITIONS,
   STABLE_CONDITIONS,
   conditionLabelAr,

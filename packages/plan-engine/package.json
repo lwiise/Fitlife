@@ -6,7 +6,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./memberJoin": "./src/memberJoin.ts"
+    "./memberJoin": "./src/memberJoin.ts",
+    "./familyRole": "./src/familyRole.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit",

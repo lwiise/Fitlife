@@ -7,6 +7,7 @@
  */
 
 import { SUPPORTED_LANGUAGES } from "@fitlife/config";
+import { isSpouseRole } from "@fitlife/plan-engine/familyRole";
 import type { AdminLocale } from "./format";
 export type { AdminLocale };
 
@@ -519,14 +520,24 @@ export function statusLabel(status: string | null, locale: AdminLocale): string 
 
 const ROLE: Record<string, Entry> = {
   mom: { ar: "الأم", en: "Mom" },
-  dad: { ar: "الأب", en: "Father" },
   son: { ar: "ابن", en: "Son" },
   daughter: { ar: "ابنة", en: "Daughter" },
   housekeeper: { ar: "الخادمة", en: "Housekeeper" },
   other_adult: { ar: "بالغ آخر", en: "Other adult" },
   other_child: { ar: "طفل آخر", en: "Other child" },
 };
-export function roleLabel(role: string, locale: AdminLocale): string {
+// role 'dad' is the owner's SPOUSE, a wife as well as a husband
+// (plan-engine familyRole.ts), so it is named by the member's own sex.
+const SPOUSE: Record<"male" | "female", Entry> = {
+  male: { ar: "الزوج", en: "Husband" },
+  female: { ar: "الزوجة", en: "Wife" },
+};
+export function roleLabel(
+  role: string,
+  locale: AdminLocale,
+  sex?: string | null,
+): string {
+  if (isSpouseRole(role)) return SPOUSE[sex === "female" ? "female" : "male"][locale];
   return ROLE[role]?.[locale] ?? role;
 }
 

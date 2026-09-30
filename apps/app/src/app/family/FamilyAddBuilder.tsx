@@ -8,12 +8,13 @@ import { PregLactSwitch } from "./add/PregLactSwitch";
 import { HousekeeperForm } from "./add/HousekeeperForm";
 import { CheckRow, StepperRow } from "./add/FamilyComposerControls";
 import { genderPick } from "@/lib/copy/gender";
+import { SPOUSE_ROLE } from "@fitlife/plan-engine/familyRole";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 
-// One step of the guided sequence. Husband and maid are singular; the rest carry a count.
+// One step of the guided sequence. Spouse and maid are singular; the rest carry a count.
 type Task =
-  | { kind: "husband" }
+  | { kind: "spouse" }
   | { kind: "adult"; count: number }
   | { kind: "child"; count: number }
   | { kind: "preg"; count: number }
@@ -21,22 +22,22 @@ type Task =
 
 /**
  * Post-onboarding multi-member add (lives on /family). She first SELECTS the whole
- * composition — checkboxes for the singular roles (husband, maid) and 0-default
+ * composition — checkboxes for the singular roles (spouse, maid) and 0-default
  * steppers for the repeatable ones (adult, child, pregnant/lactating) — then a single
  * guided sequence walks through every selected member's wizard in order, saving each
  * as it's completed. Mirrors the onboarding family builder, but post-onboarding each
  * save regenerates the plan incrementally (the first kicks off the shared-group
  * rebuild; the rest are saved and drained on /plan), so the end lands on /plan.
  *
- * `canAddHusband` / `canAddHousekeeper` hide those singular rows when one already
+ * `canAddSpouse` / `canAddHousekeeper` hide those singular rows when one already
  * exists in the household.
  */
 export function FamilyAddBuilder({
-  canAddHusband = true,
+  canAddSpouse = true,
   canAddHousekeeper = true,
   ownerSex,
 }: {
-  canAddHusband?: boolean;
+  canAddSpouse?: boolean;
   canAddHousekeeper?: boolean;
   ownerSex?: string | null;
 }) {
@@ -46,19 +47,19 @@ export function FamilyAddBuilder({
   const [queue, setQueue] = useState<Task[]>([]);
   const [index, setIndex] = useState(0);
 
-  // Selection: husband/maid are checkmarks; the rest are 0-default steppers.
-  const [husband, setHusband] = useState(false);
+  // Selection: spouse/maid are checkmarks; the rest are 0-default steppers.
+  const [spouse, setSpouse] = useState(false);
   const [maid, setMaid] = useState(false);
   const [adult, setAdult] = useState(0);
   const [child, setChild] = useState(0);
   const [preg, setPreg] = useState(0);
 
   const totalSelected =
-    (husband ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
+    (spouse ? 1 : 0) + (maid ? 1 : 0) + adult + child + preg;
 
   const start = () => {
     const q: Task[] = [];
-    if (husband) q.push({ kind: "husband" });
+    if (spouse) q.push({ kind: "spouse" });
     if (adult > 0) q.push({ kind: "adult", count: adult });
     if (child > 0) q.push({ kind: "child", count: child });
     if (preg > 0) q.push({ kind: "preg", count: preg });
@@ -101,16 +102,13 @@ export function FamilyAddBuilder({
     const terminalLabel = isLastTask ? g("أنشئي الخطة", "أنشئ الخطة") : "التالي";
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-brand-surface">
-        {task.kind === "husband" && (
+        {task.kind === "spouse" && (
           <MemberWizard
-            key={`husband-${index}`}
+            key={`spouse-${index}`}
             type="adult"
-            // A MALE owner's spouse must not carry role="dad": MemberWizard
-            // derives sex from the role (`role === "dad" ? "male"`), so she
-            // would be stored as male and planned on a man's BMR/TDEE. The
-            // onboarding builder already draws this distinction — this copy of
-            // the same screen never got the fix.
-            role={ownerSex === "male" ? "other_adult" : "dad"}
+            // A wife as well as a husband: the wizard takes the spouse's sex
+            // from the owner's, so it titles her «إضافة الزوجة» and never asks.
+            role={SPOUSE_ROLE}
             count={1}
             onComplete={advance}
             terminalLabel={terminalLabel}
@@ -170,12 +168,12 @@ export function FamilyAddBuilder({
       </p>
 
       <div className="space-y-2">
-        {canAddHusband && (
+        {canAddSpouse && (
           <CheckRow
             label={g("زوج", "زوجة")}
             Icon={User}
-            checked={husband}
-            onToggle={() => setHusband((v) => !v)}
+            checked={spouse}
+            onToggle={() => setSpouse((v) => !v)}
           />
         )}
         <StepperRow label="بالغ ثانٍ" Icon={UserPlus} value={adult} onChange={setAdult} />

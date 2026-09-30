@@ -9,6 +9,7 @@ export function ChildWizard(props: {
   onboarding?: boolean;
   count?: number;
   onComplete?: () => void;
+  ownerSex?: string | null;
 }) {
   return <MemberWizard type="child" {...props} />;
 }

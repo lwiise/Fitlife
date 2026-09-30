@@ -13,6 +13,7 @@ import { FamilyMemberCard } from "./FamilyMemberCard";
 import { HousekeeperCard } from "./HousekeeperCard";
 import { FamilyAddBuilder } from "./FamilyAddBuilder";
 import { genderPick } from "@/lib/copy/gender";
+import { isSpouseRole } from "@fitlife/plan-engine/familyRole";
 
 export const metadata = { title: "عائلتك" };
 
@@ -84,6 +85,8 @@ export default async function FamilyPage() {
                 key={m.id}
                 id={m.id}
                 name={m.name}
+                role={m.role}
+                sex={m.sex}
                 memberType={m.member_type ?? "adult"}
                 primaryGoal={m.primary_goal}
                 rosterIndex={i + 1}
@@ -116,7 +119,7 @@ export default async function FamilyPage() {
         )}
 
         <FamilyAddBuilder
-          canAddHusband={!members.some((m) => m.role === "dad")}
+          canAddSpouse={!members.some((m) => isSpouseRole(m.role))}
           canAddHousekeeper={!housekeeper}
           ownerSex={profile.sex}
         />

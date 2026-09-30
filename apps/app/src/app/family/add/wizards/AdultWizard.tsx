@@ -9,6 +9,7 @@ export function AdultWizard(props: {
   onboarding?: boolean;
   count?: number;
   onComplete?: () => void;
+  ownerSex?: string | null;
 }) {
   return <MemberWizard type="adult" {...props} />;
 }

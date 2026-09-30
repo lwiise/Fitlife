@@ -1,4 +1,5 @@
 import { User, Baby, HeartPulse, Milk } from "lucide-react";
+import { isSpouseRole } from "@fitlife/plan-engine/familyRole";
 import { AvatarPhotoButton } from "@/components/profile-photo/ProfilePhotoTriggers";
 import { ButtonLink } from "@/components/ui/button";
 import { RemoveMemberButton } from "./RemoveMemberButton";
@@ -37,6 +38,8 @@ const GOAL_LABELS: Record<string, string> = {
 export function FamilyMemberCard({
   id,
   name,
+  role,
+  sex,
   memberType,
   primaryGoal,
   rosterIndex,
@@ -45,6 +48,8 @@ export function FamilyMemberCard({
 }: {
   id: string;
   name: string;
+  role: string;
+  sex: string | null;
   memberType: string;
   primaryGoal: string | null;
   rosterIndex: number;
@@ -54,6 +59,9 @@ export function FamilyMemberCard({
 }) {
   const meta = TYPE_META[memberType] ?? TYPE_META.adult!;
   const { Icon } = meta;
+  // The spouse reads as what they are, not as «بالغ»: the same words as the
+  // add picker's row («زوج» / «زوجة»).
+  const typeLabel = isSpouseRole(role) ? (sex === "female" ? "زوجة" : "زوج") : meta.label;
   const goal = primaryGoal ? GOAL_LABELS[primaryGoal] : undefined;
 
   return (
@@ -64,7 +72,7 @@ export function FamilyMemberCard({
         <p className="mt-0.5 flex items-center gap-1 text-meta text-brand-ink-muted">
           <Icon className="size-3.5 shrink-0" aria-hidden="true" />
           <span className="truncate">
-            {meta.label}
+            {typeLabel}
             {goal ? ` · ${goal}` : ""}
           </span>
         </p>
