@@ -1,0 +1,293 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FitLife admin console — Overview (U6).
+
+   Only what admin.css (the prototype port) does not already carry: the
+   container that drives the overview's responsive grids, the pending dim,
+   the chart's plot box and marks, the popover forms and the footnotes.
+   Same contract as admin.css: everything in `@layer components`, every rule
+   under `.admin-root` on `ad-*` classes, logical properties only, no motion
+   under prefers-reduced-motion (admin.css's global rule covers this file).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer theme, base, components, utilities;
+
+@layer components {
+
+/* ── Page frame ─────────────────────────────────────────────────────────── */
+/* The content column is the size container: the grids below respond to the
+   width the overview actually has (rail or not), not to the viewport. */
+.admin-root .ad-ov-in { container: ad-ov / inline-size; }
+.admin-root .ad-ov-body { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.admin-root .ad-ov-body > * { transition: opacity .15s; }
+/* A range change is loading: the old figures stay, dimmed, never blanked. */
+.admin-root .ad-ov-body[aria-busy="true"] { cursor: progress; }
+.admin-root .ad-ov-body[aria-busy="true"] > * { opacity: .6; }
+.admin-root .ad-ov-in.ad-skel-group { gap: 24px; }
+
+.admin-root .ad-ov-titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+
+/* Footnotes under the chart and the cost tiles (approximation, how costs are
+   computed): quiet, but always visible. */
+.admin-root .ad-ov-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+.admin-root .ad-ov-foot .ad-ic { width: 14px; height: 14px; margin-block-start: 1px; }
+
+/* ── Range row ──────────────────────────────────────────────────────────── */
+.admin-root .ad-ov-custom[aria-current="true"] { background: var(--tint); color: var(--purple); }
+
+.admin-root .ad-ov-datepop { display: grid; gap: 12px; min-width: 272px; padding: 16px; }
+.admin-root .ad-ov-field { display: grid; gap: 4px; }
+/* `.ad-pop label` draws checkbox rows; a form label is a plain caption. */
+.admin-root .ad-pop .ad-ov-flabel {
+  display: block;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  cursor: default;
+}
+.admin-root .ad-pop .ad-ov-flabel:hover { background: none; }
+.admin-root .ad-ov-date {
+  width: 100%;
+  height: 44px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+}
+.admin-root .ad-ov-date[aria-invalid="true"] { box-shadow: inset 0 0 0 2px var(--crit); }
+.admin-root .ad-ov-err { color: var(--crit); font-size: 12px; line-height: 16px; font-weight: 700; }
+
+/* Metric picker: a refused choice reads dimmed (rows are 44px in admin.css). */
+.admin-root .ad-ov-pop label:has(input[aria-disabled="true"]) { color: var(--muted); cursor: not-allowed; }
+.admin-root .ad-ov-pop input[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.admin-root .ad-ov-pop .ad-ov-limit:empty { display: none; }
+.admin-root .ad-ov-pop .ad-ov-limit { max-width: 248px; padding-block: 8px 4px; }
+
+/* ── Metric and stat tiles ──────────────────────────────────────────────── */
+.admin-root :is(.ad-kpi, .ad-tile) .ad-v { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Sparkline marks (prototype sparkSVG). */
+.admin-root .ad-spark .ad-ov-spark-area { fill: #6B3FBF; fill-opacity: .1; stroke: none; }
+.admin-root .ad-spark .ad-ov-spark-line {
+  fill: none;
+  stroke: #6B3FBF;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.admin-root .ad-spark .ad-ov-spark-dot { fill: #6B3FBF; }
+.admin-root .ad-kpi .ad-v.ad-ov-long { font-size: 22px; }
+/* A tile with a comparison adds the prior value under its change pill
+   («مقابل ٨١٥ ر.س»): a fourth row, pulled up so it reads with the pill. */
+.admin-root .ad-kpi.ad-ov-kpi-vs { grid-template-rows: 20px 36px 32px 12px; }
+.admin-root .ad-kpi .ad-ov-vs {
+  overflow: hidden;
+  margin-block-start: -4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.admin-root .ad-tile .ad-v.ad-ov-long { font-size: 20px; }
+
+/* ── Chart card ─────────────────────────────────────────────────────────── */
+/* The prototype's h3 style, on the card's real heading level (h2). */
+.admin-root .ad-chart-top h2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 800;
+}
+.admin-root .ad-ov-legend { flex-wrap: wrap; gap: 4px 16px; }
+/* The window's dates follow each period's name in the legend's own muted
+   colour (4.5:1 needs it at 13px); the name's weight sets them apart. */
+.admin-root .ad-ov-legend > span { font-weight: 700; }
+.admin-root .ad-ov-legend .ad-ov-dates { font-weight: 400; }
+
+.admin-root .ad-ov-chart { border-radius: 12px; touch-action: pan-y; }
+.admin-root .ad-ov-chart:focus-visible { outline-offset: 4px; }
+
+/* The plot box. Gutters hold the y ticks (inline start), the end label's
+   overhang (inline end) and the x labels (below). */
+.admin-root .ad-ov-plot {
+  position: relative;
+  height: 240px;
+  margin-block: 16px 32px;
+  margin-inline: 56px 72px;
+}
+.admin-root .ad-chart-box .ad-ov-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.admin-root .ad-ov-grid,
+.admin-root .ad-ov-base,
+.admin-root .ad-ov-pri,
+.admin-root .ad-ov-cur { vector-effect: non-scaling-stroke; }
+.admin-root .ad-ov-grid { stroke: rgba(26, 16, 35, .08); stroke-width: 1; }
+.admin-root .ad-ov-base { stroke: rgba(26, 16, 35, .18); stroke-width: 1; }
+.admin-root .ad-ov-pri {
+  fill: none;
+  stroke: #8C8699;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.admin-root .ad-ov-area { fill: #6B3FBF; fill-opacity: .1; stroke: none; }
+.admin-root .ad-ov-cur {
+  fill: none;
+  stroke: #6B3FBF;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.admin-root .ad-ov-xl { fill: var(--muted); font-size: 11px; }
+/* The latest value, above the last dot, with a halo so a line never cuts it. */
+.admin-root .ad-ov-end {
+  fill: var(--ink);
+  stroke: var(--card);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  font-size: 13px;
+  font-weight: 700;
+}
+.admin-root .ad-ov-dot { fill: #6B3FBF; stroke: var(--card); stroke-width: 2; }
+.admin-root .ad-ov-dot.ad-ov-dot-pri { fill: #8C8699; }
+/* A tooltip row that is not a plotted line (a flow's per-bucket amount): an
+   empty swatch keeps its label aligned with the others. */
+.admin-root .ad-chart-tip .ad-tr i.ad-ov-k0 { background: none; }
+.admin-root .ad-ov-xh { stroke: var(--ink); stroke-opacity: .35; stroke-width: 1; }
+
+/* Y ticks sit in the inline-start gutter, their end edge 10px off the axis;
+   the five positions are fixed quarters of the axis, so they need no
+   computed geometry. */
+.admin-root .ad-ov-ytick {
+  position: absolute;
+  inset-inline-end: calc(100% + 10px);
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.admin-root .ad-ov-ytick.ad-ov-t0 { inset-block-start: 100%; }
+.admin-root .ad-ov-ytick.ad-ov-t1 { inset-block-start: 75%; }
+.admin-root .ad-ov-ytick.ad-ov-t2 { inset-block-start: 50%; }
+.admin-root .ad-ov-ytick.ad-ov-t3 { inset-block-start: 25%; }
+.admin-root .ad-ov-ytick.ad-ov-t4 { inset-block-start: 0; }
+
+/* X labels: the wide set by default, the sparse set on a narrow chart. */
+.admin-root .ad-ov-xl:not(.ad-ov-w) { display: none; }
+
+.admin-root .ad-ov-empty {
+  display: grid;
+  place-items: center;
+  min-height: 288px;
+  padding: 24px;
+  border-radius: 12px;
+  background: rgba(26, 16, 35, .035);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* Table view: row headers read as data cells. */
+.admin-root .ad-tbl tbody th.ad-ov-rowh {
+  height: 52px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.admin-root .ad-charttable:focus-visible { outline-offset: 2px; }
+
+/* ── Skeleton sizes (the loaded page's real heights) ────────────────────── */
+.admin-root .ad-skel.ad-ov-skel-h1 { width: 160px; }
+.admin-root .ad-skel.ad-ov-skel-presets { width: 336px; max-width: 100%; }
+.admin-root .ad-skel.ad-ov-skel-custom { width: 92px; }
+.admin-root .ad-skel.ad-ov-skel-interval { width: 168px; }
+.admin-root .ad-skel.ad-ov-skel-customize { width: 156px; }
+.admin-root .ad-skel.ad-ov-skel-sec { height: 24px; }
+.admin-root .ad-skel.ad-ov-skel-kpi { height: 156px; }
+.admin-root .ad-skel.ad-ov-skel-chart { height: 418px; }
+/* Tile rows grow to their two-line hints. */
+.admin-root .ad-skel.ad-ov-skel-tile { height: 152px; box-shadow: none; }
+
+/* ── Responsive (by the overview's own width) ───────────────────────────── */
+@container ad-ov (max-width: 1119px) {
+  /* Six cost/engagement tiles become three a row: a money figure needs ~130px. */
+  .admin-root .ad-ov-in .ad-tiles.ad-c6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-root .ad-ov-in .ad-tiles.ad-c6 .ad-tile.ad-big { grid-column: span 2; }
+}
+@container ad-ov (max-width: 939px) {
+  /* Four metric tiles become two by two before their figures would clip. */
+  .admin-root .ad-ov-in .ad-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container ad-ov (max-width: 639px) {
+  .admin-root .ad-ov-in .ad-tiles.ad-c6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-root .ad-ov-in .ad-tiles.ad-c6 .ad-tile.ad-big { grid-column: 1 / -1; }
+  .admin-root .ad-ov-plot { height: 184px; margin-inline: 44px 48px; }
+  .admin-root .ad-ov-empty { min-height: 232px; }
+  .admin-root .ad-ov-xl { display: none; }
+  .admin-root .ad-ov-xl.ad-ov-n { display: inline; }
+  /* The presets fill the row, like the prototype's phone. No scroller: it
+     would clip the links' 44px hit areas (admin.css draws them past the
+     segment's edge), and the steps below keep the four on one line at 320px. */
+  .admin-root .ad-ov-range { width: 100%; }
+  .admin-root .ad-ov-presets { display: flex; width: 100%; }
+  .admin-root .ad-seg.ad-ov-presets > * { flex: 1 1 auto; }
+  .admin-root .ad-skel.ad-ov-skel-chart { height: 462px; }
+}
+@container ad-ov (max-width: 419px) {
+  .admin-root .ad-seg.ad-ov-presets > * { padding-inline: 6px; font-size: 12px; }
+  /* Two tiles a row leave ~130px: the sparkline gives way to the delta. */
+  .admin-root .ad-kpi .ad-spark { flex: 0 1 64px; min-width: 40px; }
+}
+@container ad-ov (max-width: 339px) {
+  .admin-root .ad-seg.ad-ov-presets > * { padding-inline: 4px; font-size: 11px; }
+  .admin-root .ad-tile .ad-v { font-size: 20px; }
+  .admin-root .ad-ov-xl.ad-ov-n { display: none; }
+  .admin-root .ad-ov-xl.ad-ov-s { display: inline; }
+}
+@container ad-ov (max-width: 309px) {
+  /* The smallest phones: the tile keeps its figure and delta, drops the texture. */
+  .admin-root .ad-kpi .ad-spark { display: none; }
+}
+
+@media (max-width: 767px) {
+  .admin-root .ad-ov-body,
+  .admin-root .ad-ov-in.ad-skel-group { gap: 16px; }
+  /* admin.css draws phone metric figures at 20px; a long one steps below it. */
+  .admin-root .ad-kpi .ad-v.ad-ov-long { font-size: 16px; }
+  /* admin.css's phone density: tiles pad 12px 16px. */
+  .admin-root .ad-skel.ad-ov-skel-kpi { height: 148px; }
+  .admin-root .ad-skel.ad-ov-skel-tile { height: 144px; }
+}
+
+} /* @layer components */

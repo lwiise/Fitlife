@@ -1,58 +1,58 @@
-import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
-import {
-  buildOverviewView,
-  buildSubscriberRows,
-  filterSortPaginate,
-  loadAdminDataset,
-} from "@/lib/admin/queries";
+import { buildOverviewView, loadAdminDataset } from "@/lib/admin/queries";
+import { loadEngagementStats, type EngagementStats } from "@/lib/admin/engagement";
 import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
-import type { SubscriberSortKey } from "@/lib/admin/types";
-import type { AdminLocale } from "@/lib/admin/format";
-import { statusLabel, t, tierLabel } from "@/lib/admin/i18n";
-import { loadEngagementStats } from "@/lib/admin/engagement";
-import { AdminTopBar } from "@/app/admin/_components/AdminTopBar";
-import { EngagementStrip } from "@/app/admin/_components/EngagementStrip";
-import { RevenueChartSection } from "@/app/admin/_components/RevenueChartSection";
-import { AiCostStrip } from "@/app/admin/_components/AiCostStrip";
-import { FilterBar } from "@/app/admin/_components/FilterBar";
-import { SubscriberTable } from "@/app/admin/_components/SubscriberTable";
-import { Pagination } from "@/app/admin/_components/Pagination";
-import { flatten, type RawParams } from "@/app/admin/_components/searchParams";
+import { t } from "@/lib/admin/i18n";
+import { Card } from "../_ui/Card";
+import { Empty, Note } from "../_ui/Note";
+import { CostTiles } from "../_overview/CostTiles";
+import { EngagementTiles } from "../_overview/EngagementTiles";
+import { MetricBoard } from "../_overview/MetricBoard";
+import { OverviewScope } from "../_overview/OverviewScope";
+import { RangeControls } from "../_overview/RangeControls";
+import { boardLabels, buildOverviewModel, rangeLabels } from "../_overview/model";
+import { flattenParams, overviewAuditDetail, type RawParams } from "../_overview/urls";
+import "../_overview/overview.css";
 
-const SORT_KEYS: SubscriberSortKey[] = [
-  "signupAt",
-  "lastActivityAt",
-  "lifetimeAiCostUsd",
-  "plansGenerated",
-  "beneficiaries",
-  "displayName",
-  "status",
-];
-const STATUS_VALUES = ["trialing", "active", "past_due", "cancelled", "expired"];
-
-export default async function AdminOverviewPage({
+/**
+ * /admin — the Overview (Concept A · Console): headline metrics, the chart,
+ * AI cost and the engagement layer, all scoped to the URL's range.
+ *
+ * One round of parallel reads: the audit row (PDPL) is written alongside the
+ * data, never before or after it, and records the RAW parameters so it does
+ * not wait on anything. The dataset and the engagement counters are cached
+ * (60s). Range, interval and metric-set changes navigate in a transition —
+ * the page stays on screen, dimmed, until the new figures arrive.
+ */
+export default async function OverviewPage({
   searchParams,
 }: {
   searchParams: Promise<RawParams>;
 }) {
   const admin = await requireAdmin();
-  const locale = await getAdminLocale();
+  const params = flattenParams(await searchParams);
+  const currencyRead = getAdminCurrency();
 
-  const params = flatten(await searchParams);
-  const baseParams = params;
-  const currency = await getAdminCurrency();
-  // Query-preserving return path so flipping currency/language keeps the current
-  // sort/filter/page (and metric/range) — shared by both header toggles.
-  const qs = new URLSearchParams(baseParams).toString();
-  const topBarNext = qs ? `/admin?${qs}` : "/admin";
-
-  const [dataset, engagementStats] = await Promise.all([
+  const [, dataset, engagement, locale, currency] = await Promise.all([
+    currencyRead.then((cur) =>
+      logAdminAccess({
+        adminUserId: admin.userId,
+        action: "view_subscriber_list",
+        detail: overviewAuditDetail(params, cur),
+      }),
+    ),
     loadAdminDataset(),
-    loadEngagementStats(),
+    // Secondary figures: a failed read shows «—» instead of failing the page.
+    loadEngagementStats().catch((error: unknown): EngagementStats | null => {
+      console.error("[admin] engagement stats failed", error);
+      return null;
+    }),
+    getAdminLocale(),
+    currencyRead,
   ]);
-  const overview = buildOverviewView(dataset, {
+
+  const view = buildOverviewView(dataset, {
     metric: params.metric,
     metrics: params.metrics,
     range: params.range,
@@ -61,133 +61,49 @@ export default async function AdminOverviewPage({
     interval: params.interval,
     cmp: params.cmp,
   });
-  const rows = buildSubscriberRows(dataset);
+  const title = t("nav_overview", locale);
 
-  const sort = SORT_KEYS.includes(params.sort as SubscriberSortKey)
-    ? (params.sort as SubscriberSortKey)
-    : "signupAt";
-  const dir = params.dir === "asc" ? "asc" : "desc";
-  const page = Number.parseInt(params.page ?? "1", 10) || 1;
+  if (view.subscriberCount === 0) {
+    return (
+      <div className="ad-a-ov">
+        <div className="ad-a-ov-in ad-ov-in">
+          <div className="ad-ovhead">
+            <h1>{title}</h1>
+          </div>
+          <Card>
+            <Empty title={t("table_empty", locale)}>{t("ov_empty_body", locale)}</Empty>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
-  const list = filterSortPaginate(rows, {
-    search: params.search,
-    tier: params.tier,
-    status: params.status,
-    sort,
-    dir,
-    page,
-  });
-
-  // PDPL: record the list access (who / filters / window / when).
-  await logAdminAccess({
-    adminUserId: admin.userId,
-    action: "view_subscriber_list",
-    detail: {
-      total: list.total,
-      page: list.page,
-      filters: {
-        search: params.search ?? null,
-        tier: params.tier ?? null,
-        status: params.status ?? null,
-      },
-      metric: overview.selectedMetric,
-      range: overview.preset,
-      interval: overview.interval,
-      cmp: overview.comparisonOn,
-      cur: currency,
-      section: "overview_v2",
-    },
-  });
-
-  const tierOptions = (Object.keys(PRICING_TIERS) as Tier[]).map((tier) => ({
-    value: tier,
-    label: tierLabel(tier, locale, PRICING_TIERS[tier].name_ar),
-  }));
-  const statusOptions = STATUS_VALUES.map((s) => ({
-    value: s,
-    label: statusLabel(s, locale),
-  }));
+  const model = buildOverviewModel({ view, engagement, locale, currency });
 
   return (
-    <>
-      <AdminTopBar
-        locale={locale}
-        activeNav="overview"
-        adminEmail={admin.email}
-        currency={currency}
-        next={topBarNext}
-      />
-
-      <main className="container-app space-y-6 py-6">
-        <h1 className="sr-only">{t("nav_overview", locale)}</h1>
-        {overview.subscriberCount === 0 ? (
-          <EmptyState locale={locale} />
-        ) : (
-          <>
-            <RevenueChartSection
-              view={overview}
-              baseParams={baseParams}
-              locale={locale}
-              currency={currency}
-            />
-
-            <AiCostStrip view={overview} currency={currency} locale={locale} />
-
-            <EngagementStrip stats={engagementStats} locale={locale} />
-
-            {dataset.truncated.length > 0 ? (
-              <p className="rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 text-sm text-brand-ink">
-                {t("truncated_warning", locale)}
-              </p>
-            ) : null}
-
-            <section className="space-y-3" aria-labelledby="admin-subscribers-heading">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2
-                  id="admin-subscribers-heading"
-                  className="adm-h2 text-brand-ink"
-                >
-                  {t("table_title", locale)}
-                </h2>
-                <FilterBar
-                  tiers={tierOptions}
-                  statuses={statusOptions}
-                  labels={{
-                    search: t("search_placeholder", locale),
-                    tier: t("filter_tier", locale),
-                    status: t("filter_status", locale),
-                    all: t("filter_all", locale),
-                  }}
-                />
-              </div>
-
-              <SubscriberTable
-                result={list}
-                baseParams={baseParams}
-                sortState={{ sort, dir }}
-                currency={currency}
-                locale={locale}
-              />
-
-              <Pagination
-                page={list.page}
-                pageCount={list.pageCount}
-                total={list.total}
-                baseParams={baseParams}
-                locale={locale}
-              />
-            </section>
-          </>
-        )}
-      </main>
-    </>
-  );
-}
-
-function EmptyState({ locale }: { locale: AdminLocale }) {
-  return (
-    <div className="grid place-items-center rounded-xl border border-dashed border-brand-ink/15 bg-surface-elevated py-24 text-center">
-      <p className="adm-h2 text-brand-ink">{t("table_empty", locale)}</p>
+    <div className="ad-a-ov">
+      <OverviewScope
+        busyLabel={t("ov_updating", locale)}
+        metrics={model.board.metrics.map((m) => m.key)}
+        head={
+          <div className="ad-ovhead">
+            <h1>{title}</h1>
+            <RangeControls head={model.head} labels={rangeLabels(locale)} />
+          </div>
+        }
+      >
+        {dataset.truncated.length > 0 ? (
+          <Note tone="warn">{t("truncated_warning", locale)}</Note>
+        ) : null}
+        <MetricBoard
+          board={model.board}
+          labels={boardLabels(locale)}
+          locale={locale}
+          currency={currency}
+        />
+        <CostTiles cost={model.cost} vsPrior={t("vs_prior", locale)} rtl={locale === "ar"} />
+        <EngagementTiles engagement={model.engagement} />
+      </OverviewScope>
     </div>
   );
 }

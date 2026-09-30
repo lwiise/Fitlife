@@ -1,39 +1,10 @@
+import { getAdminLocale } from "@/lib/admin/locale";
 import { t } from "@/lib/admin/i18n";
+import { OverviewSkeleton } from "../_overview/OverviewSkeleton";
+import "../_overview/overview.css";
 
-/** Admin loading skeleton (respects prefers-reduced-motion via globals.css). */
-export default function AdminLoading() {
-  return (
-    <>
-      <div className="h-[4.5rem] border-b border-brand-ink/10 bg-surface-elevated" />
-      <main
-        className="container-app space-y-6 py-6"
-        aria-busy="true"
-        aria-label={t("loading_label", "ar")}
-      >
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="h-6 w-40 animate-pulse rounded bg-surface-elevated" />
-            <div className="h-11 w-96 max-w-full animate-pulse rounded bg-surface-elevated" />
-          </div>
-          <div className="space-y-4 rounded-xl border border-brand-ink/10 bg-surface-elevated p-4 sm:p-6">
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl bg-brand-surface" />
-              ))}
-            </div>
-            <div className="h-64 animate-pulse rounded-xl bg-brand-surface" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-xl border border-brand-ink/10 bg-surface-elevated"
-            />
-          ))}
-        </div>
-        <div className="h-96 animate-pulse rounded-xl border border-brand-ink/10 bg-surface-elevated" />
-      </main>
-    </>
-  );
+/** The Overview's skeleton (see OverviewSkeleton), in the admin's language. */
+export default async function OverviewLoading() {
+  const locale = await getAdminLocale();
+  return <OverviewSkeleton label={t("ov_loading", locale)} />;
 }
