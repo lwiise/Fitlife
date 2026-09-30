@@ -114,11 +114,7 @@ const STRINGS = {
   kpi_beneficiaries: { ar: "مستفيد", en: "beneficiaries" },
 
   // Table columns and search: the families list, the family blocks, Insights
-  table_title: { ar: "كل المشتركين", en: "All subscribers" },
   search_placeholder: { ar: "بحث بالاسم أو البريد", en: "Search name or email" },
-  filter_all: { ar: "الكل", en: "All" },
-  filter_tier: { ar: "الباقة", en: "Tier" },
-  filter_status: { ar: "الحالة", en: "Status" },
   col_name: { ar: "المشترك", en: "Subscriber" },
   col_tier: { ar: "الباقة", en: "Tier" },
   col_status: { ar: "الحالة", en: "Status" },
@@ -147,8 +143,6 @@ const STRINGS = {
   cancel_scheduled: { ar: "إلغاء مجدول", en: "Cancel scheduled" },
 
   // ── Subscriber detail ──
-  back_to_overview: { ar: "العودة إلى اللوحة", en: "Back to dashboard" },
-  back_to_subscriber: { ar: "العودة إلى المشترك", en: "Back to subscriber" },
 
   // ── Account actions (danger zone) ──
   danger_zone: { ar: "منطقة الخطر", en: "Danger zone" },
@@ -164,7 +158,6 @@ const STRINGS = {
   },
   deactivate_account: { ar: "تعطيل", en: "Deactivate" },
   reactivate_account: { ar: "إعادة تفعيل", en: "Reactivate" },
-  saving: { ar: "جارٍ الحفظ…", en: "Saving…" },
   delete_desc: {
     ar: "حذف الحساب وكل بياناته نهائياً وإلغاء الاشتراك. لا يمكن التراجع.",
     en: "Permanently erase the account and all its data, and cancel billing. Cannot be undone.",
@@ -180,10 +173,6 @@ const STRINGS = {
   },
   delete_item_account: { ar: "ملف المشترك وبياناته", en: "The subscriber's profile and data" },
   delete_item_family: { ar: "كل أفراد العائلة", en: "All family members" },
-  delete_item_plans: {
-    ar: "كل الخطط الغذائية وسجل الإنشاء",
-    en: "All meal plans and generation history",
-  },
   delete_item_billing: {
     ar: "الاشتراك الحالي (يُلغى دون استرداد)",
     en: "The current subscription (cancelled, no refund)",
@@ -223,7 +212,6 @@ const STRINGS = {
   section_household: { ar: "الأسرة", en: "Household" },
   field_goal: { ar: "الهدف", en: "Goal" },
   field_calories: { ar: "السعرات", en: "Calories" },
-  field_macros: { ar: "الماكروز", en: "Macros" },
   no_members: { ar: "لا يوجد أفراد في الأسرة", en: "No household members" },
   macro_protein: { ar: "بروتين", en: "Protein" },
   macro_carbs: { ar: "كارب", en: "Carbs" },
@@ -234,7 +222,6 @@ const STRINGS = {
 
   section_plans: { ar: "الخطط الغذائية", en: "Meal plans" },
   field_days: { ar: "الأيام", en: "Days" },
-  field_tokens: { ar: "التوكنز", en: "Tokens" },
   field_cost: { ar: "التكلفة", en: "Cost" },
   field_model: { ar: "النموذج", en: "Model" },
   inspect_plan: { ar: "عرض الخطة", en: "View plan" },
@@ -257,8 +244,6 @@ const STRINGS = {
   field_chat_cost: { ar: "تكلفة المحادثة", en: "Chat cost" },
 
   section_flags: { ar: "التنبيهات", en: "Flags" },
-  flag_medical_blocked: { ar: "محظور (بوابة طبية)", en: "Blocked (medical gate)" },
-  flag_failed_gen: { ar: "إنشاءات فاشلة", en: "Failed generations" },
   flags_clear: { ar: "لا توجد تنبيهات", en: "No flags" },
 
   // ── Health detail (gated) ──
@@ -277,7 +262,6 @@ const STRINGS = {
   field_dislikes: { ar: "ما لا تفضله", en: "Dislikes" },
 
   // ── Plan view (gated) ──
-  plan_data_title: { ar: "الخطة", en: "Plan" },
   plan_data_logged_note: {
     ar: "تم تسجيل عرض خطة المشترك في سجل التدقيق.",
     en: "Viewing the subscriber's plan is recorded in the audit log.",
@@ -289,11 +273,6 @@ const STRINGS = {
 
   // States
   retry: { ar: "إعادة المحاولة", en: "Try again" },
-  error_title: { ar: "تعذّر تحميل البيانات", en: "Couldn’t load data" },
-  error_body: {
-    ar: "حدث خطأ أثناء جلب بيانات المشتركين. حدّث الصفحة للمحاولة مرة أخرى.",
-    en: "Something went wrong loading subscriber data. Refresh to try again.",
-  },
   truncated_warning: {
     ar: "بعض الإحصاءات قد تكون غير مكتملة (تم بلوغ حد التحميل).",
     en: "Some figures may be incomplete (load ceiling reached).",

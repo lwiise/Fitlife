@@ -187,7 +187,6 @@ export const FAMILY_STRINGS = {
   fm_focus: { ar: "التركيز", en: "Focus" },
   fm_session_length: { ar: "مدة الحصة", en: "Session length" },
   fm_chosen_days: { ar: "الأيام المختارة", en: "Chosen days" },
-  fm_split: { ar: "التقسيم", en: "Split" },
 
   // ── Exercise program: the week and one session ──
   fm_rest_day: { ar: "راحة", en: "Rest" },
