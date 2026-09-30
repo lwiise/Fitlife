@@ -96,6 +96,16 @@ function defaultDayIndex(member: MemberWorkout | undefined): number {
   return member.weekly_sessions[0]?.day_index ?? 0;
 }
 
+// The read-only view (someone else's program, in the admin console) opens on
+// the week's first session instead. It has nothing to mark today, and the
+// server that renders it (UTC) and the browser that hydrates it (the viewer's
+// own time zone) can disagree about which weekday today is; a choice that
+// never reads the clock renders the same in both.
+function firstSessionDay(member: MemberWorkout | undefined): number {
+  const days = member?.weekly_sessions.map((s) => s.day_index) ?? [];
+  return days.length > 0 ? Math.min(...days) : 0;
+}
+
 function SessionDetail({
   session,
   homeMode,
@@ -250,6 +260,7 @@ export function WorkoutViewer({
   roster,
   addMemberHref = "/family",
   addTraineeHref = "/onboarding/workout",
+  readOnly = false,
 }: {
   plan: WorkoutPlan;
   /** workout_plans.id — needed to write session marks. */
@@ -284,6 +295,13 @@ export function WorkoutViewer({
    * page resolves this to the opt-in questionnaire when an eligible adult can be
    * added, else to /family to add one first. */
   addTraineeHref?: string;
+  /** Someone else's program, shown as-is (the admin console): no links into
+   * the customer's own screens (add a member, add a trainee, the journey), no
+   * «أنتِ/أنتَ» marker on the owner's chip, and no session marking. It opens
+   * on the week's first session rather than today, and keeps the chip of a
+   * lone trainee, so it always says whose program it is. Off by default — the
+   * customer's view is unchanged. */
+  readOnly?: boolean;
 }) {
   // The Exercise view mirrors the meal view's member tabs (owner directive
   // 07/2026): the SAME people appear as tabs. A member with a program shows it;
@@ -309,7 +327,7 @@ export function WorkoutViewer({
   const activeWorkout =
     plan.members.find((m) => m.member_id === activeMemberId) ?? null;
   const [activeDayIndex, setActiveDayIndex] = useState<number>(() =>
-    defaultDayIndex(plan.members[0]),
+    readOnly ? firstSessionDay(plan.members[0]) : defaultDayIndex(plan.members[0]),
   );
   // Viewer-level so the choice survives switching days/members.
   const [homeMode, setHomeMode] = useState(false);
@@ -412,6 +430,7 @@ export function WorkoutViewer({
   const activeDayDist = (todayWeekday - activeDayIndex + 7) % 7;
   const workoutMaxBack = Math.max(todayWeekday, WORKOUT_GRACE_DAYS);
   const canMarkActive =
+    !readOnly &&
     checkins !== undefined &&
     !!planId &&
     !!activeWorkout &&
@@ -420,8 +439,9 @@ export function WorkoutViewer({
   // The private «الوزن والمتابعة» journey link for the ACTIVE member (eligible
   // members only) — same placement rule as the meal view: beside the tabs for a
   // family, up top with the toggle for a solo program.
-  const journeyEntry =
-    journeyMembers?.find((j) => j.id === activeMemberId) ?? null;
+  const journeyEntry = readOnly
+    ? null
+    : (journeyMembers?.find((j) => j.id === activeMemberId) ?? null);
   const journeyLink = journeyEntry ? (
     <Link
       href={
@@ -467,8 +487,10 @@ export function WorkoutViewer({
             last chip (→ /family, exactly like meals), and «الوزن والمتابعة»
             takes the trailing slot. A member without a program renders the
             add-plan CTA in the body below; a solo household shows the invite
-            prompt instead of a lone chip. */}
-        {!isSolo && (
+            prompt instead of a lone chip. Read-only keeps the row for a lone
+            trainee: it is the only place that names whose program this is,
+            and there that trainee need not be the account owner. */}
+        {(!isSolo || readOnly) && (
           <>
             <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
             <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
@@ -497,7 +519,7 @@ export function WorkoutViewer({
                         <span className="relative">
                           {/* «أنتِ» stays visible TEXT — same treatment as the
                               meal viewer's chips. */}
-                          {m.member_id === "mom" && (
+                          {m.member_id === "mom" && !readOnly && (
                             <span className="me-1">
                               {genderPick(ownerSex)("أنتِ", "أنتَ")} ·
                             </span>
@@ -507,13 +529,15 @@ export function WorkoutViewer({
                       </button>
                     );
                   })}
-                  <Link
-                    href={addMemberHref}
-                    className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                  >
-                    <UserPlus className="size-4" aria-hidden="true" />
-                    إضافة فرد
-                  </Link>
+                  {!readOnly && (
+                    <Link
+                      href={addMemberHref}
+                      className="inline-flex items-center gap-1.5 flex-shrink-0 min-h-11 px-4 rounded-full border-[1.5px] border-dashed border-brand-purple-900/35 text-brand-purple-900 hover:bg-brand-lavender/25 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                    >
+                      <UserPlus className="size-4" aria-hidden="true" />
+                      إضافة فرد
+                    </Link>
+                  )}
                 </div>
                 {journeyLink}
               </div>
@@ -527,7 +551,7 @@ export function WorkoutViewer({
             adults-only + opt-in per person, so this is the only way the
             switcher grows). Sits where the chip row would be, so it reads as
             «this is where other people appear». */}
-        {isSolo && (
+        {isSolo && !readOnly && (
           <>
             <div className="h-px bg-brand-ink/10 my-4" aria-hidden="true" />
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -821,16 +845,18 @@ export function WorkoutViewer({
               <p className="text-brand-ink font-bold text-base leading-relaxed max-w-sm">
                 لا توجد خطة تمارين لـ{activeTab.member_name_ar} بعد.
               </p>
-              <Link
-                href="/onboarding/workout"
-                className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-3 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
-              >
-                <Dumbbell className="size-4" aria-hidden="true" />
-                {genderPick(ownerSex)(
-                  `أضيفي خطة تمارين لـ${activeTab.member_name_ar}`,
-                  `أضِف خطة تمارين لـ${activeTab.member_name_ar}`,
-                )}
-              </Link>
+              {!readOnly && (
+                <Link
+                  href="/onboarding/workout"
+                  className="inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-purple-900 text-white font-bold text-sm px-5 py-3 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple-900 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface min-h-11"
+                >
+                  <Dumbbell className="size-4" aria-hidden="true" />
+                  {genderPick(ownerSex)(
+                    `أضيفي خطة تمارين لـ${activeTab.member_name_ar}`,
+                    `أضِف خطة تمارين لـ${activeTab.member_name_ar}`,
+                  )}
+                </Link>
+              )}
             </>
           ) : (
             <p className="text-brand-ink-muted text-sm leading-relaxed max-w-sm">

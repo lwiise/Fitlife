@@ -1,5 +1,6 @@
 "use server";
 
+import { updateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
@@ -11,6 +12,23 @@ import { ADMIN_CURRENCY_COOKIE, ADMIN_LOCALE_COOKIE } from "@/lib/admin/locale";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Where the account tools return: the family page's account tab, the tab they
+ * are used from. Only ever built from an id that has passed UUID_RE.
+ */
+function accountTab(userId: string, error?: "audit_failed"): string {
+  const path = `/admin/subscribers/${userId}?tab=account`;
+  return error ? `${path}&error=${error}` : path;
+}
+
+/**
+ * The cached tables the families list, the rail counts and the ⌘K index are
+ * built from (lib/admin/queries.ts). An erased account must drop out of them
+ * on the very next request — the families list the deletion lands on — not
+ * up to a minute (dataset) or five (emails) later.
+ */
+const ADMIN_LIST_CACHE_TAGS = ["admin-dataset", "admin-email-map"] as const;
 
 /** The account tools must never touch an admin (prevents self/admin lockout). */
 async function isTargetAdmin(userId: string): Promise<boolean> {
@@ -69,15 +87,15 @@ export async function setAdminCurrency(formData: FormData) {
 /**
  * Deactivate (ban) or reactivate (unban) a subscriber via GoTrue — reversible,
  * blocks login while keeping all data. Any admin; the action refuses to touch an
- * admin account. The redirect re-renders the (uncached) detail page so the new
- * status shows immediately.
+ * admin account. The redirect re-renders the (uncached) family page on its
+ * account tab, so the new status shows immediately where the button was.
  */
 export async function setSubscriberActive(formData: FormData) {
   const admin = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
   const active = formData.get("active") === "true";
   if (!UUID_RE.test(userId)) redirect("/admin");
-  if (await isTargetAdmin(userId)) redirect(`/admin/subscribers/${userId}`);
+  if (await isTargetAdmin(userId)) redirect(accountTab(userId));
 
   // Audit BEFORE acting: if the trail can't be written, the action must not
   // happen (PDPL). The row therefore records INTENT — if GoTrue then errors,
@@ -90,20 +108,22 @@ export async function setSubscriberActive(formData: FormData) {
       ? "reactivate_subscriber_account"
       : "deactivate_subscriber_account",
   });
-  if (!audit.ok) redirect(`/admin/subscribers/${userId}?error=audit_failed`);
+  if (!audit.ok) redirect(accountTab(userId, "audit_failed"));
 
   const { error } = await createAdminClient().auth.admin.updateUserById(userId, {
     ban_duration: active ? "none" : "876000h", // ~100 years = "deactivated"
   });
   if (error) throw error;
 
-  redirect(`/admin/subscribers/${userId}`);
+  redirect(accountTab(userId));
 }
 
 /**
  * Permanently delete a subscriber account (PDPL erasure) — irreversible: cascades
  * all their data and cancels billing. The admin must re-type the subscriber's
  * email, verified server-side. Any admin; refuses to delete an admin account.
+ * A refused check returns to the account tab it was started from; a completed
+ * erasure lands on the families list, already without the account.
  */
 export async function deleteSubscriberAccount(formData: FormData) {
   const admin = await requireAdmin();
@@ -112,13 +132,13 @@ export async function deleteSubscriberAccount(formData: FormData) {
     .trim()
     .toLowerCase();
   if (!UUID_RE.test(userId)) redirect("/admin");
-  if (await isTargetAdmin(userId)) redirect(`/admin/subscribers/${userId}`);
+  if (await isTargetAdmin(userId)) redirect(accountTab(userId));
 
   // Server-side confirmation: the typed email must match the account's real email.
   const { data: target } = await createAdminClient().auth.admin.getUserById(userId);
   const realEmail = target?.user?.email?.trim().toLowerCase() ?? null;
   if (!realEmail || confirmEmail !== realEmail) {
-    redirect(`/admin/subscribers/${userId}`);
+    redirect(accountTab(userId));
   }
 
   // Log BEFORE erasing — the audit FK is `on delete set null`, so the row survives
@@ -130,9 +150,13 @@ export async function deleteSubscriberAccount(formData: FormData) {
     action: "delete_subscriber_account",
     detail: { email: realEmail },
   });
-  if (!audit.ok) redirect(`/admin/subscribers/${userId}?error=audit_failed`);
+  if (!audit.ok) redirect(accountTab(userId, "audit_failed"));
 
   await eraseUserAccount(userId);
 
-  redirect("/admin");
+  // Read-your-writes: expire the list's cached tables now, so the families
+  // list below (and the rail counts, and ⌘K) no longer show the account.
+  for (const tag of ADMIN_LIST_CACHE_TAGS) updateTag(tag);
+
+  redirect("/admin/families");
 }

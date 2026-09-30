@@ -1,82 +1,77 @@
 import { notFound } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
 import { MealPlanSchema } from "@fitlife/plan-engine";
 import { requireAdmin } from "@/lib/admin/auth";
 import { logAdminAccess } from "@/lib/admin/audit";
 import { loadPlanForInspect } from "@/lib/admin/detail";
-import { fmtDate } from "@/lib/admin/format";
-import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
-import { planStatusLabel, t } from "@/lib/admin/i18n";
-import { DetailHeader } from "@/app/admin/_components/DetailHeader";
+import { isUuid } from "@/lib/admin/familyList";
+import { t } from "@/lib/admin/i18n";
+import { getAdminLocale } from "@/lib/admin/locale";
 import { PlanViewer } from "@/app/plan/PlanViewer";
+import { Card, Empty } from "@/app/admin/_ui";
+import { loadFamilyName } from "@/app/admin/_family/data";
+import { ViewerHead } from "@/app/admin/_family/ViewerHead";
+import "@/app/admin/_family/family.css";
 
 /**
- * Admin view of a subscriber's meal plan — the real PlanViewer (read-only: no
- * regenerate / add-member / PDF export), not a raw JSON dump. Plan data describes a
- * household's meals + health needs, so opening it records a `view_plan_data` audit
- * event (PDPL).
+ * A family's meal plan as the family sees it — the real PlanViewer, read-only
+ * (no regenerate, no add-member, no PDF export), not a raw JSON dump. Plan
+ * data describes a household's meals and health needs, so opening it records
+ * a `view_plan_data` audit event (PDPL), written alongside the read. The plan
+ * must belong to the family in the URL. Content that no longer validates
+ * shows an explanation instead of the viewer.
  */
-export default async function AdminPlanViewPage({
+export default async function FamilyMealPlanPage({
   params,
 }: {
   params: Promise<{ userId: string; planId: string }>;
 }) {
   const admin = await requireAdmin();
-  const { userId, planId } = await params;
+  const { userId: rawUser, planId: rawPlan } = await params;
+  if (!isUuid(rawUser) || !isUuid(rawPlan)) notFound();
+  const userId = rawUser.toLowerCase();
+  const planId = rawPlan.toLowerCase();
 
-  const plan = await loadPlanForInspect(userId, planId);
+  const [, plan, familyName, locale] = await Promise.all([
+    logAdminAccess({
+      adminUserId: admin.userId,
+      subscriberId: userId,
+      action: "view_plan_data",
+      detail: { planId, kind: "meal" },
+    }),
+    loadPlanForInspect(userId, planId),
+    loadFamilyName(userId),
+    getAdminLocale(),
+  ]);
   if (!plan) notFound();
-
-  const locale = await getAdminLocale();
-  const currency = await getAdminCurrency();
-
-  await logAdminAccess({
-    adminUserId: admin.userId,
-    subscriberId: userId,
-    action: "view_plan_data",
-    detail: { planId },
-  });
 
   const parsed = MealPlanSchema.safeParse(plan.planData);
 
   return (
-    <>
-      <DetailHeader
-        backHref={`/admin/subscribers/${userId}`}
-        backLabel={t("back_to_subscriber", locale)}
-        name={`${t("plan_data_title", locale)} — ${planStatusLabel(plan.status, locale)}`}
-        locale={locale}
-        currency={currency}
-        localeNext={`/admin/subscribers/${userId}/plan/${planId}`}
-      />
-
-      <main className="container-app space-y-4 py-6">
-        <p className="flex items-center gap-2 rounded-lg border border-brand-warm-orange/30 bg-brand-warm-orange/10 px-3 py-2 adm-body text-brand-ink">
-          <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
-          {t("plan_data_logged_note", locale)}
-        </p>
-
-        <p className="adm-body text-brand-ink-muted">
-          {fmtDate(plan.generatedAt ?? plan.createdAt, locale)}
-        </p>
-
+    <div className="ad-a-page">
+      <div className="ad-a-page-in">
+        <ViewerHead
+          userId={userId}
+          backTab="meal"
+          familyName={familyName}
+          title={t("fp_tab_meal", locale)}
+          status={plan.status}
+          createdAt={plan.createdAt}
+          generatedAt={plan.generatedAt}
+          audit={t("plan_data_logged_note", locale)}
+          locale={locale}
+        />
         {parsed.success ? (
-          // The plan content is Arabic — force RTL so it reads correctly even when
-          // the admin chrome is in English. PlanViewer is read-only with no export.
-          <div dir="rtl">
-            <PlanViewer
-              plan={parsed.data}
-              planId={plan.id}
-              readOnly
-              hideExport
-            />
+          // Plan content is Arabic: right-to-left and tagged Arabic even in
+          // the English console.
+          <div className="ad-viewer" dir="rtl" lang="ar">
+            <PlanViewer plan={parsed.data} planId={plan.id} readOnly hideExport />
           </div>
         ) : (
-          <div className="rounded-xl border border-brand-ink/10 bg-surface-elevated p-10 text-center adm-body text-brand-ink-muted">
-            {t("plan_no_data", locale)}
-          </div>
+          <Card>
+            <Empty title={t("fp_plan_unavailable", locale)}>{t("plan_no_data", locale)}</Empty>
+          </Card>
         )}
-      </main>
-    </>
+      </div>
+    </div>
   );
 }

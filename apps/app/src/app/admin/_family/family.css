@@ -1,0 +1,82 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FitLife admin console — the full family page and its audited views (U5).
+
+   Only what admin.css (the prototype port) does not already carry: the
+   danger zone's title row, the "open" action cluster and its pending label,
+   the delete dialog's form, the health cards' surface and h2, and the loading
+   shapes. Same contract as
+   admin.css: everything in `@layer components`, every rule under
+   `.admin-root` on `ad-*` classes, logical properties only; admin.css's
+   reduced-motion rule stops the skeleton pulse here too.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer theme, base, components, utilities;
+
+@layer components {
+
+/* ── Account actions ────────────────────────────────────────────────────── */
+/* A danger-zone row's title with the account's current state beside it. */
+.admin-root .ad-fp-dz-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The delete dialog wraps its body and footer in the form; they stack as the
+   dialog's own sections do. */
+.admin-root .ad-fp-dform { display: flex; flex-direction: column; min-height: 0; }
+
+/* ── Tab bodies ─────────────────────────────────────────────────────────── */
+/* An "open" action with the audit line that belongs to it, at a panel head's end. */
+.admin-root .ad-fp-open { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+/* The label of an "open" button, which reads «جارٍ الفتح…» while its view is
+   on its way (OpeningLabel): both texts share one grid cell, so the button is
+   as wide as the longer one and never resizes; only the current text shows.
+   The button dims meanwhile, as a busy `.ad-btn` does. */
+.admin-root .ad-fp-swap { display: inline-grid; justify-items: center; }
+.admin-root .ad-fp-swap > * { grid-area: 1 / 1; }
+.admin-root .ad-fp-swap > [aria-hidden="true"] { visibility: hidden; }
+.admin-root .ad-btn:has(> .ad-fp-swap[data-pending]) { opacity: .7; cursor: progress; }
+/* A table that scrolls sideways must also hold its screen-reader-only text:
+   `.ad-sr` is absolutely positioned, and with no positioned box inside the
+   scroll area it escapes the scroller's clip — the plan and program tables'
+   hidden «فتح» header then widened the whole phone page by the table's width. */
+.admin-root .ad-a-page .ad-tbl-wrap { position: relative; }
+/* A date stays on one line in a narrow table (it scrolls sideways instead),
+   as the runs table already does for its own. */
+.admin-root .ad-a-page .ad-tbl td:has(> time) { white-space: nowrap; }
+
+/* ── Health page ────────────────────────────────────────────────────────── */
+/* The prototype drew these cards inside a dialog, which gave them its card
+   surface. On the page they carry their own: below 1024px the page is the
+   grey --bg, where a card without one read as a hollow outline and its chips
+   all but vanished. From 1024px the page is --card already, so nothing moves. */
+.admin-root .ad-hcard { background: var(--card); }
+/* The cards sit under the page's h1, so their titles are h2 (admin.css styles
+   the prototype's h3). */
+.admin-root .ad-hcard h2 { margin-block-end: 12px; font-size: 14px; line-height: 20px; font-weight: 800; }
+
+/* ── Loading shapes ─────────────────────────────────────────────────────── */
+/* The page's own rhythm (admin.css gives a skeleton group 12px). */
+.admin-root .ad-skel-group.ad-fp-skel { gap: 20px; }
+.admin-root .ad-fp-skel-id { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.admin-root .ad-fp-skel-crumb { width: 96px; height: 14px; margin-block: 9px; }
+.admin-root .ad-fp-skel-h1 { width: 240px; max-width: 100%; height: 32px; }
+.admin-root .ad-fp-skel-sub { width: 320px; max-width: 100%; }
+.admin-root .ad-fp-skel-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-root .ad-fp-skel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 44px;
+  overflow: hidden;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--line);
+}
+.admin-root .ad-fp-skel-tabs > .ad-skel { flex: none; width: 72px; height: 14px; }
+.admin-root .ad-fp-skel-chip { width: 88px; height: 36px; border-radius: 999px; }
+.admin-root .ad-fp-skel-day { height: 56px; border-radius: 12px; }
+.admin-root .ad-fp-skel-wd { height: 128px; border-radius: 12px; }
+.admin-root .ad-fp-skel-box { height: 112px; border-radius: 12px; }
+.admin-root .ad-fp-skel-note { height: 44px; border-radius: 12px; }
+.admin-root .ad-fp-skel-rows { display: flex; flex-direction: column; gap: 1px; overflow: hidden; border-radius: 12px; }
+.admin-root .ad-fp-skel-rows > .ad-skel { height: 52px; border-radius: 0; }
+.admin-root .ad-fp-skel-viewer { height: 480px; border-radius: 24px; }
+.admin-root .ad-fp-skel-hcard { height: 280px; border-radius: 12px; }
+
+} /* @layer components */
