@@ -9,10 +9,11 @@ import {
 } from "react";
 import { ChevronDown, ChevronUp, TriangleAlert } from "lucide-react";
 import type { FamilyColumn, FamilyRow, FamilySortKey } from "@/lib/admin/console-types";
+import { renewalDateAt } from "@/lib/admin/familyFlags";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
-import { Flag, Ltr, StatusPill, TierBadge } from "../_ui";
-import { HouseholdCell, MealPlanPill, WorkoutPlanPill, showsCancelScheduled } from "../_blocks";
+import { Flag, Ltr, StatusPill, TierBadge, joinSep } from "../_ui";
+import { HouseholdCell, MealPlanPill, WorkoutPlanPill } from "../_blocks";
 import { COLUMN_LABEL, COLUMN_SORT, familyPageHref, type TableColumn } from "./listModel";
 import type { FamilyRowText } from "./types";
 
@@ -295,13 +296,14 @@ function cell(column: FamilyColumn, row: FamilyRow, text: FamilyRowText, locale:
     case "plans":
       return (
         <td key={column}>
-          <span className="ad-num">{fmtNumber(row.plansGenerated, locale)}</span>
-          {row.failedPlans > 0 ? (
-            <span className="ad-bad">
-              {" "}
-              · {fmtNumber(row.failedPlans, locale)} {t("fl_failed", locale)}
-            </span>
-          ) : null}
+          {joinSep(
+            <span className="ad-num">{fmtNumber(row.plansGenerated, locale)}</span>,
+            row.failedPlans > 0 ? (
+              <span className="ad-bad">
+                {fmtNumber(row.failedPlans, locale)} {t("fl_failed", locale)}
+              </span>
+            ) : null,
+          )}
         </td>
       );
   }
@@ -309,28 +311,29 @@ function cell(column: FamilyColumn, row: FamilyRow, text: FamilyRowText, locale:
 
 /**
  * The renewal cell — RenewalCell's rule (the trial end while trialing, else
- * the period end, plus «· إلغاء مجدول» on a subscription set to cancel that
- * has not expired), printing the server-formatted date.
+ * the paid-through date: `renewalDateAt`; plus «إلغاء مجدول» behind a
+ * separator while the row's cancelState is scheduled), printing the
+ * server-formatted date.
  */
 function renewal(row: FamilyRow, text: FamilyRowText, locale: AdminLocale) {
   if (!row.status) return "—";
-  const iso = row.status === "trialing" ? row.trialEndsAt : row.currentPeriodEnd;
+  const iso = renewalDateAt(row);
   const date = iso ? <time dateTime={iso}>{text.renewal}</time> : "—";
-  const cancelling = showsCancelScheduled(row.status, row.cancelAtPeriodEnd) ? (
-    <span className="ad-bad"> · {t("cancel_scheduled", locale)}</span>
-  ) : null;
+  const cancelling =
+    row.cancelState === "scheduled" ? (
+      <span className="ad-bad">{t("cancel_scheduled", locale)}</span>
+    ) : null;
   if (row.status === "trialing") {
     return (
       <>
-        <span className="ad-muted">{t("fm_trial_ends", locale)}</span> {date}
-        {cancelling}
+        {joinSep(
+          <>
+            <span className="ad-muted">{t("fm_trial_ends", locale)}</span> {date}
+          </>,
+          cancelling,
+        )}
       </>
     );
   }
-  return (
-    <>
-      {date}
-      {cancelling}
-    </>
-  );
+  return <>{joinSep(date, cancelling)}</>;
 }

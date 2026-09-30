@@ -16,7 +16,7 @@ import type {
 export type { MrrBreakdown, Trend, GrossMargin };
 export type { Granularity, MetricKey, MetricView, RangePreset };
 
-/** One row in the subscriber table — minimized, ops-relevant fields only. */
+/** One family's account + billing fields (the base of FamilyRow) — minimized, ops-relevant fields only. */
 export interface SubscriberRow {
   userId: string;
   displayName: string | null;
@@ -28,6 +28,14 @@ export interface SubscriberRow {
   signupAt: string;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  /**
+   * subscriptions.ends_at — LemonSqueezy's paid-through date on a cancelled
+   * (or paused) subscription. A portal cancellation often arrives with no new
+   * period end and this set; see subscriptionCancelState. Read only on a row
+   * that has stopped renewing — on a renewing one it is left over
+   * (paidThroughAt).
+   */
+  endsAt: string | null;
   cancelAtPeriodEnd: boolean;
   /** Beneficiaries counting toward the tier limit: owner + non-housekeeper members. */
   beneficiaries: number;
@@ -42,10 +50,11 @@ export interface SubscriberRow {
 }
 
 /**
- * The Overview top section: a Kajabi-style spline chart (selected metric +
- * comparison line) with switchable metric tabs, plus an AI-cost strip — all
- * scoped to the selected range. Every series is a snapshot reconstruction (see
- * lib/admin/timeseries.ts) → `approximated: true`. The AI-cost strip is exact.
+ * The Overview's data (buildOverviewView): the shown metrics' series with their
+ * comparison window, for the metric tiles and the chart (_overview/MetricBoard),
+ * plus the AI-cost figures (_overview/CostTiles) — all scoped to the selected
+ * range. Every series is a snapshot reconstruction (see lib/admin/timeseries.ts)
+ * → `approximated: true`. The AI-cost figures are exact.
  */
 export interface OverviewView {
   /** Total accounts in the system (for empty-state detection + per-account AI). */
@@ -55,9 +64,9 @@ export interface OverviewView {
 
   // ── Chart selection ──
   selectedMetric: MetricKey;
-  /** The (≤4) metric tabs, in display order. */
+  /** The (≤4) metric tiles, in display order. */
   shownMetrics: MetricKey[];
-  /** Computed views for the shown tabs + the selected metric. */
+  /** Computed views for the shown tiles + the selected metric. */
   metrics: MetricView[];
 
   // ── Range / interval ──
@@ -74,7 +83,7 @@ export interface OverviewView {
   /** One ISO anchor per current-range bucket (x-axis). */
   bucketIsos: string[];
 
-  // ── AI-cost strip (exact, scoped to the range) ──
+  // ── AI-cost figures (exact, scoped to the range) ──
   aiCostUsd: number;
   aiCostPerAccountUsd: number | null;
   aiCostPerMemberUsd: number | null;
@@ -96,31 +105,4 @@ export interface OverviewView {
 
   /** Series are reconstructed from the snapshot (labeled in the UI). */
   approximated: true;
-}
-
-export interface SubscriberListParams {
-  search?: string;
-  tier?: string;
-  status?: string;
-  sort?: SubscriberSortKey;
-  dir?: "asc" | "desc";
-  page?: number;
-  pageSize?: number;
-}
-
-export type SubscriberSortKey =
-  | "signupAt"
-  | "lastActivityAt"
-  | "lifetimeAiCostUsd"
-  | "plansGenerated"
-  | "beneficiaries"
-  | "displayName"
-  | "status";
-
-export interface SubscriberListResult {
-  rows: SubscriberRow[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pageCount: number;
 }

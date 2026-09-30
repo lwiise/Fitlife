@@ -17,6 +17,7 @@ import { deleteSubscriberAccount, setSubscriberActive } from "@/app/admin/action
 import { Btn, IconBtn } from "@/app/admin/_ui/Button";
 import { SecTitle } from "@/app/admin/_ui/Card";
 import { Pill } from "@/app/admin/_ui/Pill";
+import { joinSep } from "@/app/admin/_ui/Sep";
 import { Ltr } from "@/app/admin/_ui/Text";
 import { trapTab, useEscapedKeys } from "@/app/admin/_ui/modalFocus";
 import { emailMatches, familyName } from "@/app/admin/_family/model";
@@ -266,9 +267,7 @@ function DeleteDialog({
         <div className="ad-modal-h">
           <div>
             <h2 id={titleId}>{t("delete_modal_title", locale)}</h2>
-            <p>
-              <bdi>{familyName(displayName, locale)}</bdi> · <Ltr mono>{email}</Ltr>
-            </p>
+            <p>{joinSep(<bdi>{familyName(displayName, locale)}</bdi>, <Ltr mono>{email}</Ltr>)}</p>
           </div>
           <IconBtn label={t("fm_close", locale)} icon={X} onClick={close} disabled={pending} />
         </div>

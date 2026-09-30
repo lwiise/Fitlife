@@ -74,7 +74,8 @@ export const FAMILY_STRINGS = {
   fm_slot_lunch: { ar: "غداء", en: "Lunch" },
   fm_slot_snack: { ar: "وجبة خفيفة", en: "Snack" },
   fm_slot_dinner: { ar: "عشاء", en: "Dinner" },
-  fm_shared: { ar: "مشتركة", en: "Shared" },
+  // A shared meal's pill; the number of sharers follows as its own element.
+  fm_shared_by: { ar: "مشتركة بين", en: "Shared by" },
   fm_day_total: { ar: "مجموع اليوم", en: "Day total" },
   fm_portions: { ar: "بالحصص، بدون هدف سعرات", en: "By portions, no calorie target" },
   fm_portions_short: { ar: "بالحصص", en: "portions" },

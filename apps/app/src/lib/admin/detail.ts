@@ -26,6 +26,12 @@ export interface SubscriptionRow {
   trialStartedAt: string | null;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  /**
+   * subscriptions.ends_at — LemonSqueezy's paid-through date on a cancelled
+   * (or paused) subscription, read only on a row that has stopped renewing;
+   * see paidThroughAt and subscriptionCancelState (familyFlags.ts).
+   */
+  endsAt: string | null;
   cancelAtPeriodEnd: boolean;
   cancelledAt: string | null;
   lemonsqueezySubscriptionId: string | null;
@@ -50,65 +56,11 @@ export interface MemberSummary {
   consultedDoctor: boolean | null;
 }
 
-export interface PlanSummary {
-  id: string;
-  status: string;
-  createdAt: string;
-  generatedAt: string | null;
-  daysCovered: number;
-  memberCount: number;
-  aiInputTokens: number | null;
-  aiOutputTokens: number | null;
-  aiModel: string | null;
-  costUsd: number | null;
-}
-
-export interface GenerationSummary {
-  id: string;
-  status: string;
-  model: string | null;
-  tokensIn: number | null;
-  tokensOut: number | null;
-  costUsd: number | null;
-  durationMs: number | null;
-  createdAt: string;
-  completedAt: string | null;
-  errorMessage: string | null;
-  mealPlanId: string | null;
-}
-
-export interface SubscriberDetail {
-  userId: string;
-  email: string | null;
-  /** GoTrue ban active (banned_until in the future) → blocked from logging in. */
-  deactivated: boolean;
-  account: {
-    displayName: string | null;
-    preferredLanguage: string;
-    signupAt: string;
-    onboardingCompletedAt: string | null;
-    familyWideCompletedAt: string | null;
-    momProfileCompletedAt: string | null;
-  };
-  subscription: SubscriptionRow | null;
-  subscriptionHistory: SubscriptionRow[];
-  members: MemberSummary[];
-  plans: PlanSummary[];
-  generations: GenerationSummary[];
-  engagement: { chatCount: number; lastChatAt: string | null; chatCostUsd: number };
-  flags: {
-    medicalGateBlocked: boolean;
-    overLimit: boolean;
-    failedGenerations: number;
-    beneficiaries: number;
-  };
-}
-
 // ── Loaders ──────────────────────────────────────────────────────────────────
 
 /** The subscriptions columns `mapSubscription` reads (shared with family.ts). */
 export const SUBSCRIPTION_COLUMNS =
-  "tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id, lemonsqueezy_customer_id, lemonsqueezy_variant_id";
+  "tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, ends_at, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id, lemonsqueezy_customer_id, lemonsqueezy_variant_id";
 
 export function mapSubscription(s: {
   tier: string | null;
@@ -119,6 +71,7 @@ export function mapSubscription(s: {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  ends_at: string | null;
   cancel_at_period_end: boolean;
   cancelled_at: string | null;
   lemonsqueezy_subscription_id: string | null;
@@ -134,6 +87,7 @@ export function mapSubscription(s: {
     trialStartedAt: s.trial_started_at,
     trialEndsAt: s.trial_ends_at,
     currentPeriodEnd: s.current_period_end,
+    endsAt: s.ends_at ?? null,
     cancelAtPeriodEnd: s.cancel_at_period_end,
     cancelledAt: s.cancelled_at,
     lemonsqueezySubscriptionId: s.lemonsqueezy_subscription_id,

@@ -293,22 +293,6 @@ export function subscriptionStatusTone(status: string | null): Tone {
   return (status && SUBSCRIPTION_TONE[status]) || "neu";
 }
 
-/**
- * Whether a renewal date carries «· إلغاء مجدول»: the subscription is set to
- * cancel and has not ended yet. The old families list showed it on EVERY
- * status; the one exception here is 'expired', where the cancellation has
- * already happened. 'cancelled' keeps it: a cancellation made in the
- * LemonSqueezy portal lands as status 'cancelled' with the flag set, and the
- * customer stays paid through the period (lib/subscription/state.ts).
- *
- * Deliberately wider than the `cancel_scheduled` list flag
- * (`isLiveForCancellation`: active or trialing only) — this is the old
- * renewal column's rule, not the attention-flag taxonomy.
- */
-export function showsCancelScheduled(status: string | null, cancelAtPeriodEnd: boolean): boolean {
-  return cancelAtPeriodEnd && !!status && status !== "expired";
-}
-
 /** Tier display name (Arabic from the pricing config). "—" when missing. */
 export function tierName(tier: string | null, locale: AdminLocale): string {
   const arName = tier && tier in PRICING_TIERS ? PRICING_TIERS[tier as Tier].name_ar : null;
@@ -694,6 +678,9 @@ export interface MarkView {
   /** No leading dot (for "upcoming"). */
   plain: boolean;
   label: string;
+  /** «الشدة: مناسبة» when the intensity was asked for and rated — the pill
+   * draws it after the label, behind a separator. */
+  detail: string | null;
 }
 
 /**
@@ -709,21 +696,20 @@ export function markView(
 ): MarkView | null {
   const mark = effectiveMark(session, todayWeekday);
   if (mark) {
-    const base = t(MARK_KEY[mark.status], locale);
-    const label =
+    const detail =
       withIntensity && mark.intensity
-        ? `${base} · ${t("fm_intensity", locale)}: ${t(INTENSITY_KEY[mark.intensity], locale)}`
-        : base;
-    return { tone: MARK_TONE[mark.status], plain: false, label };
+        ? `${t("fm_intensity", locale)}: ${t(INTENSITY_KEY[mark.intensity], locale)}`
+        : null;
+    return { tone: MARK_TONE[mark.status], plain: false, label: t(MARK_KEY[mark.status], locale), detail };
   }
   if (todayWeekday == null) return null;
   if (session.dayIndex === todayWeekday) {
-    return { tone: "pur", plain: false, label: t("fm_today", locale) };
+    return { tone: "pur", plain: false, label: t("fm_today", locale), detail: null };
   }
   if (session.dayIndex < todayWeekday) {
-    return { tone: "neu", plain: false, label: t("fm_mark_none", locale) };
+    return { tone: "neu", plain: false, label: t("fm_mark_none", locale), detail: null };
   }
-  return { tone: "neu", plain: true, label: t("fm_upcoming", locale) };
+  return { tone: "neu", plain: true, label: t("fm_upcoming", locale), detail: null };
 }
 
 // ── Workout questionnaire labels ────────────────────────────────────────────
@@ -808,9 +794,9 @@ export function equipmentText(profile: TraineeProfileSummary, locale: AdminLocal
 }
 
 /**
- * A trainee's one-line summary parts: location · equipment · level (the split
- * is Arabic plan content and is rendered separately). Missing answers are
- * skipped, never guessed.
+ * A trainee's one-line summary parts: location, equipment, level — drawn with
+ * a separator between them (the split is Arabic plan content and is rendered
+ * separately). Missing answers are skipped, never guessed.
  */
 export function traineeProfileParts(
   profile: TraineeProfileSummary | null,

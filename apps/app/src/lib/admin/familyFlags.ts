@@ -11,6 +11,10 @@
  * The medical gate is deliberately NOT a list flag — the list is the
  * least-privileged surface and never says who has a medical condition. It
  * joins the reasons only where the caller passes it (panel and page).
+ *
+ * The cancellation rule lives here too (`subscriptionCancelState`): the
+ * cancel_scheduled flag, the «cancelling» and «ended» views and every renewal
+ * cell read that one function, never the raw status or flag on their own.
  */
 
 import type {
@@ -18,6 +22,7 @@ import type {
   AttentionSeverity,
   FamilyFlag,
   MealPlanCell,
+  SubscriptionCancelState,
   WorkoutPlanCell,
 } from "./console-types";
 
@@ -31,10 +36,120 @@ export const FAMILY_FLAG_ORDER: readonly FamilyFlag[] = [
   "onboarding_incomplete",
 ];
 
-/** A subscription still running, for which a scheduled cancellation matters. */
-export function isLiveForCancellation(status: string | null | undefined): boolean {
-  return status === "active" || status === "trialing";
+// ── Cancellation ────────────────────────────────────────────────────────────
+
+/** The subscription fields the cancellation rule reads (a list row and a SubscriptionRow both have them). */
+export interface CancelStateInput {
+  /** Latest subscription status (null = never subscribed). */
+  status: string | null;
+  cancelAtPeriodEnd: boolean;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  endsAt: string | null;
 }
+
+/**
+ * The statuses LemonSqueezy dates with ends_at: a subscription that has
+ * stopped renewing. On any other row (active, trialing, past_due) ends_at is
+ * null at the source, so a value there can only be left over — the webhook
+ * writes ends_at whenever it is set and never clears it on a renewal payment
+ * — and it is never read.
+ */
+const ENDS_AT_STATUSES: ReadonlySet<string> = new Set(["cancelled", "expired", "paused"]);
+
+/**
+ * What a subscription is paid through: its period end, or — when a
+ * cancellation arrived without one — LemonSqueezy's ends_at, read only on a
+ * row that has stopped renewing. The dates the app judges access by
+ * (lib/subscription/state.ts, isSubscriptionActive): an active row by its
+ * period end alone, a cancelled one by its period end, else its ends_at.
+ */
+export function paidThroughAt(
+  sub: Pick<CancelStateInput, "status" | "currentPeriodEnd" | "endsAt">,
+): string | null {
+  if (sub.currentPeriodEnd != null) return sub.currentPeriodEnd;
+  return sub.status != null && ENDS_AT_STATUSES.has(sub.status) ? sub.endsAt : null;
+}
+
+/**
+ * The date a renewal cell shows, a scheduled cancellation is dated at, and
+ * the cancellation rule judges: the trial's end while trialing; otherwise
+ * what the subscription is paid through (`paidThroughAt`) — its next
+ * renewal, or the day a cancelled one runs out.
+ */
+export function renewalDateAt(
+  sub: Pick<CancelStateInput, "status" | "trialEndsAt" | "currentPeriodEnd" | "endsAt">,
+): string | null {
+  return sub.status === "trialing" ? sub.trialEndsAt : paidThroughAt(sub);
+}
+
+/**
+ * Where a subscription stands on cancellation. The ONE rule behind the
+ * cancel_scheduled flag and its reason, the «cancelling» and «ended» saved
+ * views and the renewal cells of the list, the panel and the page.
+ *
+ * A subscription that will not renew is "scheduled" while it still runs and
+ * "ended" after, judged by the date its renewal cell shows (`renewalDateAt`)
+ * — so a scheduled cancellation is never shown with a date already passed,
+ * with one exception: past_due, below, where the flag alone decides and the
+ * date is the renewal that failed (its cancel_scheduled reason is undated):
+ *  - 'expired' → ended;
+ *  - 'cancelled' → scheduled while the paid-through date is still ahead,
+ *    ended once it has passed — or when there is no date at all. Cancelled
+ *    means "will not renew", not "access ends now": a cancellation made in
+ *    the LemonSqueezy portal lands as status 'cancelled', and the customer
+ *    keeps what she paid for until that date;
+ *  - cancel_at_period_end on an active or trialing subscription (our own
+ *    cancel route keeps the row 'active' and only sets the flag) → scheduled
+ *    until the period end, or the trial's end, and ended once it has passed:
+ *    a missed expiry webhook leaves the row 'active' after that date. An
+ *    active row is dated by its period end alone (a left-over ends_at is not
+ *    its date; see `paidThroughAt`). With no date, an active row is a legacy
+ *    row with open-ended access (still scheduled) and a trial has already
+ *    run out (ended);
+ *  - cancel_at_period_end on a past-due subscription → scheduled: its period
+ *    end has passed by definition (the renewal failed), so the flag decides;
+ *  - anything else → none.
+ *
+ * It mirrors isSubscriptionActive (lib/subscription/state.ts): outside
+ * past_due, "scheduled" is "the app still grants access, and it will not
+ * renew" (familyFlags.test.ts holds the two together). It does not call it:
+ * that module is server-only, and while free-access mode is on it answers
+ * true for everyone, where the console must show the real billing state.
+ *
+ * `nowMs` is the caller's fixed "now" (the dataset's read time, the page's
+ * load time), so every surface judges one snapshot the same way.
+ */
+export function subscriptionCancelState(
+  sub: CancelStateInput,
+  nowMs: number,
+): SubscriptionCancelState {
+  switch (sub.status) {
+    case "expired":
+      return "ended";
+    case "cancelled":
+      return runsAt(renewalDateAt(sub), nowMs, false) ? "scheduled" : "ended";
+    case "active":
+    case "trialing":
+      if (!sub.cancelAtPeriodEnd) return "none";
+      return runsAt(renewalDateAt(sub), nowMs, sub.status === "active") ? "scheduled" : "ended";
+    case "past_due":
+      return sub.cancelAtPeriodEnd ? "scheduled" : "none";
+    default:
+      return "none";
+  }
+}
+
+/**
+ * Does a subscription that runs until `until` still run at `nowMs`? `undated`
+ * answers when there is no date. An unparseable date is NaN, which is never
+ * ahead: it has run out.
+ */
+function runsAt(until: string | null, nowMs: number, undated: boolean): boolean {
+  return until == null ? undated : Date.parse(until) > nowMs;
+}
+
+// ── Runs ────────────────────────────────────────────────────────────────────
 
 export type GenerationKind = "meal" | "workout";
 
@@ -83,7 +198,8 @@ export type ServedCellLike = Pick<MealPlanCell | WorkoutPlanCell, "state" | "mas
 export interface FlagInput {
   /** Latest subscription status (null = never subscribed). */
   status: string | null;
-  cancelAtPeriodEnd: boolean;
+  /** That subscription's `subscriptionCancelState`, judged at the snapshot's "now". */
+  cancelState: SubscriptionCancelState;
   overLimit: boolean;
   onboardingComplete: boolean;
   /** Status of the newest meal-kind generation row, if any. */
@@ -125,7 +241,7 @@ export function deriveFamilyFlags(input: FlagInput): FamilyFlag[] {
     failed_workout_run:
       input.newestWorkoutRunStatus === "failed" || servedCellFailed(input.workout),
     failed_meal_run: input.newestMealRunStatus === "failed" || servedCellFailed(input.meal),
-    cancel_scheduled: input.cancelAtPeriodEnd && isLiveForCancellation(input.status),
+    cancel_scheduled: input.cancelState === "scheduled",
     onboarding_incomplete: !input.onboardingComplete,
   };
   return FAMILY_FLAG_ORDER.filter((f) => on[f]);
@@ -151,7 +267,9 @@ export interface ReasonInput {
   /** Panel/page only. */
   medicalGateBlocked: boolean;
   subscription: {
+    status: string | null;
     currentPeriodEnd: string | null;
+    endsAt: string | null;
     trialEndsAt: string | null;
     updatedAt: string | null;
   } | null;
@@ -230,7 +348,15 @@ export function attentionReasons(input: ReasonInput): AttentionReason[] {
         });
         break;
       case "cancel_scheduled":
-        out.push({ flag, severity: "medium", at: sub?.currentPeriodEnd ?? null, tab: "billing" });
+        // Dated when it takes effect: the day it is paid through (a trial's
+        // end). Not on a past-due subscription: its date is the renewal that
+        // failed — already behind it, and already the past_due reason's date.
+        out.push({
+          flag,
+          severity: "medium",
+          at: sub && sub.status !== "past_due" ? renewalDateAt(sub) : null,
+          tab: "billing",
+        });
         break;
       case "onboarding_incomplete":
         out.push({ flag, severity: "medium", at: sub?.trialEndsAt ?? null, tab: "summary" });

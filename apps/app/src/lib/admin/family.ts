@@ -166,6 +166,7 @@ interface SubscriptionDbRow {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  ends_at: string | null;
   cancel_at_period_end: boolean;
   cancelled_at: string | null;
   lemonsqueezy_subscription_id: string | null;
@@ -467,10 +468,10 @@ const newestLive = (rows: readonly { status: string; created_at: string }[]) =>
 // ── Header ──────────────────────────────────────────────────────────────────
 
 /**
- * Identity, billing, flags and totals. The flags, household count, lifetime
- * cost and plan cells are computed by the families list's own builder over a
- * one-family slice of the same tables, so the page and the list cannot
- * disagree about a family.
+ * Identity, billing, flags and totals. The flags, the cancellation state,
+ * household count, lifetime cost and plan cells are computed by the families
+ * list's own builder over a one-family slice of the same tables, so the page
+ * and the list cannot disagree about a family.
  */
 async function buildHeader(reader: FamilyReader): Promise<FamilyHeaderData | null> {
   const userId = reader.userId;
@@ -570,17 +571,12 @@ async function buildHeader(reader: FamilyReader): Promise<FamilyHeaderData | nul
     tierMaxPeople,
     overLimit: row.overLimit,
     flags: row.flags,
+    cancelState: row.cancelState,
     medicalGateBlocked,
     reasons: attentionReasons({
       flags: row.flags,
       medicalGateBlocked,
-      subscription: subscription
-        ? {
-            currentPeriodEnd: subscription.currentPeriodEnd,
-            trialEndsAt: subscription.trialEndsAt,
-            updatedAt: subscription.updatedAt,
-          }
-        : null,
+      subscription,
       beneficiaries: row.beneficiaries,
       maxPeople: tierMaxPeople,
       mealFailureAt: runFailureAt(newestRun.meal, row.meal, newestLive(mealRows)),

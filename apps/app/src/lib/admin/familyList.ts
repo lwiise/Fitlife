@@ -104,7 +104,12 @@ export function matchesSearch(
 
 // ── Views and filters ───────────────────────────────────────────────────────
 
-/** Is a row in a saved view? */
+/**
+ * Is a row in a saved view? «cancelling» and «ended» read the row's
+ * `cancelState` (subscriptionCancelState, judged with its flags when the
+ * dataset was read): a subscription cancelled in the LemonSqueezy portal is
+ * still «cancelling» while it is paid through, and only then «ended».
+ */
 export function familyInView(row: FamilyRow, view: FamilyView): boolean {
   switch (view) {
     case "all":
@@ -116,9 +121,9 @@ export function familyInView(row: FamilyRow, view: FamilyView): boolean {
     case "past_due":
       return row.status === view;
     case "cancelling":
-      return row.cancelAtPeriodEnd && (row.status === "active" || row.status === "trialing");
+      return row.cancelState === "scheduled";
     case "ended":
-      return row.status === "cancelled" || row.status === "expired";
+      return row.cancelState === "ended";
   }
 }
 
@@ -223,14 +228,6 @@ export function paginateFamilies(
     pageSize: size,
     pageCount,
   };
-}
-
-/** filter → sort → paginate, the whole query in one call. */
-export function queryFamilies(rows: readonly FamilyRow[], query: FamilyListQuery): FamilyPage {
-  return paginateFamilies(
-    sortFamilies(filterFamilies(rows, query), query.sort, query.dir),
-    query.page,
-  );
 }
 
 // ── URL <-> query ───────────────────────────────────────────────────────────

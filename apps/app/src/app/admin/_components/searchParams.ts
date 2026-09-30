@@ -1,7 +1,6 @@
 /**
- * URL search-param helpers for the (fully server-rendered) admin tables.
- * Filters/sort/pagination live in the query string so the table needs no
- * client JS beyond the small FilterBar island.
+ * URL search-param helpers for the (fully server-rendered, hidden) Insights
+ * page and its top bar's toggles, whose state lives in the query string.
  */
 
 export type RawParams = Record<string, string | string[] | undefined>;

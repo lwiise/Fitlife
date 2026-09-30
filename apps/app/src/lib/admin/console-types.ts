@@ -73,10 +73,23 @@ export type FamilyFlag =
   | "over_limit"
   /** onboarding_completed_at is null. */
   | "onboarding_incomplete"
-  /** cancel_at_period_end is set on a live subscription. */
+  /** The subscription will not renew but still runs (SubscriptionCancelState "scheduled"). */
   | "cancel_scheduled"
   /** subscription status is past_due. */
   | "past_due";
+
+/**
+ * Where a subscription stands on cancellation — `subscriptionCancelState` in
+ * familyFlags.ts, the one rule behind the cancel_scheduled flag, the
+ * «cancelling» and «ended» views and the renewal cells:
+ *  - "scheduled": it will not renew but still runs — set to cancel and not
+ *    yet at its period end (or trial end), or cancelled in the LemonSqueezy
+ *    portal and still paid through; a past-due subscription set to cancel is
+ *    scheduled on the flag alone (its period end is the renewal that failed);
+ *  - "ended": expired, or a cancellation whose date has passed;
+ *  - "none": neither (including no subscription at all).
+ */
+export type SubscriptionCancelState = "none" | "scheduled" | "ended";
 
 export type PlanCellState = "none" | "generating" | "ready" | "failed";
 
@@ -104,6 +117,12 @@ export interface FamilyRow extends SubscriberRow {
   workout: WorkoutPlanCell;
   /** Ordered most severe first. */
   flags: FamilyFlag[];
+  /**
+   * Judged at the same "now" as the flags (when the dataset was read), so the
+   * cancel_scheduled flag, the saved views and the renewal cell always agree
+   * — on the server and in the browser, which never reads its own clock for it.
+   */
+  cancelState: SubscriptionCancelState;
 }
 
 export type FamilySortKey =
@@ -224,6 +243,8 @@ export interface FamilyHeaderData {
   overLimit: boolean;
   /** List flags for this family (same rules as FamilyRow.flags). */
   flags: FamilyFlag[];
+  /** The current subscription's cancellation state, judged when the header was loaded (as FamilyRow.cancelState). */
+  cancelState: SubscriptionCancelState;
   /** Any member trips the doctor sign-off gate (boolean only — no detail). */
   medicalGateBlocked: boolean;
   reasons: AttentionReason[];

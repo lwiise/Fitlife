@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FamilyRow } from "./console-types";
+import { subscriptionCancelState } from "./familyFlags";
 import {
   DEFAULT_FAMILY_LIST_QUERY,
   FAMILY_PAGE_SIZE,
@@ -13,16 +14,22 @@ import {
   paginateFamilies,
   parseFamilyListQuery,
   parseFamilyPanelState,
-  queryFamilies,
   sortFamilies,
   toAsciiDigits,
   viewCounts,
 } from "./familyList";
 
+/** When the fixtures' dataset was "read" — the cancellation state is judged at it. */
+const NOW = Date.parse("2026-09-30T09:00:00Z");
+const FUTURE = "2026-10-14T00:00:00Z";
+const PAST = "2026-09-01T00:00:00Z";
+
 let seq = 0;
+/** A row as buildFamilyRows makes it: cancelState follows the subscription unless given. */
 function fam(p: Partial<FamilyRow> = {}): FamilyRow {
   seq += 1;
-  return {
+  const { cancelState, ...fields } = p;
+  const row: Omit<FamilyRow, "cancelState"> = {
     userId: `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`,
     displayName: `عائلة ${seq}`,
     email: `f${seq}@example.com`,
@@ -32,6 +39,7 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     signupAt: "2026-06-01T00:00:00Z",
     trialEndsAt: null,
     currentPeriodEnd: null,
+    endsAt: null,
     cancelAtPeriodEnd: false,
     beneficiaries: 2,
     hasHousekeeper: false,
@@ -44,8 +52,9 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
     meal: { state: "ready", daysReady: 7, daysTotal: 7, masked: false },
     workout: { state: "none", masked: false },
     flags: [],
-    ...p,
+    ...fields,
   };
+  return { ...row, cancelState: cancelState ?? subscriptionCancelState(row, NOW) };
 }
 
 // ── search ──────────────────────────────────────────────────────────────────
@@ -91,7 +100,8 @@ describe("views", () => {
     fam({ status: "active", flags: ["failed_meal_run"] }),
     fam({ status: "active", cancelAtPeriodEnd: true, flags: ["cancel_scheduled"] }),
     fam({ status: "past_due", flags: ["past_due"] }),
-    fam({ status: "cancelled", cancelAtPeriodEnd: true }),
+    // Cancelled and past its paid-through date.
+    fam({ status: "cancelled", cancelAtPeriodEnd: true, currentPeriodEnd: PAST }),
     fam({ status: "expired" }),
     fam({ status: null }),
   ];
@@ -106,8 +116,66 @@ describe("views", () => {
       cancelling: 1,
       ended: 2,
     });
-    // A cancelled subscription with the flag left over is ended, not "cancelling".
     expect(familyInView(rows[4]!, "cancelling")).toBe(false);
+    expect(familyInView(rows[4]!, "ended")).toBe(true);
+  });
+
+  it("keeps a portal cancellation «cancelling» until the day it is paid through", () => {
+    // LemonSqueezy's portal lands a cancellation as status 'cancelled', often
+    // with no new period end and ends_at set. She keeps what she paid for.
+    const paidUp = fam({
+      status: "cancelled",
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: null,
+      endsAt: FUTURE,
+      flags: ["cancel_scheduled"],
+    });
+    expect(paidUp.cancelState).toBe("scheduled");
+    expect(familyInView(paidUp, "cancelling")).toBe(true);
+    expect(familyInView(paidUp, "ended")).toBe(false);
+    expect(familyInView(paidUp, "attention")).toBe(true);
+    // The same cancellation once that date has passed.
+    const lapsed = fam({
+      status: "cancelled",
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: null,
+      endsAt: PAST,
+    });
+    expect(lapsed.cancelState).toBe("ended");
+    expect(familyInView(lapsed, "cancelling")).toBe(false);
+    expect(familyInView(lapsed, "ended")).toBe(true);
+    // No paid-through date at all: nothing justifies access, so it has ended.
+    const undated = fam({ status: "cancelled", currentPeriodEnd: null, endsAt: null });
+    expect(familyInView(undated, "ended")).toBe(true);
+    // An expired subscription has ended whatever its dates say.
+    const expired = fam({ status: "expired", currentPeriodEnd: FUTURE, cancelAtPeriodEnd: true });
+    expect(familyInView(expired, "ended")).toBe(true);
+    expect(familyInView(expired, "cancelling")).toBe(false);
+  });
+
+  it("moves a subscription set to cancel from «cancelling» to «ended» at its date", () => {
+    // Our own cancel route keeps the row 'active'; a missed expiry webhook
+    // leaves it 'active' past its period end, when it has in fact run out.
+    const running = fam({ status: "active", cancelAtPeriodEnd: true, currentPeriodEnd: FUTURE });
+    expect(familyInView(running, "cancelling")).toBe(true);
+    expect(familyInView(running, "ended")).toBe(false);
+    const runOut = fam({ status: "active", cancelAtPeriodEnd: true, currentPeriodEnd: PAST });
+    expect(familyInView(runOut, "cancelling")).toBe(false);
+    expect(familyInView(runOut, "ended")).toBe(true);
+    // A trial set to cancel runs until the trial's end.
+    const trial = fam({ status: "trialing", cancelAtPeriodEnd: true, trialEndsAt: FUTURE });
+    expect(familyInView(trial, "cancelling")).toBe(true);
+    const trialOver = fam({ status: "trialing", cancelAtPeriodEnd: true, trialEndsAt: PAST });
+    expect(familyInView(trialOver, "ended")).toBe(true);
+    expect(familyInView(trialOver, "cancelling")).toBe(false);
+  });
+
+  it("reads the view from the row's cancelState, never the clock", () => {
+    // Judged «scheduled» when the dataset was read: the browser's later clock
+    // does not move the row, so the rail, the list and the flag agree.
+    const judged = fam({ status: "cancelled", currentPeriodEnd: PAST, cancelState: "scheduled" });
+    expect(familyInView(judged, "cancelling")).toBe(true);
+    expect(familyInView(judged, "ended")).toBe(false);
   });
 
   it("filters by view, tier, status and search together", () => {
@@ -184,12 +252,6 @@ describe("paginateFamilies", () => {
     expect(paginateFamilies(rows, 99).page).toBe(3);
     expect(paginateFamilies(rows, 0).page).toBe(1);
     expect(paginateFamilies([], 4)).toMatchObject({ total: 0, page: 1, pageCount: 1, rows: [] });
-  });
-
-  it("runs the whole query in one call", () => {
-    const res = queryFamilies(rows, { ...DEFAULT_FAMILY_LIST_QUERY, page: 2 });
-    expect(res.page).toBe(2);
-    expect(res.rows).toHaveLength(50);
   });
 });
 

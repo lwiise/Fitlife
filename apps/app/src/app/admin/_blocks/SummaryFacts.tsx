@@ -1,7 +1,9 @@
-import type { FamilyHeaderData } from "@/lib/admin/console-types";
+import type { FamilyHeaderData, SubscriptionCancelState } from "@/lib/admin/console-types";
+import { renewalDateAt } from "@/lib/admin/familyFlags";
 import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
-import { fmtDay, fmtRelativeTo, showsCancelScheduled } from "./helpers";
+import { joinSep } from "../_ui/Sep";
+import { fmtDay, fmtRelativeTo } from "./helpers";
 import { DateText, Field, FlagChip } from "./parts";
 
 /**
@@ -41,43 +43,48 @@ export function HouseholdCell({
 
 /**
  * The renewal cell (the prototype's `renewalCell`): a trial shows when it
- * ends; anything else its period end — and either way «· إلغاء مجدول» when
- * the subscription is set to cancel and has not expired (the old list's rule,
- * which showed it on every status: see `showsCancelScheduled`). No
+ * ends; anything else the date it is paid through (`renewalDateAt` — the
+ * next renewal, or the day a cancelled subscription runs out) — and either
+ * way «إلغاء مجدول» behind a separator while the cancellation is scheduled. `cancelState` is
+ * the loader's verdict (subscriptionCancelState), never re-judged here. No
  * subscription reads «—».
  */
 export function RenewalCell({
   status,
   trialEndsAt,
   currentPeriodEnd,
-  cancelAtPeriodEnd,
+  endsAt,
+  cancelState,
   locale,
 }: {
   status: string | null;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
+  endsAt: string | null;
+  cancelState: SubscriptionCancelState;
   locale: AdminLocale;
 }) {
   if (!status) return <>—</>;
-  const cancelling = showsCancelScheduled(status, cancelAtPeriodEnd) ? (
-    <span className="ad-bad"> · {t("cancel_scheduled", locale)}</span>
-  ) : null;
+  const date = (
+    <DateText iso={renewalDateAt({ status, trialEndsAt, currentPeriodEnd, endsAt })} locale={locale} />
+  );
+  const cancelling =
+    cancelState === "scheduled" ? (
+      <span className="ad-bad">{t("cancel_scheduled", locale)}</span>
+    ) : null;
   if (status === "trialing") {
     return (
       <>
-        <span className="ad-muted">{t("fm_trial_ends", locale)}</span>{" "}
-        <DateText iso={trialEndsAt} locale={locale} />
-        {cancelling}
+        {joinSep(
+          <>
+            <span className="ad-muted">{t("fm_trial_ends", locale)}</span> {date}
+          </>,
+          cancelling,
+        )}
       </>
     );
   }
-  return (
-    <>
-      <DateText iso={currentPeriodEnd} locale={locale} />
-      {cancelling}
-    </>
-  );
+  return <>{joinSep(date, cancelling)}</>;
 }
 
 /**
@@ -102,6 +109,7 @@ export function SummaryFacts({
     | "hasHousekeeper"
     | "overLimit"
     | "subscription"
+    | "cancelState"
     | "lifetimeAiCostUsd"
     | "lastActivityAt"
   >;
@@ -126,7 +134,8 @@ export function SummaryFacts({
           status={sub?.status ?? null}
           trialEndsAt={sub?.trialEndsAt ?? null}
           currentPeriodEnd={sub?.currentPeriodEnd ?? null}
-          cancelAtPeriodEnd={sub?.cancelAtPeriodEnd ?? false}
+          endsAt={sub?.endsAt ?? null}
+          cancelState={header.cancelState}
           locale={locale}
         />
       </Field>

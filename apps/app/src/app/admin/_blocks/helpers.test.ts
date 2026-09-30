@@ -54,7 +54,6 @@ import {
   programHref,
   reasonSentence,
   sessionMinutesLabel,
-  showsCancelScheduled,
   slotLabel,
   todayWeekdayFrom,
   traineeProfileParts,
@@ -342,22 +341,6 @@ describe("reasonSentence", () => {
   });
 });
 
-describe("showsCancelScheduled", () => {
-  it("marks a scheduled cancellation on every status that has not ended", () => {
-    // 'cancelled' included: a portal cancellation lands as status 'cancelled'
-    // with the flag set, while the customer is still paid through the period.
-    for (const status of ["trialing", "active", "cancelled", "past_due", "paused"]) {
-      expect(showsCancelScheduled(status, true), status).toBe(true);
-      expect(showsCancelScheduled(status, false), status).toBe(false);
-    }
-  });
-
-  it("never on an expired subscription or no subscription", () => {
-    expect(showsCancelScheduled("expired", true)).toBe(false);
-    expect(showsCancelScheduled(null, true)).toBe(false);
-  });
-});
-
 describe("cells from sections", () => {
   it("rebuilds the meal cell the list shows", () => {
     const none: MealSection = { served: null, plans: [] };
@@ -511,9 +494,12 @@ describe("exercise week", () => {
     expect(markView(session(0, done), 2, "en", true)).toEqual({
       tone: "ok",
       plain: false,
-      label: "Done · Intensity: right",
+      label: "Done",
+      detail: "Intensity: right",
     });
-    expect(markView(session(0, done), 2, "en", false)?.label).toBe("Done");
+    // The pill draws the intensity behind a separator: never one «·»-joined string.
+    expect(markView(session(0, done), 2, "ar", true)).toMatchObject({ label: "تمّت", detail: "الشدة: مناسبة" });
+    expect(markView(session(0, done), 2, "en", false)).toMatchObject({ label: "Done", detail: null });
     expect(markView(session(2), 2, "en", false)).toMatchObject({ tone: "pur", label: "Today" });
     expect(markView(session(1), 2, "en", false)).toMatchObject({ label: "Not marked" });
     expect(markView(session(4), 2, "en", false)).toMatchObject({ plain: true, label: "Upcoming" });

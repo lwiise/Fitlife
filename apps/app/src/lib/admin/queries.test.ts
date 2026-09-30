@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 // import chain never touches env. buildFamilyRows is pure over the dataset.
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
+import { familyInView, viewCounts } from "./familyList";
 import { buildFamilyRows, type AdminDataset, type PlanProbeLite } from "./queries";
 
 const LOADED = "2026-09-29T12:00:00.000Z";
@@ -39,6 +40,7 @@ const sub = (user_id: string, p: Partial<AdminDataset["subscriptions"][number]> 
   trial_started_at: null,
   trial_ends_at: null,
   current_period_end: daysAgo(-14),
+  ends_at: null,
   cancel_at_period_end: false,
   cancelled_at: null,
   lemonsqueezy_subscription_id: "1",
@@ -264,6 +266,83 @@ describe("buildFamilyRows", () => {
     expect(maha.meal.state).toBe("none");
     expect(maha.workout.state).toBe("none");
     expect(maha.flags).toEqual(["cancel_scheduled", "onboarding_incomplete"]);
+    expect(maha.cancelState).toBe("scheduled");
+    expect(byId(rows, U.hind).cancelState).toBe("none");
+  });
+
+  describe("cancellations", () => {
+    const PORTAL = "00000000-0000-4000-8000-000000000006";
+    const LAPSED = "00000000-0000-4000-8000-000000000007";
+    const EXPIRED = "00000000-0000-4000-8000-000000000008";
+    const MISSED = "00000000-0000-4000-8000-000000000009";
+    const withCancellations = () => {
+      const ds = dataset();
+      ds.profiles.push(
+        profile(PORTAL, "نوف"),
+        profile(LAPSED, "سلمى"),
+        profile(EXPIRED, "دانة"),
+        profile(MISSED, "جود"),
+      );
+      ds.subscriptions.push(
+        // Cancelled in the LemonSqueezy portal: status 'cancelled', no new
+        // period end, ends_at 20 days out — still paid up.
+        sub(PORTAL, {
+          status: "cancelled",
+          cancel_at_period_end: true,
+          current_period_end: null,
+          ends_at: daysAgo(-20),
+          cancelled_at: daysAgo(2),
+        }),
+        // The same kind of cancellation whose paid-through date has passed.
+        sub(LAPSED, {
+          status: "cancelled",
+          cancel_at_period_end: true,
+          current_period_end: daysAgo(5),
+          cancelled_at: daysAgo(35),
+        }),
+        sub(EXPIRED, { status: "expired", current_period_end: daysAgo(40) }),
+        // Set to cancel through our own route (the row stays 'active'), and
+        // the expiry webhook never arrived: the period end has passed.
+        sub(MISSED, { cancel_at_period_end: true, current_period_end: daysAgo(3) }),
+      );
+      return ds;
+    };
+
+    it("keeps a paid-up portal cancellation «cancelling», flagged and dated, not «ended»", () => {
+      const out = buildFamilyRows(withCancellations());
+      const portal = byId(out, PORTAL);
+      expect(portal.endsAt).toBe(daysAgo(-20));
+      expect(portal.cancelState).toBe("scheduled");
+      expect(portal.flags).toEqual(["cancel_scheduled"]);
+      expect(familyInView(portal, "cancelling")).toBe(true);
+      expect(familyInView(portal, "ended")).toBe(false);
+      expect(familyInView(portal, "attention")).toBe(true);
+    });
+
+    it("ends a lapsed cancellation, an expired subscription and a missed expiry without flagging them", () => {
+      const out = buildFamilyRows(withCancellations());
+      for (const id of [LAPSED, EXPIRED, MISSED]) {
+        const row = byId(out, id);
+        expect(row.cancelState, id).toBe("ended");
+        expect(row.flags, id).toEqual([]);
+        expect(familyInView(row, "ended"), id).toBe(true);
+        expect(familyInView(row, "cancelling"), id).toBe(false);
+      }
+      const counts = viewCounts(out);
+      // Maha's trial set to cancel + the portal cancellation.
+      expect(counts.cancelling).toBe(2);
+      expect(counts.ended).toBe(3);
+    });
+
+    it("judges each cancellation's date at the snapshot's own time", () => {
+      // Twenty-one days after the snapshot the portal cancellation has run
+      // out, and so has Maha's trial (it ended three days after it).
+      const late = buildFamilyRows(withCancellations(), NOW + 21 * 86_400_000);
+      for (const id of [PORTAL, U.maha]) {
+        expect(byId(late, id).cancelState, id).toBe("ended");
+        expect(byId(late, id).flags, id).not.toContain("cancel_scheduled");
+      }
+    });
   });
 
   it("judges staleness against when the dataset was read", () => {

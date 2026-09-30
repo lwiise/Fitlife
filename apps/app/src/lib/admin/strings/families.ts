@@ -15,9 +15,10 @@ import type { Entry } from "./types";
  * views (sh_view_*), column names (col_tier, col_status, col_household,
  * col_activity, col_ai_cost, col_renewal, col_signup, col_plans), the search
  * placeholder, paging (page_prev, page_next, nav_pagination), retry, the
- * truncation warning, and the family blocks' own words (fm_*). The panel's
- * head and footer have their own wording (fl_customer_since, fl_open_*),
- * which differs from the full page's.
+ * truncation warning, and the family blocks' own words (fm_*) — the panel's
+ * head says «مشترك منذ» with the full page's own key (fm_customer_since). The
+ * panel's footer has its own wording (fl_open_*), which differs from the
+ * full page's.
  */
 export const FAMILIES_STRINGS = {
   // ── Table and toolbar ──
@@ -30,7 +31,7 @@ export const FAMILIES_STRINGS = {
   fl_status_paused: { ar: "متوقف مؤقتاً", en: "Paused" },
   fl_columns: { ar: "الأعمدة", en: "Columns" },
   fl_columns_hint: { ar: "اختيار الأعمدة الظاهرة", en: "Choose visible columns" },
-  // "· ٢ فاشلة" after a plan count.
+  // «٢ فاشلة», after a plan count and a separator.
   fl_failed: { ar: "فاشلة", en: "failed" },
   fl_views: { ar: "قوائم العائلات", en: "Family lists" },
   fl_truncated: {
@@ -38,7 +39,7 @@ export const FAMILIES_STRINGS = {
     en: "The list may be incomplete: the load ceiling was reached for",
   },
 
-  // ── The head's count line: «١٠ عائلات · ٦ مدفوعة · ٣ تجريبية» ──
+  // ── The head's count line: «١٠ عائلات», «٦ مدفوعة», «٣ تجريبية», with a separator between ──
   fl_n_families_zero: { ar: "{n} عائلة", en: "{n} families" },
   fl_n_families_one: { ar: "عائلة واحدة", en: "{n} family" },
   fl_n_families_two: { ar: "عائلتان", en: "{n} families" },
@@ -80,8 +81,6 @@ export const FAMILIES_STRINGS = {
   fl_go_tab: { ar: "فتح قسم {tab}", en: "Open {tab}" },
   fl_waiting_meals: { ar: "بانتظار الوجبات", en: "Waiting for meals" },
   fl_close_panel: { ar: "إغلاق اللوحة", en: "Close panel" },
-  // The head's «… · عميلة منذ ١ أغسطس» — the brief's wording for the panel.
-  fl_customer_since: { ar: "عميلة منذ", en: "Customer since" },
   // The footer's primary action names what opens, beside «الصفحة الكاملة».
   fl_open_plan: { ar: "فتح خطة الوجبات", en: "Open meal plan" },
   fl_open_program: { ar: "فتح برنامج التمارين", en: "Open exercise program" },

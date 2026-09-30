@@ -63,7 +63,6 @@ const STRINGS = {
 
   // ── Insights: trends ──
   insights_title: { ar: "التحليلات والصحة التشغيلية", en: "Insights & operational health" },
-  section_trends: { ar: "الاتجاهات", en: "Trends" },
   chart_signups: { ar: "اشتراكات جديدة / شهر", en: "New signups / month" },
   chart_growth: { ar: "نمو المشتركين", en: "Subscriber growth" },
   chart_ai_cost: { ar: "تكلفة الذكاء / شهر", en: "AI cost / month" },
@@ -94,8 +93,6 @@ const STRINGS = {
   trend_down: { ar: "انخفاض", en: "down" },
   trend_flat: { ar: "ثابت", en: "flat" },
   nav_pagination: { ar: "التنقل بين الصفحات", en: "Pagination" },
-  page_label: { ar: "صفحة", en: "Page" },
-  failed_plans: { ar: "خطط فاشلة", en: "failed plans" },
 
   period_label: { ar: "الفترة", en: "Period" },
   period_30: { ar: "آخر ٣٠ يوم", en: "Last 30 days" },
@@ -104,7 +101,6 @@ const STRINGS = {
 
   // KPI labels
   kpi_subscribers: { ar: "المشتركون", en: "Subscribers" },
-  kpi_active: { ar: "نشط", en: "active" },
   kpi_trialing: { ar: "تجريبي", en: "trial" },
   kpi_mrr: { ar: "الإيراد الشهري", en: "MRR" },
   kpi_arr: { ar: "سنوي", en: "ARR" },
@@ -114,11 +110,10 @@ const STRINGS = {
   kpi_churn_rate: { ar: "نسبة الإلغاء", en: "churn rate" },
   kpi_plans: { ar: "خطط مُنشأة", en: "Plans generated" },
   kpi_ai_spend: { ar: "تكلفة الذكاء الاصطناعي", en: "AI spend" },
-  kpi_of_revenue: { ar: "من الإيراد", en: "of revenue" },
   kpi_avg_household: { ar: "متوسط حجم الأسرة", en: "Avg household" },
   kpi_beneficiaries: { ar: "مستفيد", en: "beneficiaries" },
 
-  // Subscriber table
+  // Table columns and search: the families list, the family blocks, Insights
   table_title: { ar: "كل المشتركين", en: "All subscribers" },
   search_placeholder: { ar: "بحث بالاسم أو البريد", en: "Search name or email" },
   filter_all: { ar: "الكل", en: "All" },
@@ -134,8 +129,6 @@ const STRINGS = {
   col_activity: { ar: "آخر نشاط", en: "Last activity" },
   col_ai_cost: { ar: "تكلفة الذكاء", en: "AI cost" },
   table_empty: { ar: "لا يوجد مشتركون بعد", en: "No subscribers yet" },
-  table_no_match: { ar: "لا نتائج مطابقة للتصفية", en: "No subscribers match the filters" },
-  results_count: { ar: "مشترك", en: "subscribers" },
 
   // Pagination
   page_prev: { ar: "السابق", en: "Previous" },
@@ -151,8 +144,6 @@ const STRINGS = {
 
   // Flags / misc
   flag_over_limit: { ar: "تجاوز الحد", en: "Over limit" },
-  flag_housekeeper: { ar: "خادمة", en: "Housekeeper" },
-  flag_onboarding_incomplete: { ar: "لم يكمل التسجيل", en: "Onboarding incomplete" },
   cancel_scheduled: { ar: "إلغاء مجدول", en: "Cancel scheduled" },
 
   // ── Subscriber detail ──
@@ -454,23 +445,9 @@ const STRINGS = {
   ai_cost_per_member_plan: { ar: "تكلفة الذكاء لكل فرد في الخطة", en: "AI cost per member plan" },
   kpi_active_users: { ar: "المستخدمون النشطون", en: "Active users" },
   per_account: { ar: "لكل حساب", en: "per account" },
-  per_beneficiary: { ar: "لكل مستفيد", en: "per beneficiary" },
   per_plan: { ar: "لكل خطة", en: "per plan" },
   per_member_plan: { ar: "لكل فرد في خطة", en: "per member plan" },
-  ai_avg_active_note: {
-    ar: "المتوسطات محسوبة على الحسابات التي استخدمت الذكاء في الفترة.",
-    en: "Averages cover only accounts that used AI in the period.",
-  },
   cost_efficiency: { ar: "التكلفة والكفاءة", en: "Cost & efficiency" },
-  ai_billed_usd_note: {
-    ar: "تُحتسب تكلفة الذكاء بالدولار وتُعرض بالريال وفق سعر الصرف المعتمد.",
-    en: "AI is billed in USD; shown in SAR at the platform rate.",
-  },
-
-  // ── Overview: subscribers table legend / affordances ──
-  table_legend_label: { ar: "دليل الرموز", en: "Legend" },
-  view_subscriber: { ar: "تفاصيل المشترك", en: "View subscriber" },
-  info_more: { ar: "تفاصيل إضافية", en: "More info" },
 
   // ── Overview: Kajabi-style chart controls ──
   range_24h: { ar: "آخر ٢٤ ساعة", en: "Last 24h" },
@@ -480,7 +457,6 @@ const STRINGS = {
   interval_day: { ar: "يوم", en: "Day" },
   interval_week: { ar: "أسبوع", en: "Week" },
   interval_month: { ar: "شهر", en: "Month" },
-  legend_current: { ar: "الحالية", en: "Current" },
   customize_metrics: { ar: "تخصيص المؤشرات", en: "Customize metrics" },
   currency_label: { ar: "ر.س", en: "SAR" },
   currency_usd_label: { ar: "دولار", en: "USD" },

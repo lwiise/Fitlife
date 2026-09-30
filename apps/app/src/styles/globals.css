@@ -264,19 +264,10 @@
 }
 
 @layer components {
-  /* Type-scale roles — the single source of truth for admin typography.
+  /* Type-scale roles for the Insights page's cards and charts (DetailCard,
+     KpiCard, ChartFrame); the console itself is set by app/admin/admin.css.
      Size/weight/leading only; colour comes from utilities (which win, being
      a later layer). Pair stat figures with `tabular-nums` + a sibling label. */
-  .admin-root .adm-display {
-    font-size: 1.75rem; /* 28px */
-    font-weight: 800;
-    line-height: 1.1;
-  }
-  .admin-root .adm-h1 {
-    font-size: 1.25rem; /* 20px */
-    font-weight: 800;
-    line-height: 1.2;
-  }
   .admin-root .adm-h2 {
     font-size: 1.0625rem; /* 17px */
     font-weight: 700;

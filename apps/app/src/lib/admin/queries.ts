@@ -12,7 +12,11 @@ import {
   type MealRowLite,
 } from "@/lib/admin/mealProjection";
 import { workoutCellFromRows, type WorkoutRowLite } from "@/lib/admin/workoutProjection";
-import { deriveFamilyFlags, newestGenerationByKind } from "@/lib/admin/familyFlags";
+import {
+  deriveFamilyFlags,
+  newestGenerationByKind,
+  subscriptionCancelState,
+} from "@/lib/admin/familyFlags";
 import type { FamilyRow } from "@/lib/admin/console-types";
 import { computeMrr } from "@/lib/admin/revenue";
 import { trend, type Trend } from "@/lib/admin/period";
@@ -32,13 +36,7 @@ import {
   shiftBuckets,
   toYmd,
 } from "@/lib/admin/timeseries";
-import type {
-  OverviewView,
-  SubscriberListParams,
-  SubscriberListResult,
-  SubscriberRow,
-  SubscriberSortKey,
-} from "@/lib/admin/types";
+import type { OverviewView, SubscriberRow } from "@/lib/admin/types";
 
 /**
  * Admin data layer. All reads go through the service-role client (RLS bypass),
@@ -103,6 +101,8 @@ interface SubscriptionLite {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  /** LemonSqueezy's paid-through date on a cancelled subscription (subscriptionCancelState). */
+  ends_at: string | null;
   cancel_at_period_end: boolean;
   cancelled_at: string | null;
   lemonsqueezy_subscription_id: string | null;
@@ -237,7 +237,7 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
         db
           .from("subscriptions")
           .select(
-            "user_id, tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id",
+            "user_id, tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, ends_at, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id",
           )
           .order("created_at", { ascending: false })
           .order("id", { ascending: true })
@@ -343,16 +343,18 @@ type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser">;
 const cachedAdminDataset = unstable_cache(
   fetchAdminDataset,
   // v2: the console rebuild added plan ids, meal-plan probes, workout plans and
-  // generation kinds. A new key part keeps a pre-deploy cache entry (without
-  // them) from ever being read by the new builders.
-  ["admin-dataset", "v2"],
+  // generation kinds; v3: subscriptions.ends_at (the cancellation rule). A new
+  // key part keeps a cache entry written without them from ever being read by
+  // the new builders.
+  ["admin-dataset", "v3"],
   { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: ["admin-dataset"] },
 );
 
 // Emails come from GoTrue (`loadEmailMap` paginates ALL users — the part that scales
-// worst), yet they change rarely and are used only by the subscriber table. Cache them
-// SEPARATELY on a longer TTL so the per-minute dataset refresh never pays the GoTrue
-// pagination. Entries array, not a Map: a Map serializes to `{}` under unstable_cache.
+// worst), yet they change rarely and are used only by the families list's rows (and so
+// its search and the ⌘K index). Cache them SEPARATELY on a longer TTL so the per-minute
+// dataset refresh never pays the GoTrue pagination. Entries array, not a Map: a Map
+// serializes to `{}` under unstable_cache.
 const ADMIN_EMAIL_TTL_SECONDS = 300; // emails change rarely; 5 min is fresh enough
 
 async function fetchEmailEntries(): Promise<{
@@ -417,7 +419,8 @@ function maxIso(a: string | null, b: string | null): string | null {
   return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
 }
 
-export function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
+/** The account + billing half of every families-list row (see buildFamilyRows). */
+function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
   const subByUser = subscriptionByUser(ds);
   const membersByUser = groupBy(ds.members, (m) => m.user_id);
   const plansByUser = groupBy(ds.plans, (p) => p.user_id);
@@ -459,6 +462,7 @@ export function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
       signupAt: p.created_at,
       trialEndsAt: sub?.trial_ends_at ?? null,
       currentPeriodEnd: sub?.current_period_end ?? null,
+      endsAt: sub?.ends_at ?? null,
       cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
       beneficiaries,
       hasHousekeeper,
@@ -486,12 +490,14 @@ const newestFirst = <R extends { id: string; created_at: string }>(rows: readonl
 /**
  * The families list: every SubscriberRow field, plus what each household is
  * actually served (meal + exercise, by the app's own getLatestPlan /
- * getLatestWorkoutPlan rules — see mealProjection.ts / workoutProjection.ts)
- * and the attention flags.
+ * getLatestWorkoutPlan rules — see mealProjection.ts / workoutProjection.ts),
+ * the subscription's cancellation state and the attention flags.
  *
  * `nowMs` defaults to when the dataset was READ, not the wall clock: the rows
  * are a snapshot up to a minute old, and judging a snapshot's "silence since
  * the last write" against a later clock would call a live run stale early.
+ * The cancellation state is judged at the same instant as the flags, so a
+ * row's cancel_scheduled flag and its «cancelling» view never disagree.
  */
 export function buildFamilyRows(
   ds: AdminDataset,
@@ -519,13 +525,14 @@ export function buildFamilyRows(
     const newestRun = newestGenerationByKind(gensByUser.get(row.userId) ?? []);
     const meal = mealCellFromRows(mealRows, nowMs);
     const workout = workoutCellFromRows(workoutRows, nowMs);
+    const cancelState = subscriptionCancelState(row, nowMs);
     return {
       ...row,
       meal,
       workout,
       flags: deriveFamilyFlags({
         status: row.status,
-        cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+        cancelState,
         overLimit: row.overLimit,
         onboardingComplete: row.onboardingComplete,
         newestMealRunStatus: newestRun.meal?.status ?? null,
@@ -533,6 +540,7 @@ export function buildFamilyRows(
         meal,
         workout,
       }),
+      cancelState,
     } satisfies FamilyRow;
   });
 }
@@ -558,17 +566,13 @@ export const loadFamilyList = cache(async (): Promise<FamilyListData> => {
   };
 });
 
-/** Just the rows of `loadFamilyList` (same per-request computation). */
-export const loadFamilyRows = cache(async (): Promise<FamilyRow[]> => {
-  return (await loadFamilyList()).rows;
-});
-
 const DAY_MS = 86_400_000;
 
 /**
- * Build the Overview top section: a Kajabi-style spline chart (selected metric +
- * comparison line) with switchable metric tabs, plus an AI-cost strip, scoped to
- * the URL-selected range. All series are snapshot reconstructions (see
+ * Build the Overview's data, scoped to the URL-selected range: every shown
+ * metric's series with its comparison window (the metric tiles and the chart,
+ * _overview/MetricBoard) plus the AI-cost figures (_overview/CostTiles);
+ * _overview/model.ts formats it. All series are snapshot reconstructions (see
  * lib/admin/timeseries.ts) so `approximated: true`; the AI-cost figures are
  * exact. Reuses the single overview dataset load.
  */
@@ -690,78 +694,4 @@ export function buildOverviewView(
     activeUsersInRange,
     approximated: true,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Subscriber table: filter / sort / paginate (pure)
-// ---------------------------------------------------------------------------
-
-const DEFAULT_PAGE_SIZE = 25;
-
-export function filterSortPaginate(
-  rows: SubscriberRow[],
-  params: SubscriberListParams = {},
-): SubscriberListResult {
-  const search = params.search?.trim().toLowerCase();
-  let filtered = rows;
-
-  if (search) {
-    filtered = filtered.filter(
-      (r) =>
-        r.displayName?.toLowerCase().includes(search) ||
-        r.email?.toLowerCase().includes(search),
-    );
-  }
-  if (params.tier) filtered = filtered.filter((r) => r.tier === params.tier);
-  if (params.status) filtered = filtered.filter((r) => r.status === params.status);
-
-  const sortKey: SubscriberSortKey = params.sort ?? "signupAt";
-  const dir = params.dir ?? "desc";
-  const mult = dir === "asc" ? 1 : -1;
-  filtered = [...filtered].sort((a, b) => compareRows(a, b, sortKey) * mult);
-
-  const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
-  const total = filtered.length;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(Math.max(1, params.page ?? 1), pageCount);
-  const startIdx = (page - 1) * pageSize;
-  const pageRows = filtered.slice(startIdx, startIdx + pageSize);
-
-  return { rows: pageRows, total, page, pageSize, pageCount };
-}
-
-function compareRows(
-  a: SubscriberRow,
-  b: SubscriberRow,
-  key: SubscriberSortKey,
-): number {
-  switch (key) {
-    case "displayName":
-      return (a.displayName ?? "").localeCompare(b.displayName ?? "", "ar");
-    case "status":
-      return (a.status ?? "").localeCompare(b.status ?? "");
-    case "beneficiaries":
-      return a.beneficiaries - b.beneficiaries;
-    case "plansGenerated":
-      return a.plansGenerated - b.plansGenerated;
-    case "lifetimeAiCostUsd":
-      return a.lifetimeAiCostUsd - b.lifetimeAiCostUsd;
-    case "lastActivityAt":
-      return cmpIsoNullsLast(a.lastActivityAt, b.lastActivityAt);
-    case "signupAt":
-    default:
-      return cmpIso(a.signupAt, b.signupAt);
-  }
-}
-
-function cmpIso(a: string, b: string): number {
-  return new Date(a).getTime() - new Date(b).getTime();
-}
-
-function cmpIsoNullsLast(a: string | null, b: string | null): number {
-  // Keep nulls at the "low" end so desc sort puts most-recent first, nulls last.
-  if (!a && !b) return 0;
-  if (!a) return -1;
-  if (!b) return 1;
-  return cmpIso(a, b);
 }

@@ -32,6 +32,7 @@ import {
 } from "@/lib/admin/familyList";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, type AdminStringKey } from "@/lib/admin/i18n";
+import { joinText } from "@/lib/admin/separators";
 import { fill, planStateLabel } from "../_blocks/helpers";
 
 // ── Columns and sorting ─────────────────────────────────────────────────────
@@ -381,16 +382,28 @@ export function countFamilies(n: number, locale: AdminLocale): string {
   return fill(t(key, locale), { n: fmtNumber(n, locale) });
 }
 
-/** The head line: «١٠ عائلات · ٦ مدفوعة · ٣ تجريبية». */
-export function countsLine(
+/**
+ * The head line's parts: «١٠ عائلات», «٦ مدفوعة», «٣ تجريبية». The page
+ * draws a separator between them (never «·», which beside an Arabic-Indic
+ * digit reads as «٠»).
+ */
+export function countsParts(
   counts: { families: number; paying: number; trialing: number },
   locale: AdminLocale,
-): string {
+): string[] {
   return [
     countFamilies(counts.families, locale),
     fill(t("fl_n_paying", locale), { n: fmtNumber(counts.paying, locale) }),
     fill(t("fl_n_trial", locale), { n: fmtNumber(counts.trialing, locale) }),
-  ].join(" · ");
+  ];
+}
+
+/** The head line as one text, for the live region: «١٠ عائلات، ٦ مدفوعة، ٣ تجريبية». */
+export function countsLine(
+  counts: { families: number; paying: number; trialing: number },
+  locale: AdminLocale,
+): string {
+  return joinText(countsParts(counts, locale), locale);
 }
 
 /** The footer's range: «١–٥٠ من ١٢٠». */
@@ -407,21 +420,24 @@ export function rangeText(
 }
 
 /**
- * A phone card's meal line: days ready («٦/٧») when known — while generating
- * with the state in front («قيد الإنشاء · ٤/٧») — else the state alone;
- * «لا يوجد» without a plan. Never a guessed day count.
+ * A phone card's meal line, as the state's words and the days ready: the days
+ * alone («٦/٧») when ready and known; the state in front of them while
+ * generating («قيد الإنشاء» + «٤/٧» — the card sets the days apart as a count,
+ * never behind a separator); else the state alone, «لا يوجد» without a plan.
+ * Never a guessed day count.
  */
-export function mealCardText(cell: MealPlanCell, locale: AdminLocale): string {
-  if (cell.state === "none") return t("fm_state_none", locale);
-  if (cell.state === "failed") return planStateLabel("failed", locale);
+export function mealCardParts(
+  cell: MealPlanCell,
+  locale: AdminLocale,
+): { state: string | null; days: string | null } {
+  if (cell.state === "none") return { state: t("fm_state_none", locale), days: null };
+  if (cell.state === "failed") return { state: planStateLabel("failed", locale), days: null };
   const days =
     cell.daysReady != null
       ? `${fmtNumber(cell.daysReady, locale)}/${fmtNumber(cell.daysTotal, locale)}`
       : null;
-  if (cell.state === "generating") {
-    return days ? `${planStateLabel("generating", locale)} · ${days}` : planStateLabel("generating", locale);
-  }
-  return days ?? planStateLabel("ready", locale);
+  if (cell.state === "generating") return { state: planStateLabel("generating", locale), days };
+  return days ? { state: null, days } : { state: planStateLabel("ready", locale), days: null };
 }
 
 /** A phone card's exercise line: the program's state, or «لا يوجد». */

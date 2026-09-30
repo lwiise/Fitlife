@@ -423,6 +423,7 @@ describe("loadFamilyPanel", () => {
       tierMaxPeople: 2,
       overLimit: true,
       flags: ["over_limit", "failed_meal_run"],
+      cancelState: "none",
       medicalGateBlocked: true,
     });
     expect(header.reasons.map((r) => [r.flag, r.severity])).toEqual([
@@ -636,6 +637,33 @@ describe("loadFamilyPanel", () => {
       at: minAgo(40),
       tab: "exercise",
     });
+  });
+
+  it("keeps a portal cancellation scheduled until the day it is paid through", async () => {
+    // LemonSqueezy's portal: status 'cancelled', no new period end, ends_at set.
+    const portal = {
+      ...tables.subscriptions![0]!,
+      status: "cancelled",
+      cancel_at_period_end: true,
+      current_period_end: null,
+      ends_at: daysAgo(-12),
+      cancelled_at: daysAgo(1),
+    };
+    tables.subscriptions = [portal];
+    const header = await family.loadFamilyHeader(UID);
+    expect(header?.subscription?.endsAt).toBe(daysAgo(-12));
+    expect(header?.cancelState).toBe("scheduled");
+    expect(header?.flags).toContain("cancel_scheduled");
+    expect(header?.reasons.find((r) => r.flag === "cancel_scheduled")).toMatchObject({
+      severity: "medium",
+      at: daysAgo(-12),
+      tab: "billing",
+    });
+
+    tables.subscriptions = [{ ...portal, ends_at: daysAgo(1) }];
+    const lapsed = await family.loadFamilyHeader(UID);
+    expect(lapsed?.cancelState).toBe("ended");
+    expect(lapsed?.flags).not.toContain("cancel_scheduled");
   });
 });
 
