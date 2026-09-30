@@ -35,6 +35,7 @@ export default async function SettingsPage() {
       <div className="mx-auto max-w-2xl space-y-8">
         <PageHeader
           className="mb-0"
+          back={{ fallback: "/dashboard" }}
           title="الإعدادات"
           description="حسابك وبيتك واشتراكك وبياناتك."
         />

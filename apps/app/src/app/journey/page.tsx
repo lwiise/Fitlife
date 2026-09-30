@@ -239,6 +239,7 @@ export default async function JourneyPage({
       <div className="mx-auto max-w-2xl space-y-6">
         <PageHeader
           className="mb-0"
+          back={{ fallback: "/settings" }}
           title={memberName ? `رحلة ${memberName} الخاصة` : "رحلتك الخاصة"}
           description="سجلّ خاص لا يظهر على لوحة العائلة ولا في أي مكان مشترك."
         />

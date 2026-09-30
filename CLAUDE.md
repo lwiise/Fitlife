@@ -1414,6 +1414,20 @@ desktop nav, account menu with logout) and a five-tab bar on phones (الرئي�
 `--app-header-h` / `--app-tabbar-h` (globals.css, set via `:has()`); anything fixed to the
 viewport bottom carries `data-float-bottom` so it sits above the tab bar.
 
+**«رجوع» on the settings pages goes to the PREVIOUS page (owner directive 09/2026).**
+/settings, /profile, /subscription and /journey open with `PageHeader back={{ fallback }}`
+→ `PreviousPageLink` (components/ui/previous-page-link.tsx): /journey opened from the plan's
+••• sheet returns to the plan, not to a fixed parent. It walks the tab's history with the
+Navigation API and calls `history.go`, so the back gesture keeps going backwards and scroll is
+restored. It skips entries that are the same page (member chips, `#change-plan`, `?edited=`),
+the page's own sub-pages (the form a save just came from — why the rest of the app avoids
+`router.back()`), and, from /settings, the whole «حسابي» section, so the hub cannot bounce
+back into a page it opened. It stops at an /auth entry. With nothing to return to (deep link,
+new tab, the return from checkout) or no Navigation API (older Safari) it follows `fallback`:
+/settings for the sub-pages, /dashboard for /settings. The rule is `previousPageDelta`
+(components/shell/previousPage.ts, tested). Named links (`back={{ href, label }}`, the
+profile and member forms) stay fixed parents: a label must say where it goes.
+
 **One vocabulary.** `components/ui/`: `Button`/`ButtonLink`/`buttonClasses` (primary = the
 ONE filled purple action per screen), `Card`/`CardHeader`, `Notice` (five tones, colour AND
 icon differ; one per screen, chosen by priority), `PageHeader`, `Avatar`/`AvatarStack`

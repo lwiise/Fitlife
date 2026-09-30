@@ -72,7 +72,7 @@ export default async function SubscriptionPage({
     return (
       <main className="container-shell py-6 lg:py-10">
         <div className="mx-auto max-w-2xl space-y-6">
-          <PageHeader className="mb-0" title="اشتراكك" />
+          <PageHeader className="mb-0" back={{ fallback: "/settings" }} title="اشتراكك" />
           <Card className="space-y-4 text-center">
             <p className="text-app-item text-brand-ink">لا يوجد اشتراك بعد</p>
             <ButtonLink href="/pricing">{g("اختاري خطتك", "اختر خطتك")}</ButtonLink>
@@ -90,6 +90,7 @@ export default async function SubscriptionPage({
       <div className="mx-auto max-w-2xl space-y-6">
         <PageHeader
           className="mb-0"
+          back={{ fallback: "/settings" }}
           title="اشتراكك"
           description="الباقة، الفواتير، وطريقة الدفع."
         />

@@ -9,6 +9,9 @@ export default function SubscriptionLoading() {
     <main className="container-shell py-6 lg:py-10" aria-busy="true" aria-label="جارٍ التحميل">
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="space-y-2">
+          <div className="flex h-11 items-center">
+            <div className="h-5 w-16 animate-pulse rounded-lg bg-brand-card" />
+          </div>
           <div className="h-9 w-40 animate-pulse rounded-lg bg-brand-card" />
           <div className="h-5 w-64 max-w-full animate-pulse rounded-lg bg-brand-card" />
         </div>

@@ -120,6 +120,7 @@ export default async function ProfilePage() {
       <div className="mx-auto max-w-2xl space-y-6">
         <PageHeader
           className="mb-0"
+          back={{ fallback: "/settings" }}
           title="ملفي الشخصي"
           description={g(
             "عدّلي معلوماتكِ متى شئتِ. اختاري القسم الذي تريدين تعديله.",
