@@ -1,8 +1,14 @@
 /**
  * Console primitives (Concept A). Presentational only — no hooks, no data —
- * so server and client components can both render them. The one exception is
- * LinkPending, a leaf client component that LinkTabs renders inside each link.
+ * so server and client components can both render them. Two exceptions, both
+ * client components that server pages can still render with plain props:
+ * LinkTabs (it runs its navigation in a transition to show the pending state)
+ * and LinkPending (the rail's per-link pending hint).
  * Styling lives in ../admin.css under `ad-*` classes.
+ *
+ * `./modalFocus` (dialog keyboard containment: trapTab, useEscapedKeys) is
+ * client-only and deliberately NOT re-exported here — server components
+ * import this index. Client components import it by path.
  */
 export { Pill, Flag, Dot, toneClass, type Tone } from "./Pill";
 export { TierBadge, StatusPill, statusTone } from "./Badges";

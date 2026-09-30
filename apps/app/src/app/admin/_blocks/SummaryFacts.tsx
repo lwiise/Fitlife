@@ -1,14 +1,7 @@
 import type { FamilyHeaderData } from "@/lib/admin/console-types";
-import {
-  fmtMoney,
-  fmtNumber,
-  fmtRelative,
-  type AdminLocale,
-  type Currency,
-} from "@/lib/admin/format";
-import { isLiveForCancellation } from "@/lib/admin/familyFlags";
+import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
-import { fmtDay } from "./helpers";
+import { fmtDay, fmtRelativeTo, showsCancelScheduled } from "./helpers";
 import { DateText, Field, FlagChip } from "./parts";
 
 /**
@@ -48,8 +41,10 @@ export function HouseholdCell({
 
 /**
  * The renewal cell (the prototype's `renewalCell`): a trial shows when it
- * ends; anything else its period end, with «· إلغاء مجدول» when a live
- * subscription is set to cancel. No subscription reads «—».
+ * ends; anything else its period end — and either way «· إلغاء مجدول» when
+ * the subscription is set to cancel and has not expired (the old list's rule,
+ * which showed it on every status: see `showsCancelScheduled`). No
+ * subscription reads «—».
  */
 export function RenewalCell({
   status,
@@ -65,20 +60,22 @@ export function RenewalCell({
   locale: AdminLocale;
 }) {
   if (!status) return <>—</>;
+  const cancelling = showsCancelScheduled(status, cancelAtPeriodEnd) ? (
+    <span className="ad-bad"> · {t("cancel_scheduled", locale)}</span>
+  ) : null;
   if (status === "trialing") {
     return (
       <>
         <span className="ad-muted">{t("fm_trial_ends", locale)}</span>{" "}
         <DateText iso={trialEndsAt} locale={locale} />
+        {cancelling}
       </>
     );
   }
   return (
     <>
       <DateText iso={currentPeriodEnd} locale={locale} />
-      {cancelAtPeriodEnd && isLiveForCancellation(status) ? (
-        <span className="ad-bad"> · {t("cancel_scheduled", locale)}</span>
-      ) : null}
+      {cancelling}
     </>
   );
 }
@@ -86,11 +83,18 @@ export function RenewalCell({
 /**
  * The summary's key figures (the prototype's summary `kv`): people, renewal,
  * lifetime AI cost, last active.
+ *
+ * `nowIso` is REQUIRED: "last active" is relative («قبل ساعتين»), and a
+ * relative time must be measured from a "now" the caller fixes — the server
+ * page's request time, or the moment the panel's data was fetched — never
+ * from the clock during render, which would differ between the server render
+ * and hydration.
  */
 export function SummaryFacts({
   header,
   locale,
   currency,
+  nowIso,
 }: {
   header: Pick<
     FamilyHeaderData,
@@ -103,6 +107,8 @@ export function SummaryFacts({
   >;
   locale: AdminLocale;
   currency: Currency;
+  /** ISO time "now" is — e.g. new Date().toISOString() in the page's server code. */
+  nowIso: string;
 }) {
   const sub = header.subscription;
   return (
@@ -134,7 +140,7 @@ export function SummaryFacts({
       <Field label={t("fm_last_active", locale)}>
         {header.lastActivityAt ? (
           <time dateTime={header.lastActivityAt} title={fmtDay(header.lastActivityAt, locale)}>
-            {fmtRelative(header.lastActivityAt, locale)}
+            {fmtRelativeTo(header.lastActivityAt, nowIso, locale)}
           </time>
         ) : (
           "—"

@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, Search, Users, X } from "lucide-react";
@@ -17,6 +16,7 @@ import { FAMILY_VIEWS, type FamilyView } from "@/lib/admin/console-types";
 import { normalizeSearch } from "@/lib/admin/familyList";
 import { initialOf } from "../_ui/Avatar";
 import { IconBtn } from "../_ui/Button";
+import { trapTab, useEscapedKeys } from "../_ui/modalFocus";
 import { PALETTE_OPEN_EVENT, requestFamiliesView, requestFamilyOpen } from "./events";
 import type { ShellLabels } from "./labels";
 import type { NavPromise } from "./Rail";
@@ -31,6 +31,22 @@ const MAX_FAMILIES = 8;
 function matchesAllTokens(haystack: string, normalizedQuery: string): boolean {
   if (!normalizedQuery) return true;
   return normalizedQuery.split(" ").every((word) => haystack.includes(word));
+}
+
+type NavFamily = ShellNav["families"][number];
+
+/** A family with its search keys: normalised name + email, lower-cased id. */
+interface IndexedFamily extends NavFamily {
+  hay: string;
+  idKey: string;
+}
+
+function buildIndex(families: readonly NavFamily[]): IndexedFamily[] {
+  return families.map((f) => ({
+    ...f,
+    hay: normalizeSearch(`${f.name ?? ""} ${f.email ?? ""}`),
+    idKey: f.id.toLowerCase(),
+  }));
 }
 
 type Item =
@@ -70,8 +86,11 @@ type PaletteLabels = Pick<
  * click outside) closes and returns focus to where it was.
  *
  * Always mounted and never suspended, so the shortcut works the moment the
- * frame paints; the family index arrives from the layout's promise and the
- * list says "loading" until it does.
+ * frame paints; the family list arrives from the layout's promise and the
+ * palette says "loading" until it does. Its normalised search index is built
+ * lazily — the first time the palette opens with the list in hand, never at
+ * page load — and cached in a ref for every re-opening until the list itself
+ * changes.
  */
 export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: NavPromise }) {
   const router = useRouter();
@@ -80,6 +99,9 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [data, setData] = useState<ShellNav | null | undefined>(undefined);
+  // What render reads; set from the cache below when the palette opens.
+  const [index, setIndex] = useState<IndexedFamily[] | null>(null);
+  const indexCache = useRef<{ source: ShellNav; index: IndexedFamily[] } | null>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -88,15 +110,29 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
   const listId = `${baseId}-list`;
   const optionId = useCallback((i: number) => `${baseId}-opt-${i}`, [baseId]);
 
-  // The family index: resolved from the layout's promise (never suspends).
+  /** The search index for this family list — built once, then from the cache. */
+  function indexFor(source: ShellNav): IndexedFamily[] {
+    const cached = indexCache.current;
+    if (cached && cached.source === source) return cached.index;
+    const built = buildIndex(source.families);
+    indexCache.current = { source, index: built };
+    return built;
+  }
+
+  // The family list: resolved from the layout's promise (never suspends). The
+  // index is only built here when the palette is already open and waiting.
+  const onNavData = useEffectEvent((value: ShellNav | null) => {
+    setData(value);
+    if (open && value) setIndex(indexFor(value));
+  });
   useEffect(() => {
     let alive = true;
     nav.then(
       (value) => {
-        if (alive) setData(value);
+        if (alive) onNavData(value);
       },
       () => {
-        if (alive) setData(null);
+        if (alive) onNavData(null);
       },
     );
     return () => {
@@ -104,26 +140,16 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     };
   }, [nav]);
 
-  const index = useMemo(
-    () =>
-      (data?.families ?? []).map((f) => ({
-        ...f,
-        hay: normalizeSearch(`${f.name ?? ""} ${f.email ?? ""}`),
-        idKey: f.id.toLowerCase(),
-      })),
-    [data],
-  );
-
   const q = normalizeSearch(query);
-  const matched = useMemo(
-    () =>
-      q
-        ? index.filter((f) => matchesAllTokens(f.hay, q) || (q.length >= 4 && f.idKey.startsWith(q)))
-        : index,
-    [index, q],
-  );
+  const matched = useMemo(() => {
+    if (!index) return [];
+    return q
+      ? index.filter((f) => matchesAllTokens(f.hay, q) || (q.length >= 4 && f.idKey.startsWith(q)))
+      : index;
+  }, [index, q]);
 
   const navItems = useMemo(() => {
+    if (!open) return [];
     const all: Item[] = [
       { kind: "overview" },
       ...FAMILY_VIEWS.map((view): Item => ({ kind: "view", view })),
@@ -137,7 +163,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
             : "";
       return matchesAllTokens(normalizeSearch(text), q);
     });
-  }, [labels, q]);
+  }, [open, labels, q]);
 
   const familyItems: Item[] = matched
     .slice(0, MAX_FAMILIES)
@@ -150,13 +176,14 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     [labels.locale],
   );
 
-  const openPalette = useCallback(() => {
+  function openPalette() {
     restoreRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery("");
     setActive(0);
+    if (data) setIndex(indexFor(data));
     setOpen(true);
-  }, []);
+  }
 
   // Returns focus to where it was ONLY if nobody else claimed it. Unmounting
   // the dialog drops focus to <body>; a choice handed to the families page
@@ -164,7 +191,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
   // sheet in its own effect, which runs before this frame — restoring then
   // would pull a keyboard user out of the panel they just opened. The same
   // guard leaves Next's post-navigation focus alone.
-  const close = useCallback(() => {
+  function close() {
     setOpen(false);
     const back = restoreRef.current;
     restoreRef.current = null;
@@ -176,7 +203,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
         if (lost && back.isConnected) back.focus({ preventScroll: true });
       });
     }
-  }, []);
+  }
 
   // ⌘K / Ctrl+K anywhere toggles; the top-bar buttons send PALETTE_OPEN_EVENT.
   // e.code keeps the shortcut working on an Arabic keyboard layout.
@@ -230,18 +257,28 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     router.push("/admin");
   }
 
-  function onInputKey(event: ReactKeyboardEvent<HTMLInputElement>) {
-    if (event.nativeEvent.isComposing) return;
+  /** ↑ ↓ move the active option, ⏎ opens it; true when the key was one of them. */
+  function listKey(event: { key: string; preventDefault(): void }): boolean {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (!items.length) return;
-      const step = event.key === "ArrowDown" ? 1 : -1;
-      setActive((activeIndex + step + items.length) % items.length);
-    } else if (event.key === "Enter") {
+      if (items.length) {
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        setActive((activeIndex + step + items.length) % items.length);
+      }
+      return true;
+    }
+    if (event.key === "Enter") {
       event.preventDefault();
       const item = items[activeIndex];
       if (item) choose(item);
+      return true;
     }
+    return false;
+  }
+
+  function onInputKey(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
+    listKey(event);
   }
 
   // Esc closes; Tab stays inside the dialog.
@@ -252,23 +289,23 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
       close();
       return;
     }
-    if (event.key !== "Tab" || !dialogRef.current) return;
-    const nodes = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>(
-        'input, button, [href], [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((el) => el.getClientRects().length > 0 && !el.hasAttribute("disabled"));
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (dialogRef.current) trapTab(event, dialogRef.current);
   }
+
+  // Focus normally never leaves the field (see the dialog's onMouseDown); if
+  // it does anyway, Esc and Tab still work (the hook), and any other key lands
+  // back in the combobox: ↑ ↓ ⏎ act on the list, and a typed character goes
+  // into the field, because focus moves before the key's default action.
+  useEscapedKeys({
+    open,
+    containerRef: dialogRef,
+    onEscape: close,
+    onOtherKey: (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      inputRef.current?.focus();
+      listKey(event);
+    },
+  });
 
   if (!open) return null;
 
@@ -287,7 +324,6 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
       role: "option" as const,
       "aria-selected": selected,
       className: "ad-opt",
-      onMouseDown: (e: ReactMouseEvent) => e.preventDefault(),
       onMouseMove: () => {
         if (i !== activeIndex) setActive(i);
       },
@@ -360,6 +396,13 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={onDialogKey}
+        onMouseDown={(event) => {
+          // Keep focus in the combobox. A press on anything but the field —
+          // an option, a group label, padding, the footer — would otherwise
+          // move focus to <body>, out of reach of ↑↓ ⏎ Esc and Tab. (The
+          // close button still receives its click; it just never takes focus.)
+          if (!(event.target instanceof HTMLInputElement)) event.preventDefault();
+        }}
       >
         <h2 id={titleId} className="ad-sr">
           {labels.palTitle}

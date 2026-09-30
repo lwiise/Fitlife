@@ -6,11 +6,32 @@
  * panel serialises them. Everything here must be plain JSON — no Map, no Date,
  * no functions — because it crosses the server → client boundary.
  *
- * Sensitive health values (allergies, dislikes, medical conditions, pregnancy
- * detail) are deliberately absent from every shape in this file. They load
- * only on the audited /health page (data minimisation, PDPL). The list never
- * carries the medical-gate flag at all; the panel and the family page carry it
- * as a single derived boolean.
+ * Health data (PDPL, data minimisation). No raw health COLUMN is copied into
+ * any shape here — allergies, dislikes, medical conditions, the pregnancy /
+ * trimester / lactation / postpartum columns, the workout questionnaire's
+ * injury areas and notes. Whatever the console shows of them, it shows only on
+ * the audited /health page. The list never carries the medical-gate
+ * flag at all; the panel and the family page carry it as derived booleans:
+ * the family's `medicalGateBlocked` and each HouseholdMember's `medicalGate`.
+ *
+ * What DOES cross to the panel and the page, knowingly — health-adjacent,
+ * though no raw column:
+ *  - `HouseholdMember.consultedDoctor`: the doctor-consult answer the gate is
+ *    built on.
+ *  - `HouseholdMember.primaryGoal`: the plan's exact goal, kept on purpose
+ *    (the owner's call: parity with the old detail page, which showed it). A
+ *    goal can itself be health-derived ('pregnancy_lactation',
+ *    'metabolic_health', 'digestive_health'), so the payload can tell that a
+ *    member's plan is pregnancy- or condition-led.
+ *  - Generated plan and program TEXT: dish names, session names, the split,
+ *    warm-up / cool-down, home variants, progression notes. The model writes
+ *    it from the whole profile — a trainee's trimester, months postpartum and
+ *    injury areas are mandatory clauses of the workout prompt — so it may
+ *    restate pregnancy, postpartum or injury context in its own words.
+ *
+ * `TraineeProfileSummary.injuries` stays in the contract but the loaders
+ * leave it EMPTY (summarizeWorkoutProfile): no console block needs the
+ * injury areas.
  */
 
 import type { SubscriptionRow, MemberSummary } from "./detail";
@@ -298,6 +319,7 @@ export interface WorkoutPlanListItem {
 export interface TraineeProfileSummary {
   location: "home" | "gym" | "both" | null;
   equipment: string[];
+  /** Always empty: injury answers are health detail and stay out (see the note at the top). */
   injuries: string[];
   desiredDays: number | null;
   /** 0 = Sunday … 6 = Saturday. */

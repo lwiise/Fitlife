@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { addDaysISO, riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { probeFromPlanData } from "./mealProjection";
+import { currentTrainingWeek } from "./workoutProjection";
 
 /**
  * family.ts is server-only and reads through the service-role client, so this
@@ -18,6 +20,8 @@ const COOK = "44444444-4444-4444-8444-444444444444";
 const now = Date.now();
 const minAgo = (m: number) => new Date(now - m * 60_000).toISOString();
 const daysAgo = (d: number) => minAgo(d * 24 * 60);
+/** This training week's Sunday in Riyadh — the loader reads marks from here. */
+const SUNDAY = currentTrainingWeek(riyadhTodayISO()).start;
 
 // ── plan fixtures ───────────────────────────────────────────────────────────
 
@@ -93,6 +97,10 @@ type Row = Record<string, unknown>;
 let tables: Record<string, Row[]>;
 let failTables: Set<string>;
 let calls: string[];
+/** Every plan_data read, with the ids it asked for, in order. */
+let blobCalls: Array<{ table: string; ids: unknown[] }>;
+const blobReads = (table: string) =>
+  blobCalls.filter((c) => c.table === table).map((c) => c.ids);
 
 function seed() {
   const mealRows = [
@@ -151,7 +159,9 @@ function seed() {
         workout_profile: {
           location: "home",
           equipment: ["dumbbells"],
-          injuries: [],
+          // Health detail: must never reach the panel (see the last assertion).
+          injuries: ["knee"],
+          injury_notes: "ألم في الركبة اليسرى",
           desired_days: 3,
           focus_areas: ["full_body"],
           experience: "beginner",
@@ -305,7 +315,7 @@ function seed() {
         day_index: 0,
         status: "done",
         intensity: "right",
-        local_date: "2026-09-27",
+        local_date: SUNDAY,
         created_at: minAgo(60),
       },
     ],
@@ -320,6 +330,7 @@ function query(table: string) {
   let columns = "";
   const run = () => {
     calls.push(inIds ? `${table}#blob` : table);
+    if (inIds) blobCalls.push({ table, ids: [...inIds] });
     if (failTables.has(table)) return { data: null, error: { message: `${table} is down` } };
     let rows = (tables[table] ?? []).filter((r) =>
       Object.entries(eq).every(([k, v]) => String(r[k]) === String(v)),
@@ -372,6 +383,7 @@ beforeEach(() => {
   seed();
   failTables = new Set();
   calls = [];
+  blobCalls = [];
 });
 
 describe("loadFamilyPanel", () => {
@@ -461,7 +473,7 @@ describe("loadFamilyPanel", () => {
       [KID, "child"],
       [COOK, "housekeeper"],
     ]);
-    expect(workout.marksWindow).not.toBeNull();
+    expect(workout.marksWindow).toEqual({ start: SUNDAY, end: riyadhTodayISO() });
 
     // Household: owner first, targets from the served plan, pregnancy-free types.
     expect(household.map((m) => [m.id, m.memberType, m.caloriesTarget, m.medicalGate])).toEqual([
@@ -472,10 +484,14 @@ describe("loadFamilyPanel", () => {
     ]);
     expect(household[0]!.age).toBeGreaterThan(30);
 
-    // Nothing sensitive crosses the wire.
+    // Nothing sensitive crosses the wire — conditions, nor the workout
+    // questionnaire's injury areas and notes (the trainee's profile still does).
     const json = JSON.stringify(panel);
     expect(json).not.toContain("kidney_disease");
     expect(json).not.toContain("medical_conditions");
+    expect(json).not.toContain("knee");
+    expect(json).not.toContain("الركبة");
+    expect(workout.served?.trainees[0]?.profile).toMatchObject({ location: "home", injuries: [] });
   });
 
   it("returns null for an unknown family and never reads for a malformed id", async () => {
@@ -620,6 +636,209 @@ describe("loadFamilyPanel", () => {
       at: minAgo(40),
       tab: "exercise",
     });
+  });
+});
+
+describe("after a failed newest run, older plans are read one at a time", () => {
+  const mealRow = (id: string, status: string, ageDays: number, planData: unknown) => ({
+    id,
+    user_id: UID,
+    status,
+    created_at: daysAgo(ageDays),
+    updated_at: daysAgo(ageDays),
+    generated_at: status === "ready" ? daysAgo(ageDays) : null,
+    error_message: status === "failed" ? "timeout" : null,
+    ai_input_tokens: 1,
+    ai_output_tokens: 1,
+    ai_model: "claude-sonnet-4-6",
+    plan_data: planData,
+    ...probeFromPlanData(planData),
+  });
+
+  /** Every member of READY_PLAN with its days emptied — or only those `only` names. */
+  const emptied = (only?: string) => ({
+    ...READY_PLAN,
+    generating: true,
+    members: READY_PLAN.members.map((m) =>
+      only === undefined || m.member_id === only
+        ? { ...m, days: [0, 1, 2, 3, 4, 5, 6].map((i) => day(i, [])) }
+        : m,
+    ),
+  });
+  /** Meals in the probes (first member, day 0), but not a plan the schema accepts. */
+  const BAD_PLAN = {
+    week_start_date: "2026-09-27",
+    members: [{ member_id: "mom", days: [{ day_index: 0, meals: [{ slot: "lunch" }] }] }],
+  };
+
+  /** Make the n-th plan_data read of meal_plans (1-based) fail; every read after it too. */
+  const failMealBlobReadFrom = (n: number) => {
+    const original = fakeDb.from;
+    let reads = 0;
+    fakeDb.from = (t: string) => {
+      const q = original(t) as Record<string, unknown>;
+      if (t !== "meal_plans") return q;
+      const inFn = q.in as (k: string, v: unknown[]) => unknown;
+      q.in = (k: string, v: unknown[]) => {
+        reads += 1;
+        if (reads >= n) failTables.add("meal_plans");
+        return inFn(k, v);
+      };
+      return q;
+    };
+    return () => {
+      fakeDb.from = original;
+    };
+  };
+
+  it("meal: reads older plans newest first, one blob at a time, and stops at the first the app serves", async () => {
+    tables.meal_plans = [
+      mealRow("m-new", "failed", 1, {}),
+      // No member and no week: the probes prove the schema rejects it — never read.
+      mealRow("m-void", "ready", 2, { members: [] }),
+      // Meals in the probes, but the blob fails the schema: read, passed over.
+      mealRow("m-bad", "ready", 3, BAD_PLAN),
+      mealRow("m-good", "ready", 4, READY_PLAN),
+      mealRow("m-older", "ready", 5, READY_PLAN),
+    ];
+    const meal = await family.loadMealSection(UID);
+    expect(meal.served?.plan.id).toBe("m-good");
+    expect(meal.served?.masked).toBe(true);
+    expect(meal.served?.maskedFailureAt).toBe(daysAgo(1));
+    expect(meal.served?.week?.members).toHaveLength(3);
+    // One blob per read, newest first — never m-void, never m-older.
+    expect(blobReads("meal_plans")).toEqual([["m-bad"], ["m-good"]]);
+  });
+
+  it("meal: serves a plan whose first member is empty when another member has meals (the app's any-member rule)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    tables.meal_plans = [
+      mealRow("m-new", "failed", 1, {}),
+      // A dead shell: a valid plan, but nobody has a meal — read, passed over.
+      mealRow("m-shell", "ready", 2, emptied()),
+      // A killed regeneration of the owner: her days emptied, everyone else's
+      // carried. Its probes (first member only) read 0 days, yet getLatestPlan
+      // serves it — so it must be read, and it must win over the older week.
+      mealRow("m-regen", "ready", 3, emptied("mom")),
+      mealRow("m-good", "ready", 4, READY_PLAN),
+    ];
+    try {
+      const meal = await family.loadMealSection(UID);
+      expect(meal.served?.plan).toMatchObject({ id: "m-regen", status: "ready", daysReady: 0 });
+      expect(meal.served?.masked).toBe(true);
+      expect(meal.served?.week?.members.map((m) => [m.memberId, m.days.length])).toEqual([
+        ["mom", 0],
+        [DAD, 7],
+        [KID, 7],
+      ]);
+      expect(blobReads("meal_plans")).toEqual([["m-shell"], ["m-regen"]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("meal: an unreadable candidate is served on its probes, without a week", async () => {
+    tables.meal_plans = [
+      mealRow("m-new", "failed", 1, {}),
+      mealRow("m-bad", "ready", 3, BAD_PLAN),
+      mealRow("m-good", "ready", 4, READY_PLAN),
+    ];
+    // The second blob read (m-good) fails; m-bad was already ruled out.
+    const restore = failMealBlobReadFrom(2);
+    try {
+      const meal = await family.loadMealSection(UID);
+      expect(meal.served?.plan).toMatchObject({ id: "m-good", status: "ready" });
+      expect(meal.served?.masked).toBe(true);
+      expect(meal.served?.week).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it("meal: once a blob read fails, the probes decide the rest — with no further reads", async () => {
+    tables.meal_plans = [
+      mealRow("m-new", "failed", 1, {}),
+      // Unreadable, and its probes show no meals: the list's rule passes it over…
+      mealRow("m-regen", "ready", 2, emptied("mom")),
+      // …and serves the next candidate whose probes show meals, unread.
+      mealRow("m-good", "ready", 4, READY_PLAN),
+    ];
+    const restore = failMealBlobReadFrom(1);
+    try {
+      const meal = await family.loadMealSection(UID);
+      expect(meal.served?.plan).toMatchObject({ id: "m-good", status: "ready" });
+      expect(meal.served?.masked).toBe(true);
+      expect(meal.served?.week).toBeNull();
+      expect(blobReads("meal_plans")).toEqual([["m-regen"]]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("meal: with nothing older to serve, the failed run stands", async () => {
+    tables.meal_plans = [
+      mealRow("m-new", "failed", 1, {}),
+      mealRow("m-bad", "ready", 3, BAD_PLAN),
+    ];
+    const meal = await family.loadMealSection(UID);
+    expect(meal.served?.plan).toMatchObject({ id: "m-new", status: "failed" });
+    expect(meal.served?.masked).toBe(false);
+    expect(blobReads("meal_plans")).toEqual([["m-bad"]]);
+  });
+
+  it("workout: stops at the first ready program the app serves", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const base = tables.workout_plans![0]!;
+    const at = (ageDays: number) => ({
+      created_at: daysAgo(ageDays),
+      updated_at: daysAgo(ageDays),
+    });
+    tables.workout_plans = [
+      {
+        ...base,
+        ...at(1),
+        id: "w-new",
+        status: "failed",
+        generated_at: null,
+        error_message: "timeout",
+        plan_data: {},
+      },
+      // Ready, but not a program the schema accepts.
+      { ...base, ...at(2), id: "w-bad", plan_data: { members: "nope" } },
+      { ...base, ...at(3), id: "w-good" },
+      { ...base, ...at(4), id: "w-older" },
+    ];
+    try {
+      const workout = await family.loadWorkoutSection(UID);
+      expect(workout.latest).toMatchObject({ id: "w-new", status: "failed" });
+      expect(workout.served?.plan).toMatchObject({
+        id: "w-good",
+        status: "ready",
+        traineeCount: 1,
+      });
+      expect(workout.served?.masked).toBe(true);
+      // The failed newest row has no program to read; then w-bad, then w-good.
+      expect(blobReads("workout_plans")).toEqual([["w-bad"], ["w-good"]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("workout: only this week's marks count — last Thursday is not this Thursday", async () => {
+    tables.workout_checkins!.push({
+      user_id: UID,
+      member_id: "mom",
+      day_index: 4,
+      status: "done",
+      intensity: "hard",
+      local_date: addDaysISO(SUNDAY, -3),
+      created_at: minAgo(30),
+    });
+    const workout = await family.loadWorkoutSection(UID);
+    const mom = workout.served!.trainees[0]!;
+    expect(mom.doneThisWeek).toBe(1);
+    expect(mom.sessions.find((s) => s.dayIndex === 0)?.mark?.status).toBe("done");
+    expect(mom.sessions.find((s) => s.dayIndex === 4)?.mark).toBeNull();
   });
 });
 

@@ -18,9 +18,9 @@ export function RunKindChip({ kind, locale }: { kind: RunKind; locale: AdminLoca
 
 /**
  * Every generation run, meal and exercise, newest first (the prototype's
- * `runsTable` plus the model column the old page had): when, kind, status,
- * duration, tokens in/out, cost, model, error. Costs keep four decimals so a
- * small run never reads as zero.
+ * `runsTable` plus the model column the old page had): when (with the year —
+ * runs span months), kind, status, duration, tokens in/out, cost, model,
+ * error. Costs keep four decimals so a small run never reads as zero.
  */
 export function RunsTable({
   runs,
@@ -57,8 +57,10 @@ export function RunsTable({
         <tbody>
           {runs.map((run) => (
             <tr key={run.id}>
-              <td>
-                <time dateTime={run.createdAt}>{fmtDateTime(run.createdAt, locale)}</time>
+              <td className="ad-nowrap">
+                <time dateTime={run.createdAt}>
+                  {fmtDateTime(run.createdAt, locale, { year: true })}
+                </time>
               </td>
               <td>
                 <RunKindChip kind={run.kind} locale={locale} />

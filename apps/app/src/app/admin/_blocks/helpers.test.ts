@@ -34,6 +34,7 @@ import {
   fmtDateTime,
   fmtDay,
   fmtDuration,
+  fmtRelativeTo,
   fmtWeekday,
   fraction,
   initialMealDay,
@@ -53,9 +54,12 @@ import {
   programHref,
   reasonSentence,
   sessionMinutesLabel,
+  showsCancelScheduled,
   slotLabel,
   todayWeekdayFrom,
   traineeProfileParts,
+  traineeRoleLabel,
+  trainingWeekSundayFrom,
   weekdayOfIso,
   widthClass,
   workoutCellFromSection,
@@ -234,6 +238,27 @@ describe("calendar days", () => {
     expect(fmtDuration(null, "en")).toBe("—");
     expect(fmtDuration(-5, "en")).toBe("—");
   });
+
+  it("adds the year to a date-time on request (runs span months)", () => {
+    const at = "2026-09-27T10:30:00Z";
+    expect(fmtDateTime(at, "en")).not.toContain("2026");
+    expect(fmtDateTime(at, "en", { year: true })).toContain("2026");
+    expect(fmtDateTime(at, "en", { year: true })).toContain("Sep 27");
+    expect(fmtDateTime(at, "ar", { year: true })).toContain("٢٠٢٦");
+    expect(fmtDateTime(null, "en", { year: true })).toBe("—");
+  });
+
+  it("measures a relative time from the caller's now, never the clock", () => {
+    const now = "2026-09-29T12:00:00Z";
+    expect(fmtRelativeTo("2026-09-29T10:00:00Z", now, "en")).toBe("2 hours ago");
+    expect(fmtRelativeTo("2026-09-28T12:00:00Z", now, "en")).toBe("yesterday");
+    // The same inputs give the same text however long after `now` it runs.
+    expect(fmtRelativeTo("2026-09-29T11:59:00Z", now, "en")).toBe("1 minute ago");
+    expect(fmtRelativeTo(null, now, "en")).toBe("—");
+    expect(fmtRelativeTo("garbage", now, "en")).toBe("—");
+    // An unusable "now" falls back to the day itself.
+    expect(fmtRelativeTo("2026-09-27T10:00:00Z", "", "en")).toBe("Sep 27, 2026");
+  });
 });
 
 // ── states and flags ────────────────────────────────────────────────────────
@@ -314,6 +339,22 @@ describe("reasonSentence", () => {
     expect(reasonSentence({ ...base, flag: "medical_gate", severity: "high" }, "ar")).toContain(
       "استشارة الطبيب",
     );
+  });
+});
+
+describe("showsCancelScheduled", () => {
+  it("marks a scheduled cancellation on every status that has not ended", () => {
+    // 'cancelled' included: a portal cancellation lands as status 'cancelled'
+    // with the flag set, while the customer is still paid through the period.
+    for (const status of ["trialing", "active", "cancelled", "past_due", "paused"]) {
+      expect(showsCancelScheduled(status, true), status).toBe(true);
+      expect(showsCancelScheduled(status, false), status).toBe(false);
+    }
+  });
+
+  it("never on an expired subscription or no subscription", () => {
+    expect(showsCancelScheduled("expired", true)).toBe(false);
+    expect(showsCancelScheduled(null, true)).toBe(false);
   });
 });
 
@@ -432,6 +473,19 @@ describe("exercise week", () => {
     expect(todayWeekdayFrom({ marksWindow: null })).toBeNull();
   });
 
+  it("takes the week's Sunday from the loader's window, never recomputing it", () => {
+    // 2026-09-27 is a Sunday; the loader's window opens on it.
+    expect(trainingWeekSundayFrom({ marksWindow: { start: "2026-09-27", end: "2026-09-29" } })).toBe(
+      "2026-09-27",
+    );
+    // A window that does not open on a Sunday cannot number a Sunday-first grid.
+    expect(
+      trainingWeekSundayFrom({ marksWindow: { start: "2026-09-28", end: "2026-09-29" } }),
+    ).toBeNull();
+    expect(trainingWeekSundayFrom({ marksWindow: { start: "nope", end: "2026-09-29" } })).toBeNull();
+    expect(trainingWeekSundayFrom({ marksWindow: null })).toBeNull();
+  });
+
   it("drops marks on days still ahead (last week's grace-window tail)", () => {
     expect(effectiveMark(session(5, done), 0)).toBeNull();
     expect(effectiveMark(session(0, done), 0)).toEqual(done);
@@ -534,6 +588,16 @@ describe("household", () => {
     expect(memberRoleLabel("housekeeper", true, "ar")).toBe("الطبّاخة");
     expect(memberRoleLabel("dad", false, "en")).toBe("Father");
     expect(memberRoleLabel("", false, "en")).toBe("");
+  });
+
+  it("never calls a male account owner «الأم»", () => {
+    expect(traineeRoleLabel("mom", "male", "ar")).toBe("صاحب الحساب");
+    expect(traineeRoleLabel("mom", "male", "en")).toBe("Account owner");
+    // Female or unanswered keeps the stored role (the feminine fallback).
+    expect(traineeRoleLabel("mom", "female", "ar")).toBe("الأم");
+    expect(traineeRoleLabel("mom", null, "ar")).toBe("الأم");
+    expect(traineeRoleLabel("dad", "male", "en")).toBe("Father");
+    expect(traineeRoleLabel("", null, "en")).toBe("");
   });
 
   it("rounds macros P / C / F", () => {

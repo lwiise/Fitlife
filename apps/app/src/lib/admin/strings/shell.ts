@@ -77,7 +77,13 @@ export const SHELL_STRINGS = {
 
   // ── Error view ──
   sh_error_title: { ar: "تعذّر عرض هذه الصفحة", en: "This page couldn’t be shown" },
+  // Two bodies: the reference is only mentioned when there is one to show
+  // (Next gives server errors a digest; client-side errors have none).
   sh_error_body: {
+    ar: "حدث خطأ غير متوقع أثناء تحميلها، وإعادة المحاولة تكفي عادةً.",
+    en: "Something unexpected went wrong while loading it. Trying again usually works.",
+  },
+  sh_error_body_ref: {
     ar: "حدث خطأ غير متوقع أثناء تحميلها. إعادة المحاولة تكفي عادةً، وإن تكرّر الخطأ فالرمز أدناه يساعد في تتبّعه.",
     en: "Something unexpected went wrong while loading it. Trying again usually works; if it keeps happening, the reference below helps trace it.",
   },

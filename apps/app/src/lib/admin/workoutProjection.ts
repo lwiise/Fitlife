@@ -15,7 +15,12 @@
 
 import { WorkoutProfileSchema, type WorkoutPlan } from "@fitlife/plan-engine";
 import { STALE_GENERATION_MIN } from "@/lib/plans/generationTiming";
-import { collapseWorkoutMarks, type RawSeasonWorkoutRow } from "@/lib/engagement/seasonMath";
+import { addDaysISO } from "@/lib/plans/dayMapping";
+import {
+  collapseWorkoutMarks,
+  isISODate,
+  type RawSeasonWorkoutRow,
+} from "@/lib/engagement/seasonMath";
 import { WORKOUT_CHECKIN_STATUSES, WORKOUT_INTENSITIES } from "@/lib/engagement/types";
 import {
   momWorkoutIneligibleReason,
@@ -61,9 +66,9 @@ export function resolveWorkoutRowLite(
 }
 
 /**
- * The fallback half of pickServedWorkoutRow on columns: the first READY row
- * among the older rows of the window (content = status ready). Also what the
- * family page falls back to when the older programs' blobs cannot be read.
+ * The fallback half of pickServedWorkoutRow on columns — the first READY row
+ * among the older rows of the window (content = status ready). Used only by
+ * `pickServedWorkoutLite`.
  */
 export function previousReadyWorkoutLite<R extends { status: string }>(
   older: readonly R[],
@@ -73,7 +78,9 @@ export function previousReadyWorkoutLite<R extends { status: string }>(
 
 /**
  * pickServedWorkoutRow on columns. `rows` = the household's workout_plans,
- * newest first; archived rows are skipped here.
+ * newest first; archived rows are skipped here. The families list's rule (via
+ * `workoutCellFromRows`), and the family page's stand-in when the newest
+ * program's blob cannot be read.
  */
 export function pickServedWorkoutLite<R extends WorkoutRowLite>(
   rows: readonly R[],
@@ -105,8 +112,14 @@ export function workoutCellFromRows(
 /**
  * profiles.workout_profile / family_members.workout_profile → the fields the
  * console shows. Parsed with the app's schema; anything it rejects is null —
- * bad data never throws. The free-text injury notes are left out on purpose
- * (they are health detail, and the console never needs them).
+ * bad data never throws.
+ *
+ * Every injury answer is left out — the areas (shoulder / knee / back /
+ * other) as well as the free-text notes. They are health detail, no console
+ * block shows them, and this summary travels in the side panel's JSON and the
+ * family page's client payload (PDPL data minimisation: spec §2.4, "health
+ * values never leave /health"). `injuries` stays in the contract and is
+ * always empty.
  */
 export function summarizeWorkoutProfile(raw: unknown): TraineeProfileSummary | null {
   if (raw === null || raw === undefined) return null;
@@ -116,7 +129,7 @@ export function summarizeWorkoutProfile(raw: unknown): TraineeProfileSummary | n
   return {
     location: p.location,
     equipment: [...p.equipment],
-    injuries: [...p.injuries],
+    injuries: [],
     desiredDays: p.desired_days,
     preferredDays: p.preferred_days && p.preferred_days.length > 0 ? [...p.preferred_days] : null,
     focusAreas: [...p.focus_areas],
@@ -133,17 +146,43 @@ const INTENSITIES: ReadonlySet<string> = new Set(WORKOUT_INTENSITIES);
 const markKey = (memberId: string, dayIndex: number) => `${memberId}|${dayIndex}`;
 
 /**
+ * The current training week in Riyadh: its Sunday through today (both
+ * YYYY-MM-DD, inclusive). `todayIso` is riyadhTodayISO() — pure, so the
+ * caller owns the clock.
+ *
+ * Deliberately NOT the app's `workoutMarkingWindow`: that is the span a
+ * member may still MARK, and on a Sunday or Monday it reaches back into last
+ * Friday and Saturday (the 48h grace). Marks are keyed by weekday, so a mark
+ * from last Friday would land on THIS week's Friday session — a session that
+ * has not happened yet — and count as done this week. The console reports
+ * this week only.
+ */
+export function currentTrainingWeek(todayIso: string): { start: string; end: string } {
+  const weekday = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
+  return { start: addDaysISO(todayIso, -weekday), end: todayIso };
+}
+
+/**
  * This week's marks by member and weekday. Rows are the calendar-keyed read
- * the app makes (user + `workoutMarkingWindow`, oldest first); the app's
+ * the app makes (by user and date, oldest first); the app's
  * `collapseWorkoutMarks` settles re-marks (last write wins), then each mark is
  * keyed by (member, day_index) exactly as the /plan viewer reads it. Unknown
  * statuses are dropped; intensity only means something on a done session.
+ *
+ * `weekStart` (the Sunday from `currentTrainingWeek`) drops every mark dated
+ * before it — and every mark with no date, which no week can claim. Without
+ * it, rows are taken as given.
  */
 export function marksByMemberDay(
   rows: readonly RawSeasonWorkoutRow[],
+  weekStart?: string,
 ): Map<string, WorkoutSessionMark> {
   const out = new Map<string, WorkoutSessionMark>();
-  for (const m of collapseWorkoutMarks([...rows])) {
+  const inWeek =
+    weekStart === undefined
+      ? rows
+      : rows.filter((r) => isISODate(r.local_date) && r.local_date >= weekStart);
+  for (const m of collapseWorkoutMarks([...inWeek])) {
     const day = m.day_index;
     if (typeof day !== "number" || !Number.isInteger(day) || day < 0 || day > 6) continue;
     if (!m.member_id || !MARK_STATUSES.has(m.status)) continue;

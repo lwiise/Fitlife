@@ -12,8 +12,8 @@ import {
   effectiveMark,
   fmtWeekday,
   localizeDigits,
-  memberRoleLabel,
   traineeProfileParts,
+  traineeRoleLabel,
   weekdayInitial,
   weekdaysText,
 } from "./helpers";
@@ -73,7 +73,7 @@ function Trainee({
       .map((s) => s.dayIndex),
   );
   const parts = traineeProfileParts(trainee.profile, trainee.sex, locale);
-  const role = memberRoleLabel(trainee.role, false, locale);
+  const role = traineeRoleLabel(trainee.role, trainee.sex, locale);
   const of = t("fm_of", locale);
 
   return (

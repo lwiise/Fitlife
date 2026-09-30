@@ -55,8 +55,10 @@
   --crit-soft: #FDECEB;
   --info: #1F4E8C;
   --info-soft: #E6EEF9;
-  --font: var(--font-tajawal, "Tajawal"), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  /* Tajawal only (CLAUDE.md), system-ui as the last resort. There is no
+     monospace stack: machine identifiers (.ad-mono) and key hints (.ad-kbd)
+     keep Tajawal and line their digits up with tabular figures instead. */
+  --font: var(--font-tajawal, "Tajawal"), system-ui, sans-serif;
   /* Frame geometry (read by pages that pin things under the top bar). */
   --ad-top-h: 64px;
   --ad-rail-w: 240px;
@@ -138,9 +140,10 @@
 .admin-root .ad-ar-text { direction: rtl; unicode-bidi: isolate; }
 .admin-root .ad-ltr { direction: ltr; unicode-bidi: isolate; }
 .admin-root .ad-mono {
-  font-family: var(--mono);
+  font-family: var(--font);
   font-size: 12px;
   line-height: 16px;
+  font-variant-numeric: tabular-nums;
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -207,6 +210,7 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
+  min-height: 44px; /* it is a link: a full 44px target around the 32px logo */
   font-size: 16px;
   line-height: 24px;
   font-weight: 800;
@@ -299,6 +303,7 @@
 .admin-root .ad-dot.ad-ok { background: var(--ok); }
 .admin-root .ad-dot.ad-pur { background: var(--purple); }
 .admin-root .ad-dot.ad-neu { background: var(--faint); }
+.admin-root .ad-dot.ad-info { background: var(--info); }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 .admin-root .ad-btn {
@@ -395,6 +400,11 @@
 .admin-root .ad-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
 .admin-root .ad-label { font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); }
 .admin-root .ad-label:lang(en) { letter-spacing: .04em; text-transform: uppercase; }
+/* The tracking above (and on English table headers) is for Latin only: an
+   Arabic name or dish nested in an English label must never inherit it. */
+.admin-root :is(.ad-label, .ad-tbl th, .ad-a-table th):lang(en) :is(:lang(ar), .ad-ar-text, [dir="rtl"]) {
+  letter-spacing: normal;
+}
 .admin-root .ad-sec-title {
   display: flex;
   align-items: center;
@@ -476,9 +486,10 @@
   border-radius: 6px;
   background: rgba(26, 16, 35, .06);
   color: var(--muted);
-  font-family: var(--mono);
+  font-family: var(--font);
   font-size: 12px;
   line-height: 16px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .admin-root .ad-select {
@@ -536,7 +547,16 @@
   background: var(--purple);
 }
 .admin-root .ad-tabs > :is(button, a):focus-visible { outline-offset: -2px; }
+/* A tab navigation on its way (LinkTabs sets aria-busy on the list and on the
+   chosen tab until the new tab has rendered): the chosen tab reads chosen and
+   pulses its underline hint (.ad-lp.ad-on), and the tab body being replaced
+   dims. Nothing is blocked meanwhile. The body is whatever follows the tab
+   list — as a sibling (the desktop page), or, when the tabs close the phone
+   header (.ad-ph-top), whatever follows that header. */
 .admin-root .ad-tabs[aria-busy="true"] { cursor: progress; }
+.admin-root .ad-tabs > :is(button, a)[aria-busy="true"] { color: var(--ink); }
+.admin-root .ad-tabs[aria-busy="true"] ~ *,
+.admin-root .ad-ph-top:has(> .ad-tabs[aria-busy="true"]) ~ * { opacity: .6; transition: opacity .15s; }
 
 .admin-root .ad-segtabs {
   display: inline-flex;
@@ -710,6 +730,8 @@
 }
 .admin-root .ad-mini-meter i { display: block; height: 100%; border-radius: 3px; background: var(--ok); }
 .admin-root .ad-mini-meter i.ad-pur { background: var(--purple); }
+.admin-root .ad-mini-meter i.ad-warn { background: #D98A00; }
+.admin-root .ad-mini-meter i.ad-crit { background: var(--crit); }
 .admin-root .ad-mealcell { display: inline-flex; align-items: center; gap: 8px; }
 .admin-root .ad-empty { padding: 32px 20px; color: var(--muted); font-size: 13px; line-height: 20px; text-align: center; }
 .admin-root .ad-empty b { display: block; margin-block-end: 4px; color: var(--ink); font-size: 16px; line-height: 24px; }
@@ -791,6 +813,11 @@
 .admin-root .ad-trainee .ad-t1 span { font-size: 12px; line-height: 16px; }
 .admin-root .ad-trainee .ad-done { color: var(--ok); font-size: 12px; line-height: 20px; font-weight: 700; white-space: nowrap; }
 .admin-root .ad-trainee p { grid-column: 1 / -1; color: var(--muted); font-size: 13px; line-height: 20px; }
+/* A plan's summary line (the prototype's `.pl-sum`): muted text, the facts in ink. */
+.admin-root .ad-pl-sum { color: var(--muted); font-size: 13px; line-height: 20px; }
+.admin-root .ad-pl-sum b { color: var(--ink); }
+.admin-root .ad-panel-h + .ad-pl-sum { margin-block-start: 8px; }
+.admin-root .ad-pl-sum + .ad-pl-sum { margin-block-start: 4px; }
 .admin-root .ad-wdays { grid-column: 1 / -1; display: flex; gap: 4px; margin-block-start: 8px; }
 .admin-root .ad-wdays i {
   display: grid;
@@ -836,6 +863,17 @@
 }
 .admin-root .ad-reason .ad-ic { margin-block-start: 2px; }
 .admin-root .ad-reason b { display: block; font-size: 13px; line-height: 20px; }
+/* A reason's action (e.g. a link to the tab that resolves it) sits at the
+   row's inline end, on the first line; the negative block margins let a 32px
+   link (44px hit area) share the 20px line without making the row taller. */
+.admin-root .ad-reason-act {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-block: -6px;
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
 
 /* ── Tables ─────────────────────────────────────────────────────────────── */
 .admin-root .ad-tbl { width: 100%; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
@@ -855,6 +893,7 @@
 .admin-root .ad-tbl td { height: 52px; padding: 0 16px; border-block-end: 1px solid var(--line); vertical-align: middle; }
 .admin-root .ad-tbl tr:last-child td { border-block-end: 0; }
 .admin-root .ad-tbl :is(th, td).ad-end { text-align: end; }
+.admin-root .ad-tbl td.ad-nowrap { white-space: nowrap; }
 .admin-root .ad-tbl .ad-err { max-width: 240px; color: var(--crit); font-size: 12px; line-height: 16px; }
 .admin-root .ad-tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 
@@ -1006,11 +1045,13 @@
 }
 .admin-root .ad-pop.ad-at-end { inset-inline-end: 0; inset-block-start: 48px; }
 .admin-root .ad-pop.ad-at-start { inset-inline-start: 0; inset-block-start: 48px; }
+/* Popover rows are stacked with no gap, so each row is its own full 44px
+   target (a ::before hit area would overlap the row next to it). */
 .admin-root .ad-pop label {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 40px;
+  min-height: 44px;
   padding-inline: 8px;
   border-radius: 8px;
   font-size: 14px;
@@ -1025,7 +1066,7 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  height: 40px;
+  min-height: 44px;
   padding-inline: 12px;
   border-radius: 8px;
   font-size: 14px;
@@ -1034,10 +1075,12 @@
 .admin-root .ad-pop .ad-menu-item:hover { background: var(--hover); }
 .admin-root .ad-pop .ad-menu-item.ad-danger { color: var(--crit); }
 
+/* Above the phone drawer (75): a dialog opened while the drawer is open —
+   ⌘K on a narrow window — must not render underneath it. */
 .admin-root .ad-scrim {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: 76;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1057,6 +1100,9 @@
   box-shadow: 0 32px 72px -32px rgba(26, 16, 35, .7);
 }
 .admin-root .ad-modal.ad-narrow { width: min(480px, 100%); }
+/* A dialog box takes focus itself (tabIndex -1) only so a click on its text
+   keeps the keyboard working; the box is not a control, so no ring. */
+.admin-root :is(.ad-modal, .ad-drawer-panel):focus { outline: none; }
 .admin-root .ad-modal.ad-wide { width: min(1120px, 100%); }
 .admin-root .ad-modal-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px 12px; }
 .admin-root .ad-modal-h h2 { font-size: 20px; line-height: 28px; font-weight: 800; }
@@ -1236,7 +1282,11 @@
 }
 .admin-root .ad-top-start { display: flex; align-items: center; gap: 4px; min-width: 0; padding-inline: 24px; }
 .admin-root .ad-a-top .ad-brand { border-radius: 10px; }
-.admin-root :is(.ad-a-top, .ad-drawer) .ad-brand:focus-visible { outline-offset: 6px; }
+/* The brand link is itself the 44px target, so its ring keeps the default
+   2px offset: 52px tall, inside even the 56px phone bar. (A 6px offset, sized
+   for the old 32px box, pushed the ring's top edge above the viewport while
+   that bar is stuck to the top.) */
+.admin-root :is(.ad-a-top, .ad-drawer) .ad-brand:focus-visible { outline-offset: 2px; }
 .admin-root .ad-a-top .ad-search.ad-top-search {
   justify-self: start;
   width: min(560px, calc(100% - 24px));
@@ -1555,10 +1605,15 @@
 .admin-root .ad-ph-title { font-size: 28px; line-height: 36px; font-weight: 800; }
 .admin-root .ad-ph-sub { margin-block-start: 8px; }
 .admin-root .ad-ph-label { padding: 8px 4px 0; }
+/* A horizontal scroller clips on both axes, so it pads 4px around the 36px
+   chips — room for their focus ring and 44px hit area — and takes the 4px
+   back with negative margins so the layout does not move. */
 .admin-root .ad-ph-chips {
   display: flex;
   gap: 8px;
+  margin-block: -4px;
   margin-inline: -16px;
+  padding-block: 4px;
   padding-inline: 16px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -1871,7 +1926,13 @@ html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
   .admin-root .ad-meal .ad-share { grid-column: 2; justify-self: start; }
   .admin-root .ad-meal .ad-share:empty { display: none; }
   .admin-root .ad-meal .ad-kc { grid-row: 1; grid-column: 3; }
-  .admin-root .ad-wk { grid-template-columns: repeat(7, minmax(88px, 1fr)); overflow-x: auto; }
+  /* Scrolls sideways on phones: pad for the focus ring (see .ad-ph-chips). */
+  .admin-root .ad-wk {
+    grid-template-columns: repeat(7, minmax(88px, 1fr));
+    overflow-x: auto;
+    margin: -4px;
+    padding: 4px;
+  }
   .admin-root .ad-kv,
   .admin-root .ad-kv.ad-kv4 { grid-template-columns: minmax(0, 1fr); }
   .admin-root .ad-summary-plans,

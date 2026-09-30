@@ -13,6 +13,7 @@ import Link, { useLinkStatus } from "next/link";
 import { Lock, Shield, X } from "lucide-react";
 import type { AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
+import { trapTab, useEscapedKeys } from "../_ui/modalFocus";
 import { healthHref } from "./helpers";
 
 /**
@@ -29,7 +30,8 @@ import { healthHref } from "./helpers";
  * else `.admin-root`) so a scrolling or fixed ancestor such as the side panel
  * cannot clip it, while it keeps the console's type and tokens. Esc, the
  * close button, Cancel or a click on the scrim close it and return focus to
- * the trigger; Tab stays inside while it is open.
+ * the trigger; Tab stays inside while it is open. The dialog box itself is
+ * focusable (tabIndex -1), so a click on its text keeps the keys working.
  */
 export function HealthLink({
   userId,
@@ -78,23 +80,10 @@ export function HealthLink({
       close();
       return;
     }
-    if (event.key !== "Tab" || !dialogRef.current) return;
-    const nodes = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((el) => el.getClientRects().length > 0);
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (dialogRef.current) trapTab(event, dialogRef.current);
   }
+
+  useEscapedKeys({ open, containerRef: dialogRef, onEscape: close });
 
   const dialog = (
     <div
@@ -110,6 +99,7 @@ export function HealthLink({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
+        tabIndex={-1}
         onKeyDown={onDialogKey}
       >
         <div className="ad-modal-h">

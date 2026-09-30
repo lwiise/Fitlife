@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planHasContent } from "@fitlife/plan-engine";
+import { MealPlanSchema, planHasContent } from "@fitlife/plan-engine";
 
 import {
   DEFAULT_DAYS_TOTAL,
@@ -11,6 +11,7 @@ import {
   pickServedMealPlan,
   planTargetsById,
   probeFromPlanData,
+  probeMayHoldPlan,
   projectMealWeek,
   resolveMealRow,
   resolveMealRowLite,
@@ -199,6 +200,29 @@ describe("projectMealWeek", () => {
     expect(w.generating).toBe(false);
     expect(projectMealWeek(weekPlan({ generating: true }))!.generating).toBe(true);
   });
+
+  it("reads the engine's 0 placeholders as no target, never «٠ سعرة»", () => {
+    // Before the skeleton runs — and for a member a skeleton dropped (the
+    // zero-macro shell) — the header carries 0 where a target will be.
+    const w = projectMealWeek(
+      plan([
+        member("mom", [], {
+          daily_calories_target: 0,
+          macros_target: { protein_g: 0, carbs_g: 0, fat_g: 0 },
+        }),
+        member("dad", [fullDay(0)], {
+          daily_calories_target: "-5",
+          macros_target: { protein_g: -1 },
+        }),
+        member("aunt", [fullDay(0)], { daily_calories_target: "1650.5" }),
+      ]),
+    )!;
+    expect(w.members.map((m) => [m.caloriesTarget, m.proteinTargetG])).toEqual([
+      [null, null],
+      [null, null],
+      [1650.5, 130],
+    ]);
+  });
 });
 
 describe("planTargetsById", () => {
@@ -216,6 +240,28 @@ describe("planTargetsById", () => {
     });
     expect(t.get("kid")).toEqual({ primaryGoal: null, caloriesTarget: 1800, macros: null });
     expect(planTargetsById(null).size).toBe(0);
+  });
+
+  it("drops placeholder targets: no calories at 0, no macros unless one is above 0", () => {
+    const t = planTargetsById(
+      plan([
+        member("mom", [], {
+          daily_calories_target: 0,
+          macros_target: { protein_g: 0, carbs_g: 0, fat_g: 0 },
+        }),
+        member("dad", [], {
+          daily_calories_target: "0",
+          macros_target: { protein_g: "0", carbs_g: 0, fat_g: 12 },
+        }),
+      ]),
+    );
+    expect(t.get("mom")).toEqual({ primaryGoal: "fat_loss", caloriesTarget: null, macros: null });
+    // One real macro makes the line real (a 0 g fat target is a target).
+    expect(t.get("dad")).toEqual({
+      primaryGoal: "fat_loss",
+      caloriesTarget: null,
+      macros: { protein_g: 0, carbs_g: 0, fat_g: 12 },
+    });
   });
 });
 
@@ -238,6 +284,45 @@ describe("probes", () => {
     expect(workerAckedFromProbe({})).toBe(false);
     expect(workerAckedFromProbe(probeFromPlanData({ worker_ack_at: minAgo(1) }))).toBe(true);
     expect(workerAckedFromProbe(probeFromPlanData(weekPlan()))).toBe(true);
+  });
+
+  it("rules a blob out only when the schema provably rejects it", () => {
+    // A killed regeneration of the owner: her days empty, the others' carried.
+    // The first-member probes read 0 days, yet the app serves it.
+    const ownerRegen = plan([
+      member("mom", [0, 1, 2, 3, 4, 5, 6].map(shell)),
+      member("dad", [0, 1, 2, 3, 4, 5, 6].map(fullDay)),
+    ]);
+    const cases: Array<[string, unknown]> = [
+      ["never written", {}],
+      ["no members", plan([])],
+      ["no week", { members: [member("mom", [fullDay(0)])] }],
+      ["empty member id", plan([member("", [fullDay(0)])])],
+      ["numeric week", { week_start_date: 20260927, members: [member("mom", [fullDay(0)])] }],
+      ["full week", weekPlan()],
+      ["empty shell", plan([member("mom", [shell(0)])])],
+      ["owner regeneration", ownerRegen],
+    ];
+    const verdicts = cases.map(([label, pd]) => [label, probeMayHoldPlan(probeFromPlanData(pd))]);
+    expect(verdicts).toEqual([
+      ["never written", false],
+      ["no members", false],
+      ["no week", false],
+      ["empty member id", false],
+      ["numeric week", false],
+      ["full week", true],
+      ["empty shell", true],
+      ["owner regeneration", true],
+    ]);
+    // Sound: whatever it rules out, the schema really rejects.
+    for (const [label, pd] of cases) {
+      if (!probeMayHoldPlan(probeFromPlanData(pd))) {
+        expect(MealPlanSchema.safeParse(pd).success, label).toBe(false);
+      }
+    }
+    // And the case it exists for: the probes see no meals, the app sees content.
+    expect(daysReadyFromProbe(probeFromPlanData(ownerRegen))).toBe(0);
+    expect(planHasContent(MealPlanSchema.parse(ownerRegen))).toBe(true);
   });
 });
 

@@ -3,7 +3,9 @@
  * render the console-types shapes on BOTH the side panel (client) and the
  * full family page (server). Data comes in as props — plus `locale`, and
  * `currency` wherever money is shown — so nothing here fetches, and nothing
- * reads the clock during render (callers pass "today").
+ * reads the clock during render: callers pass "today" (`todayIso`,
+ * `todayWeekday`) and, for relative times, "now" (`nowIso` — REQUIRED on
+ * SummaryFacts and EngagementFields).
  *
  * Client components (state/interaction): MealWeekExplorer,
  * ProgramWeekExplorer, HealthLink. Everything else has no hooks.
@@ -34,6 +36,7 @@ export {
   mealPlanHref,
   programHref,
   reasonSentence,
+  showsCancelScheduled,
   todayWeekdayFrom,
   workoutCellFromSection,
 } from "./helpers";

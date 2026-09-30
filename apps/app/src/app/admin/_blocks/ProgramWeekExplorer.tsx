@@ -25,7 +25,7 @@ import {
   markView,
   sessionMinutesLabel,
   equipmentText,
-  weekdayOfIso,
+  trainingWeekSundayFrom,
   weekdaysText,
   type MarkView,
 } from "./helpers";
@@ -83,11 +83,9 @@ function Explorer({
     picked != null && dayOf(picked) ? picked : defaultSessionDay(trainee, todayWeekday);
   const selected = selectedDay != null ? dayOf(selectedDay) : null;
 
-  // Day numbers for this training week: its Sunday is today minus today's
-  // weekday, both read from the mark window's end (today in Riyadh).
-  const end = section.marksWindow?.end ?? null;
-  const endWeekday = weekdayOfIso(end);
-  const sunday = end && endWeekday != null ? addDaysIso(end, -endWeekday) : null;
+  // Day numbers for this training week, counted from its Sunday — the mark
+  // window's start, as the loader defined it (never recomputed here).
+  const sunday = trainingWeekSundayFrom(section);
   const dayNum = (d: number) => (sunday ? fmtDayOfMonth(addDaysIso(sunday, d), locale) : null);
 
   const excluded = section.ineligible;

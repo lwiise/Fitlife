@@ -9,7 +9,7 @@
  */
 
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
-import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
+import { fmtNumber, fmtRelative, type AdminLocale } from "@/lib/admin/format";
 import { planStatusLabel, roleLabel, t, tierLabel, type AdminStringKey } from "@/lib/admin/i18n";
 import type {
   AttentionReason,
@@ -197,18 +197,46 @@ export function fmtDayOfMonth(iso: string, locale: AdminLocale): string {
   );
 }
 
-/** Date and time in Riyadh — «٢٨ سبتمبر، ١:٣٠ ص». "—" if missing. */
-export function fmtDateTime(iso: string | null | undefined, locale: AdminLocale): string {
+/**
+ * Date and time in Riyadh — «٢٨ سبتمبر، ١:٣٠ ص». "—" if missing. `year`
+ * adds the year («٢٨ سبتمبر ٢٠٢٦، ١:٣٠ ص») for lists that span months, such
+ * as the generation runs.
+ */
+export function fmtDateTime(
+  iso: string | null | undefined,
+  locale: AdminLocale,
+  opts: { year?: boolean } = {},
+): string {
   if (!iso) return "—";
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return "—";
   return new Intl.DateTimeFormat(TAG[locale], {
+    ...(opts.year ? { year: "numeric" as const } : null),
     day: "numeric",
     month: "short",
     hour: "numeric",
     minute: "2-digit",
     timeZone: RIYADH_TZ,
   }).format(new Date(ms));
+}
+
+/**
+ * «قبل ساعتين» / «2 hours ago», measured against `nowIso` — the render's
+ * "now" handed down by the caller (a server page's request time), never the
+ * clock read during render: a relative time rendered on the server and again
+ * at hydration a moment later can disagree, and React then throws away the
+ * server HTML. "—" when `iso` is missing or unusable; the plain day when
+ * `nowIso` is.
+ */
+export function fmtRelativeTo(
+  iso: string | null | undefined,
+  nowIso: string,
+  locale: AdminLocale,
+): string {
+  if (!iso || Number.isNaN(Date.parse(iso))) return "—";
+  const now = Date.parse(nowIso);
+  if (Number.isNaN(now)) return fmtDay(iso, locale);
+  return fmtRelative(iso, locale, new Date(now));
 }
 
 /** A run's duration as m:ss («١٢:٤١»). "—" when unknown. */
@@ -265,6 +293,22 @@ export function subscriptionStatusTone(status: string | null): Tone {
   return (status && SUBSCRIPTION_TONE[status]) || "neu";
 }
 
+/**
+ * Whether a renewal date carries «· إلغاء مجدول»: the subscription is set to
+ * cancel and has not ended yet. The old families list showed it on EVERY
+ * status; the one exception here is 'expired', where the cancellation has
+ * already happened. 'cancelled' keeps it: a cancellation made in the
+ * LemonSqueezy portal lands as status 'cancelled' with the flag set, and the
+ * customer stays paid through the period (lib/subscription/state.ts).
+ *
+ * Deliberately wider than the `cancel_scheduled` list flag
+ * (`isLiveForCancellation`: active or trialing only) — this is the old
+ * renewal column's rule, not the attention-flag taxonomy.
+ */
+export function showsCancelScheduled(status: string | null, cancelAtPeriodEnd: boolean): boolean {
+  return cancelAtPeriodEnd && !!status && status !== "expired";
+}
+
 /** Tier display name (Arabic from the pricing config). "—" when missing. */
 export function tierName(tier: string | null, locale: AdminLocale): string {
   const arName = tier && tier in PRICING_TIERS ? PRICING_TIERS[tier as Tier].name_ar : null;
@@ -275,6 +319,21 @@ export function tierName(tier: string | null, locale: AdminLocale): string {
 export function memberRoleLabel(role: string, isHousekeeper: boolean, locale: AdminLocale): string {
   if (isHousekeeper || role === "housekeeper") return t("fm_role_cook", locale);
   return role ? roleLabel(role, locale) : "";
+}
+
+/**
+ * A trainee's role. The account owner's role is stored as "mom" whoever
+ * signed up, so a male owner reads «صاحب الحساب» / "Account owner" rather
+ * than «الأم»; an owner whose sex is unanswered keeps «الأم» (the product's
+ * feminine fallback). Every other role already names its own sex.
+ */
+export function traineeRoleLabel(
+  role: string,
+  sex: "male" | "female" | null,
+  locale: AdminLocale,
+): string {
+  if (role === "mom" && sex === "male") return t("fm_role_owner_m", locale);
+  return memberRoleLabel(role, false, locale);
 }
 
 /**
@@ -566,15 +625,26 @@ export function todayWeekdayFrom(section: Pick<WorkoutSection, "marksWindow">): 
   return weekdayOfIso(section.marksWindow?.end ?? null);
 }
 
-/** The Sunday that opens the current training week. */
-export function trainingWeekStart(todayIso: string, todayWeekday: number): string {
-  return addDaysIso(todayIso, -todayWeekday);
+/**
+ * The Sunday that opens the current training week: the mark window's start,
+ * which the loader sets to exactly that day (`currentTrainingWeek` in
+ * lib/admin/workoutProjection.ts — the ONE definition; nothing here
+ * recomputes it). Null when there is no window, or its start is not a Sunday
+ * (a window that does not open the week cannot number a Sunday-first grid).
+ */
+export function trainingWeekSundayFrom(
+  section: Pick<WorkoutSection, "marksWindow">,
+): string | null {
+  const start = section.marksWindow?.start ?? null;
+  return start !== null && weekdayOfIso(start) === 0 ? start : null;
 }
 
 /**
- * This week's mark for a session. The mark window reaches up to two days
- * into LAST week (the app's 48h grace), and marks are keyed by weekday — so a
- * mark on a day still ahead of today belongs to last week and is not shown.
+ * This week's mark for a session. The loader already reads this week's marks
+ * only (Sunday → today, `currentTrainingWeek`), so this is a guard, not the
+ * rule: marks are keyed by weekday, and a mark on a day still ahead of today
+ * can only be last week's — the app's own marking window reaches two days
+ * into last week — so it is never shown as this week's.
  */
 export function effectiveMark(
   session: Pick<WorkoutSessionView, "dayIndex" | "mark">,

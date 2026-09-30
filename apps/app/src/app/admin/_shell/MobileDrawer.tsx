@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { IconBtn } from "../_ui/Button";
+import { tabbablesIn, trapTab, useEscapedKeys } from "../_ui/modalFocus";
 import { CurrencyToggle } from "./CurrencyToggle";
 import type { ShellLabels } from "./labels";
 import { LocaleToggle } from "./LocaleToggle";
@@ -16,7 +17,12 @@ import { WIDE_QUERY } from "./views";
  * opens a modal panel from the inline-start edge with the sections, the
  * language and currency switches and the signed-in address. Focus moves in,
  * Tab stays in, Esc / a tap outside / choosing a link closes it and focus
- * returns to the menu button. Growing past 1024px closes it too.
+ * returns to the menu button. Growing past 1024px, or a browser back/forward,
+ * closes it too.
+ *
+ * The panel itself is focusable (tabIndex -1), so a tap on its plain text or
+ * padding keeps focus inside it — the keys keep working — instead of dropping
+ * focus to <body>; useEscapedKeys covers any other way focus gets out.
  */
 export function MobileDrawer({
   labels,
@@ -42,14 +48,21 @@ export function MobileDrawer({
   }
 
   useEffect(() => {
-    if (!open) return;
-    panelRef.current?.querySelector<HTMLElement>("a[href], button")?.focus();
+    const panel = panelRef.current;
+    if (!open || !panel) return;
+    (tabbablesIn(panel)[0] ?? panel).focus();
     const wide = window.matchMedia(WIDE_QUERY);
     const onChange = () => {
       if (wide.matches) setOpen(false);
     };
+    // Back/forward (the phone's back gesture) leaves the page it was opened on.
+    const onPop = () => setOpen(false);
     wide.addEventListener("change", onChange);
-    return () => wide.removeEventListener("change", onChange);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      wide.removeEventListener("change", onChange);
+      window.removeEventListener("popstate", onPop);
+    };
   }, [open]);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -59,21 +72,10 @@ export function MobileDrawer({
       close();
       return;
     }
-    if (event.key !== "Tab" || !panelRef.current) return;
-    const nodes = Array.from(
-      panelRef.current.querySelectorAll<HTMLElement>('a[href], button, [tabindex]:not([tabindex="-1"])'),
-    ).filter((el) => el.getClientRects().length > 0 && !el.hasAttribute("disabled"));
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (panelRef.current) trapTab(event, panelRef.current);
   }
+
+  useEscapedKeys({ open, containerRef: panelRef, onEscape: () => close() });
 
   return (
     <>
@@ -105,6 +107,7 @@ export function MobileDrawer({
             role="dialog"
             aria-modal="true"
             aria-label={labels.menu}
+            tabIndex={-1}
             onClick={(event) => {
               // Choosing a destination closes the drawer; the new page takes focus.
               if ((event.target as HTMLElement).closest("a[href]")) close(false);

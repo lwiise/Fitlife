@@ -17,8 +17,9 @@ export function Kv({
 
 /**
  * One key-value pair. `mono` renders the value as an isolated left-to-right
- * monospace run that translators skip — for emails, ids and codes inside an
- * RTL block (the block itself stays RTL so it aligns with its column).
+ * identifier run (`.ad-mono`: small, tabular figures — still Tajawal) that
+ * translators skip — for emails, ids and codes inside an RTL block (the block
+ * itself stays RTL so it aligns with its column).
  */
 export function KvItem({
   label,

@@ -1,13 +1,7 @@
 import type { FamilyHeaderData } from "@/lib/admin/console-types";
-import {
-  fmtMoney,
-  fmtNumber,
-  fmtRelative,
-  type AdminLocale,
-  type Currency,
-} from "@/lib/admin/format";
+import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { localeName, t } from "@/lib/admin/i18n";
-import { fmtDay } from "./helpers";
+import { fmtDay, fmtRelativeTo } from "./helpers";
 import { DateText, Field, FlagChip, Ltr, Pill } from "./parts";
 
 /**
@@ -81,15 +75,21 @@ export function AccountFields({
  * Advisor engagement (the prototype's `engagementFields`): messages, last
  * chat (relative, with the date on hover) and what the chat cost. Costs keep
  * four decimals so a few cents never read as zero.
+ *
+ * `nowIso` is REQUIRED, as for SummaryFacts: the relative "last chat" is
+ * measured from a "now" the caller fixes, never the clock during render.
  */
 export function EngagementFields({
   header,
   locale,
   currency,
+  nowIso,
 }: {
   header: Pick<FamilyHeaderData, "engagement">;
   locale: AdminLocale;
   currency: Currency;
+  /** ISO time "now" is — e.g. new Date().toISOString() in the page's server code. */
+  nowIso: string;
 }) {
   const { chatCount, lastChatAt, chatCostUsd } = header.engagement;
   return (
@@ -100,7 +100,7 @@ export function EngagementFields({
       <Field label={t("fm_chat_last", locale)}>
         {lastChatAt ? (
           <time dateTime={lastChatAt} title={fmtDay(lastChatAt, locale)}>
-            {fmtRelative(lastChatAt, locale)}
+            {fmtRelativeTo(lastChatAt, nowIso, locale)}
           </time>
         ) : (
           "—"

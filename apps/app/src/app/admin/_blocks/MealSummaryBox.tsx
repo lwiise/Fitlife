@@ -40,7 +40,8 @@ export function MealSummaryBox({
     plan.daysReady != null
       ? `${fmtNumber(plan.daysReady, locale)}/${fmtNumber(plan.daysTotal, locale)}`
       : "—";
-  const people = week ? fmtNumber(week.members.length, locale) : "—";
+  // No members yet (the skeleton phase of a run) is unknown, not «٠ أفراد».
+  const people = week && week.members.length > 0 ? fmtNumber(week.members.length, locale) : "—";
   const cost = plan.costUsd != null ? fmtMoney(plan.costUsd, currency, locale, 2) : "—";
 
   let note: string | null = null;

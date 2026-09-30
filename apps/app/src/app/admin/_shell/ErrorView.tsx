@@ -46,7 +46,7 @@ export function ErrorView({
           <TriangleAlert className="ad-ic" />
         </span>
         <h1>{t("sh_error_title", locale)}</h1>
-        <p>{t("sh_error_body", locale)}</p>
+        <p>{t(error.digest ? "sh_error_body_ref" : "sh_error_body", locale)}</p>
         {error.digest ? (
           <p className="ad-ref">
             {t("sh_error_ref", locale)}

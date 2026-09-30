@@ -14,17 +14,25 @@
  *  - `resolveMealRow` + `pickServedMealPlan` run that rule on FULL rows
  *    (plan_data in hand) with the app's own building blocks — MealPlanSchema,
  *    planHasContent, resolveStaleness, workerAckedFromPlanData. The family
- *    page uses them, one family at a time.
+ *    page uses them, one family at a time, handing `pickServedMealPlan` the
+ *    older candidates one row at a time in getLatestPlan's order, so it reads
+ *    a blob per candidate and stops at the first the app serves. The only
+ *    rows it skips unread are the ones `probeMayHoldPlan` proves the schema
+ *    rejects — so the page's answer is the app's, exactly.
  *  - `mealCellFromRows` runs the same rule on PROBE rows — a few JSON-path
  *    columns instead of the multi-hundred-KB blob — because the families list
- *    covers every household at once. It cannot run the Zod validation (it
- *    never sees the blob), so it assumes a 'ready' row's data is valid; every
- *    other branch is the app's, pinned against `resolveStaleness` by
- *    mealProjection.test.ts so the two cannot drift silently.
+ *    covers every household at once. Two approximations follow from never
+ *    seeing the blob: it assumes a 'ready' row's data is valid (no Zod), and
+ *    its probes see the FIRST member only, so "has content" means "the first
+ *    member has meals" where the app asks whether ANY member does — a plan
+ *    whose first member is empty while others are not (an owner's own
+ *    regeneration opens that way) reads as empty here. Every other branch is
+ *    the app's, pinned against `resolveStaleness` by mealProjection.test.ts
+ *    so the two cannot drift silently.
  *
  * getLatestPlan itself is server-only and reads through a cookie-bound client,
- * so it cannot be called from the admin; the fallback loop is mirrored here
- * line for line (see the comments that point back at it).
+ * so it cannot be called from the admin; its fallback loop is mirrored in
+ * `pickServedMealPlan` line for line (see the comments that point back at it).
  */
 
 import { MealPlanSchema, planHasContent, type MealPlan } from "@fitlife/plan-engine";
@@ -56,10 +64,13 @@ const DAY_PROBE_KEYS = ["d0", "d1", "d2", "d3", "d4", "d5", "d6"] as const;
  * `day_index` instead would count the empty day SHELLS the engine writes for
  * days it has not generated yet, so a plan with one real day would read 7/7.)
  * The first member stands in for the household: days are generated for the
- * whole household together, and a member added later is appended at the end.
+ * whole household together, and a member added later is appended at the end
+ * (the one corner where that does not hold — the first member's own
+ * regeneration — is in the header above).
  *
- * `ack`, `ws` and `m0` only exist to answer "has the worker ever written this
- * row" (see `workerAckedFromProbe`).
+ * `ack`, `ws` and `m0` answer "has the worker ever written this row" (see
+ * `workerAckedFromProbe`); `ws` and `m0` also rule out a blob the schema
+ * would reject (`probeMayHoldPlan`).
  */
 export const MEAL_PROBE_COLUMNS = [
   "days_total:plan_data->days_total",
@@ -98,6 +109,22 @@ export function daysReadyFromProbe(p: MealProbeFields): number {
 /** plan_data.days_total, defaulting to a full week. */
 export function daysTotalFromProbe(p: MealProbeFields | null | undefined): number {
   return positiveInt(p?.days_total) ?? DEFAULT_DAYS_TOTAL;
+}
+
+/**
+ * False only when the probes PROVE a row's plan_data fails MealPlanSchema, so
+ * the app could never serve it: the first member has no member_id (the
+ * schema needs at least one member, each with a non-empty id) or there is no
+ * week_start_date string (also required).
+ *
+ * Deliberately NOT "the first member has meals" (`daysReadyFromProbe > 0`):
+ * the app serves a plan when ANY member has meals (`planHasContent`), and a
+ * plan whose first member is empty while others have meals is ordinary — a
+ * regeneration of the owner opens with her days emptied and everyone else's
+ * carried. Only the blob can tell those apart from an empty shell.
+ */
+export function probeMayHoldPlan(p: MealProbeFields): boolean {
+  return typeof p.m0 === "string" && p.m0 !== "" && typeof p.ws === "string";
 }
 
 /**
@@ -412,6 +439,10 @@ export interface ProjectMealWeekOptions {
  * - A child (is_child, stamped by the engine) is planned by PORTIONS: the
  *   calorie/protein figures on its header are an approximate average, not a
  *   target the days are held to, so both targets are null here.
+ * - A target of 0 (or less) is the engine's PLACEHOLDER, not a target: the
+ *   header is written before the skeleton has run, and a skeleton that drops
+ *   a member leaves a zero-macro shell. Both read as null ("not computed"),
+ *   never as «٠ سعرة».
  * - `sharedBy` is the number of people on the dish's per-member portions when
  *   the meal is a shared recipe, else 1.
  */
@@ -436,8 +467,8 @@ export function projectMealWeek(
         opts.nameById?.get(memberId) ??
         (typeof m.member_name_ar === "string" && m.member_name_ar ? m.member_name_ar : memberId),
       isChild,
-      caloriesTarget: isChild ? null : finiteNumber(m.daily_calories_target),
-      proteinTargetG: isChild ? null : finiteNumber(macros?.protein_g),
+      caloriesTarget: isChild ? null : positiveOrNull(m.daily_calories_target),
+      proteinTargetG: isChild ? null : positiveOrNull(macros?.protein_g),
       days: projectDays(m.days),
     });
   }
@@ -513,6 +544,10 @@ export interface MemberPlanTargets {
  * Per-member goal and targets as the plan states them (the household table's
  * goal/calories/macros). Lenient like `projectMealWeek`; children keep the
  * engine's approximate figures here, exactly as the old detail page showed.
+ *
+ * Placeholders are not targets (see `projectMealWeek`): a calorie target of 0
+ * or less is null, and the macros are null unless all three are numbers and
+ * at least one is above 0 — a zero-macro shell must not read «٠ / ٠ / ٠».
  */
 export function planTargetsById(planData: unknown): Map<string, MemberPlanTargets> {
   const out = new Map<string, MemberPlanTargets>();
@@ -525,13 +560,12 @@ export function planTargetsById(planData: unknown): Map<string, MemberPlanTarget
     const protein = finiteNumber(mac?.protein_g);
     const carbs = finiteNumber(mac?.carbs_g);
     const fat = finiteNumber(mac?.fat_g);
+    const macrosKnown =
+      protein !== null && carbs !== null && fat !== null && (protein > 0 || carbs > 0 || fat > 0);
     out.set(id, {
       primaryGoal: typeof m.primary_goal === "string" && m.primary_goal ? m.primary_goal : null,
-      caloriesTarget: finiteNumber(m.daily_calories_target),
-      macros:
-        protein !== null && carbs !== null && fat !== null
-          ? { protein_g: protein, carbs_g: carbs, fat_g: fat }
-          : null,
+      caloriesTarget: positiveOrNull(m.daily_calories_target),
+      macros: macrosKnown ? { protein_g: protein, carbs_g: carbs, fat_g: fat } : null,
     });
   }
   return out;

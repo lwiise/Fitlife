@@ -33,6 +33,7 @@ import {
   pickServedMealLite,
   pickServedMealPlan,
   planTargetsById,
+  probeMayHoldPlan,
   projectMealWeek,
   resolveMealRow,
   type MealPlanRowFull,
@@ -41,9 +42,9 @@ import {
 } from "@/lib/admin/mealProjection";
 import {
   WORKOUT_SERVED_WINDOW,
+  currentTrainingWeek,
   marksByMemberDay,
   pickServedWorkoutLite,
-  previousReadyWorkoutLite,
   projectWorkoutTrainees,
   resolveWorkoutRowLite,
   sexOf,
@@ -79,7 +80,6 @@ import {
   type WorkoutPlanRow,
 } from "@/lib/plans/workoutPlanRows";
 import { riyadhCurrentYear, riyadhTodayISO } from "@/lib/plans/dayMapping";
-import { workoutMarkingWindow } from "@/lib/engagement/seasonMath";
 
 /**
  * One family, for the side panel and the full family page (service-role,
@@ -91,12 +91,22 @@ import { workoutMarkingWindow } from "@/lib/engagement/seasonMath";
  * cached too, so the header, the meal tab and the household table issue each
  * query once per request however many of them render.
  *
- * Data minimisation (PDPL): health columns are read here only to derive the
- * doctor-gate BOOLEAN; no health column is returned. One open exception: the
- * exact plan goal, which can be health-derived (see buildHousehold). The full plan_data blob
- * is read for the SERVED plan only (plus, when the newest run failed, the few
- * older rows getLatestPlan would look at) and is projected to a compact
- * display shape before it leaves this module.
+ * Data minimisation (PDPL). The raw health columns (medical conditions, the
+ * pregnancy and high-risk flags) are read here only to derive the doctor-gate
+ * BOOLEANS and are never returned, and the workout questionnaire's injury
+ * answers are dropped when its summary is built (summarizeWorkoutProfile).
+ * What does leave this module, knowingly (the full account is at the top of
+ * console-types.ts):
+ *  - the exact plan goal, which can be health-derived (see buildHousehold);
+ *  - `consultedDoctor`, the doctor-consult answer the gate is built on;
+ *  - generated plan and program TEXT — dish and session names, the split,
+ *    warm-up/cool-down, home variants, progression notes — which the model
+ *    writes from the whole profile and may restate pregnancy, postpartum or
+ *    injury context in its own words.
+ * The full plan_data blob is read for the SERVED plan only (plus, when the
+ * newest run failed, the older candidates getLatestPlan would look at — one
+ * at a time, stopping at the first it would serve) and is projected to a
+ * compact display shape before it leaves this module.
  *
  * Errors: a failed read of the tables every section is built on (profiles,
  * subscriptions, family_members, meal_plans, plan_generations) THROWS — an
@@ -606,9 +616,26 @@ interface ServedMeal {
 
 /**
  * getLatestPlan's decision for one family (see mealProjection.ts). Reads the
- * newest row's blob when it can hold one, and the older READY rows' blobs only
- * when the newest run failed with nothing to show. If a blob read fails, the
- * probe-level decision stands in (state known, no week to project).
+ * newest row's blob when it can hold one. Only when the newest run failed with
+ * nothing to show does it look further back — getLatestPlan's own loop, in its
+ * own order: the older 'ready' rows of the window, newest first, read ONE
+ * blob at a time and tested with the app's rule (schema, content in ANY
+ * member, staleness), stopping at the first it would serve. So the common
+ * case (the previous week is fine) costs one read, however many failures are
+ * stacked in front of it.
+ *
+ * The only older rows skipped unread are those whose probes PROVE the schema
+ * would reject them (`probeMayHoldPlan`: no first member, no week). A row
+ * whose FIRST member has no meals is still read: the app serves it when any
+ * other member has meals — the probes, which see the first member only,
+ * cannot tell that from an empty shell. (The families list, which has only
+ * the probes, does take that first-member approximation; see
+ * `pickServedMealLite`.)
+ *
+ * If a blob read fails, the probe-level decision stands in (state known, no
+ * week to project): for the newest row, the list's rule over the window; for
+ * the older candidates, the list's rule over the ones not yet ruled out — the
+ * first whose probes show meals is served — with no further reads.
  */
 async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | null> {
   const userId = reader.userId;
@@ -640,10 +667,15 @@ async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | nul
   };
 
   const blobs = new Map<string, unknown>();
-  if (newest.status === "ready" || newest.status === "generating") {
-    const got = await fetchPlanData("meal_plans", userId, [newest.id]);
-    if (!got) return fromProbes();
+  /** Reads one row's plan_data into `blobs`; false when the read failed. */
+  const readBlob = async (id: string): Promise<boolean> => {
+    const got = await fetchPlanData("meal_plans", userId, [id]);
+    if (!got) return false;
     for (const [k, v] of got) blobs.set(k, v);
+    return true;
+  };
+  if (newest.status === "ready" || newest.status === "generating") {
+    if (!(await readBlob(newest.id))) return fromProbes();
   }
   const full = (r: MealRow): MealPlanRowFull => ({
     id: r.id,
@@ -658,14 +690,31 @@ async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | nul
   if (!resolvedNewest) return null;
   let pick = pickServedMealPlan(resolvedNewest, [], now);
   if (needsPreviousPlan(resolvedNewest)) {
-    const older = window.slice(1);
-    const readyIds = older.filter((r) => r.status === "ready").map((r) => r.id);
-    if (readyIds.length > 0) {
-      const got = await fetchPlanData("meal_plans", userId, readyIds);
-      if (!got) return fromProbes();
-      for (const [k, v] of got) blobs.set(k, v);
+    const candidates = window
+      .slice(1)
+      .filter((r) => r.status === "ready" && probeMayHoldPlan(r));
+    for (const [i, candidate] of candidates.entries()) {
+      if (!(await readBlob(candidate.id))) {
+        // The blob path is down: the list's probe rule decides among the
+        // candidates not yet ruled out, without reading any more.
+        const onProbes = candidates.slice(i).find((r) => daysReadyFromProbe(r) > 0);
+        if (!onProbes) break;
+        return {
+          rowId: onProbes.id,
+          state: "ready",
+          planData: null,
+          masked: true,
+          maskedFailureAt: newest.created_at,
+        };
+      }
+      // The app's own test (schema, content in any member, staleness) on this one row.
+      const attempt = pickServedMealPlan(resolvedNewest, [full(candidate)], now);
+      if (attempt.masked) {
+        pick = attempt;
+        break;
+      }
+      blobs.delete(candidate.id); // passed over: never needed again
     }
-    pick = pickServedMealPlan(resolvedNewest, older.map(full), now);
   }
 
   const served = pick.served;
@@ -842,22 +891,33 @@ async function buildWorkoutSection(reader: FamilyReader): Promise<WorkoutSection
     latestError = latest?.error_message ?? latestError;
     served = latest;
     if (latest && latest.status === "failed" && !latest.plan_data) {
-      const readyIds = window
-        .slice(1)
-        .filter((r) => r.status === "ready")
-        .map((r) => r.id);
-      const older =
-        readyIds.length > 0 ? await fetchPlanData("workout_plans", userId, readyIds) : new Map();
-      if (older) {
-        for (const [k, v] of older) blobs.set(k, v);
-        served = pickServedWorkoutRow(window.map(full), now, STALE_GENERATION_MIN);
-      } else {
-        // The newest run is known to have failed (its blob was read); only the
-        // older programs are unreadable, so the fallback is decided on columns.
-        const prev = previousReadyWorkoutLite(window.slice(1));
-        if (prev) {
+      // The older READY programs, ONE blob at a time, newest first, stopping
+      // at the first the app would serve (its own pickServedWorkoutRow, asked
+      // about this one row) — never every older program at once. Workout rows
+      // carry no plan_data probes; a row only turns 'ready' on its final
+      // write, with the finished program in it, so status is the pre-filter.
+      const candidates = window.slice(1).filter((r) => r.status === "ready");
+      // The newest is already resolved (failed, nothing to show); handing the
+      // rule that fact spares re-resolving — and re-logging — it per candidate.
+      const failedNewest: WorkoutPlanRow = { ...full(newest), status: "failed", plan_data: null };
+      for (const candidate of candidates) {
+        const got = await fetchPlanData("workout_plans", userId, [candidate.id]);
+        if (!got) {
+          // The newest run is known to have failed (its row was read); this
+          // older program is unreadable, so it is served on its columns.
           served = null;
-          servedFromColumns = { row: prev, masked: true };
+          servedFromColumns = { row: candidate, masked: true };
+          break;
+        }
+        for (const [k, v] of got) blobs.set(k, v);
+        const pick = pickServedWorkoutRow(
+          [failedNewest, full(candidate)],
+          now,
+          STALE_GENERATION_MIN,
+        );
+        if (pick && pick.id === candidate.id) {
+          served = pick;
+          break;
         }
       }
     }
@@ -907,7 +967,10 @@ async function buildWorkoutSection(reader: FamilyReader): Promise<WorkoutSection
   const withStats = (p: WorkoutPlanListItem): WorkoutPlanListItem =>
     p.id === served.id ? { ...p, ...stats } : p;
 
-  const marksWindow = workoutMarkingWindow(riyadhTodayISO());
+  // THIS week only (Sunday → today, Riyadh), not the app's marking window,
+  // which on a Sunday or Monday reaches back into last Friday and Saturday —
+  // marks are keyed by weekday, so those would land on this week's sessions.
+  const marksWindow = currentTrainingWeek(riyadhTodayISO());
   const roster = new Map<string, WorkoutRosterEntry>();
   roster.set("mom", {
     memberId: "mom",
@@ -929,7 +992,7 @@ async function buildWorkoutSection(reader: FamilyReader): Promise<WorkoutSection
   const trainees: WorkoutTraineeView[] = projectWorkoutTrainees(
     program,
     roster,
-    marksByMemberDay(checkins),
+    marksByMemberDay(checkins, marksWindow.start),
   );
 
   const servedItem =
@@ -957,11 +1020,12 @@ export const loadWorkoutSection = cache(
 );
 
 /**
- * This week's session marks, read the way /plan reads them: by user and the
- * marking window (calendar-keyed), NOT by workout_plan_id — a re-dispatch
- * mints a new program row and a plan-id read would drop every earlier mark.
- * Untyped client: workout_checkins (00020) and its intensity column (00022)
- * are not in the generated Database types.
+ * Session marks between two Riyadh dates (the loader passes this week's
+ * Sunday → today), read the way /plan reads them: by user and date
+ * (calendar-keyed), NOT by workout_plan_id — a re-dispatch mints a new program
+ * row and a plan-id read would drop every earlier mark. Untyped client:
+ * workout_checkins (00020) and its intensity column (00022) are not in the
+ * generated Database types.
  */
 async function loadWorkoutCheckins(userId: string, start: string, end: string) {
   const { data, error } = await (adminDb() as unknown as SupabaseClient)
@@ -1010,13 +1074,12 @@ export const loadRuns = cache(async (userId: string): Promise<RunRow[]> => {
  * adult / child / housekeeper only — pregnancy and lactation are not a member
  * type here.
  *
- * NOT fully minimised, and knowingly so: `primaryGoal` is the exact goal
- * (spec §6 keeps goal parity with the old detail page, which showed it), and
- * the plan's goal can itself be health-derived — 'pregnancy_lactation',
- * 'metabolic_health', 'digestive_health'. So this payload can still tell a
- * pregnancy or a condition-led plan apart. Whether to keep the exact goal or
- * bucket those three on the panel/page (exact value on /health only) is an
- * owner decision, open as of 09/2026.
+ * NOT fully minimised, and knowingly so: `primaryGoal` is the exact goal,
+ * and the plan's goal can itself be health-derived — 'pregnancy_lactation',
+ * 'metabolic_health', 'digestive_health' — so this payload can still tell a
+ * pregnancy or a condition-led plan apart. The owner keeps the exact goal
+ * (spec §6: parity with the old detail page, which showed it); see the
+ * privacy note at the top of console-types.ts.
  */
 async function buildHousehold(reader: FamilyReader): Promise<HouseholdMember[]> {
   const [profile, members, served] = await Promise.all([

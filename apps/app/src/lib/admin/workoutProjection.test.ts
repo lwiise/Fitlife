@@ -4,6 +4,7 @@ import { WorkoutPlanSchema, type WorkoutPlan } from "@fitlife/plan-engine";
 import { pickServedWorkoutRow, type WorkoutPlanRow } from "@/lib/plans/workoutPlanRows";
 import { STALE_GENERATION_MIN } from "@/lib/plans/generationTiming";
 import {
+  currentTrainingWeek,
   marksByMemberDay,
   pickServedWorkoutLite,
   projectWorkoutTrainees,
@@ -84,11 +85,16 @@ const PROFILE = {
 // ── profiles ────────────────────────────────────────────────────────────────
 
 describe("summarizeWorkoutProfile", () => {
-  it("summarises a valid profile and leaves the injury notes out", () => {
-    expect(summarizeWorkoutProfile(PROFILE)).toEqual({
+  it("summarises a valid profile and leaves every injury answer out", () => {
+    // The profile names an injured knee and a free-text note; neither the
+    // area nor the note reaches the console (health detail, PDPL).
+    const summary = summarizeWorkoutProfile(PROFILE);
+    expect(JSON.stringify(summary)).not.toContain("knee");
+    expect(JSON.stringify(summary)).not.toContain("الركبة");
+    expect(summary).toEqual({
       location: "home",
       equipment: ["dumbbells", "bands"],
-      injuries: ["knee"],
+      injuries: [],
       desiredDays: 3,
       preferredDays: [0, 2, 4],
       focusAreas: ["full_body"],
@@ -169,6 +175,28 @@ describe("marksByMemberDay", () => {
     ]);
     expect([...marks.keys()]).toEqual(["mom|2"]);
     expect(marks.get("mom|2")?.intensity).toBeNull();
+  });
+
+  it("reads the training week as its Sunday through today", () => {
+    expect(currentTrainingWeek("2026-09-27")).toEqual({ start: "2026-09-27", end: "2026-09-27" }); // Sunday
+    expect(currentTrainingWeek("2026-09-28")).toEqual({ start: "2026-09-27", end: "2026-09-28" }); // Monday
+    expect(currentTrainingWeek("2026-10-03")).toEqual({ start: "2026-09-27", end: "2026-10-03" }); // Saturday
+    expect(currentTrainingWeek("2026-10-01")).toEqual({ start: "2026-09-27", end: "2026-10-01" }); // across a month
+  });
+
+  it("drops marks from before the week's Sunday, and marks with no date", () => {
+    // On a Monday the app's marking window still reaches last Saturday; a
+    // weekday-keyed mark from last Friday would land on THIS Friday.
+    const rows = [
+      { local_date: "2026-09-25", day_index: 5, member_id: "mom", status: "done" }, // last Friday
+      { local_date: "2026-09-26", day_index: 6, member_id: "mom", status: "done" }, // last Saturday
+      { local_date: null, day_index: 3, member_id: "mom", status: "done" },
+      { local_date: "2026-09-27", day_index: 0, member_id: "mom", status: "done" },
+      { local_date: "2026-09-28", day_index: 1, member_id: "mom", status: "moved" },
+    ];
+    expect([...marksByMemberDay(rows, "2026-09-27").keys()]).toEqual(["mom|0", "mom|1"]);
+    // Without a week start the rows are taken as given.
+    expect(marksByMemberDay(rows).size).toBe(5);
   });
 
   it("toRawWorkoutRows tolerates select('*') rows without the intensity column", () => {

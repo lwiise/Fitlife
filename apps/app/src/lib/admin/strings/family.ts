@@ -224,6 +224,8 @@ export const FAMILY_STRINGS = {
     en: "Macros (P / C / F, g)",
   },
   fm_role_cook: { ar: "الطبّاخة", en: "Cook" },
+  // The owner's stored role is "mom" whoever signed up; a male owner reads this.
+  fm_role_owner_m: { ar: "صاحب الحساب", en: "Account owner" },
 
   // ── Billing / account / engagement ──
   fm_cancelled_at: { ar: "تاريخ الإلغاء", en: "Cancelled on" },
