@@ -1513,7 +1513,7 @@ tab away («الرئيسية», «حسابي»). The cook's view keeps its own k
 
 **Structure (`app/plan/bar/`).** `PlanBar` (compound: `PlanBarRow`, `PlanBarIdentity`,
 `PlanBarEnd`, `PlanBarPill`, `PlanBarMore`, `PlanBarRail`), `WeekStrip`, `MemberSheet`,
-`MoreSheet`, `menuItem.ts`; generic `components/ui/sheet.tsx`. Row A:
+`MoreSheet`, `RecipesSheet`, `menuItem.ts`; generic `components/ui/sheet.tsx`. Row A:
 [avatar + name «· أنتِ» ⌄] …… [«الخدامة»] [•••]. Row B: seven dated cells
 (`lib/plans/weekStrip.ts` — Arabic months come from a Gregorian table, NEVER `Intl` "ar-SA",
 which is Hijri in browsers; other locales pin `-u-ca-gregory`). The page h1 is sr-only inside
@@ -1523,12 +1523,16 @@ meals/workout segmented switch (workout households only), `DayLine` (date + «م
 macros; a child tab reads «بالحصص حسب العمر» with an ⓘ disclosure), then the meals.
 - Member switching is the sheet (2 taps), with one status line per person
   (`lib/plans/memberSheetStatus.ts`). The selected day is kept.
-- «الخدامة» is the cook's door (owner directive 09/2026: one word, her recipes only): it
-  appears only when the household has a housekeeper who reads a non-Arabic language and
-  links to /plan/housekeeper (aria-label «وصفات الخدامة بالفلبينية»). Without one the bar
-  has no pill — an Arabic-reading cook reads /plan itself. It replaced «الوصفات», which
-  opened a sheet of the whole household's dishes when there was no cook; that sheet
-  (`RecipesSheet`, `lib/plans/householdDishes.ts`) was deleted with it.
+- «الخدامة» is the cook's door (owner directive 09/2026: one word, named for her; it was
+  «الوصفات»). It is ALWAYS on the interactive view — an interim version that showed it only
+  for a non-Arabic housekeeper read as the button being deleted. With a housekeeper who
+  reads another language it links to /plan/housekeeper (aria-label «وصفات الخدامة
+  بالفلبينية»); otherwise it opens `RecipesSheet`, every dish of the selected day for the
+  whole house (`lib/plans/householdDishes.ts`, read-only MealCards, absence-scaled) — what
+  an Arabic-reading cook cooks from, since /plan/housekeeper redirects Arabic to /plan.
+  With NO housekeeper the sheet ends with «أضيفي الخدامة لتصلها الوصفات بلغتها»
+  (→ /family/add?type=housekeeper). page.tsx passes `housekeeperLocale` for ANY
+  housekeeper, Arabic included; PlanViewer derives `cookViewLocale` (non-Arabic only).
 - ••• holds the secondary actions: the viewed person's «الوزن والمتابعة» and PDF; «هذا
   الأسبوع» (Sara's changes, past plans, add a workout plan, add a member on solo); then
   «إنشاء خطة جديدة» last. The regenerate ConfirmDialog opens ABOVE the sheet — Sheet yields

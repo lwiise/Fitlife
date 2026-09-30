@@ -395,12 +395,11 @@ export default async function PlanPage({
       }))
     : undefined;
 
-  // Housekeeper view entry: only when a housekeeper exists and reads a non-Arabic language.
-  const housekeeper = familyMembers.find((m) => m.role === "housekeeper");
-  const housekeeperLocale =
-    housekeeper && housekeeper.preferred_language !== "ar"
-      ? housekeeper.preferred_language
-      : undefined;
+  // The housekeeper's reading language, when the household has one: PlanViewer
+  // sends a non-Arabic reader's «الخدامة» door to her own translated view.
+  const housekeeperLocale = familyMembers.find(
+    (m) => m.role === "housekeeper",
+  )?.preferred_language;
   // Who we're generating for: prefer the plan's own targeted member (stamped on
   // single-member add/regenerate/edit) so the loader names the right person even when
   // the URL has no ?member (the regenerate button refreshes without it). The
