@@ -1,0 +1,120 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FitLife admin console — the families list and its side panel (U4).
+
+   Only what admin.css (the prototype port) does not already carry: the name
+   link, the summary cards' state line, the footer's pager, the empty and
+   panel states, and the loading skeleton's sizes. Same contract as
+   admin.css: everything in `@layer components`, every rule under
+   `.admin-root` on `ad-*` classes, logical properties only; admin.css's
+   reduced-motion rule covers the transitions here.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer theme, base, components, utilities;
+
+@layer components {
+
+/* ── The table ──────────────────────────────────────────────────────────── */
+/* The family name is a real link to the full page (a plain click on a wide
+   screen opens the panel instead). It reads as the row's title, not as a
+   blue link, until pointed at. */
+.admin-root .ad-fl .ad-fl-name {
+  min-width: 0;
+  border-radius: 4px;
+  color: inherit;
+  transition: color .15s;
+}
+.admin-root .ad-fl .ad-fl-name:hover {
+  color: var(--purple);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The truncation warning sits in the list column, under its head. */
+.admin-root .ad-fl .ad-fl-note { margin: 0 24px 16px; }
+
+/* ── Leaving for a family's page (Enter on a row, a tapped card) ─────────
+   Until the page arrives the list reports aria-busy: the other rows and
+   cards dim, and the chosen one keeps full strength with a pulsing bar on
+   its start edge — the rail's link-pending hint (.ad-lp.ad-on), stood on its
+   side where the selected row's bar sits. Opacity only (no layout); the
+   reduced-motion rule in admin.css stops the pulse. */
+.admin-root .ad-fl .ad-a-list[aria-busy="true"] { cursor: progress; }
+.admin-root .ad-fl .ad-a-list[aria-busy="true"] :is(.ad-a-table tbody tr, .ad-pcard):not([aria-busy="true"]) {
+  opacity: .5;
+  transition: opacity .15s;
+}
+.admin-root .ad-fl .ad-pcard { position: relative; }
+.admin-root .ad-fl :is(.ad-a-table .ad-c-fam, .ad-pcard) > .ad-lp {
+  inset-inline: 0 auto;
+  inset-block: 12px;
+  width: 3px;
+  height: auto;
+}
+
+/* The panel's footer links: the hint sits inside the button, under the
+   label, in the label's own colour (white on the primary action). */
+.admin-root .ad-fl .ad-sh-foot .ad-lp {
+  inset-inline: 16px;
+  inset-block-end: 6px;
+  background: currentColor;
+}
+
+/* ── Footer: the range and the pager at the start, the key hints at the end ── */
+.admin-root .ad-fl .ad-fl-pages { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.admin-root .ad-fl .ad-fl-pager { display: flex; align-items: center; gap: 4px; }
+.admin-root .ad-fl .ad-fl-pager .ad-iconbtn[aria-disabled="true"] { opacity: .35; cursor: default; }
+.admin-root .ad-fl .ad-fl-pager .ad-iconbtn[aria-disabled="true"]:hover { background: transparent; }
+
+/* An empty state's one action, centred under its text. */
+.admin-root .ad-fl .ad-fl-empty-act { display: flex; justify-content: center; margin-block-start: 16px; }
+
+/* ── The side panel ─────────────────────────────────────────────────────── */
+.admin-root .ad-fl .ad-fl-sh-id { min-width: 0; }
+.admin-root .ad-fl .ad-fl-sh-id h2 { overflow-wrap: anywhere; border-radius: 6px; }
+.admin-root .ad-fl .ad-fl-sh-id .ad-meta { overflow-wrap: anywhere; }
+/* The prototype's `.sp p`, on a span: a button holds phrasing content only. */
+.admin-root .ad-fl .ad-sp .ad-fl-sp-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+/* "No longer exists" and "couldn't load": the message, then its one action. */
+.admin-root .ad-fl .ad-fl-state { display: flex; flex-direction: column; gap: 12px; }
+.admin-root .ad-fl .ad-fl-state .ad-empty { padding-block: 24px 8px; }
+.admin-root .ad-fl .ad-fl-state .ad-fl-state-act { align-self: center; }
+.admin-root .ad-fl .ad-fl-sheet-skel { gap: 16px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-name { width: 180px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-meta { width: 240px; margin-block-start: 8px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-box { height: 132px; border-radius: 12px; }
+
+/* ── Loading skeleton (loading.tsx): the page's own layout, drawn empty ──── */
+.admin-root .ad-fl .ad-fl-skel.ad-skel-group { gap: 0; }
+.admin-root .ad-fl .ad-fl-skel .ad-a-table tbody tr { cursor: default; }
+.admin-root .ad-fl .ad-fl-skel .ad-a-table tbody tr:hover td { background: var(--card); }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-h1 { width: 200px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-sub { width: 240px; margin-block-start: 8px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-search { flex: 1; min-width: 220px; max-width: 400px; height: 44px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-select { width: 132px; height: 44px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-cols { width: 128px; height: 44px; margin-inline-start: auto; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-chip { width: 112px; height: 36px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-th { width: 64px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-cell { width: 88px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-short { width: 32px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-row-name { width: 140px; height: 14px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-row-email { width: 176px; }
+.admin-root .ad-fl .ad-skel.ad-fl-skel-card-line { width: 60%; }
+
+/* ── Below 1024px: the phone list ───────────────────────────────────────── */
+@media (max-width: 1023px) {
+  .admin-root .ad-fl .ad-a-tools { padding-block-start: 12px; }
+  .admin-root .ad-fl .ad-fl-note { margin: 12px 16px 0; }
+  .admin-root .ad-fl .ad-pcards { padding-block-start: 4px; }
+  .admin-root .ad-fl .ad-a-foot { padding-inline: 16px; }
+  .admin-root .ad-fl .ad-skel.ad-fl-skel-search { flex-basis: 100%; min-width: 0; max-width: none; }
+}
+
+} /* @layer components */
