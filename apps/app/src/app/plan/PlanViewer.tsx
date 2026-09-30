@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
-import { Loader2, Clock, UserPlus, History, ChefHat, AlertTriangle, Dumbbell, TrendingUp } from "lucide-react";
+import { Loader2, Clock, UserPlus, History, ChefHat, Languages, AlertTriangle, Dumbbell, TrendingUp } from "lucide-react";
 import type { MealPlan, MemberPlan, LocaleCode } from "@fitlife/plan-engine";
 // The leaf subpath, not the package root: this is a client component, and the
 // root would drag the whole engine into the /plan bundle.
@@ -28,7 +28,7 @@ import {
 import { WeekStrip, type WeekStripDay } from "./bar/WeekStrip";
 import { MemberSheet, type MemberSheetMember } from "./bar/MemberSheet";
 import { MoreSheet } from "./bar/MoreSheet";
-import { RecipesSheet, type RecipesSheetDish } from "./bar/RecipesSheet";
+import { Sheet } from "@/components/ui/sheet";
 import { PLAN_MENU_ICON_CLASS, PLAN_MENU_ITEM_CLASS } from "./bar/menuItem";
 import { SaraToast } from "./sara/SaraToast";
 import { SaraChangesSheet } from "./sara/SaraChangesSheet";
@@ -65,7 +65,6 @@ import {
 } from "@/lib/plans/locales";
 import { orderDayMeals } from "@/lib/plans/mealOrder";
 import { dayLineDate, mealStripDays } from "@/lib/plans/weekStrip";
-import { householdDayDishes } from "@/lib/plans/householdDishes";
 import { memberSheetStatus } from "@/lib/plans/memberSheetStatus";
 import { genderPick } from "@/lib/copy/gender";
 import { arNum } from "@/lib/copy/numbers";
@@ -135,7 +134,7 @@ export function PlanViewer({
   preselectedMember,
   readOnly = false,
   hideExport = false,
-  housekeeperLocale,
+  housekeeper,
   locale,
   showWorkoutOptIn = false,
   checkins,
@@ -167,11 +166,10 @@ export function PlanViewer({
   readOnly?: boolean;
   // Hide the PDF export (the admin plan view: read-only, no customer export).
   hideExport?: boolean;
-  // The housekeeper's reading language, when the household has one. Not Arabic
-  // → the bar's «الخدامة» door opens HER translated view; Arabic, or no
-  // housekeeper → the day's recipes in a sheet (which, with no housekeeper,
-  // ends by inviting the owner to add her).
-  housekeeperLocale?: string;
+  // The household's housekeeper, if any. The bar's «الخدامة» pill opens a
+  // sheet: her translated view (non-Arabic reader) + change her language, or
+  // «add a housekeeper» when there is none. Recipes are never repeated there.
+  housekeeper?: { id: string; name: string; locale: string };
   // Housekeeper view: render translated content + localized chrome + dir/lang.
   locale?: LocaleCode;
   // No workout plan exists yet → offer the add-exercise-plan entry in the
@@ -914,7 +912,7 @@ export function PlanViewer({
   // With a cook who reads another language, «الخدامة» opens HER view — the
   // translated one she cooks from; otherwise, the day's dishes in a sheet.
   const cookViewLocale =
-    housekeeperLocale && housekeeperLocale !== "ar" ? housekeeperLocale : undefined;
+    housekeeper && housekeeper.locale !== "ar" ? housekeeper.locale : undefined;
   const cookLanguage =
     cookViewLocale && isLocaleCode(cookViewLocale)
       ? LOCALE_INFO[cookViewLocale].ar_name
@@ -1043,24 +1041,6 @@ export function PlanViewer({
     };
   });
 
-  // «الخدامة» (no translated view): every dish of the open day for the whole
-  // house, a shared pot once. «حصتك» marks the owner's portion — she is the reader.
-  const recipeDishes: RecipesSheetDish[] =
-    interactive && !cookViewLocale
-      ? householdDayDishes(plan.members, activeDayIndex).map(
-          ({ meal, memberId, sharerIds }) => ({
-            meal,
-            forName: isSolo || sharerIds ? null : (memberNames[memberId] ?? null),
-            currentMemberId: sharerIds?.includes("mom") ? "mom" : undefined,
-            absentMemberIds: sharerIds
-              ? sharerIds.filter((id) =>
-                  absenceSet.has(`${activeDayIndex}|${meal.slot}|${id}`),
-                )
-              : undefined,
-          }),
-        )
-      : [];
-
   // The ••• sheet: first what concerns the person on screen, then the week.
   const personItems: ReactNode[] = [];
   if (showJourney && journeyEntry) {
@@ -1175,28 +1155,17 @@ export function PlanViewer({
           />
           {(interactive || hasMenuActions) && (
             <PlanBarEnd>
-              {interactive &&
-                (cookViewLocale ? (
-                  <PlanBarPill
-                    href="/plan/housekeeper"
-                    icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
-                    ariaLabel={
-                      inCookLanguage ? `وصفات الخدامة ${inCookLanguage}` : "وصفات الخدامة"
-                    }
-                  >
-                    الخدامة
-                  </PlanBarPill>
-                ) : (
-                  <PlanBarPill
-                    ref={recipesRef}
-                    onClick={() => setOpenSheet("recipes")}
-                    expanded={openSheet === "recipes"}
-                    icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
-                    ariaLabel="وصفات الخدامة"
-                  >
-                    الخدامة
-                  </PlanBarPill>
-                ))}
+              {interactive && (
+                <PlanBarPill
+                  ref={recipesRef}
+                  onClick={() => setOpenSheet("recipes")}
+                  expanded={openSheet === "recipes"}
+                  icon={<ChefHat className="size-[18px]" aria-hidden="true" />}
+                  ariaLabel="وصفات الخدامة"
+                >
+                  الخدامة
+                </PlanBarPill>
+              )}
               {hasMenuActions && (
                 <PlanBarMore
                   ref={moreRef}
@@ -1562,30 +1531,44 @@ export function PlanViewer({
         />
       )}
 
-      {interactive && !cookViewLocale && (
-        <RecipesSheet
+      {interactive && (
+        <Sheet
           open={openSheet === "recipes"}
           onClose={() => setOpenSheet(null)}
-          title={`وصفات ${activeDate}`}
-          note={isSolo ? undefined : "وصفات كل أطباق اليوم للبيت كله"}
-          dishes={recipeDishes}
-          memberNames={memberNames}
-          emptyText="لم يُجهَّز هذا اليوم بعد."
+          title="الخدامة"
           returnFocusRef={recipesRef}
-          footer={
-            // No housekeeper yet: the door is named for her, so it says how to
-            // add her — adding one lands on her recipes.
-            !housekeeperLocale ? (
+        >
+          <div className="px-1 pb-2">
+            {housekeeper ? (
+              <>
+                {cookViewLocale ? (
+                  <Link href="/plan/housekeeper" className={PLAN_MENU_ITEM_CLASS}>
+                    <ChefHat className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+                    {inCookLanguage
+                      ? `وصفات ${housekeeper.name} ${inCookLanguage}`
+                      : `وصفات ${housekeeper.name}`}
+                  </Link>
+                ) : (
+                  <p className="px-2 pb-2 text-meta text-brand-ink-muted">
+                    {housekeeper.name} تقرأ العربية، فوصفاتها هي الخطة نفسها.
+                  </p>
+                )}
+                <Link
+                  href={`/family/edit/${housekeeper.id}`}
+                  className={PLAN_MENU_ITEM_CLASS}
+                >
+                  <Languages className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
+                  تغيير لغة الخدامة
+                </Link>
+              </>
+            ) : (
               <Link href="/family/add?type=housekeeper" className={PLAN_MENU_ITEM_CLASS}>
                 <UserPlus className={PLAN_MENU_ICON_CLASS} aria-hidden="true" />
-                {g(
-                  "أضيفي الخدامة لتصلها الوصفات بلغتها",
-                  "أضف الخدامة لتصلها الوصفات بلغتها",
-                )}
+                {g("أضيفي الخدامة", "أضف الخدامة")}
               </Link>
-            ) : undefined
-          }
-        />
+            )}
+          </div>
+        </Sheet>
       )}
 
       {saraChanges && (

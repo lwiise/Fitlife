@@ -395,11 +395,12 @@ export default async function PlanPage({
       }))
     : undefined;
 
-  // The housekeeper's reading language, when the household has one: PlanViewer
-  // sends a non-Arabic reader's «الخدامة» door to her own translated view.
-  const housekeeperLocale = familyMembers.find(
-    (m) => m.role === "housekeeper",
-  )?.preferred_language;
+  // The housekeeper, when the household has one: the «الخدامة» sheet opens her
+  // view (non-Arabic reader) and lets the owner change her language.
+  const hk = familyMembers.find((m) => m.role === "housekeeper");
+  const housekeeper = hk
+    ? { id: hk.id, name: hk.name, locale: hk.preferred_language }
+    : undefined;
   // Who we're generating for: prefer the plan's own targeted member (stamped on
   // single-member add/regenerate/edit) so the loader names the right person even when
   // the URL has no ?member (the regenerate button refreshes without it). The
@@ -691,7 +692,7 @@ export default async function PlanPage({
               generating={latest.in_progress}
               updatedAt={latest.updated_at}
               preselectedMember={member}
-              housekeeperLocale={housekeeperLocale}
+              housekeeper={housekeeper}
               showWorkoutOptIn={workout === null}
               checkins={checkins}
               verdicts={verdicts}
