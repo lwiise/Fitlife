@@ -1,7 +1,8 @@
 /**
  * Pure logic for the full family page and its three audited views (plan,
  * program, health). No React, no I/O, no clock — client-safe, so the danger
- * zone and the route skeleton import it too.
+ * zone and the tab bar import it too, and the server actions share its rules
+ * (the typed-email comparison, where the account tools return and why).
  */
 
 import { FAMILY_TABS, type FamilyTab } from "@/lib/admin/console-types";
@@ -22,11 +23,6 @@ export function parseFamilyTab(value: string | readonly string[] | null | undefi
   return (FAMILY_TABS as readonly string[]).includes(tab ?? "") ? (tab as FamilyTab) : "summary";
 }
 
-/** `?error=audit_failed` — an account action was stopped because its audit row could not be written. */
-export function isAuditFailure(value: string | readonly string[] | null | undefined): boolean {
-  return firstParam(value) === "audit_failed";
-}
-
 /** The family page. */
 export function familyPagePath(userId: string): string {
   return `/admin/subscribers/${encodeURIComponent(userId)}`;
@@ -40,6 +36,66 @@ export function familyPagePath(userId: string): string {
 export function familyTabHref(userId: string, tab: FamilyTab): string {
   const path = familyPagePath(userId);
   return tab === "summary" ? path : `${path}?tab=${tab}`;
+}
+
+// ── Account actions: why one did not happen ─────────────────────────────────
+
+/**
+ * Why an account action (deactivate, reactivate, delete) did not run. The
+ * server actions answer with exactly these, and the account tab states each
+ * in a sentence (accountRefusalText), so an operator never has to guess
+ * whether an account was changed:
+ *  - admin_target: it is an admin's account, which the tools never touch;
+ *  - admin_check_failed: the admin_users lookup failed, so nothing proved it
+ *    is not an admin's — the check fails closed;
+ *  - email_unavailable: the account's email could not be read to check the
+ *    one typed (delete);
+ *  - email_mismatch: the typed email is not the account's (delete);
+ *  - audit_failed: the required audit row could not be written, so the
+ *    action stopped before it ran (PDPL).
+ */
+export const ACCOUNT_REFUSALS = [
+  "admin_target",
+  "admin_check_failed",
+  "email_unavailable",
+  "email_mismatch",
+  "audit_failed",
+] as const;
+
+export type AccountRefusal = (typeof ACCOUNT_REFUSALS)[number];
+
+const ACCOUNT_REFUSAL_TEXT: Readonly<Record<AccountRefusal, AdminStringKey>> = {
+  admin_target: "fp_refused_admin_target",
+  admin_check_failed: "fp_refused_admin_check",
+  // The same fact the account tab states when the page itself has no email.
+  email_unavailable: "fp_delete_no_email",
+  email_mismatch: "fp_refused_email_mismatch",
+  audit_failed: "audit_write_failed",
+};
+
+/** The sentence that tells the operator why the action did not run. */
+export function accountRefusalText(refusal: AccountRefusal, locale: AdminLocale): string {
+  return t(ACCOUNT_REFUSAL_TEXT[refusal], locale);
+}
+
+/**
+ * Where the account tools return: the family's account tab, the tab they are
+ * used from — with `?error=` when the action was refused. Only ever built
+ * from an id that has passed the actions' UUID check.
+ */
+export function accountTabHref(userId: string, refusal?: AccountRefusal): string {
+  const path = familyTabHref(userId, "account");
+  return refusal ? `${path}&error=${refusal}` : path;
+}
+
+/** `?error=` on the account tab: the refusal an action redirected with, or null. */
+export function parseAccountRefusal(
+  value: string | readonly string[] | null | undefined,
+): AccountRefusal | null {
+  const code = firstParam(value);
+  return (ACCOUNT_REFUSALS as readonly string[]).includes(code ?? "")
+    ? (code as AccountRefusal)
+    : null;
 }
 
 // ── Tabs ────────────────────────────────────────────────────────────────────
@@ -88,10 +144,11 @@ export function familyName(name: string | null | undefined, locale: AdminLocale)
 // ── Account actions ─────────────────────────────────────────────────────────
 
 /**
- * The delete dialog's typed confirmation matches the account's email — the
- * server action's own comparison (trimmed, case-insensitive), so the button
- * enables exactly when the server would accept. An account whose email is
- * unknown can never be confirmed.
+ * The delete dialog's typed confirmation matches the account's email
+ * (trimmed, case-insensitive). The ONE comparison: the dialog enables its
+ * button with it, and the delete action checks the same text against the
+ * email GoTrue holds with it. An account whose email is unknown can never be
+ * confirmed.
  */
 export function emailMatches(typed: string, email: string | null | undefined): boolean {
   const want = email?.trim().toLowerCase();

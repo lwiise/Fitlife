@@ -3,6 +3,7 @@ import {
   GEO,
   areaPath,
   axisMax,
+  carryIndex,
   indexAt,
   labelIndices,
   niceMax,
@@ -108,6 +109,43 @@ describe("indexAt", () => {
     expect(indexAt(1.7, 10)).toBe(9);
     expect(indexAt(Number.NaN, 10)).toBe(0);
     expect(indexAt(0.5, 1)).toBe(0);
+  });
+});
+
+describe("carryIndex", () => {
+  it("moves a reading to the same place in time when the series changes length", () => {
+    // The finding: 90 days by day (91 points), the pointer near the newest
+    // end, then 7 days (8 points) — the reading is the newest day, not an
+    // index past the end.
+    expect(carryIndex(88, 91, 8)).toBe(7);
+    expect(carryIndex(0, 91, 8)).toBe(0);
+    expect(carryIndex(45, 91, 31)).toBe(15);
+    // And back to a longer series.
+    expect(carryIndex(7, 8, 91)).toBe(90);
+    expect(carryIndex(4, 8, 31)).toBe(17);
+  });
+  it("always names a point the new series has", () => {
+    for (const [from, to] of [
+      [91, 8],
+      [8, 91],
+      [25, 2],
+      [31, 1],
+    ] as const) {
+      for (let i = 0; i < from; i++) {
+        const j = carryIndex(i, from, to);
+        expect(j).not.toBeNull();
+        expect(j!).toBeGreaterThanOrEqual(0);
+        expect(j!).toBeLessThan(to);
+      }
+    }
+  });
+  it("keeps a reading in place when the length is unchanged", () => {
+    for (let i = 0; i < 31; i++) expect(carryIndex(i, 31, 31)).toBe(i);
+  });
+  it("keeps no reading as none, and has nowhere to carry one in an empty series", () => {
+    expect(carryIndex(null, 91, 8)).toBeNull();
+    expect(carryIndex(3, 8, 0)).toBeNull();
+    expect(carryIndex(0, 1, 5)).toBe(0);
   });
 });
 

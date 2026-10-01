@@ -118,6 +118,16 @@ export function indexAt(fracAlongTime: number, n: number): number {
 }
 
 /**
+ * A point of a series of `from` points, carried to one of `to` points: the
+ * point at the same place in time — the same place on screen, where a
+ * resting pointer still is. Null for no point, or nothing to carry it to.
+ */
+export function carryIndex(i: number | null, from: number, to: number): number | null {
+  if (i === null || to <= 0) return null;
+  return indexAt(timeFrac(i, from), to);
+}
+
+/**
  * The point a key moves to. Arrows follow what the eye sees: in RTL time runs
  * leftward, so ArrowLeft moves forward in time. From no point, any key starts
  * at the newest one (Home at the first). Returns null for other keys.

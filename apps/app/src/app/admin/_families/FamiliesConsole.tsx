@@ -93,6 +93,7 @@ import { unpackFamilyRows, type PackedFamilyRow } from "./rowCodec";
 import { rowTextFormatter, textsFor } from "./rowText";
 import type { FamilyRowText, SelectOption } from "./types";
 import { UrlSync } from "./urlSync";
+import { useQuietRefresh } from "./useQuietRefresh";
 
 /** A row hovered this long is fetched ahead of a click. */
 const HOVER_PREFETCH_MS = 150;
@@ -167,6 +168,8 @@ export interface FamiliesConsoleProps {
   texts: Record<string, FamilyRowText>;
   /** The server's "now" for those strings — the console formats every other row from it too. */
   nowIso: string;
+  /** When the rows' dataset was read (ISO): an open list refreshes itself once it is old. */
+  loadedAt: string;
   /** The server's parse of the request URL: the fallback — the live URL seeds the state. */
   initialQuery: FamilyListQuery;
   initialPanel: FamilyPanelState;
@@ -212,6 +215,7 @@ export function FamiliesConsole({
   rows: packedRows,
   texts,
   nowIso,
+  loadedAt,
   initialQuery,
   initialPanel,
   locale,
@@ -250,6 +254,19 @@ export function FamiliesConsole({
   // Set inside the leaving transition, so it lasts exactly as long as the
   // navigation is pending — and clears itself if the page stays after all.
   const [leaving, setLeaving] = useOptimistic<Leaving | null>(null);
+
+  // An open list catches up when the operator comes back to an old one. Not
+  // while a navigation is on its way; a waiting URL write goes out first, so
+  // it cannot land on the refresh.
+  useQuietRefresh({
+    loadedAt,
+    nowIso,
+    canRefresh: () => {
+      if (sync.isPaused()) return false;
+      sync.flush();
+      return true;
+    },
+  });
 
   const hidden = useSyncExternalStore(
     subscribeHiddenColumns,

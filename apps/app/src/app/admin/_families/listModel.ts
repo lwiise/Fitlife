@@ -329,7 +329,11 @@ export function rowKeyCommand(event: {
   }
 }
 
-/** The head's figures over the filtered set: families, paying (active), in trial. */
+/**
+ * The head's figures over the filtered set: families, paying (active), in
+ * trial — a trial by the «trialing» view's rule, so one that ran out (still
+ * 'trialing' in the table: nothing moves it on) is not counted as one.
+ */
 export function listCounts(rows: readonly FamilyRow[]): {
   families: number;
   paying: number;
@@ -339,7 +343,7 @@ export function listCounts(rows: readonly FamilyRow[]): {
   let trialing = 0;
   for (const row of rows) {
     if (row.status === "active") paying += 1;
-    else if (row.status === "trialing") trialing += 1;
+    else if (familyInView(row, "trialing")) trialing += 1;
   }
   return { families: rows.length, paying, trialing };
 }

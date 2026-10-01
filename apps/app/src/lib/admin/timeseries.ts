@@ -250,11 +250,16 @@ function payingActiveInBucket(s: SubLike, b: Bucket): boolean {
   return paidStart < b.end.getTime() && churnEnd >= b.start.getTime();
 }
 
+/**
+ * A trial runs until its end, exclusive — the app's own rule
+ * (isTrialExpired: a trial with no end date, or at or past it, is over), the
+ * one subscriptionCancelState judges the families list's «trialing» and
+ * «ended» views by (familyFlags.test.ts holds the three together).
+ */
 function trialingAsOf(s: SubLike, asOfMs: number): boolean {
-  if (s.status !== "trialing") return false;
+  if (s.status !== "trialing" || !s.trial_ends_at) return false;
   if (new Date(s.created_at).getTime() >= asOfMs) return false;
-  const te = s.trial_ends_at ? new Date(s.trial_ends_at).getTime() : Number.POSITIVE_INFINITY;
-  return te >= asOfMs;
+  return new Date(s.trial_ends_at).getTime() > asOfMs;
 }
 
 /**

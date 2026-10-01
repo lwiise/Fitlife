@@ -5,18 +5,22 @@ import { unstable_cache } from "next/cache";
 import { PRICING_TIERS, type Tier } from "@fitlife/config";
 import { adminDb } from "@/lib/admin/db";
 import {
-  MEAL_PROBE_COLUMNS,
+  ADMIN_DATASET_TAG,
+  ADMIN_DATASET_TTL_SECONDS,
+  ADMIN_EMAIL_MAP_TAG,
+  ADMIN_EMAIL_TTL_SECONDS,
+  readWithinMaxAge,
+} from "@/lib/admin/freshness";
+import {
+  MEAL_PROBE_ROW_COLUMNS,
   finiteNumber,
   mealCellFromRows,
-  type MealProbeFields,
-  type MealRowLite,
+  mealProbeIdsNeeded,
+  withProbe,
+  type MealProbeRow,
 } from "@/lib/admin/mealProjection";
 import { workoutCellFromRows, type WorkoutRowLite } from "@/lib/admin/workoutProjection";
-import {
-  deriveFamilyFlags,
-  newestGenerationByKind,
-  subscriptionCancelState,
-} from "@/lib/admin/familyFlags";
+import { familyStateOf, newestGenerationByKind } from "@/lib/admin/familyFlags";
 import type { FamilyRow } from "@/lib/admin/console-types";
 import { computeMrr } from "@/lib/admin/revenue";
 import { trend, type Trend } from "@/lib/admin/period";
@@ -57,11 +61,15 @@ import type { OverviewView, SubscriberRow } from "@/lib/admin/types";
 export const PAGE = 1000;
 export const ROW_CEILING = 100_000;
 
+type ReadResult<Row> = PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
+
+/**
+ * Every row of a range-paged read (LIMIT/OFFSET). Fine for one family's rows
+ * and plain columns; the dataset pages by key instead (`paginateById`), since
+ * Postgres builds every row an OFFSET skips — projections included.
+ */
 export async function paginate<Row>(
-  build: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>,
+  build: (from: number, to: number) => ReadResult<Row>,
   label: string,
   onTruncate: (label: string) => void,
 ): Promise<Row[]> {
@@ -80,6 +88,93 @@ export async function paginate<Row>(
     }
   }
   return rows;
+}
+
+/**
+ * Every row of a whole-table read, a page at a time by key: each page is the
+ * next PAGE rows after the last id seen (`afterId`, null for the first). No
+ * OFFSET, so no page re-reads the rows before it — with LIMIT/OFFSET page k
+ * scans (and projects) every earlier page again, which grows with the square
+ * of the table. Rows come back in id order; callers sort as they need.
+ */
+export async function paginateById<Row extends { id: string }>(
+  build: (afterId: string | null) => ReadResult<Row>,
+  label: string,
+  onTruncate: (label: string) => void,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  let afterId: string | null = null;
+  for (;;) {
+    const { data, error } = await build(afterId);
+    if (error) throw new Error(`admin load ${label}: ${error.message}`);
+    const batch = data ?? [];
+    rows.push(...batch);
+    const last = batch[batch.length - 1];
+    if (batch.length < PAGE || !last) break;
+    afterId = last.id;
+    if (rows.length >= ROW_CEILING) {
+      onTruncate(label);
+      break;
+    }
+  }
+  return rows;
+}
+
+/** The part of a query builder `keysetPage` drives (structural, for any table). */
+interface KeysetQuery<Q> {
+  gt(column: "id", value: string): Q;
+  order(column: "id", options: { ascending: boolean }): Q;
+  limit(count: number): Q;
+}
+
+/** One `paginateById` page: the rows after `afterId`, in id order. */
+function keysetPage<Q extends KeysetQuery<Q>>(query: Q, afterId: string | null): Q {
+  return (afterId === null ? query : query.gt("id", afterId))
+    .order("id", { ascending: true })
+    .limit(PAGE);
+}
+
+/** How many reads of one batch run at once. */
+const READ_CONCURRENCY = 4;
+
+/**
+ * `run` over every item, at most READ_CONCURRENCY at a time; results in the
+ * order of `items`. The first failure rejects the whole batch.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  run: (item: T) => Promise<R>,
+  limit: number = READ_CONCURRENCY,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await run(items[i]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker));
+  return out;
+}
+
+/** Ids per `.in()` read: they ride in the URL, so stay well under a gateway's limit. */
+export const ID_CHUNK = 100;
+
+/**
+ * Rows by id, in bounded chunks — a few reads at a time, never OFFSET. The
+ * order of the result is not the order of `ids`.
+ */
+export async function readByIdChunks<Row>(
+  ids: readonly string[],
+  read: (chunk: string[]) => ReadResult<Row>,
+  label: string,
+): Promise<Row[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK) chunks.push(ids.slice(i, i + ID_CHUNK));
+  const pages = await mapWithConcurrency(chunks, async (chunk) => {
+    const { data, error } = await read(chunk);
+    if (error) throw new Error(`admin load ${label}: ${error.message}`);
+    return data ?? [];
+  });
+  return pages.flat();
 }
 
 interface ProfileLite {
@@ -118,17 +213,10 @@ interface PlanLite {
   created_at: string;
 }
 /**
- * A recent meal_plans row with JSON-path probes instead of its blob (see
- * MEAL_PROBE_COLUMNS). Only rows created in the last PROBE_WINDOW_DAYS and not
- * archived — enough to decide what every household is served now.
+ * The probes of a meal_plans row that decides what its household is served
+ * (`mealProbeIdsNeeded`): JSON-path values instead of the blob.
  */
-export interface PlanProbeLite extends MealProbeFields {
-  id: string;
-  user_id: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+export type PlanProbeLite = MealProbeRow;
 interface WorkoutPlanLite {
   id: string;
   user_id: string;
@@ -136,19 +224,17 @@ interface WorkoutPlanLite {
   created_at: string;
   updated_at: string;
 }
+/**
+ * A plan_generations row, as lean as its readers allow: the run flags read
+ * the kind, status and date of the newest run; the costs read cost and date.
+ */
 interface GenLite {
-  id: string;
   user_id: string;
   /** 'meal' | 'workout' (00014; null on a pre-00014 row = meal). */
   plan_kind: string | null;
   cost_usd: number | null;
   created_at: string;
-  completed_at: string | null;
   status: string;
-  error_message: string | null;
-  failure_reason: string | null;
-  meal_plan_id: string | null;
-  workout_plan_id: string | null;
 }
 interface ChatLite {
   user_id: string;
@@ -158,10 +244,11 @@ interface ChatLite {
 
 export interface AdminDataset {
   profiles: ProfileLite[];
+  /** Newest first (created_at desc, id asc) — the first row per user is their subscription. */
   subscriptions: SubscriptionLite[];
   members: MemberLite[];
   plans: PlanLite[];
-  /** Recent, non-archived meal plans with probes (bounded — see PlanProbeLite). */
+  /** Probes of the rows that decide what each household is served (see PlanProbeLite). */
   planProbes: PlanProbeLite[];
   workoutPlans: WorkoutPlanLite[];
   generations: GenLite[];
@@ -169,12 +256,13 @@ export interface AdminDataset {
   emailByUser: Map<string, string | null>;
   /** Tables where the safety ceiling was hit (counts may undercount). */
   truncated: string[];
-  /** ISO time the tables were read (the cache may be up to a minute old). */
+  /**
+   * When the read began (ISO). Every time-dependent cell is judged at this
+   * instant (buildFamilyRows), and the snapshot is never served once it is
+   * more than two TTLs old (freshness.ts).
+   */
   loadedAt: string;
 }
-
-/** How far back the meal-plan probes reach. A served plan is almost always newer. */
-export const PROBE_WINDOW_DAYS = 21;
 
 async function loadEmailMap(
   onTruncate: (label: string) => void,
@@ -199,17 +287,84 @@ async function loadEmailMap(
   return map;
 }
 
+const groupBy = <T>(rows: readonly T[], key: (r: T) => string): Map<string, T[]> => {
+  const map = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    const arr = map.get(k);
+    if (arr) arr.push(r);
+    else map.set(k, [r]);
+  }
+  return map;
+};
+
+const newestFirst = <R extends { id: string; created_at: string }>(rows: readonly R[]): R[] =>
+  [...rows].sort((a, b) => {
+    const d = Date.parse(b.created_at) - Date.parse(a.created_at);
+    if (d) return d;
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  });
+
+/**
+ * The probes of the meal plans that decide what each household is served —
+ * the second step of the two-step read. The cheap columns of every plan are
+ * already in hand; from them, `mealProbeIdsNeeded` names the rows whose
+ * probes can matter: each household's newest row, and — only for the
+ * households whose newest run died with nothing to show — the older 'ready'
+ * rows getLatestPlan's fallback looks through (asked for in the first round
+ * when the newest row is a raw failure, in the second once its probes show
+ * an empty shell). Each round reads just those ids, in chunks. A probe
+ * detoasts the whole blob, so reading them for every recent plan (each
+ * superseded week, chain hop and refill) cost far more than the list needs;
+ * this reads about one row per household.
+ *
+ * `nowMs` is the dataset's own read time, the instant buildFamilyRows judges
+ * staleness at, so the rows read here are exactly the ones its decision uses.
+ */
+async function readServedPlanProbes(
+  db: ReturnType<typeof adminDb>,
+  plans: readonly PlanLite[],
+  nowMs: number,
+): Promise<PlanProbeLite[]> {
+  const households = [...groupBy(plans, (p) => p.user_id).values()].map(newestFirst);
+  const probeById = new Map<string, PlanProbeLite>();
+  for (let round = 0; round < 2; round += 1) {
+    const ids = households.flatMap((rows) =>
+      mealProbeIdsNeeded(
+        rows.map((p) => withProbe(p, probeById.get(p.id))),
+        nowMs,
+      ),
+    );
+    if (ids.length === 0) break;
+    const probes = await readByIdChunks(
+      ids,
+      (chunk) =>
+        db
+          .from("meal_plans")
+          .select(MEAL_PROBE_ROW_COLUMNS)
+          .in("id", chunk)
+          .returns<PlanProbeLite[]>(),
+      "meal_plan_probes",
+    );
+    for (const p of probes) probeById.set(p.id, p);
+  }
+  return [...probeById.values()];
+}
+
 async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
   const db = adminDb();
+  const readAt = Date.now();
   const truncated: string[] = [];
   const onTruncate = (label: string) => {
     if (!truncated.includes(label)) truncated.push(label);
   };
-  const probeSince = new Date(Date.now() - PROBE_WINDOW_DAYS * 86_400_000).toISOString();
 
-  // Every paginated read is ordered by a unique key (id, or id as the
-  // tie-breaker): range() over an unordered read may return the same row on two
-  // pages and skip another once a table outgrows one page.
+  const plansRead = paginateById<PlanLite>(
+    (after) => keysetPage(db.from("meal_plans").select("id, user_id, status, created_at"), after),
+    "meal_plans",
+    onTruncate,
+  );
+
   const [
     profiles,
     subscriptions,
@@ -220,98 +375,78 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
     generations,
     chats,
   ] = await Promise.all([
-    paginate<ProfileLite>(
-      (f, t) =>
-        db
-          .from("profiles")
-          .select(
-            "id, display_name, preferred_language, created_at, onboarding_completed_at, family_wide_completed_at, mom_profile_completed_at",
-          )
-          .order("id", { ascending: true })
-          .range(f, t),
+    paginateById<ProfileLite>(
+      (after) =>
+        keysetPage(
+          db
+            .from("profiles")
+            .select(
+              "id, display_name, preferred_language, created_at, onboarding_completed_at, family_wide_completed_at, mom_profile_completed_at",
+            ),
+          after,
+        ),
       "profiles",
       onTruncate,
     ),
-    paginate<SubscriptionLite>(
-      (f, t) =>
-        db
-          .from("subscriptions")
-          .select(
-            "user_id, tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, ends_at, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id",
-          )
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: true })
-          .range(f, t),
+    paginateById<SubscriptionLite & { id: string }>(
+      (after) =>
+        keysetPage(
+          db
+            .from("subscriptions")
+            .select(
+              "id, user_id, tier, status, cadence, created_at, updated_at, trial_started_at, trial_ends_at, current_period_end, ends_at, cancel_at_period_end, cancelled_at, lemonsqueezy_subscription_id",
+            ),
+          after,
+        ),
       "subscriptions",
       onTruncate,
+    ).then((rows) =>
+      // Newest first, ties by id: the first row per user is the one that counts.
+      [...rows]
+        .sort(
+          (a, b) =>
+            Date.parse(b.created_at) - Date.parse(a.created_at) ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        )
+        .map(({ id: _id, ...s }) => s),
     ),
-    paginate<MemberLite>(
-      (f, t) =>
-        db
-          .from("family_members")
-          .select("user_id, role")
-          .order("id", { ascending: true })
-          .range(f, t),
+    paginateById<MemberLite & { id: string }>(
+      (after) => keysetPage(db.from("family_members").select("id, user_id, role"), after),
       "family_members",
       onTruncate,
-    ),
-    paginate<PlanLite>(
-      (f, t) =>
-        db
-          .from("meal_plans")
-          .select("id, user_id, status, created_at")
-          .order("id", { ascending: true })
-          .range(f, t),
-      "meal_plans",
-      onTruncate,
-    ),
-    paginate<PlanProbeLite>(
-      (f, t) =>
-        db
-          .from("meal_plans")
-          .select(`id, user_id, status, created_at, updated_at, ${MEAL_PROBE_COLUMNS}`)
-          .gte("created_at", probeSince)
-          .neq("status", "archived")
-          .order("id", { ascending: true })
-          .range(f, t)
-          .returns<PlanProbeLite[]>(),
-      "meal_plan_probes",
-      onTruncate,
-    ),
-    paginate<WorkoutPlanLite>(
-      (f, t) =>
-        db
-          .from("workout_plans")
-          .select("id, user_id, status, created_at, updated_at")
-          .order("id", { ascending: true })
-          .range(f, t),
+    ).then((rows) => rows.map((m) => ({ user_id: m.user_id, role: m.role }))),
+    plansRead,
+    plansRead.then((rows) => readServedPlanProbes(db, rows, readAt)),
+    paginateById<WorkoutPlanLite>(
+      (after) =>
+        keysetPage(
+          db.from("workout_plans").select("id, user_id, status, created_at, updated_at"),
+          after,
+        ),
       "workout_plans",
       onTruncate,
     ),
-    paginate<GenLite>(
-      (f, t) =>
-        db
-          .from("plan_generations")
-          .select(
-            "id, user_id, plan_kind, cost_usd, created_at, completed_at, status, error_message, failure_reason, meal_plan_id, workout_plan_id",
-          )
-          .order("id", { ascending: true })
-          .range(f, t),
+    paginateById<GenLite & { id: string }>(
+      (after) =>
+        keysetPage(
+          db
+            .from("plan_generations")
+            .select("id, user_id, plan_kind, cost_usd, created_at, status"),
+          after,
+        ),
       "plan_generations",
       onTruncate,
     ),
-    paginate<ChatLite>(
-      (f, t) =>
-        db
-          .from("chat_messages")
-          .select("user_id, cost_usd, created_at")
-          .order("id", { ascending: true })
-          .range(f, t),
+    paginateById<ChatLite & { id: string }>(
+      (after) =>
+        keysetPage(db.from("chat_messages").select("id, user_id, cost_usd, created_at"), after),
       "chat_messages",
       onTruncate,
     ),
   ]);
 
+  // The ids were only the page keys; the cached value keeps what its readers
+  // read. Postgres numeric can arrive as a string; every cost sum assumes a number.
   return {
     profiles,
     subscriptions,
@@ -319,11 +454,20 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
     plans,
     planProbes,
     workoutPlans,
-    // Postgres numeric can arrive as a string; every cost sum below assumes a number.
-    generations: generations.map((g) => ({ ...g, cost_usd: finiteNumber(g.cost_usd) })),
-    chats: chats.map((c) => ({ ...c, cost_usd: finiteNumber(c.cost_usd) })),
+    generations: generations.map((g) => ({
+      user_id: g.user_id,
+      plan_kind: g.plan_kind,
+      cost_usd: finiteNumber(g.cost_usd),
+      created_at: g.created_at,
+      status: g.status,
+    })),
+    chats: chats.map((c) => ({
+      user_id: c.user_id,
+      cost_usd: finiteNumber(c.cost_usd),
+      created_at: c.created_at,
+    })),
     truncated,
-    loadedAt: new Date().toISOString(),
+    loadedAt: new Date(readAt).toISOString(),
   };
 }
 
@@ -334,8 +478,8 @@ async function fetchAdminDataset(): Promise<AdminDatasetCacheable> {
  * and the chart's granularity links — re-ran the full multi-table fetch (~1–3s). The
  * per-request view computation + formatting stay OUTSIDE the cache, so locale /
  * currency / range still apply live. `revalidateTag("admin-dataset")` force-refreshes.
+ * An entry is served for at most two TTLs (loadAdminDataset; freshness.ts).
  */
-const ADMIN_DATASET_TTL_SECONDS = 60; // analytics tolerate ≤60s staleness
 
 /** JSON-safe shape stored in the cache: the tables + loadedAt (emails are cached separately). */
 type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser">;
@@ -343,11 +487,12 @@ type AdminDatasetCacheable = Omit<AdminDataset, "emailByUser">;
 const cachedAdminDataset = unstable_cache(
   fetchAdminDataset,
   // v2: the console rebuild added plan ids, meal-plan probes, workout plans and
-  // generation kinds; v3: subscriptions.ends_at (the cancellation rule). A new
-  // key part keeps a cache entry written without them from ever being read by
-  // the new builders.
-  ["admin-dataset", "v3"],
-  { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: ["admin-dataset"] },
+  // generation kinds; v3: subscriptions.ends_at (the cancellation rule); v4:
+  // probes only for the rows that decide the served plan, leaner generation
+  // rows, loadedAt = when the read began. A new key part keeps a cache entry
+  // written in an older shape from ever being read by the new builders.
+  ["admin-dataset", "v4"],
+  { revalidate: ADMIN_DATASET_TTL_SECONDS, tags: [ADMIN_DATASET_TAG] },
 );
 
 // Emails come from GoTrue (`loadEmailMap` paginates ALL users — the part that scales
@@ -355,31 +500,44 @@ const cachedAdminDataset = unstable_cache(
 // its search and the ⌘K index). Cache them SEPARATELY on a longer TTL so the per-minute
 // dataset refresh never pays the GoTrue pagination. Entries array, not a Map: a Map
 // serializes to `{}` under unstable_cache.
-const ADMIN_EMAIL_TTL_SECONDS = 300; // emails change rarely; 5 min is fresh enough
-
-async function fetchEmailEntries(): Promise<{
+interface EmailEntries {
   entries: Array<[string, string | null]>;
   truncated: boolean;
-}> {
+  /** When the read began (ISO): the entry is served for at most two TTLs. */
+  loadedAt: string;
+}
+
+async function fetchEmailEntries(): Promise<EmailEntries> {
+  const loadedAt = new Date().toISOString();
   let truncated = false;
   const map = await loadEmailMap(() => {
     truncated = true;
   });
-  return { entries: [...map], truncated };
+  return { entries: [...map], truncated, loadedAt };
 }
 
-const cachedEmailEntries = unstable_cache(fetchEmailEntries, ["admin-email-map"], {
+const cachedEmailEntries = unstable_cache(fetchEmailEntries, ["admin-email-map", "v2"], {
   revalidate: ADMIN_EMAIL_TTL_SECONDS,
-  tags: ["admin-email-map"],
+  tags: [ADMIN_EMAIL_MAP_TAG],
 });
 
 /**
  * The dataset for this request. `cache()` makes every caller in one render
  * (the console frame's rail counts, the overview, the families page) share one
  * read of the two unstable_cache entries and one rebuilt Map.
+ *
+ * unstable_cache is stale-while-revalidate: past its TTL it still returns the
+ * old entry and refreshes it in the background, however old that entry is —
+ * and in a low-traffic console the first load after a quiet spell gets one
+ * that is hours old. So an entry more than two TTLs old is not served: this
+ * request reads for itself, while the background refresh it set off brings
+ * the cache up to date for the next one (readWithinMaxAge).
  */
 export const loadAdminDataset = cache(async (): Promise<AdminDataset> => {
-  const [base, email] = await Promise.all([cachedAdminDataset(), cachedEmailEntries()]);
+  const [base, email] = await Promise.all([
+    readWithinMaxAge(cachedAdminDataset, fetchAdminDataset, ADMIN_DATASET_TTL_SECONDS),
+    readWithinMaxAge(cachedEmailEntries, fetchEmailEntries, ADMIN_EMAIL_TTL_SECONDS),
+  ]);
   // Rebuild the Map on this side of the cache so every consumer still gets a real
   // Map (`.get`), not the `{}` a serialized Map would degrade to.
   return {
@@ -402,90 +560,94 @@ function subscriptionByUser(ds: AdminDataset): Map<string, SubscriptionLite> {
   return map;
 }
 
-function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const r of rows) {
-    const k = key(r);
-    const arr = map.get(k);
-    if (arr) arr.push(r);
-    else map.set(k, [r]);
-  }
-  return map;
-}
-
 function maxIso(a: string | null, b: string | null): string | null {
   if (!a) return b;
   if (!b) return a;
   return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
 }
 
-/** The account + billing half of every families-list row (see buildFamilyRows). */
-function buildSubscriberRows(ds: AdminDataset): SubscriberRow[] {
-  const subByUser = subscriptionByUser(ds);
-  const membersByUser = groupBy(ds.members, (m) => m.user_id);
-  const plansByUser = groupBy(ds.plans, (p) => p.user_id);
-  const genByUser = groupBy(ds.generations, (g) => g.user_id);
-  const chatByUser = groupBy(ds.chats, (c) => c.user_id);
+const roundUsd = (n: number) => Math.round(n * 1_000_000) / 1_000_000;
 
-  return ds.profiles.map((p) => {
-    const sub = subByUser.get(p.id) ?? null;
-    const members = membersByUser.get(p.id) ?? [];
-    const nonHousekeeper = members.filter((m) => m.role !== "housekeeper").length;
-    const beneficiaries = 1 + nonHousekeeper; // owner + dependents
-    const hasHousekeeper = members.some((m) => m.role === "housekeeper");
+/** What `subscriberRowOf` reads about one family — from the dataset, or from the family's own rows. */
+export interface SubscriberRowInput {
+  profile: Pick<ProfileLite, "id" | "display_name" | "created_at" | "onboarding_completed_at">;
+  /** The family's latest subscription, if any. */
+  subscription: Pick<
+    SubscriptionLite,
+    | "tier"
+    | "status"
+    | "cadence"
+    | "trial_ends_at"
+    | "current_period_end"
+    | "ends_at"
+    | "cancel_at_period_end"
+  > | null;
+  email: string | null;
+  members: ReadonlyArray<{ role: string }>;
+  /** Every meal_plans row (archived ones too: they were generated). */
+  plans: ReadonlyArray<{ status: string; created_at: string }>;
+  /** Sum of the family's generation runs' cost (USD). */
+  generationCostUsd: number;
+  /** The family's advisor chat: total cost (USD) and the newest message. */
+  chat: { costUsd: number; lastAt: string | null };
+}
 
-    const tierDef = sub?.tier && sub.tier in PRICING_TIERS
-      ? PRICING_TIERS[sub.tier as Tier]
-      : null;
-    const overLimit =
-      tierDef?.max_people != null && beneficiaries > tierDef.max_people;
+/**
+ * The account + billing half of a family's row: household size and the tier
+ * limit, plan counts, last activity, lifetime AI cost. ONE definition, used
+ * by the families list (buildFamilyRows, over the dataset) and by the family
+ * page's header (lib/admin/family.ts, over that family's own rows), so the
+ * two cannot count a family differently.
+ */
+export function subscriberRowOf(input: SubscriberRowInput): SubscriberRow {
+  const { profile: p, subscription: sub, members, plans, chat } = input;
+  const nonHousekeeper = members.filter((m) => m.role !== "housekeeper").length;
+  const beneficiaries = 1 + nonHousekeeper; // owner + dependents
+  const hasHousekeeper = members.some((m) => m.role === "housekeeper");
 
-    const plans = plansByUser.get(p.id) ?? [];
-    const gens = genByUser.get(p.id) ?? [];
-    const chats = chatByUser.get(p.id) ?? [];
+  const tierDef = sub?.tier && sub.tier in PRICING_TIERS ? PRICING_TIERS[sub.tier as Tier] : null;
+  const overLimit = tierDef?.max_people != null && beneficiaries > tierDef.max_people;
 
-    const lifetimeAiCostUsd =
-      gens.reduce((s, g) => s + (g.cost_usd ?? 0), 0) +
-      chats.reduce((s, c) => s + (c.cost_usd ?? 0), 0);
+  let lastActivityAt: string | null = chat.lastAt;
+  for (const pl of plans) lastActivityAt = maxIso(lastActivityAt, pl.created_at);
 
-    let lastActivityAt: string | null = null;
-    for (const c of chats) lastActivityAt = maxIso(lastActivityAt, c.created_at);
-    for (const pl of plans) lastActivityAt = maxIso(lastActivityAt, pl.created_at);
+  return {
+    userId: p.id,
+    displayName: p.display_name,
+    email: input.email,
+    tier: sub?.tier ?? null,
+    status: sub?.status ?? null,
+    cadence: sub?.cadence ?? null,
+    signupAt: p.created_at,
+    trialEndsAt: sub?.trial_ends_at ?? null,
+    currentPeriodEnd: sub?.current_period_end ?? null,
+    endsAt: sub?.ends_at ?? null,
+    cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
+    beneficiaries,
+    hasHousekeeper,
+    overLimit,
+    plansGenerated: plans.length,
+    failedPlans: plans.filter((pl) => pl.status === "failed").length,
+    lastActivityAt,
+    lifetimeAiCostUsd: roundUsd(input.generationCostUsd + chat.costUsd),
+    onboardingComplete: p.onboarding_completed_at != null,
+  };
+}
 
-    return {
-      userId: p.id,
-      displayName: p.display_name,
-      email: ds.emailByUser.get(p.id) ?? null,
-      tier: sub?.tier ?? null,
-      status: sub?.status ?? null,
-      cadence: sub?.cadence ?? null,
-      signupAt: p.created_at,
-      trialEndsAt: sub?.trial_ends_at ?? null,
-      currentPeriodEnd: sub?.current_period_end ?? null,
-      endsAt: sub?.ends_at ?? null,
-      cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
-      beneficiaries,
-      hasHousekeeper,
-      overLimit,
-      plansGenerated: plans.length,
-      failedPlans: plans.filter((pl) => pl.status === "failed").length,
-      lastActivityAt,
-      lifetimeAiCostUsd: Math.round(lifetimeAiCostUsd * 1_000_000) / 1_000_000,
-      onboardingComplete: p.onboarding_completed_at != null,
-    } satisfies SubscriberRow;
-  });
+/** A family's chat: total cost and the newest message. */
+function chatTotals(chats: readonly ChatLite[]): { costUsd: number; lastAt: string | null } {
+  let costUsd = 0;
+  let lastAt: string | null = null;
+  for (const c of chats) {
+    costUsd += c.cost_usd ?? 0;
+    lastAt = maxIso(lastAt, c.created_at);
+  }
+  return { costUsd, lastAt };
 }
 
 // ---------------------------------------------------------------------------
 // Families list rows (pure over the dataset)
 // ---------------------------------------------------------------------------
-
-const newestFirst = <R extends { id: string; created_at: string }>(rows: readonly R[]): R[] =>
-  [...rows].sort((a, b) => {
-    const d = Date.parse(b.created_at) - Date.parse(a.created_at);
-    if (d) return d;
-    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
-  });
 
 /**
  * The families list: every SubscriberRow field, plus what each household is
@@ -493,54 +655,55 @@ const newestFirst = <R extends { id: string; created_at: string }>(rows: readonl
  * getLatestWorkoutPlan rules — see mealProjection.ts / workoutProjection.ts),
  * the subscription's cancellation state and the attention flags.
  *
- * `nowMs` defaults to when the dataset was READ, not the wall clock: the rows
- * are a snapshot up to a minute old, and judging a snapshot's "silence since
- * the last write" against a later clock would call a live run stale early.
- * The cancellation state is judged at the same instant as the flags, so a
- * row's cancel_scheduled flag and its «cancelling» view never disagree.
+ * The meal cell is the probe approximation (mealCellFromRows: the first
+ * beneficiary stands in for the household); the family page and panel decide
+ * the same question on the plan's blob. Every other part of a row — counts,
+ * costs, flags, the cancellation state — is built by the same functions the
+ * family header uses (subscriberRowOf, familyStateOf).
+ *
+ * `nowMs` defaults to when the dataset was READ, not the wall clock: judging
+ * a snapshot's "silence since the last write" against a later clock would call
+ * a live run stale before the snapshot could know. The snapshot itself is at
+ * most two TTLs old when it is served (loadAdminDataset), so that instant is
+ * always recent. The cancellation state is judged at the same instant as the
+ * flags, so a row's cancel_scheduled flag and its views never disagree.
  */
 export function buildFamilyRows(
   ds: AdminDataset,
   nowMs: number = Date.parse(ds.loadedAt) || Date.now(),
 ): FamilyRow[] {
-  const base = buildSubscriberRows(ds);
+  const subByUser = subscriptionByUser(ds);
+  const membersByUser = groupBy(ds.members, (m) => m.user_id);
+  const plansByUser = groupBy(ds.plans, (p) => p.user_id);
   // Defensive `?? []`: a dataset cached by the previous deploy lacks these.
   const probeById = new Map((ds.planProbes ?? []).map((p) => [p.id, p]));
-  const plansByUser = groupBy(ds.plans, (p) => p.user_id);
   const workoutsByUser = groupBy(ds.workoutPlans ?? [], (w) => w.user_id);
   const gensByUser = groupBy(ds.generations, (g) => g.user_id);
+  const chatByUser = groupBy(ds.chats, (c) => c.user_id);
 
-  return base.map((row) => {
-    const mealRows: MealRowLite[] = newestFirst(plansByUser.get(row.userId) ?? []).map((p) => {
-      const probe = probeById.get(p.id) ?? null;
-      return {
-        id: p.id,
-        status: p.status,
-        created_at: p.created_at,
-        updated_at: probe?.updated_at ?? null,
-        probe,
-      };
+  return ds.profiles.map((p) => {
+    const plans = plansByUser.get(p.id) ?? [];
+    const gens = gensByUser.get(p.id) ?? [];
+    const row = subscriberRowOf({
+      profile: p,
+      subscription: subByUser.get(p.id) ?? null,
+      email: ds.emailByUser.get(p.id) ?? null,
+      members: membersByUser.get(p.id) ?? [],
+      plans,
+      generationCostUsd: gens.reduce((s, g) => s + (g.cost_usd ?? 0), 0),
+      chat: chatTotals(chatByUser.get(p.id) ?? []),
     });
-    const workoutRows: WorkoutRowLite[] = newestFirst(workoutsByUser.get(row.userId) ?? []);
-    const newestRun = newestGenerationByKind(gensByUser.get(row.userId) ?? []);
-    const meal = mealCellFromRows(mealRows, nowMs);
+    const meal = mealCellFromRows(
+      newestFirst(plans).map((pl) => withProbe(pl, probeById.get(pl.id))),
+      nowMs,
+    );
+    const workoutRows: WorkoutRowLite[] = newestFirst(workoutsByUser.get(p.id) ?? []);
     const workout = workoutCellFromRows(workoutRows, nowMs);
-    const cancelState = subscriptionCancelState(row, nowMs);
     return {
       ...row,
       meal,
       workout,
-      flags: deriveFamilyFlags({
-        status: row.status,
-        cancelState,
-        overLimit: row.overLimit,
-        onboardingComplete: row.onboardingComplete,
-        newestMealRunStatus: newestRun.meal?.status ?? null,
-        newestWorkoutRunStatus: newestRun.workout?.status ?? null,
-        meal,
-        workout,
-      }),
-      cancelState,
+      ...familyStateOf({ row, meal, workout, newestRun: newestGenerationByKind(gens), nowMs }),
     } satisfies FamilyRow;
   });
 }

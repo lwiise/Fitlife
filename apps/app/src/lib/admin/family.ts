@@ -16,17 +16,22 @@ import {
   type PlanInspect,
 } from "@/lib/admin/detail";
 import {
-  buildFamilyRows,
+  PAGE,
+  ROW_CEILING,
+  mapWithConcurrency,
   paginate,
-  type AdminDataset,
-  type PlanProbeLite,
+  readByIdChunks,
+  subscriberRowOf,
 } from "@/lib/admin/queries";
 import {
-  MEAL_PROBE_COLUMNS,
-  MEAL_SERVED_WINDOW,
+  DEFAULT_DAYS_TOTAL,
+  MEAL_PROBE_ROW_COLUMNS,
   daysReadyFromProbe,
   daysTotalFromProbe,
+  displayMealPlan,
   finiteNumber,
+  householdDaysReady,
+  mealServedWindow,
   mealStateOf,
   needsPreviousPlan,
   pickServedMealLite,
@@ -35,8 +40,11 @@ import {
   probeMayHoldPlan,
   projectMealWeek,
   resolveMealRow,
+  withProbe,
+  type MealDisplayRoster,
   type MealPlanRowFull,
-  type MealProbeFields,
+  type MealProbeRow,
+  type MemberPlanTargets,
   type ResolvedStatus,
 } from "@/lib/admin/mealProjection";
 import {
@@ -48,15 +56,18 @@ import {
   resolveWorkoutRowLite,
   sexOf,
   toRawWorkoutRows,
+  workoutCellFromRows,
   workoutIneligibleMembers,
   workoutPlanStats,
   type WorkoutRosterEntry,
 } from "@/lib/admin/workoutProjection";
 import {
   attentionReasons,
+  familyStateOf,
   generationKind,
   newestGenerationByKind,
   runFailureAt,
+  type ServedCellLike,
 } from "@/lib/admin/familyFlags";
 import { isUuid } from "@/lib/admin/familyList";
 import type {
@@ -103,20 +114,27 @@ import { riyadhCurrentYear, riyadhTodayISO } from "@/lib/plans/dayMapping";
  *    injury context in its own words.
  * The full plan_data blob is read for the SERVED plan only (plus, when the
  * newest run failed, the older candidates getLatestPlan would look at — one
- * at a time, stopping at the first it would serve) and is projected to a
- * compact display shape before it leaves this module.
+ * at a time, stopping at the first it would serve; and, for the household's
+ * targets while a new run has none yet, the newest earlier plan) and is
+ * projected to a compact display shape before it leaves this module.
+ *
+ * Plan rows are read in two steps: every row's cheap columns, then the
+ * JSON-path probes of the few that need them (the serve window, and the
+ * newest rows of the history for their day counts). A probe decompresses the
+ * whole blob, so probing every plan a family ever had cost more than reading
+ * them.
  *
  * Errors: a failed read of the tables every section is built on (profiles,
  * subscriptions, family_members, meal_plans, plan_generations) THROWS — an
  * error screen is honest, a panel that reads "no plan" because a query failed
  * is not. Reads of optional detail (workout programs, session marks, chat
- * cost, the auth user, plan blobs) degrade to empty with a console.warn.
+ * figures, the auth user, plan probes and blobs) degrade with a console.warn.
  */
 
 // ── Row shapes ──────────────────────────────────────────────────────────────
 
 const PROFILE_COLUMNS =
-  "id, display_name, preferred_language, created_at, onboarding_completed_at, family_wide_completed_at, mom_profile_completed_at, primary_goal, has_medical_conditions, is_pregnant, consulted_doctor, medical_conditions, birth_year, sex, workout_profile";
+  "id, display_name, preferred_language, created_at, onboarding_completed_at, family_wide_completed_at, mom_profile_completed_at, primary_goal, has_medical_conditions, is_pregnant, consulted_doctor, medical_conditions, birth_year, member_type, sex, workout_profile";
 
 interface ProfileRow {
   id: string;
@@ -132,6 +150,7 @@ interface ProfileRow {
   consulted_doctor: boolean;
   medical_conditions: string[] | null;
   birth_year: number | null;
+  member_type: string | null;
   sex: string | null;
   workout_profile: unknown;
 }
@@ -172,9 +191,11 @@ interface SubscriptionDbRow {
   lemonsqueezy_variant_id: string | null;
 }
 
-const MEAL_ROW_COLUMNS = `id, status, created_at, updated_at, generated_at, error_message, ai_input_tokens, ai_output_tokens, ai_model, ${MEAL_PROBE_COLUMNS}`;
+/** The cheap columns of a meal plan: no plan_data, no JSON paths into it. */
+const MEAL_ROW_COLUMNS =
+  "id, status, created_at, updated_at, generated_at, error_message, ai_input_tokens, ai_output_tokens, ai_model";
 
-interface MealRow extends MealProbeFields {
+interface MealRow {
   id: string;
   status: string;
   created_at: string;
@@ -185,6 +206,14 @@ interface MealRow extends MealProbeFields {
   ai_output_tokens: number | null;
   ai_model: string | null;
 }
+
+/**
+ * How many of the newest meal plans the history shows a day count for. The
+ * count comes from the plan's probes, and each row's probes cost about as much
+ * as reading its blob, so the rows past these show "—" (unknown) rather than
+ * the page decompressing every plan the family ever had.
+ */
+export const MEAL_HISTORY_PROBED_ROWS = 20;
 
 interface WorkoutRow {
   id: string;
@@ -213,10 +242,14 @@ interface GenerationRow {
   workout_plan_id: string | null;
 }
 
-interface ChatRow {
-  cost_usd: number | null;
-  created_at: string;
+/** The advisor chat, as the header reports it. */
+interface ChatStats {
+  count: number;
+  lastAt: string | null;
+  costUsd: number;
 }
+
+const NO_CHATS: ChatStats = { count: 0, lastAt: null, costUsd: 0 };
 
 // ── The per-family reader ───────────────────────────────────────────────────
 
@@ -249,6 +282,9 @@ function once<T>(fn: () => Promise<T>): () => Promise<T> {
   return () => (pending ??= fn());
 }
 
+/** A meal plan's plan_data, or null when the read failed. */
+type BlobRead = { planData: unknown } | null;
+
 /**
  * Every read one family's sections share, each run at most once. Sections
  * take a reader instead of a user id so the header, the tabs and the panel
@@ -260,19 +296,49 @@ interface FamilyReader {
   auth: () => Promise<{ email: string | null; deactivated: boolean }>;
   subscriptions: () => Promise<SubscriptionDbRow[]>;
   members: () => Promise<MemberRow[]>;
-  /** Every meal plan, newest first, WITHOUT plan_data — probes instead. */
+  /** Every meal plan, newest first: the cheap columns only. */
   mealRows: () => Promise<MealRow[]>;
+  /** Probes of the serve window (getLatestPlan's newest five non-archived rows), by id. */
+  windowProbes: () => Promise<Map<string, MealProbeRow>>;
+  /** The window's probes plus the newest MEAL_HISTORY_PROBED_ROWS rows', by id. */
+  historyProbes: () => Promise<Map<string, MealProbeRow>>;
+  /** One meal plan's blob; each id is read at most once per request. */
+  mealBlob: (id: string) => Promise<BlobRead>;
   /** Every workout program, newest first, WITHOUT plan_data. */
   workoutRows: () => Promise<WorkoutRow[]>;
   /** Every generation run (meal and workout), newest first. */
   generations: () => Promise<GenerationRow[]>;
-  chats: () => Promise<ChatRow[]>;
+  chatStats: () => Promise<ChatStats>;
   /** getLatestPlan's decision for this family (reads the served blob). */
   servedMeal: () => Promise<ServedMeal | null>;
 }
 
 function createFamilyReader(userId: string): FamilyReader {
   const db = adminDb();
+  const blobs = new Map<string, Promise<BlobRead>>();
+
+  /** Probes of these rows, by id; a failed read degrades to none (the blob rule stands). */
+  const probesOf = async (ids: readonly string[]): Promise<Map<string, MealProbeRow>> => {
+    if (ids.length === 0) return new Map();
+    try {
+      const rows = await readByIdChunks(
+        ids,
+        (chunk) =>
+          db
+            .from("meal_plans")
+            .select(MEAL_PROBE_ROW_COLUMNS)
+            .eq("user_id", userId)
+            .in("id", chunk)
+            .returns<MealProbeRow[]>(),
+        "meal_plan_probes",
+      );
+      return new Map(rows.map((r) => [r.id, r]));
+    } catch (err) {
+      warn("meal plan probes read failed; deciding without them", err);
+      return new Map();
+    }
+  };
+
   const reader: FamilyReader = {
     userId,
 
@@ -337,6 +403,32 @@ function createFamilyReader(userId: string): FamilyReader {
       ),
     ),
 
+    windowProbes: once(async () =>
+      probesOf(mealServedWindow(await reader.mealRows()).map((r) => r.id)),
+    ),
+
+    historyProbes: once(async () => {
+      const rows = await reader.mealRows();
+      const inWindow = new Set(mealServedWindow(rows).map((r) => r.id));
+      const rest = rows
+        .slice(0, MEAL_HISTORY_PROBED_ROWS)
+        .map((r) => r.id)
+        .filter((id) => !inWindow.has(id));
+      const [window, more] = await Promise.all([reader.windowProbes(), probesOf(rest)]);
+      return new Map([...window, ...more]);
+    }),
+
+    mealBlob: (id) => {
+      let read = blobs.get(id);
+      if (!read) {
+        read = fetchPlanData("meal_plans", userId, [id]).then((got) =>
+          got ? { planData: got.get(id) ?? null } : null,
+        );
+        blobs.set(id, read);
+      }
+      return read;
+    },
+
     workoutRows: once(() =>
       readAllOptional<WorkoutRow>("workout_plans", (f, t) =>
         db
@@ -365,17 +457,13 @@ function createFamilyReader(userId: string): FamilyReader {
       return rows.map((g) => ({ ...g, cost_usd: finiteNumber(g.cost_usd) }));
     }),
 
-    chats: once(async () => {
-      const rows = await readAllOptional<ChatRow>("chat_messages", (f, t) =>
-        db
-          .from("chat_messages")
-          .select("cost_usd, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: true })
-          .order("id", { ascending: true })
-          .range(f, t),
-      );
-      return rows.map((c) => ({ ...c, cost_usd: finiteNumber(c.cost_usd) }));
+    chatStats: once(async () => {
+      try {
+        return await readChatStats(db, userId);
+      } catch (err) {
+        warn("chat_messages read failed; showing none", err);
+        return NO_CHATS;
+      }
     }),
 
     servedMeal: once(() => resolveServedMeal(reader)),
@@ -417,6 +505,62 @@ async function fetchPlanData(
   return new Map((data ?? []).map((r) => [r.id, r.plan_data as unknown]));
 }
 
+/**
+ * The advisor chat's count, newest message and cost — the three figures the
+ * header shows — without bringing every row back in sequence. The count and
+ * the newest message are one-row answers; the cost has no aggregate to ask
+ * for (PostgREST's are off), so it sums the cost column alone: the first page
+ * alongside the other two, the rest (a heavy household's thousands of
+ * messages) together once the count says how many there are. Everything is
+ * read as of one instant, so a message landing mid-read cannot be counted in
+ * one figure and missed by another, or shift the pages under the sum.
+ */
+async function readChatStats(
+  db: ReturnType<typeof adminDb>,
+  userId: string,
+): Promise<ChatStats> {
+  const asOf = new Date().toISOString();
+  const chats = () => db.from("chat_messages");
+  const costPage = (page: number) =>
+    chats()
+      .select("cost_usd")
+      .eq("user_id", userId)
+      .lte("created_at", asOf)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+
+  const [counted, newest, first] = await Promise.all([
+    chats().select("id", { count: "exact", head: true }).eq("user_id", userId).lte("created_at", asOf),
+    chats()
+      .select("created_at")
+      .eq("user_id", userId)
+      .lte("created_at", asOf)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    costPage(0),
+  ]);
+  for (const read of [counted, newest, first]) {
+    if (read.error) throw new Error(`chat_messages: ${read.error.message}`);
+  }
+
+  const count = counted.count ?? 0;
+  const pages = Math.min(Math.ceil(count / PAGE), ROW_CEILING / PAGE);
+  const rest = await mapWithConcurrency(
+    Array.from({ length: Math.max(0, pages - 1) }, (_, i) => i + 1),
+    async (page) => {
+      const { data, error } = await costPage(page);
+      if (error) throw new Error(`chat_messages: ${error.message}`);
+      return data ?? [];
+    },
+  );
+  let costUsd = 0;
+  for (const row of [...(first.data ?? []), ...rest.flat()]) {
+    costUsd += finiteNumber(row.cost_usd) ?? 0;
+  }
+  return { count, lastAt: newest.data?.[0]?.created_at ?? null, costUsd };
+}
+
 // ── Derived facts shared by several sections ────────────────────────────────
 
 /** The ONE doctor-gate rule (plan-engine medicalGate.ts), exactly as the old detail page applied it. */
@@ -447,6 +591,18 @@ function namesById(profile: ProfileRow | null, members: readonly MemberRow[]): M
   return map;
 }
 
+/** The live roster /plan reads the served plan against (displayMealPlan). */
+function displayRoster(profile: ProfileRow, members: readonly MemberRow[]): MealDisplayRoster {
+  return {
+    mom: { member_type: profile.member_type, birth_year: profile.birth_year },
+    members: members.map((m) => ({
+      id: m.id,
+      member_type: m.member_type,
+      birth_year: m.birth_year,
+    })),
+  };
+}
+
 function sumCostBy(gens: readonly GenerationRow[], key: "meal_plan_id" | "workout_plan_id") {
   const out = new Map<string, number>();
   for (const g of gens) {
@@ -466,76 +622,52 @@ const newestLive = (rows: readonly { status: string; created_at: string }[]) =>
 // ── Header ──────────────────────────────────────────────────────────────────
 
 /**
- * Identity, billing, flags and totals. The flags, the cancellation state,
- * household count, lifetime cost and plan cells are computed by the families
- * list's own builder over a one-family slice of the same tables, so the page
- * and the list cannot disagree about a family.
+ * What the household is served, as the run flags read it — the blob
+ * decision the Meal tab and the household table read too.
+ */
+function servedMealCell(served: ServedMeal | null): ServedCellLike {
+  return served ? { state: served.state, masked: served.masked } : { state: "none", masked: false };
+}
+
+/**
+ * Identity, billing, flags and totals. Household count, plan counts, last
+ * activity and lifetime cost are built by the families list's own function
+ * (subscriberRowOf), and the flags and the cancellation state by its own
+ * rule (familyStateOf). What the household is served is the app's decision
+ * on the blob (servedMeal) — the one the Meal tab shows — where the list,
+ * which reads no blobs, approximates it from probes. So the page never flags
+ * a run failed under a Meal tab that shows the plan served and fine.
  */
 async function buildHeader(reader: FamilyReader): Promise<FamilyHeaderData | null> {
   const userId = reader.userId;
-  const [profile, auth, subs, members, mealRows, workoutRows, gens, chats] = await Promise.all([
-    reader.profile(),
-    reader.auth(),
-    reader.subscriptions(),
-    reader.members(),
-    reader.mealRows(),
-    reader.workoutRows(),
-    reader.generations(),
-    reader.chats(),
-  ]);
+  const [profile, auth, subs, members, mealRows, workoutRows, gens, chat, served] =
+    await Promise.all([
+      reader.profile(),
+      reader.auth(),
+      reader.subscriptions(),
+      reader.members(),
+      reader.mealRows(),
+      reader.workoutRows(),
+      reader.generations(),
+      reader.chatStats(),
+      reader.servedMeal(),
+    ]);
   if (!profile) return null;
 
   const now = Date.now();
-  const slice: AdminDataset = {
-    profiles: [
-      {
-        id: profile.id,
-        display_name: profile.display_name,
-        preferred_language: profile.preferred_language,
-        created_at: profile.created_at,
-        onboarding_completed_at: profile.onboarding_completed_at,
-        family_wide_completed_at: profile.family_wide_completed_at,
-        mom_profile_completed_at: profile.mom_profile_completed_at,
-      },
-    ],
-    subscriptions: subs.map((s) => ({ ...s, user_id: userId })),
-    members: members.map((m) => ({ user_id: userId, role: m.role })),
-    plans: mealRows.map((p) => ({
-      id: p.id,
-      user_id: userId,
-      status: p.status,
-      created_at: p.created_at,
-    })),
-    planProbes: mealRows
-      .filter((p) => p.status !== "archived")
-      .map((p): PlanProbeLite => ({ ...p, user_id: userId })),
-    workoutPlans: workoutRows.map((w) => ({
-      id: w.id,
-      user_id: userId,
-      status: w.status,
-      created_at: w.created_at,
-      updated_at: w.updated_at,
-    })),
-    generations: gens.map((g) => ({
-      id: g.id,
-      user_id: userId,
-      plan_kind: g.plan_kind,
-      cost_usd: g.cost_usd,
-      created_at: g.created_at,
-      completed_at: g.completed_at,
-      status: g.status,
-      error_message: g.error_message,
-      failure_reason: null,
-      meal_plan_id: g.meal_plan_id,
-      workout_plan_id: g.workout_plan_id,
-    })),
-    chats: chats.map((c) => ({ user_id: userId, ...c })),
-    emailByUser: new Map([[userId, auth.email]]),
-    truncated: [],
-    loadedAt: new Date(now).toISOString(),
-  };
-  const row = buildFamilyRows(slice, now)[0];
-  if (!row) return null;
+  const row = subscriberRowOf({
+    profile,
+    subscription: subs[0] ?? null,
+    email: auth.email,
+    members,
+    plans: mealRows,
+    generationCostUsd: gens.reduce((s, g) => s + (g.cost_usd ?? 0), 0),
+    chat: { costUsd: chat.costUsd, lastAt: chat.lastAt },
+  });
+  const meal = servedMealCell(served);
+  const workout = workoutCellFromRows(workoutRows, now);
+  const newestRun = newestGenerationByKind(gens);
+  const { flags, cancelState } = familyStateOf({ row, meal, workout, newestRun, nowMs: now });
 
   const subscriptionHistory = subs.map(mapSubscription);
   const subscription = subscriptionHistory[0] ?? null;
@@ -543,14 +675,6 @@ async function buildHeader(reader: FamilyReader): Promise<FamilyHeaderData | nul
   const tierMaxPeople =
     tier && tier in PRICING_TIERS ? PRICING_TIERS[tier as Tier].max_people : null;
   const medicalGateBlocked = ownerGate(profile) || members.some(memberGate);
-  const newestRun = newestGenerationByKind(gens);
-
-  let lastChatAt: string | null = null;
-  let chatCostUsd = 0;
-  for (const c of chats) {
-    if (!lastChatAt || Date.parse(c.created_at) > Date.parse(lastChatAt)) lastChatAt = c.created_at;
-    chatCostUsd += c.cost_usd ?? 0;
-  }
 
   return {
     userId,
@@ -568,26 +692,26 @@ async function buildHeader(reader: FamilyReader): Promise<FamilyHeaderData | nul
     hasHousekeeper: row.hasHousekeeper,
     tierMaxPeople,
     overLimit: row.overLimit,
-    flags: row.flags,
-    cancelState: row.cancelState,
+    flags,
+    cancelState,
     medicalGateBlocked,
     reasons: attentionReasons({
-      flags: row.flags,
+      flags,
       medicalGateBlocked,
       subscription,
       beneficiaries: row.beneficiaries,
       maxPeople: tierMaxPeople,
-      mealFailureAt: runFailureAt(newestRun.meal, row.meal, newestLive(mealRows)),
-      workoutFailureAt: runFailureAt(newestRun.workout, row.workout, newestLive(workoutRows)),
-      meal: row.meal,
-      workout: row.workout,
+      mealFailureAt: runFailureAt(newestRun.meal, meal, newestLive(mealRows)),
+      workoutFailureAt: runFailureAt(newestRun.workout, workout, newestLive(workoutRows)),
+      meal,
+      workout,
     }),
     lifetimeAiCostUsd: row.lifetimeAiCostUsd,
     lastActivityAt: row.lastActivityAt,
     engagement: {
-      chatCount: chats.length,
-      lastChatAt,
-      chatCostUsd: roundUsd(chatCostUsd),
+      chatCount: chat.count,
+      lastChatAt: chat.lastAt,
+      chatCostUsd: roundUsd(chat.costUsd),
     },
   };
 }
@@ -602,7 +726,11 @@ export const loadFamilyHeader = cache(
 interface ServedMeal {
   rowId: string;
   state: "generating" | "ready" | "failed";
-  /** What the projection reads: the validated plan, or a live run's snapshot. */
+  /**
+   * The served plan as /plan displays it (displayMealPlan): the validated
+   * plan, or a live run's snapshot; null when there is nothing to show, or
+   * its blob could not be read.
+   */
   planData: unknown;
   masked: boolean;
   maskedFailureAt: string | null;
@@ -630,24 +758,32 @@ interface ServedMeal {
  * week to project): for the newest row, the list's rule over the window; for
  * the older candidates, the list's rule over the ones not yet ruled out — the
  * first whose probes show meals is served — with no further reads.
+ *
+ * The state is decided on the plan as getLatestPlan holds it; what is
+ * returned to project is the plan as /plan then displays it.
  */
 async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | null> {
-  const userId = reader.userId;
-  const rows = await reader.mealRows();
-  const window = rows.filter((r) => r.status !== "archived").slice(0, MEAL_SERVED_WINDOW);
+  const [rows, probes, profile, members] = await Promise.all([
+    reader.mealRows(),
+    reader.windowProbes(),
+    reader.profile(),
+    reader.members(),
+  ]);
+  // A probe read is the newer read of its row: its status and clock stand.
+  const live = (r: MealRow): MealRow => {
+    const probe = probes.get(r.id);
+    return probe ? { ...r, status: probe.status, updated_at: probe.updated_at } : r;
+  };
+  const window = mealServedWindow(rows.map(live));
   const newest = window[0];
   if (!newest) return null;
   const now = Date.now();
+  const display = (planData: unknown): unknown =>
+    planData == null || !profile ? planData : displayMealPlan(planData, displayRoster(profile, members));
 
   const fromProbes = (): ServedMeal | null => {
     const pick = pickServedMealLite(
-      window.map((r) => ({
-        id: r.id,
-        status: r.status,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        probe: r,
-      })),
+      window.map((r) => withProbe(r, probes.get(r.id))),
       now,
     );
     if (!pick.served || !pick.resolution) return null;
@@ -663,9 +799,9 @@ async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | nul
   const blobs = new Map<string, unknown>();
   /** Reads one row's plan_data into `blobs`; false when the read failed. */
   const readBlob = async (id: string): Promise<boolean> => {
-    const got = await fetchPlanData("meal_plans", userId, [id]);
+    const got = await reader.mealBlob(id);
     if (!got) return false;
-    for (const [k, v] of got) blobs.set(k, v);
+    blobs.set(id, got.planData);
     return true;
   };
   if (newest.status === "ready" || newest.status === "generating") {
@@ -684,14 +820,20 @@ async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | nul
   if (!resolvedNewest) return null;
   let pick = pickServedMealPlan(resolvedNewest, [], now);
   if (needsPreviousPlan(resolvedNewest)) {
-    const candidates = window
-      .slice(1)
-      .filter((r) => r.status === "ready" && probeMayHoldPlan(r));
+    const candidates = window.slice(1).filter((r) => {
+      if (r.status !== "ready") return false;
+      // Unprobed (the probe read failed): the blob decides.
+      const probe = probes.get(r.id);
+      return !probe || probeMayHoldPlan(probe);
+    });
     for (const [i, candidate] of candidates.entries()) {
       if (!(await readBlob(candidate.id))) {
         // The blob path is down: the list's probe rule decides among the
         // candidates not yet ruled out, without reading any more.
-        const onProbes = candidates.slice(i).find((r) => daysReadyFromProbe(r) > 0);
+        const onProbes = candidates.slice(i).find((r) => {
+          const probe = probes.get(r.id);
+          return probe ? daysReadyFromProbe(probe) > 0 : true;
+        });
         if (!onProbes) break;
         return {
           rowId: onProbes.id,
@@ -707,7 +849,7 @@ async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | nul
         pick = attempt;
         break;
       }
-      blobs.delete(candidate.id); // passed over: never needed again
+      blobs.delete(candidate.id); // passed over: never needed again here
     }
   }
 
@@ -718,22 +860,33 @@ async function resolveServedMeal(reader: FamilyReader): Promise<ServedMeal | nul
     state: mealStateOf({ status: served.status, inProgress: served.inProgress, hasContent }),
     // A live run's rows are read with no validated plan (getLatestPlan's rule);
     // the admin still projects the snapshot so the operator can watch days land.
-    planData:
+    planData: display(
       served.planData ?? (served.status === "generating" ? (blobs.get(served.id) ?? null) : null),
+    ),
     masked: pick.masked,
     maskedFailureAt: pick.masked ? newest.created_at : null,
   };
 }
 
-function toMealItem(r: MealRow, costByPlan: ReadonlyMap<string, number>): MealPlanListItem {
+/**
+ * A history row. Its day count is the FIRST beneficiary's, from its probes —
+ * an approximation the list shares — or null (unknown) past the probed rows.
+ * The served plan's row is corrected to the household's count by
+ * buildMealSection, which has its blob.
+ */
+function toMealItem(
+  r: MealRow,
+  probe: MealProbeRow | null,
+  costByPlan: ReadonlyMap<string, number>,
+): MealPlanListItem {
   const cost = costByPlan.get(r.id);
   return {
     id: r.id,
     status: r.status,
     createdAt: r.created_at,
     generatedAt: r.generated_at,
-    daysReady: daysReadyFromProbe(r),
-    daysTotal: daysTotalFromProbe(r),
+    daysReady: probe ? daysReadyFromProbe(probe) : null,
+    daysTotal: probe ? daysTotalFromProbe(probe) : DEFAULT_DAYS_TOTAL,
     aiInputTokens: r.ai_input_tokens,
     aiOutputTokens: r.ai_output_tokens,
     aiModel: r.ai_model,
@@ -745,28 +898,46 @@ function toMealItem(r: MealRow, costByPlan: ReadonlyMap<string, number>): MealPl
  * The served meal plan (with a compact week) and every plan's history row.
  * `served.plan.status` is the RESOLVED state (generating / ready / failed —
  * what the household sees), not the raw column; `plans[]` keep the raw one.
+ *
+ * The served plan's days ready are the HOUSEHOLD's — the days every member
+ * has (householdDaysReady), read off the same blob as its week — in the
+ * summary and on its history row alike: a short week for one member (added
+ * mid-week, or failing until the retry cap ships the week short) is the week
+ * an operator most needs to see, and the first member's count would call it
+ * complete. Only without a week to read (no members yet, or an unreadable
+ * blob) does the probe count stand in.
  */
 async function buildMealSection(reader: FamilyReader): Promise<MealSection> {
-  const [rows, gens, served, profile, members] = await Promise.all([
+  const [rows, probes, gens, served, profile, members] = await Promise.all([
     reader.mealRows(),
+    reader.historyProbes(),
     reader.generations(),
     reader.servedMeal(),
     reader.profile(),
     reader.members(),
   ]);
   const costByPlan = sumCostBy(gens, "meal_plan_id");
-  const plans = rows.map((r) => toMealItem(r, costByPlan));
-  if (!served) return { served: null, plans };
+  const items = rows.map((r) => toMealItem(r, probes.get(r.id) ?? null, costByPlan));
+  if (!served) return { served: null, plans: items };
+
+  const week = projectMealWeek(served.planData, {
+    generating: served.state === "generating",
+    nameById: namesById(profile, members),
+  });
+  const householdDays = householdDaysReady(week);
+  const plans =
+    week && householdDays !== null
+      ? items.map((p) =>
+          p.id === served.rowId ? { ...p, daysReady: householdDays, daysTotal: week.daysTotal } : p,
+        )
+      : items;
 
   const item = plans.find((p) => p.id === served.rowId);
   if (!item) return { served: null, plans };
   return {
     served: {
       plan: { ...item, status: served.state },
-      week: projectMealWeek(served.planData, {
-        generating: served.state === "generating",
-        nameById: namesById(profile, members),
-      }),
+      week,
       masked: served.masked,
       maskedFailureAt: served.maskedFailureAt,
     },
@@ -820,6 +991,14 @@ const EMPTY_WORKOUT: WorkoutSection = {
  */
 async function buildWorkoutSection(reader: FamilyReader): Promise<WorkoutSection> {
   const userId = reader.userId;
+  // THIS week only (Sunday → today, Riyadh), not the app's marking window,
+  // which on a Sunday or Monday reaches back into last Friday and Saturday —
+  // marks are keyed by weekday, so those would land on this week's sessions.
+  // The marks depend on nothing else, so their read starts with the rows'
+  // rather than after the program's blob; it is awaited only when a program
+  // is served (and never rejects).
+  const marksWindow = currentTrainingWeek(riyadhTodayISO());
+  const checkinsRead = loadWorkoutCheckins(userId, marksWindow.start, marksWindow.end);
   const [profile, members, rows, gens] = await Promise.all([
     reader.profile(),
     reader.members(),
@@ -961,10 +1140,6 @@ async function buildWorkoutSection(reader: FamilyReader): Promise<WorkoutSection
   const withStats = (p: WorkoutPlanListItem): WorkoutPlanListItem =>
     p.id === served.id ? { ...p, ...stats } : p;
 
-  // THIS week only (Sunday → today, Riyadh), not the app's marking window,
-  // which on a Sunday or Monday reaches back into last Friday and Saturday —
-  // marks are keyed by weekday, so those would land on this week's sessions.
-  const marksWindow = currentTrainingWeek(riyadhTodayISO());
   const roster = new Map<string, WorkoutRosterEntry>();
   roster.set("mom", {
     memberId: "mom",
@@ -982,11 +1157,10 @@ async function buildWorkoutSection(reader: FamilyReader): Promise<WorkoutSection
       workoutProfile: m.workout_profile,
     });
   }
-  const checkins = await loadWorkoutCheckins(userId, marksWindow.start, marksWindow.end);
   const trainees: WorkoutTraineeView[] = projectWorkoutTrainees(
     program,
     roster,
-    marksByMemberDay(checkins, marksWindow.start),
+    marksByMemberDay(await checkinsRead, marksWindow.start),
   );
 
   const servedItem =
@@ -1019,22 +1193,28 @@ export const loadWorkoutSection = cache(
  * (calendar-keyed), NOT by workout_plan_id — a re-dispatch mints a new program
  * row and a plan-id read would drop every earlier mark. Untyped client:
  * workout_checkins (00020) and its intensity column (00022) are not in the
- * generated Database types.
+ * generated Database types. Never rejects: it is started before anyone knows
+ * whether a program will need it.
  */
 async function loadWorkoutCheckins(userId: string, start: string, end: string) {
-  const { data, error } = await (adminDb() as unknown as SupabaseClient)
-    .from("workout_checkins")
-    .select("*")
-    .eq("user_id", userId)
-    .gte("local_date", start)
-    .lte("local_date", end)
-    .order("created_at", { ascending: true })
-    .limit(800);
-  if (error) {
-    warn("workout_checkins read failed; showing no marks", error);
+  try {
+    const { data, error } = await (adminDb() as unknown as SupabaseClient)
+      .from("workout_checkins")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("local_date", start)
+      .lte("local_date", end)
+      .order("created_at", { ascending: true })
+      .limit(800);
+    if (error) {
+      warn("workout_checkins read failed; showing no marks", error);
+      return [];
+    }
+    return toRawWorkoutRows((data ?? []) as unknown[]);
+  } catch (err) {
+    warn("workout_checkins read failed; showing no marks", err);
     return [];
   }
-  return toRawWorkoutRows((data ?? []) as unknown[]);
 }
 
 // ── Runs ────────────────────────────────────────────────────────────────────
@@ -1062,11 +1242,45 @@ export const loadRuns = cache(async (userId: string): Promise<RunRow[]> => {
 
 // ── Household ───────────────────────────────────────────────────────────────
 
+/** A plan states a target for this member (a goal alone is not one). */
+const hasTargets = (t: MemberPlanTargets | undefined): t is MemberPlanTargets =>
+  !!t && (t.caloriesTarget !== null || t.macros !== null);
+
+/**
+ * Targets from the newest plan, other than the one served, that has members
+ * — the latest the engine computed for whoever the served plan does not
+ * cover. A new run states none until its skeleton lands (minutes into a
+ * family's run), and a run that died with nothing to show is served with no
+ * plan at all, though its own row may still hold the targets its skeleton
+ * wrote; the old detail page showed the newest plan with members, so it
+ * never went blank. Rows are taken newest first from the serve window, the
+ * served row itself only when it gave no plan; the probes rule out rows with
+ * no members unread, so this costs one blob read, and only when needed.
+ */
+async function earlierPlanTargets(
+  reader: FamilyReader,
+  served: ServedMeal | null,
+  roster: MealDisplayRoster,
+): Promise<Map<string, MemberPlanTargets>> {
+  const [rows, probes] = await Promise.all([reader.mealRows(), reader.windowProbes()]);
+  const source = mealServedWindow(rows).find((r) => {
+    if (served && r.id === served.rowId && served.planData != null) return false;
+    const probe = probes.get(r.id);
+    return !!probe && probeMayHoldPlan(probe);
+  });
+  if (!source) return new Map();
+  const blob = await reader.mealBlob(source.id);
+  return blob ? planTargetsById(displayMealPlan(blob.planData, roster)) : new Map();
+}
+
 /**
  * Owner first, then members by display_order. Goal, calories and macros come
- * from the served meal plan (else the stored goal). `memberType` is
- * adult / child / housekeeper only — pregnancy and lactation are not a member
- * type here.
+ * from the served meal plan as /plan displays it (a child's figures are the
+ * average of their real days); a beneficiary that plan gives no target —
+ * every one of them while a new run is still planning — takes the newest
+ * earlier plan's (earlierPlanTargets); a goal with no plan behind it falls
+ * back to the stored one. `memberType` is adult / child / housekeeper only —
+ * pregnancy and lactation are not a member type here.
  *
  * NOT fully minimised, and knowingly so: `primaryGoal` is the exact goal,
  * and the plan's goal can itself be health-derived — 'pregnancy_lactation',
@@ -1084,6 +1298,14 @@ async function buildHousehold(reader: FamilyReader): Promise<HouseholdMember[]> 
   if (!profile) return [];
 
   const targets = planTargetsById(served?.planData ?? null);
+  const beneficiaries = ["mom", ...members.filter((m) => m.role !== "housekeeper").map((m) => m.id)];
+  if (beneficiaries.some((id) => !hasTargets(targets.get(id)))) {
+    const earlier = await earlierPlanTargets(reader, served, displayRoster(profile, members));
+    for (const id of beneficiaries) {
+      const fallback = earlier.get(id);
+      if (!hasTargets(targets.get(id)) && hasTargets(fallback)) targets.set(id, fallback);
+    }
+  }
   const year = riyadhCurrentYear();
   const ageOf = (birthYear: number | null) =>
     birthYear != null && Number.isFinite(birthYear) ? year - birthYear : null;

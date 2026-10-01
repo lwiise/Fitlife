@@ -14,14 +14,19 @@ const data: ConsoleNavData = {
 };
 
 describe("toShellNav", () => {
+  /** The same Riyadh day as `data.loadedAt` (14:32 there), later in the evening. */
+  const SAME_DAY = Date.parse("2026-09-30T18:00:00Z");
+
   it("formats the counts and the Riyadh time for the UI language", () => {
-    const ar = toShellNav(data, "ar");
+    const ar = toShellNav(data, "ar", SAME_DAY);
     expect(ar.counts.all).toBe(1);
     expect(ar.countText.all).toBe("١");
     expect(ar.countText.ended).toBe("٧");
     // 11:32 UTC is 14:32 in Riyadh.
     expect(ar.updatedText).toMatch(/٢:٣٢/);
-    expect(toShellNav(data, "en").updatedText).toMatch(/2:32/);
+    expect(toShellNav(data, "en", SAME_DAY).updatedText).toMatch(/2:32/);
+    // The time alone: it is today's.
+    expect(toShellNav(data, "en", SAME_DAY).updatedText).not.toMatch(/Sep/);
     expect(ar.partial).toBe(false);
     expect(toShellNav({ ...data, truncated: ["profiles"] }, "ar").partial).toBe(true);
   });
@@ -37,6 +42,19 @@ describe("toShellNav", () => {
     const nav = toShellNav(leaky, "ar");
     expect(Object.keys(nav).sort()).toEqual(["countText", "counts", "partial", "updatedText"]);
     expect(JSON.stringify(nav)).not.toContain("hind@example.com");
+  });
+
+  it("dates the time once it is no longer today's in Riyadh", () => {
+    // 21:30 UTC on the 30th is already the 1st in Riyadh: yesterday's 2:32
+    // must not read as a time from today.
+    const nextDay = Date.parse("2026-09-30T21:30:00Z");
+    const en = toShellNav(data, "en", nextDay).updatedText;
+    expect(en).toMatch(/Sep 30/);
+    expect(en).toMatch(/2:32/);
+    const ar = toShellNav(data, "ar", nextDay).updatedText;
+    expect(ar).toMatch(/٣٠/);
+    expect(ar).toMatch(/سبتمبر/);
+    expect(ar).toMatch(/٢:٣٢/);
   });
 
   it("survives a malformed summary", () => {

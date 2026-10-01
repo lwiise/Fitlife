@@ -97,33 +97,25 @@ function dataset(): AdminDataset {
   const planProbes: PlanProbeLite[] = [
     {
       id: "p-hind",
-      user_id: U.hind,
       status: "ready",
-      created_at: daysAgo(2),
       updated_at: daysAgo(2),
       ...probes(7),
     },
     {
       id: "p-abeer-new",
-      user_id: U.abeer,
       status: "failed",
-      created_at: daysAgo(1),
       updated_at: daysAgo(1),
       ...probes(0, { m0: null, ws: null }),
     },
     {
       id: "p-abeer-old",
-      user_id: U.abeer,
       status: "ready",
-      created_at: daysAgo(8),
       updated_at: daysAgo(8),
       ...probes(7),
     },
     {
       id: "p-reem",
-      user_id: U.reem,
       status: "ready",
-      created_at: minAgo(6),
       updated_at: minAgo(1),
       ...probes(3, { generating: true }),
     },
@@ -252,7 +244,7 @@ describe("buildFamilyRows", () => {
     expect(reem.flags).toEqual(["past_due", "over_limit"]);
   });
 
-  it("gives a plan outside the probe window an unknown day count", () => {
+  it("takes a ready plan whose probes were not read at its word, its day count unknown", () => {
     expect(byId(rows, U.old).meal).toEqual({
       state: "ready",
       daysReady: null,

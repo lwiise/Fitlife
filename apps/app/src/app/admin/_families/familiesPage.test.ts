@@ -153,6 +153,7 @@ describe("/admin/families — what the page sends the console", () => {
     rows: PackedFamilyRow[];
     texts: Record<string, unknown>;
     nowIso: string;
+    loadedAt: string;
   };
 
   beforeEach(() => {
@@ -160,10 +161,12 @@ describe("/admin/families — what the page sends the console", () => {
   });
 
   it("sends every family, packed — and display strings only for the rows its render shows", async () => {
-    const { rows, texts, nowIso } = await props();
+    const { rows, texts, nowIso, loadedAt } = await props();
     expect(unpackFamilyRows(rows)).toEqual(many);
     expect(Object.keys(texts).sort()).toEqual(many.slice(0, 50).map((row) => row.userId).sort());
     expect(Date.parse(nowIso)).not.toBeNaN();
+    // When the rows were read: an open list refreshes itself once they are old.
+    expect(loadedAt).toBe("2026-09-30T09:00:00.000Z");
   });
 
   it("formats the page the URL names, on the open family's page", async () => {

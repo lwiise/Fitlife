@@ -99,23 +99,29 @@ export function renewalDateAt(
  *    means "will not renew", not "access ends now": a cancellation made in
  *    the LemonSqueezy portal lands as status 'cancelled', and the customer
  *    keeps what she paid for until that date;
- *  - cancel_at_period_end on an active or trialing subscription (our own
- *    cancel route keeps the row 'active' and only sets the flag) → scheduled
- *    until the period end, or the trial's end, and ended once it has passed:
- *    a missed expiry webhook leaves the row 'active' after that date. An
- *    active row is dated by its period end alone (a left-over ends_at is not
- *    its date; see `paidThroughAt`). With no date, an active row is a legacy
- *    row with open-ended access (still scheduled) and a trial has already
- *    run out (ended);
+ *  - 'trialing' → ended once the trial's end has passed (or there is none),
+ *    set to cancel or not: the app stops granting access at that moment
+ *    (isTrialExpired), and nothing ever moves an internal trial to
+ *    'expired' — only the LemonSqueezy webhook writes that status — so a
+ *    trial that ran out without converting reads 'trialing' for good. While
+ *    the trial runs, cancel_at_period_end makes it scheduled;
+ *  - cancel_at_period_end on an active subscription (our own cancel route
+ *    keeps the row 'active' and only sets the flag) → scheduled until the
+ *    period end, and ended once it has passed: a missed expiry webhook leaves
+ *    the row 'active' after that date. An active row is dated by its period
+ *    end alone (a left-over ends_at is not its date; see `paidThroughAt`);
+ *    with none it is a legacy row with open-ended access (still scheduled);
  *  - cancel_at_period_end on a past-due subscription → scheduled: its period
  *    end has passed by definition (the renewal failed), so the flag decides;
  *  - anything else → none.
  *
  * It mirrors isSubscriptionActive (lib/subscription/state.ts): outside
  * past_due, "scheduled" is "the app still grants access, and it will not
- * renew" (familyFlags.test.ts holds the two together). It does not call it:
- * that module is server-only, and while free-access mode is on it answers
- * true for everyone, where the console must show the real billing state.
+ * renew", and on a trial or a cancellation "ended" is "the app no longer
+ * grants access" (familyFlags.test.ts holds the two together). It does not
+ * call it: that module is server-only, and while free-access mode is on it
+ * answers true for everyone, where the console must show the real billing
+ * state.
  *
  * `nowMs` is the caller's fixed "now" (the dataset's read time, the page's
  * load time), so every surface judges one snapshot the same way.
@@ -129,10 +135,13 @@ export function subscriptionCancelState(
       return "ended";
     case "cancelled":
       return runsAt(renewalDateAt(sub), nowMs, false) ? "scheduled" : "ended";
-    case "active":
     case "trialing":
+      // renewalDateAt is the trial's end on a trialing row.
+      if (!runsAt(renewalDateAt(sub), nowMs, false)) return "ended";
+      return sub.cancelAtPeriodEnd ? "scheduled" : "none";
+    case "active":
       if (!sub.cancelAtPeriodEnd) return "none";
-      return runsAt(renewalDateAt(sub), nowMs, sub.status === "active") ? "scheduled" : "ended";
+      return runsAt(renewalDateAt(sub), nowMs, true) ? "scheduled" : "ended";
     case "past_due":
       return sub.cancelAtPeriodEnd ? "scheduled" : "none";
     default:
@@ -247,6 +256,46 @@ export function deriveFamilyFlags(input: FlagInput): FamilyFlag[] {
   return FAMILY_FLAG_ORDER.filter((f) => on[f]);
 }
 
+/** What `familyStateOf` reads about one family. */
+export interface FamilyStateInput {
+  /** The account + billing half of the family's row (subscriberRowOf). */
+  row: CancelStateInput & { overLimit: boolean; onboardingComplete: boolean };
+  /** What the household is served — the list's probe cells, or the page's blob decision. */
+  meal: ServedCellLike;
+  workout: ServedCellLike;
+  /** The newest generation row of each kind (newestGenerationByKind). */
+  newestRun: { meal: { status: string } | null; workout: { status: string } | null };
+  /** The one "now" every time-dependent part is judged at. */
+  nowMs: number;
+}
+
+/**
+ * A family's flags and cancellation state, judged at one instant. ONE
+ * definition for the families list (buildFamilyRows) and the family page's
+ * header (lib/admin/family.ts), which differ only in how they know what the
+ * household is served.
+ */
+export function familyStateOf(input: FamilyStateInput): {
+  flags: FamilyFlag[];
+  cancelState: SubscriptionCancelState;
+} {
+  const { row, meal, workout, newestRun, nowMs } = input;
+  const cancelState = subscriptionCancelState(row, nowMs);
+  return {
+    flags: deriveFamilyFlags({
+      status: row.status,
+      cancelState,
+      overLimit: row.overLimit,
+      onboardingComplete: row.onboardingComplete,
+      newestMealRunStatus: newestRun.meal?.status ?? null,
+      newestWorkoutRunStatus: newestRun.workout?.status ?? null,
+      meal,
+      workout,
+    }),
+    cancelState,
+  };
+}
+
 /**
  * When a kind's failure started, for its attention reason: the newest run's
  * start when that run failed; otherwise, when the flag comes from the served
@@ -279,8 +328,8 @@ export interface ReasonInput {
   mealFailureAt: string | null;
   workoutFailureAt: string | null;
   /** What the household is served now — sets how urgent a failed run is. */
-  meal: MealPlanCell;
-  workout: WorkoutPlanCell;
+  meal: ServedCellLike;
+  workout: ServedCellLike;
 }
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { high: 0, medium: 1, low: 2 };

@@ -96,7 +96,7 @@ describe("matchesSearch", () => {
 
 describe("views", () => {
   const rows = [
-    fam({ status: "trialing" }),
+    fam({ status: "trialing", trialEndsAt: FUTURE }),
     fam({ status: "active", flags: ["failed_meal_run"] }),
     fam({ status: "active", cancelAtPeriodEnd: true, flags: ["cancel_scheduled"] }),
     fam({ status: "past_due", flags: ["past_due"] }),
@@ -170,6 +170,26 @@ describe("views", () => {
     expect(familyInView(trialOver, "cancelling")).toBe(false);
   });
 
+  it("moves a trial that ran out from «trialing» to «ended», set to cancel or not", () => {
+    // Nothing moves an internal trial's status on: only the LemonSqueezy
+    // webhook writes 'expired', so a trial that never converted stays
+    // 'trialing' for good — and the app stopped granting access at its end.
+    const running = fam({ status: "trialing", trialEndsAt: FUTURE });
+    expect(familyInView(running, "trialing")).toBe(true);
+    expect(familyInView(running, "ended")).toBe(false);
+    for (const lapsed of [
+      fam({ status: "trialing", trialEndsAt: PAST }),
+      fam({ status: "trialing", trialEndsAt: PAST, cancelAtPeriodEnd: true }),
+      // No end date at all: the app counts it as over (isTrialExpired).
+      fam({ status: "trialing", trialEndsAt: null }),
+    ]) {
+      expect(lapsed.cancelState).toBe("ended");
+      expect(familyInView(lapsed, "trialing")).toBe(false);
+      expect(familyInView(lapsed, "ended")).toBe(true);
+      expect(familyInView(lapsed, "cancelling")).toBe(false);
+    }
+  });
+
   it("reads the view from the row's cancelState, never the clock", () => {
     // Judged «scheduled» when the dataset was read: the browser's later clock
     // does not move the row, so the rail, the list and the flag agree.
@@ -180,8 +200,8 @@ describe("views", () => {
 
   it("filters by view, tier, status and search together", () => {
     const list = [
-      fam({ displayName: "نورة", tier: "pro", status: "trialing" }),
-      fam({ displayName: "نورة الثانية", tier: "family", status: "trialing" }),
+      fam({ displayName: "نورة", tier: "pro", status: "trialing", trialEndsAt: FUTURE }),
+      fam({ displayName: "نورة الثانية", tier: "family", status: "trialing", trialEndsAt: FUTURE }),
       fam({ displayName: "ريم", tier: "pro", status: "active" }),
     ];
     const base = { view: "all" as const, q: "", tier: "", status: "" };

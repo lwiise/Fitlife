@@ -26,16 +26,29 @@
  *    its probes see the FIRST member only, so "has content" means "the first
  *    member has meals" where the app asks whether ANY member does — a plan
  *    whose first member is empty while others are not (an owner's own
- *    regeneration opens that way) reads as empty here. Every other branch is
- *    the app's, pinned against `resolveStaleness` by mealProjection.test.ts
- *    so the two cannot drift silently.
+ *    regeneration opens that way) reads as empty here, and the list's day
+ *    count is the first member's. Every other branch is the app's, pinned
+ *    against `resolveStaleness` by mealProjection.test.ts so the two cannot
+ *    drift silently.
+ *
+ * Probes are not free. Every `plan_data->…` expression in a select makes
+ * PostgreSQL detoast and decompress the whole blob once, so a row's probes
+ * cost about as much as reading its blob a dozen times over. They are read
+ * only for the rows that can decide what a household is served
+ * (`mealProbeIdsNeeded`): its newest row, and the older candidates only when
+ * that newest run died with nothing to show — never every plan it ever had.
  *
  * getLatestPlan itself is server-only and reads through a cookie-bound client,
  * so it cannot be called from the admin; its fallback loop is mirrored in
  * `pickServedMealPlan` line for line (see the comments that point back at it).
+ * What /plan then DOES with the plan it is served — members removed from the
+ * household hidden, children's figures reconciled — is the app's own code too,
+ * applied by `displayMealPlan`.
  */
 
 import { MealPlanSchema, planHasContent, type MealPlan } from "@fitlife/plan-engine";
+import { applyChildDisplayTargets } from "@/lib/plans/childTargets";
+import { dropRemovedMembers } from "@/lib/plans/removedMembers";
 import { resolveStaleness, STALE_GENERATION_MIN } from "@/lib/plans/staleness";
 import { WORKER_ACK_LIMIT_MS, workerAckedFromPlanData } from "@/lib/plans/generationTiming";
 import type {
@@ -171,14 +184,82 @@ export function probeFromPlanData(planData: unknown): MealProbeFields {
 
 // ── The served plan on probe rows (the families list) ───────────────────────
 
-/** A meal_plans row as the list sees it. `probe` is null outside the probe window. */
+/**
+ * A meal_plans row as the list sees it. `probe` is null when the row's probes
+ * were not read: they could not change what the household is served (see
+ * `mealProbeIdsNeeded`), or the row went away between the two reads.
+ */
 export interface MealRowLite {
   id: string;
   status: string;
   created_at: string;
-  /** Null when the row is outside the probe window. */
+  /** Null when the probes were not read (updated_at is read with them). */
   updated_at: string | null;
   probe: MealProbeFields | null;
+}
+
+/**
+ * One row's probes, read by id after the cheap columns (the two-step read).
+ * `status` and `updated_at` are read again with them, so the decision is made
+ * on one consistent read of the row.
+ */
+export interface MealProbeRow extends MealProbeFields {
+  id: string;
+  status: string;
+  updated_at: string;
+}
+
+/** The select for a `MealProbeRow`. */
+export const MEAL_PROBE_ROW_COLUMNS = `id, status, updated_at, ${MEAL_PROBE_COLUMNS}`;
+
+/**
+ * A row's cheap columns with its probes laid over them, when they were read:
+ * the probe read's status is the newer one.
+ */
+export function withProbe(
+  row: { id: string; status: string; created_at: string },
+  probe: MealProbeRow | null | undefined,
+): MealRowLite {
+  return probe
+    ? {
+        id: row.id,
+        status: probe.status,
+        created_at: row.created_at,
+        updated_at: probe.updated_at,
+        probe,
+      }
+    : { id: row.id, status: row.status, created_at: row.created_at, updated_at: null, probe: null };
+}
+
+/** getLatestPlan's window: the newest non-archived rows (callers pass rows newest first). */
+export function mealServedWindow<R extends { status: string }>(rows: readonly R[]): R[] {
+  return rows.filter((r) => r.status !== "archived").slice(0, MEAL_SERVED_WINDOW);
+}
+
+/**
+ * Which of one household's rows (newest first, probes laid over the ones
+ * read so far) still need their probes before the served plan is known —
+ * getLatestPlan's rule, asked one step at a time:
+ *  1. the newest row, unless it is a raw 'failed' row (that resolves failed
+ *     with or without them);
+ *  2. once the newest is known to have died with nothing to show — at once
+ *     for a raw failure, after its probes otherwise — the older 'ready' rows
+ *     of the window, which the fallback looks through.
+ * Nothing else can change the answer, so nothing else is probed. The list
+ * calls it at most twice per household — every household in one batch each
+ * time — and the second call returns [] for every household it settled.
+ */
+export function mealProbeIdsNeeded(rows: readonly MealRowLite[], nowMs: number): string[] {
+  const window = mealServedWindow(rows);
+  const newest = window[0];
+  if (!newest) return [];
+  if (!newest.probe && newest.status !== "failed") return [newest.id];
+  const resolved = resolveMealRowLite(newest, nowMs);
+  if (resolved.status !== "failed" || resolved.hasContent) return [];
+  return window
+    .slice(1)
+    .filter((r) => r.status === "ready" && !r.probe)
+    .map((r) => r.id);
 }
 
 export type ResolvedStatus = "generating" | "ready" | "failed";
@@ -203,12 +284,12 @@ export function resolveMealRowLite(row: MealRowLite, nowMs: number): LiteResolut
 
   if (status === "failed") return { status: "failed", hasContent: false, inProgress: false };
 
-  // No probe: the row is older than the probe window, or was inserted between
-  // the list's two reads. A 'ready' row is taken at its word. A 'generating'
-  // row brings no content (the app reads it with planData null), so it fails
-  // once it is older than the staleness window — measured from created_at,
-  // the only clock available, which is exact for the old rows (silent for
-  // weeks) and generous for a just-inserted one (it is still starting).
+  // No probe: the probe read did not return the row (it went away, or the
+  // read was not needed for it). A 'ready' row is taken at its word. A
+  // 'generating' row brings no content (the app reads it with planData
+  // null), so it fails once it is older than the staleness window — measured
+  // from created_at, the only clock available, which is exact for an old row
+  // (silent for weeks) and generous for a just-inserted one (still starting).
   if (!probe) {
     if (status === "ready") return { status: "ready", hasContent: true, inProgress: false };
     const createdMs = Date.parse(row.created_at);
@@ -256,7 +337,7 @@ export interface ServedMealLite {
  * newest first; archived rows are skipped here so callers can pass every row.
  */
 export function pickServedMealLite(rows: readonly MealRowLite[], nowMs: number): ServedMealLite {
-  const window = rows.filter((r) => r.status !== "archived").slice(0, MEAL_SERVED_WINDOW);
+  const window = mealServedWindow(rows);
   const newest = window[0];
   if (!newest) return { served: null, resolution: null, masked: false, maskedFailure: null };
 
@@ -264,7 +345,7 @@ export function pickServedMealLite(rows: readonly MealRowLite[], nowMs: number):
   if (resolved.status === "failed" && !resolved.hasContent) {
     for (const prev of window.slice(1)) {
       if (prev.status !== "ready") continue;
-      // No probe = outside the window: a ready row is taken at its word.
+      // No probe (the read did not return it): a ready row is taken at its word.
       const prevHasContent = prev.probe ? daysReadyFromProbe(prev.probe) > 0 : true;
       if (!prevHasContent) continue;
       return {
@@ -294,16 +375,24 @@ export function mealStateOf(r: {
   return "ready";
 }
 
-/** The families list's meal column. */
+/**
+ * The families list's meal column. Its day count is the FIRST beneficiary's
+ * (the probes see no one else) — the household's own count, the days every
+ * member has, needs the blob, and only the family page and panel read one
+ * (`householdDaysReady`).
+ */
 export function mealCellFromRows(rows: readonly MealRowLite[], nowMs: number): MealPlanCell {
   const pick = pickServedMealLite(rows, nowMs);
   if (!pick.served || !pick.resolution) {
     return { state: "none", daysReady: null, daysTotal: DEFAULT_DAYS_TOTAL, masked: false };
   }
   const { resolution, served } = pick;
+  const state = mealStateOf(resolution);
   return {
-    state: mealStateOf(resolution),
-    daysReady: served.probe ? daysReadyFromProbe(served.probe) : null,
+    state,
+    // A failed plan gives the household nothing to cook, whatever its row
+    // holds — and a failed newest row's probes are never read.
+    daysReady: state === "failed" ? 0 : served.probe ? daysReadyFromProbe(served.probe) : null,
     daysTotal: daysTotalFromProbe(served.probe),
     masked: pick.masked,
   };
@@ -418,6 +507,62 @@ export function pickServedMealPlan(
   return { served: newest, masked: false, maskedFailure: null };
 }
 
+// ── What /plan shows of the served plan ─────────────────────────────────────
+
+/** The live roster, as /plan hands it to the display layer. */
+export interface MealDisplayRoster {
+  /** The owner (profiles): the child rule applies to her as to anyone. */
+  mom: { member_type?: string | null; birth_year?: number | null };
+  /** Every family_members row (the housekeeper too — she is never a plan member). */
+  members: ReadonlyArray<{ id: string; member_type?: string | null; birth_year?: number | null }>;
+}
+
+/**
+ * plan_data as /plan displays it (app/plan/page.tsx), with the app's own
+ * read-time functions, in its order:
+ *  - `dropRemovedMembers`: a member removed while a run held the lock stays
+ *    in plan_data until the drain realigns the roster; /plan hides them, so
+ *    they are not counted, shown or required for a complete day here either;
+ *  - `applyChildDisplayTargets`: anyone the LIVE roster makes a child by the
+ *    engine's ONE rule (member_type child, or under 18) is shown as one,
+ *    stamped or not, with their figures the average of their real days
+ *    rather than the skeleton's estimate; the plan's own is_child stamp
+ *    stands for everyone else. A plan from before the stamp, or a member
+ *    re-typed since, reads exactly as /plan reads it.
+ *
+ * A blob the plan schema rejects (a live run's partial snapshot) has no
+ * MealPlan for the child rule to run on; it keeps the engine's stamp, and
+ * only removed members are dropped.
+ */
+export function displayMealPlan(planData: unknown, roster: MealDisplayRoster): unknown {
+  const live = new Set(roster.members.map((m) => m.id));
+  const parsed = MealPlanSchema.safeParse(planData);
+  if (parsed.success) {
+    return applyChildDisplayTargets(dropRemovedMembers(parsed.data, live), {
+      mom: roster.mom,
+      members: [...roster.members],
+    });
+  }
+  const pd = asRecord(planData);
+  if (!pd || !Array.isArray(pd.members)) return planData;
+  const members = pd.members.filter(
+    (m): m is Record<string, unknown> & { member_id: string } =>
+      typeof asRecord(m)?.member_id === "string",
+  );
+  const kept = dropRemovedMembers({ members }, live).members;
+  return kept.length === pd.members.length ? planData : { ...pd, members: kept };
+}
+
+/**
+ * The household's days ready: days EVERY member of the plan has meals on —
+ * a member added mid-week, or one whose days keep failing, holds the count
+ * down to theirs. Null when the week has no members yet (the skeleton phase
+ * of a run), so the caller can say "unknown" rather than «٠».
+ */
+export function householdDaysReady(week: MealWeekProjection | null): number | null {
+  return week && week.members.length > 0 ? week.completeDays.length : null;
+}
+
 // ── Projection ──────────────────────────────────────────────────────────────
 
 export interface ProjectMealWeekOptions {
@@ -433,12 +578,15 @@ export interface ProjectMealWeekOptions {
  * anything malformed is skipped, never thrown. Returns null when there is no
  * plan object at all.
  *
+ * Hand it the plan as /plan displays it (`displayMealPlan`): that is what
+ * drops removed members and stamps who is a child by the app's rule.
+ *
  * - A day exists for a member only when it has at least one meal; the empty
  *   shells the engine writes for days still to come are dropped, so the UI can
  *   mark them missing.
- * - A child (is_child, stamped by the engine) is planned by PORTIONS: the
- *   calorie/protein figures on its header are an approximate average, not a
- *   target the days are held to, so both targets are null here.
+ * - A child (is_child) is planned by PORTIONS: the calorie/protein figures on
+ *   its header are an average of its days, not a target the days are held
+ *   to, so both targets are null here.
  * - A target of 0 (or less) is the engine's PLACEHOLDER, not a target: the
  *   header is written before the skeleton has run, and a skeleton that drops
  *   a member leaves a zero-macro shell. Both read as null ("not computed"),
@@ -542,8 +690,9 @@ export interface MemberPlanTargets {
 
 /**
  * Per-member goal and targets as the plan states them (the household table's
- * goal/calories/macros). Lenient like `projectMealWeek`; children keep the
- * engine's approximate figures here, exactly as the old detail page showed.
+ * goal/calories/macros). Lenient like `projectMealWeek`. Given the plan as
+ * /plan displays it (`displayMealPlan`), a child's figures are /plan's: the
+ * average of their real days, which the table marks as approximate.
  *
  * Placeholders are not targets (see `projectMealWeek`): a calorie target of 0
  * or less is null, and the macros are null unless all three are numbers and

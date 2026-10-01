@@ -4,6 +4,12 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import type { ConsoleNavData, FamilySearchIndex } from "@/lib/admin/console-types";
 import { viewCounts } from "@/lib/admin/familyList";
+import {
+  ADMIN_DATASET_TAG,
+  ADMIN_DATASET_TTL_SECONDS,
+  ADMIN_EMAIL_MAP_TAG,
+  readWithinMaxAge,
+} from "@/lib/admin/freshness";
 import { loadAdminDataset, loadFamilyList } from "@/lib/admin/queries";
 
 /**
@@ -24,43 +30,53 @@ import { loadAdminDataset, loadFamilyList } from "@/lib/admin/queries";
  *
  * Both are cut from the 60s dataset (lib/admin/queries.ts) and tagged like it,
  * so an erased account — deleteSubscriberAccount expires both tags — is gone
- * from the rail counts and from ⌘K on the very next request.
+ * from the rail counts and from ⌘K on the very next request. And like it,
+ * neither is served once it is more than two TTLs old (freshness.ts): past
+ * that the request cuts them from the dataset itself.
  */
 
-const TTL_SECONDS = 60;
-const TAGS = ["admin-dataset", "admin-email-map"];
+const TAGS = [ADMIN_DATASET_TAG, ADMIN_EMAIL_MAP_TAG];
 
-const cachedNavSummary = unstable_cache(
-  async (): Promise<ConsoleNavData> => {
-    const { rows, loadedAt, truncated } = await loadFamilyList();
-    return { counts: viewCounts(rows), loadedAt, truncated };
-  },
-  ["admin-console-nav", "v1"],
-  { revalidate: TTL_SECONDS, tags: TAGS },
-);
+async function navSummary(): Promise<ConsoleNavData> {
+  const { rows, loadedAt, truncated } = await loadFamilyList();
+  return { counts: viewCounts(rows), loadedAt, truncated };
+}
+
+// v2: a trial that ran out counts as «ended», not «trialing».
+const cachedNavSummary = unstable_cache(navSummary, ["admin-console-nav", "v2"], {
+  revalidate: ADMIN_DATASET_TTL_SECONDS,
+  tags: TAGS,
+});
 
 /** Rail counts for the console frame (no family is named in it). */
-export const loadConsoleNavData = cache((): Promise<ConsoleNavData> => cachedNavSummary());
-
-const cachedSearchIndex = unstable_cache(
-  async (): Promise<FamilySearchIndex> => {
-    // Names and emails only: no row is built, no flag derived.
-    const ds = await loadAdminDataset();
-    return {
-      families: ds.profiles.map((p) => ({
-        id: p.id,
-        name: p.display_name,
-        email: ds.emailByUser.get(p.id) ?? null,
-      })),
-      loadedAt: ds.loadedAt,
-    };
-  },
-  ["admin-family-search-index", "v1"],
-  { revalidate: TTL_SECONDS, tags: TAGS },
+export const loadConsoleNavData = cache(
+  (): Promise<ConsoleNavData> =>
+    readWithinMaxAge(cachedNavSummary, navSummary, ADMIN_DATASET_TTL_SECONDS),
 );
+
+async function searchIndex(): Promise<FamilySearchIndex> {
+  // Names and emails only: no row is built, no flag derived.
+  const ds = await loadAdminDataset();
+  return {
+    families: ds.profiles.map((p) => ({
+      id: p.id,
+      name: p.display_name,
+      email: ds.emailByUser.get(p.id) ?? null,
+    })),
+    loadedAt: ds.loadedAt,
+  };
+}
+
+const cachedSearchIndex = unstable_cache(searchIndex, ["admin-family-search-index", "v1"], {
+  revalidate: ADMIN_DATASET_TTL_SECONDS,
+  tags: TAGS,
+});
 
 /**
  * Every family for the command palette. Subscriber data: only the audited
  * GET /api/admin/families may hand it to a browser.
  */
-export const loadFamilySearchIndex = cache((): Promise<FamilySearchIndex> => cachedSearchIndex());
+export const loadFamilySearchIndex = cache(
+  (): Promise<FamilySearchIndex> =>
+    readWithinMaxAge(cachedSearchIndex, searchIndex, ADMIN_DATASET_TTL_SECONDS),
+);

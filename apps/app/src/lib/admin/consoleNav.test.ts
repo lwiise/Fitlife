@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The loaders are thin unstable_cache wrappers over the 60s dataset: run the
-// cached functions directly, and feed them a fixed dataset and list.
-vi.mock("next/cache", () => ({ unstable_cache: (fn: () => unknown) => fn }));
+// The loaders are thin unstable_cache wrappers over the 60s dataset: a hit
+// is handed back however old it is (stale-while-revalidate), a miss runs the
+// function. Fed a fixed dataset and list.
+const cacheEntries = new Map<string, unknown>();
+vi.mock("next/cache", () => ({
+  unstable_cache:
+    (fn: () => Promise<unknown>, keyParts: string[]) =>
+    async () => {
+      const key = keyParts.join("|");
+      if (!cacheEntries.has(key)) cacheEntries.set(key, await fn());
+      return cacheEntries.get(key);
+    },
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 const loadAdminDataset = vi.fn();
@@ -15,7 +25,8 @@ vi.mock("@/lib/admin/queries", () => ({
 import type { FamilyRow } from "./console-types";
 import { loadConsoleNavData, loadFamilySearchIndex } from "./consoleNav";
 
-const LOADED = "2026-09-30T09:00:00.000Z";
+/** A snapshot read just now: the cached entries below may be served as they are. */
+const LOADED = new Date().toISOString();
 
 const row = (userId: string, email: string, status: string | null, flags: FamilyRow["flags"] = []) =>
   ({
@@ -28,6 +39,9 @@ const row = (userId: string, email: string, status: string | null, flags: Family
   }) as unknown as FamilyRow;
 
 beforeEach(() => {
+  cacheEntries.clear();
+  loadFamilyList.mockClear();
+  loadAdminDataset.mockClear();
   loadFamilyList.mockResolvedValue({
     rows: [
       row("u1", "one@example.com", "active"),
@@ -71,5 +85,31 @@ describe("loadFamilySearchIndex (the audited ⌘K route only)", () => {
       ],
       loadedAt: LOADED,
     });
+  });
+});
+
+describe("how old the frame's data may be", () => {
+  const OLD = new Date(Date.now() - 9 * 3_600_000).toISOString();
+
+  it("serves the cached rail counts while they are recent", async () => {
+    cacheEntries.set("admin-console-nav|v2", {
+      counts: { all: 99 },
+      loadedAt: new Date(Date.now() - 90_000).toISOString(),
+      truncated: [],
+    });
+    expect((await loadConsoleNavData()).counts.all).toBe(99);
+    expect(loadFamilyList).not.toHaveBeenCalled();
+  });
+
+  it("cuts the rail counts from the dataset rather than serve them hours old", async () => {
+    cacheEntries.set("admin-console-nav|v2", { counts: { all: 99 }, loadedAt: OLD, truncated: [] });
+    const nav = await loadConsoleNavData();
+    expect(nav.counts.all).toBe(3);
+    expect(nav.loadedAt).toBe(LOADED);
+  });
+
+  it("does the same for the ⌘K index", async () => {
+    cacheEntries.set("admin-family-search-index|v1", { families: [], loadedAt: OLD });
+    expect((await loadFamilySearchIndex()).families).toHaveLength(2);
   });
 });

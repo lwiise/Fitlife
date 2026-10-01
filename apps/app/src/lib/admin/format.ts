@@ -13,8 +13,33 @@ export type Currency = "sar" | "usd";
 
 const TAG: Record<AdminLocale, string> = { ar: "ar-SA", en: "en-US" };
 
+/**
+ * The Intl formatters, built once per (kind, locale, options) and reused:
+ * building one costs ~20-30µs, formatting with one well under 1µs, and these
+ * helpers run several times per row of every list render (the families list
+ * calls fmtNumber 7-8 times per family). Formatters are immutable, so sharing
+ * them is safe; the keys come from a fixed set of call shapes, so the map
+ * stays small.
+ */
+const formatters = new Map<string, unknown>();
+
+function memo<F>(key: string, make: () => F): F {
+  let made = formatters.get(key) as F | undefined;
+  if (made === undefined) {
+    made = make();
+    formatters.set(key, made);
+  }
+  return made;
+}
+
+const numberFormat = (key: string, locale: AdminLocale, options?: Intl.NumberFormatOptions) =>
+  memo(`n|${key}|${locale}`, () => new Intl.NumberFormat(TAG[locale], options));
+
+const dateFormat = (key: string, locale: AdminLocale, options: Intl.DateTimeFormatOptions) =>
+  memo(`d|${key}|${locale}`, () => new Intl.DateTimeFormat(TAG[locale], options));
+
 export function fmtNumber(n: number, locale: AdminLocale): string {
-  return new Intl.NumberFormat(TAG[locale]).format(n);
+  return numberFormat("plain", locale).format(n);
 }
 
 export function fmtUsd(
@@ -22,7 +47,7 @@ export function fmtUsd(
   locale: AdminLocale,
   maxFractionDigits = 2,
 ): string {
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat(`usd${maxFractionDigits}`, locale, {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: maxFractionDigits,
@@ -35,7 +60,7 @@ export function fmtSar(
   locale: AdminLocale,
   maxFractionDigits = 0,
 ): string {
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat(`sar${maxFractionDigits}`, locale, {
     style: "currency",
     currency: "SAR",
     maximumFractionDigits: maxFractionDigits,
@@ -45,7 +70,7 @@ export function fmtSar(
 
 /** Compact SAR (e.g. "1.2K ر.س") for tight tiles and chart axes. */
 export function fmtSarCompact(n: number, locale: AdminLocale): string {
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat("sarCompact", locale, {
     style: "currency",
     currency: "SAR",
     notation: "compact",
@@ -56,7 +81,7 @@ export function fmtSarCompact(n: number, locale: AdminLocale): string {
 /** Compact USD (e.g. "$1.2K") for tight tiles and chart axes — the USD twin of
  * `fmtSarCompact`. */
 export function fmtUsdCompact(n: number, locale: AdminLocale): string {
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat("usdCompact", locale, {
     style: "currency",
     currency: "USD",
     notation: "compact",
@@ -67,7 +92,7 @@ export function fmtUsdCompact(n: number, locale: AdminLocale): string {
 /** Percent with no fraction digits (cohort cells, gauges). "—" if null. */
 export function fmtPctInt(n: number | null | undefined, locale: AdminLocale): string {
   if (n == null) return "—";
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat("pct0", locale, {
     style: "percent",
     maximumFractionDigits: 0,
   }).format(n / 100);
@@ -75,7 +100,7 @@ export function fmtPctInt(n: number | null | undefined, locale: AdminLocale): st
 
 export function fmtPct(n: number | null | undefined, locale: AdminLocale): string {
   if (n == null) return "—";
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat("pct1", locale, {
     style: "percent",
     maximumFractionDigits: 1,
   }).format(n / 100);
@@ -86,7 +111,7 @@ export function fmtSignedPct(
   locale: AdminLocale,
 ): string {
   if (n == null) return "—";
-  return new Intl.NumberFormat(TAG[locale], {
+  return numberFormat("pctSigned", locale, {
     style: "percent",
     maximumFractionDigits: 1,
     signDisplay: "exceptZero",
@@ -100,7 +125,7 @@ export function fmtSignedPct(
 // buckets AND labels together — deliberate product follow-up, not done here.
 export function fmtMonth(iso: string | null | undefined, locale: AdminLocale): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat(TAG[locale], {
+  return dateFormat("month", locale, {
     month: "short",
     year: "2-digit",
     timeZone: "UTC",
@@ -109,7 +134,7 @@ export function fmtMonth(iso: string | null | undefined, locale: AdminLocale): s
 
 export function fmtDate(iso: string | null | undefined, locale: AdminLocale): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat(TAG[locale], {
+  return dateFormat("date", locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -133,9 +158,9 @@ export function fmtBucketLabel(
       : granularity === "month"
         ? { month: "short" }
         : { day: "numeric", month: "short" };
-  return new Intl.DateTimeFormat(TAG[locale], { ...opts, timeZone: "UTC" }).format(
-    new Date(iso),
-  );
+  // Day and week buckets share one format.
+  const key = granularity === "week" ? "bucket-day" : `bucket-${granularity}`;
+  return dateFormat(key, locale, { ...opts, timeZone: "UTC" }).format(new Date(iso));
 }
 
 /**
@@ -211,7 +236,10 @@ export function fmtRelative(
 ): string {
   if (!iso) return "—";
   const diff = new Date(iso).getTime() - now.getTime();
-  const rtf = new Intl.RelativeTimeFormat(TAG[locale], { numeric: "auto" });
+  const rtf = memo(
+    `r|auto|${locale}`,
+    () => new Intl.RelativeTimeFormat(TAG[locale], { numeric: "auto" }),
+  );
   for (const [unit, ms] of REL_DIVISORS) {
     if (Math.abs(diff) >= ms || unit === "minute") {
       return rtf.format(Math.round(diff / ms), unit);

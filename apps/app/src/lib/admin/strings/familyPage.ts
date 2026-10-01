@@ -67,6 +67,20 @@ export const FAMILY_PAGE_STRINGS = {
     ar: "تعذّرت قراءة البريد الإلكتروني لهذا الحساب، لذلك لا يمكن تأكيد الحذف الآن.",
     en: "This account’s email couldn’t be read, so deletion can’t be confirmed right now.",
   },
+  // Why an account action did not run (_family/model.ts, accountRefusalText);
+  // each says plainly that nothing was changed.
+  fp_refused_admin_target: {
+    ar: "هذا حساب مشرف، وحسابات المشرفين لا تُعطَّل ولا تُحذف من لوحة التحكم. لم يتغيّر شيء.",
+    en: "This is an admin account. Admin accounts can’t be deactivated or deleted from the console. Nothing was changed.",
+  },
+  fp_refused_admin_check: {
+    ar: "تعذّر التحقق من أن هذا الحساب ليس حساب مشرف، فأُوقف الإجراء ولم يتغيّر شيء. يمكن المحاولة مرة أخرى بعد قليل.",
+    en: "Couldn’t confirm that this isn’t an admin account, so the action was stopped and nothing was changed. Try again in a moment.",
+  },
+  fp_refused_email_mismatch: {
+    ar: "البريد المكتوب لا يطابق بريد هذا الحساب كما هو مسجَّل الآن، فلم يُحذف شيء. إن كان البريد قد تغيّر فستُظهره الصفحة بعد إعادة تحميلها.",
+    en: "The email typed doesn’t match this account’s current email, so nothing was deleted. If the email has changed, reloading the page shows it.",
+  },
 
   // ── Plan and program views ──
   fp_family_page: { ar: "صفحة العائلة", en: "Family page" },

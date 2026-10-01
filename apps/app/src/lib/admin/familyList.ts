@@ -108,7 +108,9 @@ export function matchesSearch(
  * Is a row in a saved view? «cancelling» and «ended» read the row's
  * `cancelState` (subscriptionCancelState, judged with its flags when the
  * dataset was read): a subscription cancelled in the LemonSqueezy portal is
- * still «cancelling» while it is paid through, and only then «ended».
+ * still «cancelling» while it is paid through, and only then «ended». A
+ * trial that ran out is «ended», not «trialing»: nothing moves an internal
+ * trial's status on, so the status alone would keep it a trial for good.
  */
 export function familyInView(row: FamilyRow, view: FamilyView): boolean {
   switch (view) {
@@ -117,6 +119,7 @@ export function familyInView(row: FamilyRow, view: FamilyView): boolean {
     case "attention":
       return row.flags.length > 0;
     case "trialing":
+      return row.status === "trialing" && row.cancelState !== "ended";
     case "active":
     case "past_due":
       return row.status === view;

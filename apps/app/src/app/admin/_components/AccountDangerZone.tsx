@@ -16,11 +16,17 @@ import { t } from "@/lib/admin/i18n";
 import { deleteSubscriberAccount, setSubscriberActive } from "@/app/admin/actions";
 import { Btn, IconBtn } from "@/app/admin/_ui/Button";
 import { SecTitle } from "@/app/admin/_ui/Card";
+import { Note } from "@/app/admin/_ui/Note";
 import { Pill } from "@/app/admin/_ui/Pill";
 import { joinSep } from "@/app/admin/_ui/Sep";
 import { Ltr } from "@/app/admin/_ui/Text";
 import { trapTab, useEscapedKeys } from "@/app/admin/_ui/modalFocus";
-import { emailMatches, familyName } from "@/app/admin/_family/model";
+import {
+  accountRefusalText,
+  emailMatches,
+  familyName,
+  type AccountRefusal,
+} from "@/app/admin/_family/model";
 
 /**
  * The family page's account actions (the prototype's `dangerZone`), any admin:
@@ -31,9 +37,11 @@ import { emailMatches, familyName } from "@/app/admin/_family/model";
  *    (the server action's own comparison), and the server checks it again.
  *
  * Both submit to the server actions in ../actions.ts, which re-gate
- * (requireAdmin), refuse to touch an admin account, and write the audit row
- * BEFORE acting; they return to this tab (`?tab=account`), or to the families
- * list once an account is deleted.
+ * (requireAdmin), refuse to touch an admin account (or one they could not
+ * check), and write the audit row BEFORE acting; they return to this tab
+ * (`?tab=account`), or to the families list once an account is deleted. A
+ * refusal is always stated: deactivation's on this tab (`?error=`, the page's
+ * note), deletion's inside its still-open dialog.
  *
  * No motion library: the dialog appears in place, and the only transitions
  * are the buttons' own CSS ones (off under prefers-reduced-motion).
@@ -180,12 +188,16 @@ function DeleteRow({
   );
 }
 
-/** The delete action as a form action whose pending state the dialog can read. */
-async function deleteAction(_previous: null, formData: FormData): Promise<null> {
-  // Redirects on success (to the families list) and on a refused check (back
-  // to this tab); Next turns either into a navigation.
-  await deleteSubscriberAccount(formData);
-  return null;
+/**
+ * The delete action as a form action whose pending state and answer the
+ * dialog can read. A completed erasure redirects (to the families list), so
+ * it never returns here; a refused one returns why, and the dialog says it.
+ */
+async function deleteAction(
+  _previous: AccountRefusal | null,
+  formData: FormData,
+): Promise<AccountRefusal | null> {
+  return deleteSubscriberAccount(formData);
 }
 
 /**
@@ -195,7 +207,9 @@ async function deleteAction(_previous: null, formData: FormData): Promise<null> 
  * focus returns to «حذف الحساب»; the page behind cannot scroll (admin.css
  * locks it while any console scrim is open). Once the deletion is running
  * nothing closes it, so the operator never loses sight of an erasure in
- * flight.
+ * flight; and when the server refuses it — the email it holds differs, the
+ * account is an admin's, a check or the audit row failed — the dialog stays
+ * open and says why (an alert), and that nothing was deleted.
  */
 function DeleteDialog({
   userId,
@@ -217,7 +231,8 @@ function DeleteDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [typed, setTyped] = useState("");
-  const [, submit, pending] = useActionState(deleteAction, null);
+  // The last attempt's refusal, if it was refused; hidden while a retry runs.
+  const [refusal, submit, pending] = useActionState(deleteAction, null);
   const matches = emailMatches(typed, email);
 
   function close() {
@@ -301,6 +316,11 @@ function DeleteDialog({
                 onChange={(event) => setTyped(event.target.value)}
               />
             </div>
+            {refusal && !pending ? (
+              <Note tone="crit" role="alert">
+                {accountRefusalText(refusal, locale)}
+              </Note>
+            ) : null}
           </div>
           <div className="ad-modal-f">
             <Btn variant="ghost" onClick={close} disabled={pending}>

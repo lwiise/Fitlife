@@ -102,6 +102,7 @@ export default async function FamiliesPage({
       rows={packFamilyRows(list.rows)}
       texts={texts}
       nowIso={nowIso}
+      loadedAt={list.loadedAt}
       initialQuery={query}
       initialPanel={panel}
       locale={locale}

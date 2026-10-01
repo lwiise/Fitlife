@@ -96,7 +96,13 @@ export type PlanCellState = "none" | "generating" | "ready" | "failed";
 /** The meal-plan column: the plan the household is actually served. */
 export interface MealPlanCell {
   state: PlanCellState;
-  /** Days of the week that have meals for the first beneficiary; null = unknown. */
+  /**
+   * Days of the week with meals; 0 for a failed plan; null = unknown. In the
+   * families list it is the FIRST beneficiary's count — the list reads probes,
+   * which see no one else (mealCellFromRows). A cell built from a family's
+   * meal section (the panel) carries the household's: the days every member
+   * has (MealPlanListItem.daysReady of the served plan).
+   */
   daysReady: number | null;
   /** Target day count (plan_data.days_total, default 7). */
   daysTotal: number;
@@ -261,7 +267,11 @@ export interface FamilyHeaderData {
   hasHousekeeper: boolean;
   tierMaxPeople: number | null;
   overLimit: boolean;
-  /** List flags for this family (same rules as FamilyRow.flags). */
+  /**
+   * List flags for this family (FamilyRow.flags' rules), with what the
+   * household is served decided on the plan's blob — as the Meal tab shows
+   * it — where the list approximates that from probes.
+   */
   flags: FamilyFlag[];
   /** The current subscription's cancellation state, judged when the header was loaded (as FamilyRow.cancelState). */
   cancelState: SubscriptionCancelState;
@@ -281,7 +291,12 @@ export interface MealPlanListItem {
   status: string;
   createdAt: string;
   generatedAt: string | null;
-  /** Days that exist for the first beneficiary; null = unknown. */
+  /**
+   * The served plan's: the household's days ready, the days every member has
+   * (read off its blob, as its week is). Every other row's: the FIRST
+   * beneficiary's days with meals, from its probes — an approximation — and
+   * null (unknown) past the newest rows the page probes.
+   */
   daysReady: number | null;
   daysTotal: number;
   aiInputTokens: number | null;

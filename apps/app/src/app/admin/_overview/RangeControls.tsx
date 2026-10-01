@@ -18,6 +18,7 @@ import { Calendar, Columns3 } from "lucide-react";
 import { clsx } from "clsx";
 import { METRIC_POOL, type Granularity, type MetricKey, type RangePreset } from "@/lib/admin/timeseries";
 import type { OvHead, RangeLabels } from "./model";
+import { ownLink } from "./navWatch";
 import { useOverviewNav } from "./OverviewScope";
 import {
   METRIC_CAP,
@@ -115,7 +116,9 @@ function useDismiss(
  * data, so it is a client navigation inside the overview's transition — the
  * page stays on screen, dimmed and aria-busy, while the choice shows at once.
  * The presets and intervals are real links, so they also work before
- * hydration and open in a new tab with a modified click.
+ * hydration and open in a new tab with a modified click; they carry
+ * `ownLink`, so the scope tells them from a navigation started elsewhere
+ * (navWatch.ts).
  *
  * Every target is built from the scope's `query`, which already includes a
  * change still loading: «٩٠ يوم» then «شهر» asks for 90 days by month, and
@@ -166,6 +169,7 @@ export function RangeControls({ head, labels }: { head: OvHead; labels: RangeLab
           return (
             <Link
               key={p}
+              {...ownLink}
               href={href}
               prefetch={false}
               scroll={false}
@@ -205,6 +209,7 @@ export function RangeControls({ head, labels }: { head: OvHead; labels: RangeLab
           return (
             <Link
               key={g}
+              {...ownLink}
               href={href}
               prefetch={false}
               scroll={false}

@@ -149,7 +149,7 @@ const STRINGS = {
   // ── Account actions (danger zone) ──
   danger_zone: { ar: "منطقة الخطر", en: "Danger zone" },
   audit_write_failed: {
-    ar: "تعذّر تسجيل العملية في سجل التدقيق فتم إيقاف الإجراء. حاولي مرة أخرى.",
+    ar: "تعذّر تسجيل العملية في سجل التدقيق، فأُوقف الإجراء. يمكن المحاولة مرة أخرى.",
     en: "Couldn't record the audit entry, so the action was aborted. Try again.",
   },
   account_active: { ar: "الحساب نشط", en: "Account active" },
@@ -180,7 +180,7 @@ const STRINGS = {
     en: "The current subscription (cancelled, no refund)",
   },
   delete_confirm_prompt: {
-    ar: "للتأكيد، اكتب بريد المشترك الإلكتروني:",
+    ar: "لتأكيد الحذف يلزم إدخال بريد المشترك الإلكتروني:",
     en: "To confirm, type the subscriber's email:",
   },
   delete_confirm_btn: { ar: "حذف نهائي", en: "Delete permanently" },

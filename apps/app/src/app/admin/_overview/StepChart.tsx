@@ -15,6 +15,7 @@ import type { BoardLabels, OvChartMeta, OvMetric } from "./model";
 import {
   GEO,
   areaPath,
+  carryIndex,
   indexAt,
   pct,
   physFrac,
@@ -74,6 +75,18 @@ export function StepChart({
   const { cur, pri, step, yMax, unit } = metric;
   const n = cur.length;
   const last = n - 1;
+
+  // A range or interval change keeps this chart mounted (it is keyed by the
+  // metric) and can hand it a series of another length while the pointer
+  // rests on it or a keyboard reading is up. Both indexes move to the same
+  // place in time, so the crosshair and the tooltip read the new series where
+  // they stand instead of a point it may not have.
+  const [seriesLength, setSeriesLength] = useState(n);
+  if (seriesLength !== n) {
+    setSeriesLength(n);
+    setActive(carryIndex(active, seriesLength, n));
+    setTipIndex(carryIndex(tipIndex, seriesLength, n));
+  }
 
   const paths = useMemo(
     () => ({

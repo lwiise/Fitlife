@@ -1,5 +1,6 @@
 import { FAMILY_VIEWS, type ConsoleNavData, type FamilyView } from "@/lib/admin/console-types";
 import type { AdminLocale } from "@/lib/admin/format";
+import { fmtDateTime } from "../_blocks/helpers";
 
 /**
  * What the frame's client pieces receive on every console page: the rail
@@ -15,7 +16,11 @@ export interface ShellNav {
   counts: Record<FamilyView, number>;
   /** Counts formatted for the UI language. */
   countText: Record<FamilyView, string>;
-  /** loadedAt as a Riyadh wall-clock time, e.g. «٢:٣٢ م». */
+  /**
+   * loadedAt in Riyadh: the time alone when it is today's, e.g. «٢:٣٢ م»;
+   * with its day otherwise, e.g. «٣٠ سبتمبر، ٨:٥٨ م» — a bare time from an
+   * earlier day would read as minutes old.
+   */
   updatedText: string;
   /** Some table hit the load ceiling — counts may undercount. */
   partial: boolean;
@@ -23,7 +28,21 @@ export interface ShellNav {
 
 const TAG: Record<AdminLocale, string> = { ar: "ar-SA", en: "en-US" };
 
-export function toShellNav(data: ConsoleNavData, locale: AdminLocale): ShellNav {
+/** A timestamp's calendar day in Riyadh (YYYY-MM-DD). */
+const riyadhDay = (ms: number) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ms));
+
+/** `nowMs`: the render's "now" (the layout's request time). */
+export function toShellNav(
+  data: ConsoleNavData,
+  locale: AdminLocale,
+  nowMs: number = Date.now(),
+): ShellNav {
   const nf = new Intl.NumberFormat(TAG[locale]);
   const counts = {} as Record<FamilyView, number>;
   const countText = {} as Record<FamilyView, string>;
@@ -35,11 +54,13 @@ export function toShellNav(data: ConsoleNavData, locale: AdminLocale): ShellNav 
   const loaded = new Date(data.loadedAt);
   const updatedText = Number.isNaN(loaded.getTime())
     ? "—"
-    : new Intl.DateTimeFormat(TAG[locale], {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: "Asia/Riyadh",
-      }).format(loaded);
+    : riyadhDay(loaded.getTime()) === riyadhDay(nowMs)
+      ? new Intl.DateTimeFormat(TAG[locale], {
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: "Asia/Riyadh",
+        }).format(loaded)
+      : fmtDateTime(data.loadedAt, locale);
   return {
     counts,
     countText,

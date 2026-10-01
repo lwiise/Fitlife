@@ -8,7 +8,8 @@ import "@/app/admin/_family/family.css";
  * program): Next shows this segment's loading.tsx for all four, so the shape
  * follows the path being opened (SubscriberRouteSkeleton). The family page's
  * shape is its head, the tab bar and a tab body. A tab switch does not show
- * it — the page stays on screen while the next tab's body streams in.
+ * it — the head (the (family) layout) stays as it is, and only the page under
+ * it re-renders, streaming the next tab's body in behind that tab's skeleton.
  *
  * Prefetching never renders the pages behind it, whose render writes the PDPL
  * audit row: without PPR (next.config enables neither PPR nor

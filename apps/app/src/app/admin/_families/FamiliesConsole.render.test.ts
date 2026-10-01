@@ -70,6 +70,7 @@ function render(rows: FamilyRow[], url = "", sent: readonly FamilyRow[] = rows) 
       rows: packFamilyRows(rows),
       texts,
       nowIso: NOW_ISO,
+      loadedAt: NOW_ISO,
       initialQuery: parseFamilyListQuery(search.current),
       initialPanel: parseFamilyPanelState(search.current),
       locale: "ar",

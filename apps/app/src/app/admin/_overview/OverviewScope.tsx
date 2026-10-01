@@ -11,8 +11,10 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { MetricKey } from "@/lib/admin/timeseries";
+import { NAVIGATE_EVENT } from "../_shell/events";
+import { OWN_LINK_ATTR, awayAfter, mayWriteUrl, type NavSignal, type SeenClick } from "./navWatch";
 import { metricFromParam, metricParam, paramOf, pickSettled, queryOf, withPickedMetric } from "./urls";
 
 interface OverviewNav {
@@ -47,6 +49,35 @@ export function useOverviewNav(): OverviewNav {
   return nav;
 }
 
+/** A DOM click read for navWatch. The path is the one the event was
+ * dispatched along, so it still holds when a handler has since removed the
+ * element clicked (the phone drawer closes as its link navigates). */
+function seenClick(event: MouseEvent): SeenClick {
+  const anchor =
+    event
+      .composedPath()
+      .find(
+        (node): node is HTMLAnchorElement =>
+          node instanceof HTMLAnchorElement && node.hasAttribute("href"),
+      ) ?? null;
+  return {
+    defaultPrevented: event.defaultPrevented,
+    button: event.button,
+    altKey: event.altKey,
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
+    shiftKey: event.shiftKey,
+    link: anchor
+      ? {
+          href: anchor.href,
+          target: anchor.target,
+          download: anchor.hasAttribute("download"),
+          own: anchor.hasAttribute(OWN_LINK_ATTR),
+        }
+      : null,
+  };
+}
+
 /**
  * The overview's content column and its URL state. `head` (title + range
  * controls) stays live; `children` — tiles, chart, cost, engagement — dim
@@ -55,11 +86,13 @@ export function useOverviewNav(): OverviewNav {
  * such as the chart's table toggle survives a range change.
  *
  * The metric on the chart is client state that the URL follows through
- * history.replaceState — never while a navigation is loading. Next.js routes
- * replaceState through its router as a history restore, and a restore
- * DISCARDS a navigation in flight: the range just picked would silently
- * revert. So a tile picked mid-load shows at once and reaches the URL when
- * the new page lands.
+ * history.replaceState — never while ANY navigation is loading. Next.js
+ * routes replaceState through its router as a history restore, and a
+ * restore DISCARDS a navigation in flight: the range just picked would
+ * silently revert, and the page asked for from the rail or ⌘K would never
+ * arrive. So a tile picked mid-load shows at once and reaches the URL when
+ * the navigation is over — the overview's own (its transition) or one
+ * started elsewhere (navWatch.ts).
  */
 export function OverviewScope({
   head,
@@ -75,6 +108,7 @@ export function OverviewScope({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname() ?? "/admin";
   const committed = useSearchParams()?.toString() ?? "";
   const [pending, startTransition] = useTransition();
   // A navigation's query from the moment it starts; a later one stacks on
@@ -82,15 +116,28 @@ export function OverviewScope({
   const [loading, setLoading] = useOptimistic(committed);
   // A tile picked while the URL still names another metric.
   const [picked, setPicked] = useState<MetricKey | null>(null);
+  // A navigation the overview did not start is on its way (navWatch.ts).
+  const [away, setAway] = useState(false);
+  // Only a new server render of the page replaces `children` — a URL write
+  // and client state keep the same elements — so a new value means whatever
+  // was on its way has landed here, or been replaced by one that did.
+  const [served, setServed] = useState<ReactNode>(children);
+  if (served !== children) {
+    setServed(children);
+    setAway(awayAfter(away, { kind: "render" }));
+  }
 
   if (picked !== null && pickSettled(picked, loading, metrics)) setPicked(null);
   const metric = picked ?? metricFromParam(paramOf(loading, "metric"));
   const query = withPickedMetric(loading, picked);
 
-  // The URL follows the tile, so a refresh or a shared link keeps the metric.
-  // Nothing is loading here, so `picked` differs from the URL's metric.
+  // The URL follows the tile, so a refresh or a shared link keeps the metric
+  // — once nothing is loading, here or elsewhere; the pick waits until then.
+  // `picked` differs from the URL's metric here (it clears once they agree).
   useEffect(() => {
-    if (pending || picked === null) return;
+    if (picked === null) return;
+    const documentPath = window.location.pathname;
+    if (!mayWriteUrl({ pending, away, documentPath, pagePath: pathname })) return;
     try {
       const url = new URL(window.location.href);
       const value = metricParam(picked);
@@ -100,7 +147,27 @@ export function OverviewScope({
     } catch {
       // A blocked history API leaves the URL behind; the chart still follows.
     }
-  }, [pending, picked]);
+  }, [pending, away, picked, pathname]);
+
+  // Navigations started elsewhere — a rail or top-bar link, the phone
+  // drawer, ⌘K — and the back/forward that ends one (navWatch.ts).
+  useEffect(() => {
+    const observe = (signal: NavSignal) => setAway((was) => awayAfter(was, signal));
+    // Bubble phase: by the time a click reaches the window, a <Link> has
+    // taken it and its navigation has started.
+    const onClick = (event: MouseEvent) =>
+      observe({ kind: "click", click: seenClick(event), origin: window.location.origin });
+    const onRequest = () => observe({ kind: "request" });
+    const onHistory = () => observe({ kind: "history" });
+    window.addEventListener("click", onClick);
+    window.addEventListener(NAVIGATE_EVENT, onRequest);
+    window.addEventListener("popstate", onHistory);
+    return () => {
+      window.removeEventListener("click", onClick);
+      window.removeEventListener(NAVIGATE_EVENT, onRequest);
+      window.removeEventListener("popstate", onHistory);
+    };
+  }, []);
 
   const selectMetric = useCallback((key: MetricKey) => setPicked(key), []);
 

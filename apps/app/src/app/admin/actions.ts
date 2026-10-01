@@ -6,39 +6,46 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
 import { adminDb } from "@/lib/admin/db";
 import { logAdminAccessRequired } from "@/lib/admin/audit";
+import { isUuid } from "@/lib/admin/familyList";
+import { ADMIN_HOUSEHOLD_CACHE_TAGS } from "@/lib/admin/freshness";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { eraseUserAccount } from "@/lib/account/erase";
 import { ADMIN_CURRENCY_COOKIE, ADMIN_LOCALE_COOKIE } from "@/lib/admin/locale";
+import { accountTabHref, emailMatches, type AccountRefusal } from "./_family/model";
 import { toggleReturn } from "./_shell/toggleReturn";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Every cached admin read that can hold a household's data: the tables the
+ * families list, the rail counts and the ⌘K index are built from, and the
+ * Overview's engagement counters (lib/admin/freshness.ts). An erased account
+ * must drop out of them on the very next request — the families list the
+ * deletion lands on — not a minute (dataset, engagement) or five (emails) later.
+ */
+const ADMIN_LIST_CACHE_TAGS = ADMIN_HOUSEHOLD_CACHE_TAGS;
 
 /**
- * Where the account tools return: the family page's account tab, the tab they
- * are used from. Only ever built from an id that has passed UUID_RE.
+ * Whether the account tools must leave this account alone, and why: they
+ * never touch an admin's account (one admin locking out another, or
+ * themselves). Null when they may act.
+ *
+ * Fails CLOSED. A lookup that errored proves nothing about the account, so
+ * the action is refused — and the operator is told the check failed, never
+ * that the account is an admin's, since that is not known either.
  */
-function accountTab(userId: string, error?: "audit_failed"): string {
-  const path = `/admin/subscribers/${userId}?tab=account`;
-  return error ? `${path}&error=${error}` : path;
-}
-
-/**
- * The cached tables the families list, the rail counts and the ⌘K index are
- * built from (lib/admin/queries.ts). An erased account must drop out of them
- * on the very next request — the families list the deletion lands on — not
- * up to a minute (dataset) or five (emails) later.
- */
-const ADMIN_LIST_CACHE_TAGS = ["admin-dataset", "admin-email-map"] as const;
-
-/** The account tools must never touch an admin (prevents self/admin lockout). */
-async function isTargetAdmin(userId: string): Promise<boolean> {
-  const { data } = await adminDb()
+async function adminTargetRefusal(userId: string): Promise<AccountRefusal | null> {
+  const { data, error } = await adminDb()
     .from("admin_users")
     .select("user_id")
     .eq("user_id", userId)
     .maybeSingle();
-  return !!data;
+  if (error) {
+    console.error("[admin-actions] admin_users lookup failed — account action refused", {
+      subscriberId: userId,
+      error: error.message,
+    });
+    return "admin_check_failed";
+  }
+  return data ? "admin_target" : null;
 }
 
 /**
@@ -94,15 +101,17 @@ export async function setAdminCurrency(formData: FormData) {
 /**
  * Deactivate (ban) or reactivate (unban) a subscriber via GoTrue — reversible,
  * blocks login while keeping all data. Any admin; the action refuses to touch an
- * admin account. The redirect re-renders the (uncached) family page on its
- * account tab, so the new status shows immediately where the button was.
+ * admin account. It always returns to the family's account tab: with
+ * `?error=<refusal>` when it did not run (the tab says why — a plain form has
+ * no dialog to say it in), and re-rendered with the new status when it did.
  */
 export async function setSubscriberActive(formData: FormData) {
   const admin = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
   const active = formData.get("active") === "true";
-  if (!UUID_RE.test(userId)) redirect("/admin");
-  if (await isTargetAdmin(userId)) redirect(accountTab(userId));
+  if (!isUuid(userId)) redirect("/admin");
+  const refusal = await adminTargetRefusal(userId);
+  if (refusal) redirect(accountTabHref(userId, refusal));
 
   // Audit BEFORE acting: if the trail can't be written, the action must not
   // happen (PDPL). The row therefore records INTENT — if GoTrue then errors,
@@ -115,38 +124,52 @@ export async function setSubscriberActive(formData: FormData) {
       ? "reactivate_subscriber_account"
       : "deactivate_subscriber_account",
   });
-  if (!audit.ok) redirect(accountTab(userId, "audit_failed"));
+  if (!audit.ok) redirect(accountTabHref(userId, "audit_failed"));
 
   const { error } = await createAdminClient().auth.admin.updateUserById(userId, {
     ban_duration: active ? "none" : "876000h", // ~100 years = "deactivated"
   });
   if (error) throw error;
 
-  redirect(accountTab(userId));
+  // The family's head (its «الحساب معطّل» chip, and the account tab's state,
+  // both read once by the family layout) is kept as it was by a redirect back
+  // to the same family; refresh() makes that navigation re-render it too.
+  refresh();
+  redirect(accountTabHref(userId));
 }
 
 /**
  * Permanently delete a subscriber account (PDPL erasure) — irreversible: cascades
  * all their data and cancels billing. The admin must re-type the subscriber's
  * email, verified server-side. Any admin; refuses to delete an admin account.
- * A refused check returns to the account tab it was started from; a completed
- * erasure lands on the families list, already without the account.
+ *
+ * A completed erasure lands on the families list, already without the
+ * account. A refused one RETURNS why (AccountRefusal) — the delete dialog
+ * stays open and says so, rather than closing as if something had happened.
+ * Every check still runs before the audit row, and the audit row before the
+ * erasure.
  */
-export async function deleteSubscriberAccount(formData: FormData) {
+export async function deleteSubscriberAccount(formData: FormData): Promise<AccountRefusal> {
   const admin = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
-  const confirmEmail = String(formData.get("confirmEmail") ?? "")
-    .trim()
-    .toLowerCase();
-  if (!UUID_RE.test(userId)) redirect("/admin");
-  if (await isTargetAdmin(userId)) redirect(accountTab(userId));
+  const confirmEmail = String(formData.get("confirmEmail") ?? "");
+  if (!isUuid(userId)) redirect("/admin");
+  const refusal = await adminTargetRefusal(userId);
+  if (refusal) return refusal;
 
-  // Server-side confirmation: the typed email must match the account's real email.
-  const { data: target } = await createAdminClient().auth.admin.getUserById(userId);
-  const realEmail = target?.user?.email?.trim().toLowerCase() ?? null;
-  if (!realEmail || confirmEmail !== realEmail) {
-    redirect(accountTab(userId));
+  // Server-side confirmation: the typed email must match the account's real
+  // email — the dialog's own comparison (emailMatches), against GoTrue's copy.
+  const { data: target, error: lookupError } =
+    await createAdminClient().auth.admin.getUserById(userId);
+  const realEmail = target?.user?.email?.trim().toLowerCase() || null;
+  if (!realEmail) {
+    console.warn("[admin-actions] account email unreadable — deletion refused", {
+      subscriberId: userId,
+      error: lookupError?.message ?? "no email on the auth user",
+    });
+    return "email_unavailable";
   }
+  if (!emailMatches(confirmEmail, realEmail)) return "email_mismatch";
 
   // Log BEFORE erasing — the audit FK is `on delete set null`, so the row survives
   // (de-identified) but `detail` preserves what was deleted. REQUIRED: an
@@ -157,7 +180,7 @@ export async function deleteSubscriberAccount(formData: FormData) {
     action: "delete_subscriber_account",
     detail: { email: realEmail },
   });
-  if (!audit.ok) redirect(accountTab(userId, "audit_failed"));
+  if (!audit.ok) return "audit_failed";
 
   await eraseUserAccount(userId);
 

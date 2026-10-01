@@ -22,9 +22,12 @@ import { subscriptionCancelState } from "@/lib/admin/familyFlags";
  */
 
 const pathname = { current: "/admin/subscribers/x" };
+// The URL's query, as the family tab bar reads it (the layout that renders
+// the bar never sees ?tab).
+const search = { current: new URLSearchParams() };
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => search.current,
   usePathname: () => pathname.current,
 }));
 // next/link renders as the anchor it becomes, plus the one thing the real
@@ -52,8 +55,12 @@ vi.mock("@/app/admin/actions", () => ({
 }));
 
 const { FamilyDeskHead, FamilyPhoneHead } = await import("./FamilyHead");
-const { BillingView, ExerciseView, HouseholdView, MealView, RunsView, SummaryView } = await import(
+const { ExerciseView, HouseholdView, MealGlance, MealView, ProgramGlance, RunsView } = await import(
   "./views"
+);
+const { BillingView, SummaryView } = await import("./headViews");
+const { AccountFromHead, BillingFromHead, FamilyHeadProvider, SummaryFromHead } = await import(
+  "./headSnapshot"
 );
 const { AccountDangerZone } = await import("../_components/AccountDangerZone");
 const { SummaryFacts } = await import("../_blocks");
@@ -391,9 +398,19 @@ function expectOpeningLabel(idle: string, busy: string, label: string) {
 
 // ── The head ────────────────────────────────────────────────────────────────
 
+/** Render with the URL's query set to `query` (what the tab bar reads). */
+function atQuery<T>(query: string, render: () => T): T {
+  search.current = new URLSearchParams(query);
+  try {
+    return render();
+  } finally {
+    search.current = new URLSearchParams();
+  }
+}
+
 describe("family head", () => {
   it("desktop: crumb, name, email and customer-since, chips, health entry, all seven tabs", () => {
-    const out = html(FamilyDeskHead, { header: header(), tab: "meal", locale: "ar" });
+    const out = atQuery("tab=meal", () => html(FamilyDeskHead, { header: header(), locale: "ar" }));
     expect(out).toContain("العائلات");
     expect(out).toContain("<h1>");
     expect(out).toContain("هند العتيبي");
@@ -425,7 +442,6 @@ describe("family head", () => {
   it("marks a deactivated account in the chips, and omits a missing tier", () => {
     const out = html(FamilyDeskHead, {
       header: header({ deactivated: true, subscription: null, flags: [], medicalGateBlocked: false }),
-      tab: "summary",
       locale: "en",
     });
     expect(out).toContain("Account deactivated");
@@ -435,7 +451,7 @@ describe("family head", () => {
   });
 
   it("phone: the name, the chips and the tabs — no email line, no second bar", () => {
-    const out = html(FamilyPhoneHead, { header: header(), tab: "summary", locale: "ar" });
+    const out = html(FamilyPhoneHead, { header: header(), locale: "ar" });
     expect(out).toContain("ad-ph-top ad-phone-only");
     // The way back is in the top bar (_shell/PhoneBarTitle): one bar, as the
     // prototype's phone family screen has it.
@@ -448,23 +464,54 @@ describe("family head", () => {
   });
 
   it("names a nameless family", () => {
-    const out = html(FamilyDeskHead, { header: header({ displayName: "  " }), tab: "summary", locale: "ar" });
+    const out = html(FamilyDeskHead, { header: header({ displayName: "  " }), locale: "ar" });
     expect(out).toContain("بدون اسم");
+  });
+
+  it("the tab bar marks the tab in the URL, by the page's own rule", () => {
+    const current = (out: string) => out.match(/<a [^>]*aria-current="page"[^>]*>/g) ?? [];
+    for (const tab of FAMILY_TABS) {
+      const query = tab === "summary" ? "" : `tab=${tab}`;
+      const desk = atQuery(query, () => html(FamilyDeskHead, { header: header(), locale: "ar" }));
+      const phone = atQuery(query, () => html(FamilyPhoneHead, { header: header(), locale: "ar" }));
+      for (const out of [desk, phone]) {
+        expect(current(out)).toHaveLength(1);
+        expect(current(out)[0]).toContain(
+          tab === "summary" ? `href="${PAGE}"` : `href="${PAGE}?tab=${tab}"`,
+        );
+      }
+    }
+    // Anything else is the summary; a repeated tab is its first value.
+    for (const query of ["tab=health", "tab=Meal", "tab=", "tab=runs&tab=meal"]) {
+      const out = atQuery(query, () => html(FamilyDeskHead, { header: header(), locale: "ar" }));
+      expect(current(out)[0]).toContain(
+        query.startsWith("tab=runs") ? `href="${PAGE}?tab=runs"` : `href="${PAGE}"`,
+      );
+    }
   });
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────────
 
-describe("summary", () => {
-  const out = html(SummaryView, {
+/** The summary as the page composes it: the header's frame around the two section panels. */
+function summary({
+  head = header(),
+  meal = MEAL,
+  workout = READY_WORKOUT,
+}: { head?: FamilyHeaderData; meal?: MealSection; workout?: WorkoutSection } = {}) {
+  return html(SummaryView, {
     userId: ID,
-    header: header(),
-    meal: MEAL,
-    workout: READY_WORKOUT,
+    header: head,
+    meal: createElement(MealGlance, { userId: ID, meal, locale: "ar", currency: "sar" }),
+    program: createElement(ProgramGlance, { userId: ID, workout, locale: "ar", currency: "sar" }),
     locale: "ar",
     currency: "sar",
     nowIso: NOW,
   });
+}
+
+describe("summary", () => {
+  const out = summary();
 
   it("explains each flag and links it to the tab that resolves it", () => {
     expect(out).toContain("التنبيهات");
@@ -497,14 +544,10 @@ describe("summary", () => {
   });
 
   it("drops the flags panel when there is nothing to explain", () => {
-    const calm = html(SummaryView, {
-      userId: ID,
-      header: header({ reasons: [], flags: [], medicalGateBlocked: false }),
+    const calm = summary({
+      head: header({ reasons: [], flags: [], medicalGateBlocked: false }),
       meal: { served: null, plans: [] },
       workout: EMPTY_WORKOUT,
-      locale: "ar",
-      currency: "sar",
-      nowIso: NOW,
     });
     expect(calm).not.toContain("التنبيهات");
     expect(calm).toContain("لا توجد خطة غذائية بعد");
@@ -821,6 +864,73 @@ describe("account actions", () => {
     const out = zone({ email: null });
     expect(out).toContain("تعذّرت قراءة البريد الإلكتروني");
     expect(out).toMatch(/aria-disabled="true"[^>]*aria-describedby=/);
+  });
+});
+
+// ── Tabs built from the header ──────────────────────────────────────────────
+
+describe("tabs built from the header", () => {
+  // The family layout reads the header once and provides it; these tabs
+  // render from it, so switching to them reads nothing. Generated ids depend
+  // on where a component sits in the tree, so they are left out of the
+  // comparisons.
+  const noIds = (out: string) =>
+    out.replace(/\b(id|for|aria-labelledby|aria-describedby|aria-controls)="[^"]*"/g, '$1=""');
+  const within = (head: FamilyHeaderData, child: ReturnType<typeof createElement>) =>
+    renderToString(
+      createElement(FamilyHeadProvider, { head } as Parameters<typeof FamilyHeadProvider>[0], child),
+    );
+
+  it("the summary is the header's frame around the sections' panels", () => {
+    const out = within(
+      header(),
+      createElement(SummaryFromHead, {
+        meal: createElement(MealGlance, { userId: ID, meal: MEAL, locale: "ar", currency: "sar" }),
+        program: createElement(ProgramGlance, {
+          userId: ID,
+          workout: READY_WORKOUT,
+          locale: "ar",
+          currency: "sar",
+        }),
+        locale: "ar",
+        currency: "sar",
+        nowIso: NOW,
+      }),
+    );
+    expect(noIds(out)).toBe(noIds(summary()));
+  });
+
+  it("billing is the header's, as the head above it shows it", () => {
+    const out = within(header(), createElement(BillingFromHead, { locale: "ar" }));
+    expect(noIds(out)).toBe(noIds(html(BillingView, { header: header(), locale: "ar" })));
+    expect(out).toContain("sub_123");
+  });
+
+  it("the account actions act on the account the head shows, in the state it shows", () => {
+    const head = header({ deactivated: true, email: "other@example.com" });
+    const out = within(head, createElement(AccountFromHead, { locale: "en" }));
+    expect(noIds(out)).toBe(
+      noIds(
+        html(AccountDangerZone, {
+          userId: ID,
+          email: "other@example.com",
+          displayName: "هند العتيبي",
+          deactivated: true,
+          locale: "en",
+        }),
+      ),
+    );
+    expect(out).toContain("Reactivate");
+    expect(out).toContain(`name="userId" value="${ID}"`);
+  });
+
+  it("never render outside the family layout", () => {
+    expect(() => renderToString(createElement(BillingFromHead, { locale: "ar" }))).toThrow(
+      /outside the family layout/,
+    );
+    expect(() => renderToString(createElement(AccountFromHead, { locale: "ar" }))).toThrow(
+      /outside the family layout/,
+    );
   });
 });
 

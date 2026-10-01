@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   isSubscriptionActive,
+  isTrialExpired,
   type SubscriptionRow as AppSubscriptionRow,
 } from "@/lib/subscription/state";
 import type { SubscriptionCancelState } from "./console-types";
+import { computeMetricSeries } from "./timeseries";
 import {
   FAMILY_FLAG_ORDER,
   attentionReasons,
@@ -69,6 +71,18 @@ const WHILE_DATED: ByDate = {
 };
 
 /**
+ * A trial not set to cancel: nothing to report while it runs, ended once its
+ * end has passed — or when it has none (the app's isTrialExpired).
+ */
+const TRIAL_NOT_SET_TO_CANCEL: ByDate = {
+  future: "none",
+  past: "ended",
+  endsAtFuture: "none",
+  endsAtPast: "ended",
+  none: "ended",
+};
+
+/**
  * An active row set to cancel: dated by its period end alone, as the app
  * dates it — an ends_at on an active row is left over, so without a period
  * end it is undated, a legacy row the app leaves open-ended.
@@ -84,13 +98,14 @@ const ACTIVE_SET_TO_CANCEL: ByDate = {
 /**
  * Every status × cancel_at_period_end × date, written out. A subscription
  * that will not renew runs until its date — for 'cancelled' whatever the
- * flag says, for 'active' and 'trialing' only with the flag. An active row
+ * flag says, for 'active' and 'trialing' only with the flag; a trial runs
+ * until its end whatever the flag says (TRIAL_NOT_SET_TO_CANCEL). An active row
  * is dated by its period end alone (ACTIVE_SET_TO_CANCEL); a past-due one is
  * past its period end by definition, so its flag decides. 'paused', an
  * unknown status and no subscription never cancel.
  */
 const TRUTH_TABLE: Array<[string | null, { flag: ByDate; noFlag: ByDate }]> = [
-  ["trialing", { flag: WHILE_DATED, noFlag: always("none") }],
+  ["trialing", { flag: WHILE_DATED, noFlag: TRIAL_NOT_SET_TO_CANCEL }],
   ["active", { flag: ACTIVE_SET_TO_CANCEL, noFlag: always("none") }],
   ["past_due", { flag: always("scheduled"), noFlag: always("none") }],
   ["paused", { flag: always("none"), noFlag: always("none") }],
@@ -296,6 +311,32 @@ describe("subscriptionCancelState", () => {
         ),
       ).toBe("scheduled");
     });
+
+    it("ends a trial exactly when the app does — and the Overview stops counting it", () => {
+      // Internal trials are never moved to 'expired' (only the LemonSqueezy
+      // webhook writes it), so the app judges a trial by its end date alone.
+      const { now, soon, gone } = dated();
+      const lastDay = [{ start: new Date(now - DAY), end: new Date(now), iso: new Date(now - DAY).toISOString() }];
+      for (const trialEnd of [soon, gone, null]) {
+        for (const flag of [true, false]) {
+          const app = appRow({ status: "trialing", trial_ends_at: trialEnd, cancel_at_period_end: flag });
+          const state = subscriptionCancelState(
+            cancelInput({
+              status: "trialing",
+              cancelAtPeriodEnd: flag,
+              trialEndsAt: trialEnd,
+              currentPeriodEnd: null,
+            }),
+            now,
+          );
+          const label = `trial until ${trialEnd} · flag ${flag}`;
+          expect(state === "ended", label).toBe(isTrialExpired(app));
+          // The Overview's Trials tile (timeseries trialingAsOf) agrees.
+          const [trials] = computeMetricSeries("trials", [{ ...app, cancelled_at: null }], [], lastDay);
+          expect(trials === 1, label).toBe(!isTrialExpired(app));
+        }
+      }
+    });
   });
 });
 
@@ -496,7 +537,7 @@ const baseReasons: ReasonInput = {
   maxPeople: 2,
   mealFailureAt: "2026-09-19T06:02:00Z",
   workoutFailureAt: "2026-09-28T06:05:00Z",
-  meal: { state: "ready", daysReady: 7, daysTotal: 7, masked: false },
+  meal: { state: "ready", masked: false },
   workout: { state: "ready", masked: true },
 };
 
@@ -538,10 +579,10 @@ describe("attentionReasons", () => {
   it("rates a failed run by what the family is left with", () => {
     const sev = (meal: ReasonInput["meal"]) =>
       attentionReasons({ ...baseReasons, flags: ["failed_meal_run"], meal })[0]?.severity;
-    expect(sev({ state: "failed", daysReady: 0, daysTotal: 7, masked: false })).toBe("high");
-    expect(sev({ state: "none", daysReady: null, daysTotal: 7, masked: false })).toBe("high");
-    expect(sev({ state: "ready", daysReady: 7, daysTotal: 7, masked: true })).toBe("medium");
-    expect(sev({ state: "ready", daysReady: 7, daysTotal: 7, masked: false })).toBe("low");
+    expect(sev({ state: "failed", masked: false })).toBe("high");
+    expect(sev({ state: "none", masked: false })).toBe("high");
+    expect(sev({ state: "ready", masked: true })).toBe("medium");
+    expect(sev({ state: "ready", masked: false })).toBe("low");
   });
 
   it("works without a subscription and adds the medical gate only when asked", () => {

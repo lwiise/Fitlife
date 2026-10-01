@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { FAMILY_TABS } from "@/lib/admin/console-types";
+import { t } from "@/lib/admin/i18n";
 import {
+  ACCOUNT_REFUSALS,
   FAMILY_TAB_LABEL,
+  accountRefusalText,
+  accountTabHref,
   emailMatches,
   familyName,
   familyPagePath,
   familyTabHref,
   familyTabLabel,
   firstParam,
-  isAuditFailure,
   listToStrings,
+  parseAccountRefusal,
   parseFamilyTab,
   subscriberRouteKind,
   tabSections,
@@ -48,13 +52,49 @@ describe("parseFamilyTab", () => {
   });
 });
 
-describe("isAuditFailure", () => {
-  it("is only the exact audit_failed code", () => {
-    expect(isAuditFailure("audit_failed")).toBe(true);
-    expect(isAuditFailure(["audit_failed"])).toBe(true);
-    expect(isAuditFailure("audit_failed ")).toBe(false);
-    expect(isAuditFailure("other")).toBe(false);
-    expect(isAuditFailure(undefined)).toBe(false);
+describe("account refusals", () => {
+  it("reads only the exact codes the account actions send", () => {
+    for (const refusal of ACCOUNT_REFUSALS) expect(parseAccountRefusal(refusal)).toBe(refusal);
+    expect(parseAccountRefusal(["audit_failed", "admin_target"])).toBe("audit_failed");
+    expect(parseAccountRefusal("audit_failed ")).toBeNull();
+    expect(parseAccountRefusal("AUDIT_FAILED")).toBeNull();
+    expect(parseAccountRefusal("other")).toBeNull();
+    expect(parseAccountRefusal("toString")).toBeNull();
+    expect(parseAccountRefusal("")).toBeNull();
+    expect(parseAccountRefusal(undefined)).toBeNull();
+  });
+
+  it("returns to the account tab, with the refusal when there is one, and round-trips", () => {
+    expect(accountTabHref(ID)).toBe(`/admin/subscribers/${ID}?tab=account`);
+    expect(accountTabHref(ID)).toBe(familyTabHref(ID, "account"));
+    expect(accountTabHref(ID, "admin_check_failed")).toBe(
+      `/admin/subscribers/${ID}?tab=account&error=admin_check_failed`,
+    );
+    for (const refusal of ACCOUNT_REFUSALS) {
+      const query = new URL(accountTabHref(ID, refusal), "https://x.test").searchParams;
+      expect(parseFamilyTab(query.get("tab"))).toBe("account");
+      expect(parseAccountRefusal(query.get("error"))).toBe(refusal);
+    }
+  });
+
+  it("states every refusal in both languages, and that nothing happened", () => {
+    for (const refusal of ACCOUNT_REFUSALS) {
+      for (const locale of ["ar", "en"] as const) {
+        const text = accountRefusalText(refusal, locale);
+        expect(text.length).toBeGreaterThan(20);
+        expect(text).not.toContain("!");
+      }
+    }
+    const ar = ACCOUNT_REFUSALS.map((refusal) => accountRefusalText(refusal, "ar"));
+    expect(new Set(ar).size).toBe(ACCOUNT_REFUSALS.length);
+    // A failed admin check says so — it never claims the account is an admin's.
+    expect(accountRefusalText("admin_check_failed", "en")).toContain("Couldn’t confirm");
+    expect(accountRefusalText("admin_check_failed", "en")).toContain("nothing was changed");
+    expect(accountRefusalText("admin_target", "ar")).toContain("حساب مشرف");
+    expect(accountRefusalText("email_mismatch", "ar")).toContain("فلم يُحذف شيء");
+    // The sentences the page already had for these two facts.
+    expect(accountRefusalText("audit_failed", "en")).toBe(t("audit_write_failed", "en"));
+    expect(accountRefusalText("email_unavailable", "ar")).toBe(t("fp_delete_no_email", "ar"));
   });
 });
 

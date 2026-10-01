@@ -218,7 +218,13 @@ describe("sorting", () => {
 describe("filterRows", () => {
   const rows = [
     fam({ displayName: "هِنْد العتيبي", email: "hind.o@example.com", status: "active" }),
-    fam({ displayName: "أمل السبيعي", email: "amal@example.com", tier: "pro", status: "trialing" }),
+    fam({
+      displayName: "أمل السبيعي",
+      email: "amal@example.com",
+      tier: "pro",
+      status: "trialing",
+      trialEndsAt: "2026-10-04T00:00:00Z",
+    }),
     fam({ displayName: null, email: "ZOË@Example.com", status: "past_due" }),
     // Cancelled with no paid-through date: ended.
     fam({ displayName: "منى", email: null, status: "cancelled", cancelAtPeriodEnd: true }),
@@ -375,11 +381,13 @@ describe("paging", () => {
     const rows = [
       fam({ status: "active" }),
       fam({ status: "active" }),
-      fam({ status: "trialing" }),
+      fam({ status: "trialing", trialEndsAt: "2026-10-04T00:00:00Z" }),
+      // A trial that ran out is still 'trialing' in the table — not in trial.
+      fam({ status: "trialing", trialEndsAt: "2026-09-20T00:00:00Z" }),
       fam({ status: "past_due" }),
       fam({ status: null }),
     ];
-    expect(listCounts(rows)).toEqual({ families: 5, paying: 2, trialing: 1 });
+    expect(listCounts(rows)).toEqual({ families: 6, paying: 2, trialing: 1 });
     expect(listCounts([])).toEqual({ families: 0, paying: 0, trialing: 0 });
   });
 });

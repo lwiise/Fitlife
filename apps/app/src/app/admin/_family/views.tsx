@@ -1,6 +1,5 @@
 import { Dumbbell, Soup } from "lucide-react";
 import type {
-  FamilyHeaderData,
   HouseholdMember,
   MealSection,
   RunRow,
@@ -9,10 +8,6 @@ import type {
 import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import {
-  AccountFields,
-  AttentionList,
-  BillingFields,
-  EngagementFields,
   HealthLink,
   HouseholdTable,
   MealPlanHistory,
@@ -24,8 +19,6 @@ import {
   ProgramTable,
   ProgramWeekExplorer,
   RunsTable,
-  SubscriptionHistory,
-  SummaryFacts,
   TraineeList,
   mealPlanHref,
   programHref,
@@ -38,7 +31,9 @@ import { TabLink } from "./TabLink";
  * The family page's tab bodies (the prototype's `pageTabBody`), as plain
  * views over already-loaded sections: tabs.tsx loads, these render. Each view
  * returns the page's direct children — cards and `.ad-grid-2` rows — so the
- * page's own rhythm spaces them and a pending tab switch dims them.
+ * page's own rhythm spaces them and a pending tab switch dims them. What is
+ * built from the family's header instead (the summary's frame, billing) is
+ * in ./headViews, rendered from the layout's one header read.
  *
  * Panel titles are h2 (the family's name is the page's h1). Links to the plan
  * and program views never prefetch: opening them is an audited access. So the
@@ -49,91 +44,68 @@ import { TabLink } from "./TabLink";
 /** Earlier plans / programs beside the week; the full ledger is below it. */
 const RECENT_LIMIT = 5;
 
-type Header = FamilyHeaderData;
-
 // ── Summary ─────────────────────────────────────────────────────────────────
 
-export function SummaryView({
+/**
+ * The summary's meal plan panel (headViews' SummaryView slots it in): the
+ * plan at a glance, with «فتح» into the meal tab.
+ */
+export function MealGlance({
   userId,
-  header,
   meal,
+  locale,
+  currency,
+}: {
+  userId: string;
+  meal: MealSection;
+  locale: AdminLocale;
+  currency: Currency;
+}) {
+  return (
+    <Panel>
+      <PanelHead
+        action={
+          <TabLink userId={userId} tab="meal" locale={locale}>
+            {t("fp_open", locale)}
+          </TabLink>
+        }
+      >
+        <SecTitle as="h2" icon={Soup}>
+          {t("fp_tab_meal", locale)}
+        </SecTitle>
+      </PanelHead>
+      <MealSummaryBox section={meal} locale={locale} currency={currency} />
+    </Panel>
+  );
+}
+
+/** The summary's exercise panel: the program at a glance, with «فتح» into its tab. */
+export function ProgramGlance({
+  userId,
   workout,
   locale,
   currency,
-  nowIso,
 }: {
   userId: string;
-  header: Header;
-  meal: MealSection;
   workout: WorkoutSection;
   locale: AdminLocale;
   currency: Currency;
-  nowIso: string;
 }) {
-  const open = t("fp_open", locale);
   return (
-    <div className="ad-grid-2">
-      <div className="ad-col">
-        {header.reasons.length > 0 ? (
-          <Panel>
-            <SecTitle as="h2">{t("section_flags", locale)}</SecTitle>
-            <AttentionList
-              reasons={header.reasons}
-              locale={locale}
-              action={(reason) =>
-                reason.tab === "summary" ? null : (
-                  <TabLink userId={userId} tab={reason.tab} locale={locale} />
-                )
-              }
-            />
-          </Panel>
-        ) : null}
-        {/* The phone design leads with the key figures (people, renewal,
-            lifetime AI cost, last active); from 1024px the page leaves them to
-            the list and the panel, as the approved layout does. */}
-        <Panel className="ad-phone-only">
-          <SummaryFacts header={header} locale={locale} currency={currency} nowIso={nowIso} />
-        </Panel>
-        <Panel>
-          <PanelHead
-            action={
-              <TabLink userId={userId} tab="meal" locale={locale}>
-                {open}
-              </TabLink>
-            }
-          >
-            <SecTitle as="h2" icon={Soup}>
-              {t("fp_tab_meal", locale)}
-            </SecTitle>
-          </PanelHead>
-          <MealSummaryBox section={meal} locale={locale} currency={currency} />
-        </Panel>
-        <Panel>
-          <PanelHead
-            action={
-              <TabLink userId={userId} tab="exercise" locale={locale}>
-                {open}
-              </TabLink>
-            }
-          >
-            <SecTitle as="h2" icon={Dumbbell}>
-              {t("fp_tab_exercise", locale)}
-            </SecTitle>
-          </PanelHead>
-          <ProgramSummaryBox section={workout} locale={locale} currency={currency} />
-        </Panel>
-      </div>
-      <div className="ad-col">
-        <Panel>
-          <SecTitle as="h2">{t("section_account", locale)}</SecTitle>
-          <AccountFields header={header} locale={locale} />
-        </Panel>
-        <Panel>
-          <SecTitle as="h2">{t("section_engagement", locale)}</SecTitle>
-          <EngagementFields header={header} locale={locale} currency={currency} nowIso={nowIso} />
-        </Panel>
-      </div>
-    </div>
+    <Panel>
+      <PanelHead
+        action={
+          <TabLink userId={userId} tab="exercise" locale={locale}>
+            {t("fp_open", locale)}
+          </TabLink>
+        }
+      >
+        <SecTitle as="h2" icon={Dumbbell}>
+          {t("fp_tab_exercise", locale)}
+        </SecTitle>
+      </PanelHead>
+      <ProgramSummaryBox section={workout} locale={locale} currency={currency} />
+    </Panel>
   );
 }
 
@@ -319,7 +291,7 @@ export function ExerciseView({
   );
 }
 
-// ── Household, billing, runs ────────────────────────────────────────────────
+// ── Household, runs ─────────────────────────────────────────────────────────
 
 /** The household with the protected way into its health detail. */
 export function HouseholdView({
@@ -338,30 +310,6 @@ export function HouseholdView({
       </PanelHead>
       <HouseholdTable members={members} locale={locale} />
     </Panel>
-  );
-}
-
-/** The subscription (and its history when there is more than one row) beside the account. */
-export function BillingView({ header, locale }: { header: Header; locale: AdminLocale }) {
-  return (
-    <div className="ad-grid-2">
-      <div className="ad-col">
-        <Panel>
-          <SecTitle as="h2">{t("section_subscription", locale)}</SecTitle>
-          <BillingFields header={header} locale={locale} />
-        </Panel>
-        {header.subscriptionHistory.length > 1 ? (
-          <Panel>
-            <SecTitle as="h2">{t("section_sub_history", locale)}</SecTitle>
-            <SubscriptionHistory rows={header.subscriptionHistory} locale={locale} />
-          </Panel>
-        ) : null}
-      </div>
-      <Panel>
-        <SecTitle as="h2">{t("section_account", locale)}</SecTitle>
-        <AccountFields header={header} locale={locale} />
-      </Panel>
-    </div>
   );
 }
 

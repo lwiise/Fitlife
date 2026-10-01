@@ -16,8 +16,8 @@ import { tabSections, type TabSection } from "./model";
 /**
  * Server-side helpers for the family page and its audited views. The family
  * data itself comes from lib/admin/family.ts; this file only adds what those
- * loaders do not carry (a name for the view pages' crumb, the member count
- * the health page's audit row records) and the tab preload.
+ * loaders do not carry (a name for the titles and the view pages' crumb, the
+ * member count the health page's audit row records) and the tab preload.
  */
 
 const PRELOAD: Readonly<Record<TabSection, (userId: string) => Promise<unknown>>> = {
@@ -42,11 +42,14 @@ export function preloadFamilyTab(userId: string, tab: FamilyTab): void {
 }
 
 /**
- * The family's display name, for the crumb of the plan, program and health
- * pages — one small read, run in parallel with the page's own. Null when there
- * is none or the read failed (the crumb then says «صفحة العائلة»).
+ * The family's display name as stored — one small read: "" when the family
+ * has none, null when there is no such family or the read failed. The family
+ * page's <title> is built from it, so that a tab switch (which re-renders the
+ * page, and its title, but not the layout that read the header) costs this
+ * one column instead of the header; it tells the two empty cases apart so a
+ * nameless family is titled «بدون اسم», as its head names it.
  */
-export const loadFamilyName = cache(async (userId: string): Promise<string | null> => {
+export const loadProfileName = cache(async (userId: string): Promise<string | null> => {
   const { data, error } = await adminDb()
     .from("profiles")
     .select("display_name")
@@ -56,8 +59,17 @@ export const loadFamilyName = cache(async (userId: string): Promise<string | nul
     console.warn("[admin-family] display name read failed", error.message);
     return null;
   }
-  return data?.display_name?.trim() || null;
+  return data ? (data.display_name?.trim() ?? "") : null;
 });
+
+/**
+ * The family's display name, for the crumb of the plan, program and health
+ * pages — run in parallel with the page's own read. Null when there is none
+ * or the read failed (the crumb then says «صفحة العائلة»).
+ */
+export const loadFamilyName = cache(
+  async (userId: string): Promise<string | null> => (await loadProfileName(userId)) || null,
+);
 
 /** How many family_members rows the family has (the housekeeper included). */
 async function countMemberRows(userId: string): Promise<number | null> {

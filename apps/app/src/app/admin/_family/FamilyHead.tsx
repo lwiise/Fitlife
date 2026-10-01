@@ -1,10 +1,11 @@
-import { FAMILY_TABS, type FamilyHeaderData, type FamilyTab } from "@/lib/admin/console-types";
+import { FAMILY_TABS, type FamilyHeaderData } from "@/lib/admin/console-types";
 import type { AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { FamilyFlagChips, HealthLink } from "../_blocks";
 import { fmtDay } from "../_blocks/helpers";
-import { LinkTabs, Ltr, Pill, StatusPill, TierBadge, joinSep, type LinkTab } from "../_ui";
+import { Ltr, Pill, StatusPill, TierBadge, joinSep, type LinkTab } from "../_ui";
 import { FamiliesCrumb } from "./FamiliesCrumb";
+import { FamilyTabs } from "./FamilyTabs";
 import { familyName, familyTabHref, familyTabLabel } from "./model";
 
 type Head = Pick<
@@ -55,16 +56,12 @@ function HeadChips({ header, locale }: { header: Head; locale: AdminLocale }) {
  * protected health entry, and the tab bar. Returned as siblings for
  * `.ad-a-page-in`: the tab body must follow the tab bar directly so that a
  * pending tab switch dims it (admin.css, `.ad-tabs[aria-busy] ~ *`).
+ *
+ * Rendered by the family layout, once per visit: the tab bar finds the tab
+ * shown in the URL itself (FamilyTabs), so a tab switch never re-renders the
+ * head or re-reads what it shows.
  */
-export function FamilyDeskHead({
-  header,
-  tab,
-  locale,
-}: {
-  header: Head;
-  tab: FamilyTab;
-  locale: AdminLocale;
-}) {
+export function FamilyDeskHead({ header, locale }: { header: Head; locale: AdminLocale }) {
   const name = familyName(header.displayName, locale);
   return (
     <>
@@ -97,9 +94,8 @@ export function FamilyDeskHead({
           </HealthLink>
         </div>
       </div>
-      <LinkTabs
+      <FamilyTabs
         items={tabItems(header.userId, locale)}
-        current={tab}
         label={t("fp_tabs", locale)}
         className="ad-desk-only"
       />
@@ -115,15 +111,7 @@ export function FamilyDeskHead({
  * household tabs there. Its tabs close the band, so a pending switch dims
  * everything after it.
  */
-export function FamilyPhoneHead({
-  header,
-  tab,
-  locale,
-}: {
-  header: Head;
-  tab: FamilyTab;
-  locale: AdminLocale;
-}) {
+export function FamilyPhoneHead({ header, locale }: { header: Head; locale: AdminLocale }) {
   return (
     <div className="ad-ph-top ad-phone-only">
       <div>
@@ -134,11 +122,7 @@ export function FamilyPhoneHead({
           <HeadChips header={header} locale={locale} />
         </div>
       </div>
-      <LinkTabs
-        items={tabItems(header.userId, locale)}
-        current={tab}
-        label={t("fp_tabs", locale)}
-      />
+      <FamilyTabs items={tabItems(header.userId, locale)} label={t("fp_tabs", locale)} />
     </div>
   );
 }

@@ -5,7 +5,10 @@ import {
   DEFAULT_DAYS_TOTAL,
   MEAL_PROBE_COLUMNS,
   daysReadyFromProbe,
+  displayMealPlan,
+  householdDaysReady,
   mealCellFromRows,
+  mealProbeIdsNeeded,
   mealStateOf,
   pickServedMealLite,
   pickServedMealPlan,
@@ -15,6 +18,7 @@ import {
   projectMealWeek,
   resolveMealRow,
   resolveMealRowLite,
+  withProbe,
   workerAckedFromProbe,
   type MealPlanRowFull,
   type MealRowLite,
@@ -544,5 +548,203 @@ describe("mealCellFromRows", () => {
     expect(mealCellFromRows([row(1)], NOW).state).toBe("generating");
     // Created weeks ago and never finished.
     expect(mealCellFromRows([row(60 * 24 * 30)], NOW).state).toBe("failed");
+  });
+});
+
+// ── the two-step read ───────────────────────────────────────────────────────
+
+describe("mealProbeIdsNeeded", () => {
+  /** A row as the cheap read sees it: no probes yet. */
+  const unprobed = (r: MealPlanRowFull): MealRowLite => ({
+    id: r.id,
+    status: r.status,
+    created_at: r.updated_at,
+    updated_at: null,
+    probe: null,
+  });
+
+  /**
+   * The dataset's two rounds: probe what is needed, lay the probes over the
+   * rows, ask again. Returns every id probed.
+   */
+  function twoRounds(rows: MealPlanRowFull[]) {
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    let current = rows.map(unprobed);
+    const probed: string[][] = [];
+    for (let round = 0; round < 2; round += 1) {
+      const ids = mealProbeIdsNeeded(current, NOW);
+      if (ids.length === 0) break;
+      probed.push(ids);
+      current = current.map((row) => {
+        if (!ids.includes(row.id)) return row;
+        const full = byId.get(row.id)!;
+        return withProbe(row, {
+          id: full.id,
+          status: full.status,
+          updated_at: full.updated_at,
+          ...probeFromPlanData(full.plan_data),
+        });
+      });
+    }
+    return { probed, current };
+  }
+
+  const scenarios: Array<[string, MealPlanRowFull[], string[][]]> = [
+    [
+      "a served week: the newest row only",
+      [fullRow("new", "ready", weekPlan(), 60), fullRow("old", "ready", weekPlan(), 60 * 24 * 7)],
+      [["new"]],
+    ],
+    [
+      "a live run: the newest row only",
+      [
+        fullRow("live", "generating", { worker_ack_at: minAgo(1) }, 1),
+        fullRow("old", "ready", weekPlan(), 60 * 24),
+      ],
+      [["live"]],
+    ],
+    [
+      "a failed newest row: no probes for it, then the older ready rows",
+      [
+        fullRow("new", "failed", {}, 5),
+        fullRow("f2", "failed", {}, 60),
+        fullRow("empty", "ready", emptyShells(), 90),
+        fullRow("good", "ready", weekPlan(), 60 * 24),
+      ],
+      [["empty", "good"]],
+    ],
+    [
+      "a dead empty shell: its probes, then the fallbacks",
+      [fullRow("shell", "ready", emptyShells(), 40), fullRow("old", "ready", weekPlan(), 60 * 24)],
+      [["shell"], ["old"]],
+    ],
+    [
+      "a run that never started: its probes, then the fallbacks",
+      [fullRow("dead", "generating", {}, 5), fullRow("old", "ready", weekPlan(), 60 * 24)],
+      [["dead"], ["old"]],
+    ],
+    [
+      "nothing past the five-row window, nothing archived",
+      [
+        fullRow("arch", "archived", weekPlan(), 1),
+        fullRow("f1", "failed", {}, 2),
+        fullRow("f2", "failed", {}, 3),
+        fullRow("r3", "ready", emptyShells(), 4),
+        fullRow("f4", "failed", {}, 5),
+        fullRow("f5", "failed", {}, 6),
+        fullRow("beyond", "ready", weekPlan(), 7),
+      ],
+      [["r3"]],
+    ],
+    ["no plans at all", [], []],
+  ];
+
+  it.each(scenarios)("%s", (_label, rows, expected) => {
+    expect(twoRounds(rows).probed).toEqual(expected);
+  });
+
+  it.each(scenarios)("serves what the fully probed rows serve: %s", (_label, rows) => {
+    const everyProbe = rows.map(liteOf);
+    const { current } = twoRounds(rows);
+    expect(mealCellFromRows(current, NOW)).toEqual(mealCellFromRows(everyProbe, NOW));
+    expect(pickServedMealLite(current, NOW).served?.id).toBe(
+      pickServedMealLite(everyProbe, NOW).served?.id,
+    );
+  });
+});
+
+// ── what /plan shows of the served plan ─────────────────────────────────────
+
+describe("displayMealPlan", () => {
+  const roster = {
+    mom: { member_type: "adult", birth_year: 1990 },
+    members: [
+      { id: "dad", member_type: "adult", birth_year: 1988 },
+      { id: "kid", member_type: "child", birth_year: 2016 },
+      { id: "cook", member_type: "housekeeper", birth_year: 1995 },
+    ],
+  };
+  const fiveHundredDays = [0, 1, 2].map((i) =>
+    day(i, [meal("breakfast", `فطور ${i}`, 500, 20)], {
+      calories: 500,
+      protein_g: 20,
+      carbs_g: 60,
+      fat_g: 15,
+    }),
+  );
+
+  it("drops members no longer in the household and keeps the owner", () => {
+    const pd = plan([
+      member("mom", [fullDay(0)]),
+      member("dad", [fullDay(0)]),
+      member("gone", [fullDay(0)]),
+    ]);
+    const shown = displayMealPlan(pd, roster);
+    const week = projectMealWeek(shown)!;
+    expect(week.members.map((m) => m.memberId)).toEqual(["mom", "dad"]);
+    // A household with no roster still keeps its owner.
+    expect(
+      projectMealWeek(displayMealPlan(pd, { mom: {}, members: [] }))!.members.map((m) => m.memberId),
+    ).toEqual(["mom"]);
+  });
+
+  it("decides who is a child from the live roster, and reconciles a child's figures", () => {
+    // No is_child stamp, and the skeleton's estimate on the header.
+    const pd = plan([
+      member("mom", [fullDay(0)]),
+      member("kid", fiveHundredDays, { daily_calories_target: 2730 }),
+    ]);
+    const shown = displayMealPlan(pd, roster);
+    const week = projectMealWeek(shown)!;
+    expect(week.members[1]).toMatchObject({ memberId: "kid", isChild: true, caloriesTarget: null });
+    // The household table reads the average of her real days.
+    expect(planTargetsById(shown).get("kid")).toMatchObject({
+      caloriesTarget: 500,
+      macros: { protein_g: 20, carbs_g: 60, fat_g: 15 },
+    });
+    // The owner is untouched.
+    expect(planTargetsById(shown).get("mom")?.caloriesTarget).toBe(1800);
+  });
+
+  it("reads a minor saved as an adult by age, as the engine does", () => {
+    const teen = new Date().getFullYear() - 15;
+    const pd = plan([member("mom", [fullDay(0)]), member("dad", fiveHundredDays)]);
+    const shown = displayMealPlan(pd, {
+      ...roster,
+      members: [{ id: "dad", member_type: "adult", birth_year: teen }],
+    });
+    expect(projectMealWeek(shown)!.members[1]).toMatchObject({ isChild: true });
+  });
+
+  it("drops removed members from a snapshot the schema rejects, keeping its stamps", () => {
+    const partial = {
+      members: [
+        { member_id: "mom", days: [fullDay(0)] },
+        { member_id: "gone", days: [fullDay(0)] },
+        { member_id: "kid", is_child: true, days: [fullDay(0)] },
+      ],
+    };
+    expect(MealPlanSchema.safeParse(partial).success).toBe(false);
+    const week = projectMealWeek(displayMealPlan(partial, roster))!;
+    expect(week.members.map((m) => [m.memberId, m.isChild])).toEqual([
+      ["mom", false],
+      ["kid", true],
+    ]);
+    // Nothing to drop: the very same object.
+    const clean = { members: [{ member_id: "mom", days: [] }] };
+    expect(displayMealPlan(clean, roster)).toBe(clean);
+    expect(displayMealPlan(null, roster)).toBeNull();
+  });
+});
+
+describe("householdDaysReady", () => {
+  it("counts the days every member has, and says nothing before there are members", () => {
+    const pd = plan([
+      member("mom", [0, 1, 2, 3, 4, 5, 6].map(fullDay)),
+      member("dad", [fullDay(0), fullDay(1)]),
+    ]);
+    expect(householdDaysReady(projectMealWeek(pd))).toBe(2);
+    expect(householdDaysReady(projectMealWeek({ worker_ack_at: minAgo(1) }))).toBeNull();
+    expect(householdDaysReady(null)).toBeNull();
   });
 });
