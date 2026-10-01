@@ -1491,3 +1491,114 @@ open section, not a card. Workout is one row that opens the session. «اطبع�
 /plan/housekeeper?print=1 (`PrintOnOpen`). Frame: 60px phone header, avatar + chevron
 (no name), a speech-bubble advisor icon, and `container-shell` widened to a 1184px
 content column (lg padding 48px).
+
+---
+
+## The admin console («Concept A · Console», 09–10/2026)
+
+Owner brief: the old admin was slow and hard to scan; rebuild it as a modern, premium back
+office, keep EVERY datum and action it had, and add the Exercise Plan next to the Meal Plan
+for every family. The owner picked Concept A of three prototypes (a console: rail + table +
+side panel). The Exercise Plan is **view-only**, like the meal plan in the admin — no
+regenerate/retry buttons, since those spend AI credit and were not asked for.
+
+**Routes.** Everything signed-in lives in `app/admin/(console)/` (the route group mounts the
+frame; `/admin/login` stays outside). Every page still calls `requireAdmin()` itself — a
+layout does not re-run on client navigation, so it cannot be the only gate.
+- `/admin` — Overview: metric tiles (≤4 of the 6-metric pool, «تخصيص المؤشرات»), a step chart
+  with the prior period, range 24h/7d/30d/90d/custom + interval, AI-cost and engagement
+  tiles. URL params are unchanged (`metric metrics range from to interval cmp`). Flow
+  metrics plot the running total across the period vs the prior period's; per-bucket values
+  are in the tooltip and table view.
+- `/admin/families` — list + 440px side panel. `?view=&q=&tier=&status=&sort=&dir=&page=
+  &open=&tab=` is written with `history.replaceState` (`_families/urlSync.ts`), so filtering,
+  sorting, paging and opening a family never make a server round-trip. The frame's rail and
+  ⌘K palette reach the page through cancelable window events (`_shell/events.ts`). A quiet
+  `router.refresh()` runs when the tab regains focus after the cache window
+  (`useQuietRefresh`).
+- `/admin/subscribers/[id]?tab=summary|meal|exercise|household|billing|runs|account` — the
+  family page. The head lives in `(family)/layout.tsx` (URL unchanged), so a tab switch
+  re-renders only the tab body: one audit row per tab, no header re-read.
+- `/admin/subscribers/[id]/plan/[planId]` (PlanViewer read-only) and `/workout/[planId]`
+  (`WorkoutViewer readOnly` — hides every consumer link, the «أنتِ» marker and session
+  marking; default false keeps the customer view byte-for-byte unchanged).
+- `/admin/subscribers/[id]/health` — the only place health values render; reached through a
+  confirm dialog («this view is recorded»).
+- `GET /api/admin/families/[id]` (panel JSON) and `GET /api/admin/families` (the ⌘K
+  directory, fetched on first open, audited `view_subscriber_list {section:"palette",
+  total}`) — 404 to non-admins, 503 when the auth lookup itself failed
+  (`resolveAdminAccess`), `private, no-store`. Pages carry only rail counts, never the
+  directory. Insights stays hidden (`INSIGHTS_HIDDEN`; it renders without its own chrome).
+
+**Data (`lib/admin`).** The list and rail read ONE cached dataset (`queries.ts`). Cache
+windows, tags and the shared invalidation list live in `freshness.ts`: a cache hit is served
+only while younger than 2×TTL (`readWithinMaxAge`), and state is judged at the dataset's
+read time. Account actions `updateTag` every tag in `ADMIN_HOUSEHOLD_CACHE_TAGS`. Tables are
+read by keyset (`paginateById`, never OFFSET: OFFSET recomputes every skipped row). Lists
+never read `plan_data` blobs. A `plan_data->…` path decompresses the whole jsonb once per
+expression, so the dataset reads lean rows first and probes paths only for the rows that
+decide each household's served plan (`mealProbeIdsNeeded`, 100-id chunks). The list's «days
+ready» is the FIRST beneficiary's count; the family page shows the household's exact figure
+(`householdDaysReady`). One family loads in sections (`family.ts`, each React-`cache()`d) and
+reads `plan_data` for the served plan only, projected server-side (`mealProjection.ts`,
+`workoutProjection.ts`) through the app's own `dropRemovedMembers` and
+`applyChildDisplayTargets`. "Served" follows the app's rules (`getLatestPlan`'s
+masked-failure fallback; `pickServedWorkoutRow`) — never re-derive them.
+
+**One cancellation rule.** `subscriptionCancelState` (`familyFlags.ts`) is the single source
+for the cancel-scheduled flag and reason, the «cancelling»/«ended» views and every renewal
+cell. A `cancelled` row keeps access until `current_period_end ?? ends_at`, and a trial past
+its end is ended. That is `lib/subscription/state.ts`'s rule, mirrored but NOT called:
+free-access mode makes `isSubscriptionActive` return true for everyone, and the admin must
+show real billing state.
+
+**Attention flags** (`familyFlags.ts`): past due, over limit, failed workout run, failed meal
+run, cancel scheduled, onboarding incomplete. A run flag comes from the newest audit row OR
+from the served cell being failed/masked. No sweeper covers workout runs, and translation
+passes record themselves as `meal` runs, so the audit row alone misses real failures. The
+medical gate is deliberately NOT a list flag (the list is the least-privileged surface); the
+panel and page carry it as a boolean.
+
+**Audit + privacy.** Audit writes run in the same `Promise.all` as the data. `after()` is
+not used: its delivery on Netlify is unverified, and a dropped audit row is a PDPL
+regression. The 00010/00011 CHECK fixes the action values, so new context goes in `detail`:
+- overview / families / palette → `view_subscriber_list {section}`
+- panel → `view_subscriber_detail {surface:"panel"}`
+- family page → `view_subscriber_detail {surface:"page", tab}`
+- plan views → `view_plan_data {planId, kind:"meal"|"workout"}`
+
+Filtering an already-loaded list in the browser is not logged again. Destructive actions
+still audit BEFORE acting. `adminTargetRefusal` (`actions.ts`) fails CLOSED when the
+admin_users lookup errors, and a refused deletion explains itself in the dialog. Workout
+injury areas never leave the server. The exact `primary_goal` IS shown, for parity with the
+old page, and can name `pregnancy_lactation` — an owner decision.
+
+**UI system.**
+- **CSS:** `app/admin/admin.css` ports the approved prototype's pixel system. Every class is
+  `ad-<name>`, modifiers too (`ad-pill ad-ok`). Tokens are custom properties on
+  `.admin-root`. Everything sits in `@layer components`, so the embedded consumer viewers
+  (inside `.ad-viewer`) keep their Tailwind utilities.
+- **Components:** primitives in `_ui/`, the frame in `_shell/`, and in `_blocks/` the family
+  blocks shared by the panel AND the page (no server-only imports).
+- **Strings:** `lib/admin/strings/<surface>.ts`, one key prefix each (`sh_ fl_ fm_ fp_ ov_`),
+  merged into the one typed `t()`. Operator copy is neutral: no gendered imperatives and no
+  dual-writing.
+- **Typography:** Tajawal everywhere, emails and ids included.
+- **Toggles:** the language/currency switches re-render the current route
+  (`_shell/toggleReturn.ts`). Only a no-JS post redirects, and only within `/admin`.
+
+**Never put «·» next to a number.** Next to Arabic-Indic digits the middle dot reads as the
+digit zero: «الأعمدة · ١١» rendered as «الأعمدة ١١·» and read as 110, and «٧ مدفوعة» read as
+٧٠. Instead:
+- visible separators use `<Sep/>` / `joinSep()`, a hairline drawn as a border so it survives
+  forced-colors mode;
+- a count beside a label is its own `<Count>` element;
+- text-only places (title, aria-label, option) use `listSep(locale)`, which gives «، » in
+  Arabic.
+
+A source test (`_ui/separators.test.ts`) fails on any «·» in the live console.
+
+**Known limits.** The families list ships every row to the browser — right for hundreds to a
+few thousand families; beyond that, move filtering server-side. Probed rows still decompress
+once per JSON path (only the small probed set). Guarded by `lib/admin/*.test.ts` and the
+`_blocks`, `_families`, `_family`, `_overview`, `_shell` and `_ui` test files.
