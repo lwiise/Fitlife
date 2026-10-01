@@ -63,6 +63,8 @@
   --ad-top-h: 64px;
   --ad-rail-w: 240px;
   --ad-sheet-w: 440px;
+  /* The families table's pinned family column. */
+  --ad-fam-col-w: 256px;
   background: var(--bg);
   color: var(--ink);
   color-scheme: light;
@@ -689,6 +691,9 @@
 }
 .admin-root .ad-days7 button.ad-missing { background: transparent; outline: 1px dashed var(--line2); outline-offset: -1px; }
 .admin-root .ad-days7 button.ad-missing:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* A phone's strip shows the one-letter day (below 768px), as the prototype
+   does: a short Arabic name («الخميس») is wider than a phone's button. */
+.admin-root .ad-days7 .ad-dt-narrow { display: none; }
 
 /* ── Meals ──────────────────────────────────────────────────────────────── */
 /* The meals box is a size container: a narrow one — the 440px side panel, a
@@ -910,11 +915,35 @@
 }
 .admin-root .ad-tbl th:lang(en) { letter-spacing: .04em; text-transform: uppercase; }
 .admin-root .ad-tbl td { height: 52px; padding: 0 16px; border-block-end: 1px solid var(--line); vertical-align: middle; }
-.admin-root .ad-tbl tr:last-child td { border-block-end: 0; }
+.admin-root .ad-tbl tr:last-child :is(td, th[scope="row"]) { border-block-end: 0; }
+/* A row header (a plan row's date) names its row for assistive tech and
+   reads as a data cell on screen. */
+.admin-root .ad-tbl tbody th[scope="row"] {
+  height: 52px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
 .admin-root .ad-tbl :is(th, td).ad-end { text-align: end; }
 .admin-root .ad-tbl td.ad-nowrap { white-space: nowrap; }
 .admin-root .ad-tbl .ad-err { max-width: 240px; color: var(--crit); font-size: 12px; line-height: 16px; }
 .admin-root .ad-tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+/* The household table (HouseholdTable) where five columns do not fit — the
+   440px side panel, a phone: each member's flags move under the name and
+   the macros heading wraps, so the medical-gate flag is on screen without
+   scrolling. Exactly one of the two flag renderings is displayed at a time,
+   so assistive tech reads the flags once. */
+.admin-root .ad-tbl-wrap.ad-hh { container: ad-hh / inline-size; }
+.admin-root .ad-hh .ad-hh-flags-in { display: none; }
+@container ad-hh (max-width: 599px) {
+  .admin-root .ad-hh .ad-hh-flags { display: none; }
+  .admin-root .ad-hh .ad-hh-flags-in { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 6px; }
+  .admin-root .ad-hh th.ad-hh-macros { white-space: normal; }
+}
 
 /* ── KPI tiles, stat tiles ──────────────────────────────────────────────── */
 .admin-root .ad-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -1301,6 +1330,19 @@
 }
 .admin-root .ad-top-start { display: flex; align-items: center; gap: 4px; min-width: 0; padding-inline: 24px; }
 .admin-root .ad-a-top .ad-brand { border-radius: 10px; }
+/* The page's title in the phone bar (PhoneBarTitle) — the prototype's
+   `.ph-bar h1`; its way back uses `.ad-ph-back`. */
+.admin-root .ad-a-top .ad-top-title {
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 4px;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-root .ad-a-top .ad-ph-back { min-width: 0; padding-inline: 4px; }
 /* The brand link is itself the 44px target, so its ring keeps the default
    2px offset: 52px tall, inside even the 56px phone bar. (A 6px offset, sized
    for the old 32px box, pushed the ring's top edge above the viewport while
@@ -1459,11 +1501,19 @@
 .admin-root .ad-a-tools .ad-search { flex: 1; min-width: 220px; max-width: 400px; }
 .admin-root .ad-a-tools .ad-cols-btn { margin-inline-start: auto; }
 .admin-root .ad-a-tools .ad-btn { height: 44px; }
+/* Focus that the keyboard scrolls into view must clear what is pinned over
+   the scrollport (SC 2.4.11): the sticky header row at the block start, the
+   sticky family column at the inline start — Shift+Tab back through the sort
+   buttons otherwise parks each one under it. Chrome scrolls a focused
+   control only when it is outside this padded area, and leaves one that is
+   merely clipped where it is; the inline-end padding makes a sort button
+   showing a sliver at that edge count as outside, so Tab brings it in whole. */
 .admin-root .ad-a-tablewrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
   scroll-padding-block-start: 44px;
+  scroll-padding-inline: var(--ad-fam-col-w) 48px;
   border-block-start: 1px solid var(--line);
 }
 .admin-root .ad-a-table { width: 100%; min-width: max-content; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
@@ -1509,7 +1559,7 @@
 .admin-root .ad-a-table tbody tr[data-selected] td { background: var(--tint); }
 .admin-root .ad-a-table tbody tr[data-selected] .ad-c-fam { box-shadow: inset 3px 0 0 var(--purple); }
 .admin-root[dir="rtl"] .ad-a-table tbody tr[data-selected] .ad-c-fam { box-shadow: inset -3px 0 0 var(--purple); }
-.admin-root .ad-a-table .ad-c-fam { position: sticky; inset-inline-start: 0; z-index: 1; min-width: 256px; }
+.admin-root .ad-a-table .ad-c-fam { position: sticky; inset-inline-start: 0; z-index: 1; min-width: var(--ad-fam-col-w); }
 .admin-root .ad-a-table th.ad-c-fam { z-index: 3; }
 .admin-root .ad-a-table [data-col="tier"] { min-width: 112px; }
 .admin-root .ad-a-table [data-col="status"] { min-width: 128px; }
@@ -1609,6 +1659,21 @@
 }
 .admin-root .ad-ph-bar { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .admin-root .ad-ph-bar h1 { margin-inline-end: auto; font-size: 20px; line-height: 28px; font-weight: 800; }
+/* The frame's top bar IS the phone bar: it names the page or links back
+   (PhoneBarTitle), as the prototype's one `.ph-bar` does. A page header's own
+   bar row would repeat it as a second band, so it is not drawn: a heading
+   stays for assistive tech (visually hidden), and a row holding a control is
+   removed outright — focus must never land on something invisible. */
+.admin-root .ad-ph-top > .ad-ph-bar {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.admin-root .ad-ph-top > .ad-ph-bar:has(a, button, input, select) { display: none; }
 .admin-root .ad-ph-back {
   display: inline-flex;
   align-items: center;
@@ -1828,9 +1893,9 @@
 .admin-root .ad-error-card .ad-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-block-start: 8px; }
 .admin-root .ad-error-card .ad-ref { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px; color: var(--muted); font-size: 12px; line-height: 16px; }
 
-/* While a console overlay is open the page behind it must not scroll. This is
-   the one rule outside `.admin-root`, and it can only match while an admin
-   scrim or drawer is in the document. */
+/* While a console overlay is open the page behind it must not scroll. This
+   and the sticky-bar scroll padding below 1024px are the only rules outside
+   `.admin-root`; each can only match while the console is in the document. */
 html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
 
 /* ── Separators and counts (_ui/Sep.tsx) ────────────────────────────────── */
@@ -1913,9 +1978,29 @@ html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
   .admin-root[dir="rtl"] .ad-a-sheet { box-shadow: 0 0 0 1px var(--line2), 0 24px 64px -24px rgba(26, 16, 35, .5); }
 }
 
+/* While the sheet overlays the list (1024–1279px), nothing of the list's own
+   that a keyboard or a pointer needs may sit under it (SC 2.4.11). The list
+   gives up the sheet's width at its inline end: the filters and the Columns
+   button wrap into view, and the table's scrollport ends where the sheet
+   begins — scroll padding alone could not help there, since the table's last
+   columns, at the end of its scroll range, would still lie under the sheet.
+   The key-hint line no longer fits beside the pager; it rests until the
+   sheet closes. The list stays live on purpose: ↑/↓ walk its rows with the
+   sheet open. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .admin-root .ad-a-split:has(> .ad-a-sheet) > .ad-a-list { margin-inline-end: var(--ad-sheet-w); }
+  .admin-root .ad-a-split:has(> .ad-a-sheet) .ad-a-foot .ad-kb { display: none; }
+}
+
 /* Below 1024px: no rail (a drawer instead), no sheet (rows open the full
    page), the document scrolls instead of the main column. */
 @media (max-width: 1023px) {
+  /* The document scrolls under the 56px sticky top bar: anything focus
+     scrolls into view (Shift+Tab, a script's focus) stops 8px below it
+     instead of under it (SC 2.4.11). On the root scroller, so outside
+     `.admin-root`; the bar's height is a literal because html cannot read
+     the frame's --ad-top-h. */
+  html:has(.admin-root .ad-frame) { scroll-padding-block-start: 64px; }
   .admin-root .ad-desk-only { display: none !important; }
   .admin-root .ad-frame {
     --ad-top-h: 56px;
@@ -1974,6 +2059,8 @@ html:has(.admin-root .ad-scrim, .admin-root .ad-drawer) { overflow: hidden; }
   .admin-root .ad-tile.ad-big,
   .admin-root .ad-tiles.ad-c6 .ad-tile.ad-big { grid-column: 1 / -1; }
   .admin-root .ad-days7 { gap: 4px; }
+  .admin-root .ad-days7 .ad-dt-short { display: none; }
+  .admin-root .ad-days7 .ad-dt-narrow { display: inline; }
   /* Scrolls sideways on phones: pad for the focus ring (see .ad-ph-chips). */
   .admin-root .ad-wk {
     grid-template-columns: repeat(7, minmax(88px, 1fr));

@@ -8,6 +8,7 @@ import { FAMILY_VIEWS, type FamilyView } from "@/lib/admin/console-types";
 import { Dot } from "../_ui/Pill";
 import { LinkPending } from "../_ui/LinkPending";
 import { requestFamiliesView } from "./events";
+import { INSIGHTS_HIDDEN } from "./insightsFlag";
 import type { ShellLabels } from "./labels";
 import type { ShellNav } from "./navData";
 import {
@@ -143,12 +144,25 @@ export function RailItems({
           <div className="ad-rsep" />
         </>
       ) : null}
-      {/* Insights is hidden on purpose (INSIGHTS_HIDDEN) — shown, not linked. */}
-      <p className="ad-ri ad-dim">
-        <ChartLine className="ad-ic" aria-hidden="true" />
-        {labels.insights}
-        <span className="ad-rtag">{labels.hidden}</span>
-      </p>
+      {/* One switch (INSIGHTS_HIDDEN) hides the page and dims this entry. */}
+      {INSIGHTS_HIDDEN ? (
+        <p className="ad-ri ad-dim">
+          <ChartLine className="ad-ic" aria-hidden="true" />
+          {labels.insights}
+          <span className="ad-rtag">{labels.hidden}</span>
+        </p>
+      ) : (
+        <Link
+          href="/admin/insights"
+          className="ad-ri"
+          aria-current={pathname === "/admin/insights" ? "page" : undefined}
+          onClick={onNavigate}
+        >
+          <ChartLine className="ad-ic" aria-hidden="true" />
+          {labels.insights}
+          <LinkPending />
+        </Link>
+      )}
     </>
   );
 }

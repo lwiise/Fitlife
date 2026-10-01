@@ -23,7 +23,7 @@ export { ProgramHistory, ProgramTable } from "./ProgramHistory";
 export { HouseholdTable } from "./HouseholdTable";
 export { BillingFields, SubscriptionHistory } from "./BillingFields";
 export { AccountFields, EngagementFields } from "./AccountFields";
-export { HouseholdCell, RenewalCell, SummaryFacts } from "./SummaryFacts";
+export { HouseholdCell, RenewalCell, SummaryFacts, cancelMarkNode } from "./SummaryFacts";
 export { RunsTable, RunKindChip } from "./RunsTable";
 export { HealthLink } from "./HealthLink";
 export { DateText, ErrorText, PlanStatePill, SubscriptionStatusPill, TierTag } from "./parts";

@@ -10,7 +10,21 @@ import { WorkoutViewer } from "@/app/plan/WorkoutViewer";
 import { Card, Empty } from "@/app/admin/_ui";
 import { loadFamilyName } from "@/app/admin/_family/data";
 import { ViewerHead } from "@/app/admin/_family/ViewerHead";
+import { familyPageMetadata } from "@/app/admin/_shell/titles";
 import "@/app/admin/_family/family.css";
+
+/** «برنامج التمارين، هند القحطاني | لوحة تحكم Fit Life». */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ userId: string; planId: string }>;
+}) {
+  const { userId } = await params;
+  return familyPageMetadata(userId, loadFamilyName, (name, locale) => [
+    t("fp_program_title", locale),
+    name,
+  ]);
+}
 
 /**
  * A family's exercise program as the family sees it — the real WorkoutViewer

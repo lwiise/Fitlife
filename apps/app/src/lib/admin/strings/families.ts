@@ -39,6 +39,22 @@ export const FAMILIES_STRINGS = {
     en: "The list may be incomplete: the load ceiling was reached for",
   },
 
+  // ── The sort select below 1024px (no table header there): «{col}: {dir}» ──
+  fl_sort: { ar: "ترتيب العائلات", en: "Sort families" },
+  fl_order: { ar: "{col}: {dir}", en: "{col}: {dir}" },
+  fl_order_az: { ar: "أ–ي", en: "A–Z" },
+  fl_order_za: { ar: "ي–أ", en: "Z–A" },
+  fl_order_asc: { ar: "تصاعدي", en: "ascending" },
+  fl_order_desc: { ar: "تنازلي", en: "descending" },
+  fl_order_newest: { ar: "الأحدث أولاً", en: "newest first" },
+  fl_order_oldest: { ar: "الأقدم أولاً", en: "oldest first" },
+  fl_order_highest: { ar: "الأعلى أولاً", en: "highest first" },
+  fl_order_lowest: { ar: "الأقل أولاً", en: "lowest first" },
+  fl_order_largest: { ar: "الأكبر أولاً", en: "largest first" },
+  fl_order_smallest: { ar: "الأصغر أولاً", en: "smallest first" },
+  fl_order_most: { ar: "الأكثر أولاً", en: "most first" },
+  fl_order_fewest: { ar: "الأقل أولاً", en: "fewest first" },
+
   // ── The head's count line: «١٠ عائلات», «٦ مدفوعة», «٣ تجريبية», with a separator between ──
   fl_n_families_zero: { ar: "{n} عائلة", en: "{n} families" },
   fl_n_families_one: { ar: "عائلة واحدة", en: "{n} family" },
@@ -96,4 +112,12 @@ export const FAMILIES_STRINGS = {
     ar: "تعذّر تحميل بيانات هذه العائلة.",
     en: "This family’s details couldn’t be loaded.",
   },
+  // The route no longer took the operator for an admin: the session ended
+  // (or was signed out in another tab). Says nothing about the family.
+  fl_denied: { ar: "تعذّر التحقق من صلاحية الوصول", en: "Your access couldn’t be confirmed" },
+  fl_denied_b: {
+    ar: "ربما انتهت الجلسة أو سُجّل الخروج من نافذة أخرى. بعد تسجيل الدخول من جديد تُعرض بيانات العائلة.",
+    en: "The session may have ended, or you signed out in another window. Sign in again to see this family.",
+  },
+  fl_sign_in_again: { ar: "تسجيل الدخول من جديد", en: "Sign in again" },
 } as const satisfies Record<string, Entry>;

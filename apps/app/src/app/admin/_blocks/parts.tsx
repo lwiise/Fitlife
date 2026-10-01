@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { clsx } from "clsx";
 import type { AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t } from "@/lib/admin/i18n";
 import {
   fmtDay,
+  localizeDigits,
   planStateLabel,
   planStateTone,
   subscriptionStatusTone,
@@ -16,7 +17,8 @@ import {
 /**
  * The small, shared pieces the family blocks are built from. Markup mirrors
  * the prototype's classes through the `ad-` naming rule; styling lives in
- * ../admin.css. No hooks — usable from server and client components.
+ * ../admin.css. No state and no effects — usable from server and client
+ * components (TableScroll's useId works in both).
  */
 
 /** A rounded pill with a leading dot (`.ad-pill`); `plain` drops the dot. */
@@ -89,6 +91,53 @@ export function ArText({ className, children }: { className?: string; children: 
     <span lang="ar" dir="rtl" className={clsx("ad-ar-text", className)}>
       {children}
     </span>
+  );
+}
+
+/**
+ * A string the model wrote into a plan — a dish, a session («الجزء العلوي
+ * (3)»), an exercise, its muscles, a warm-up, a note — as Arabic content
+ * (ArText), its Western digits in the admin's digits (localizeDigits). The
+ * one rule for every plan string, so no card mixes «(3)» with «٤٠ دقيقة».
+ */
+export function PlanText({ text, locale }: { text: string; locale: AdminLocale }) {
+  return <ArText>{localizeDigits(text, locale)}</ArText>;
+}
+
+/**
+ * A data table that may scroll sideways (`.ad-tbl-wrap` + `.ad-tbl`) — the
+ * side panel, a phone. The wrapper is a named, focusable region, the usual
+ * pattern for a scrolling table: these tables hold nothing focusable, so
+ * without it a keyboard could not reach the columns past the edge (Safari
+ * never makes a scroller focusable on its own). Region and table share one
+ * name, the table's visually hidden caption.
+ */
+export function TableScroll({
+  label,
+  className,
+  children,
+}: {
+  /** What the table is («الأسرة») — the caption and the region's name. */
+  label: string;
+  className?: string;
+  /** The table's <thead> and <tbody>. */
+  children: ReactNode;
+}) {
+  const captionId = useId();
+  return (
+    <div
+      className={clsx("ad-tbl-wrap", className)}
+      role="region"
+      aria-labelledby={captionId}
+      tabIndex={0}
+    >
+      <table className="ad-tbl">
+        <caption id={captionId} className="ad-sr">
+          {label}
+        </caption>
+        {children}
+      </table>
+    </div>
   );
 }
 

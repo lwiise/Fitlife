@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { RotateCcw, TriangleAlert } from "lucide-react";
 import type { AdminLocale } from "@/lib/admin/format";
-import { t } from "@/lib/admin/i18n";
+import { errorString } from "@/lib/admin/strings/errors";
 import { Btn, BtnLink } from "../_ui/Button";
 
 function noopSubscribe() {
@@ -25,6 +25,11 @@ function serverLocale(): AdminLocale {
  * frame) and app/admin/(console)/error.tsx (inside it, so a failing page keeps
  * the rail and top bar). Retry re-fetches and re-renders the segment; the
  * digest lets an operator quote the server log entry.
+ *
+ * Every admin route loads this component (the error boundaries), so its
+ * strings come from their own small module (strings/errors.ts) — importing
+ * the admin dictionary here would ship all of it, both languages, to every
+ * route, the login page included.
  */
 export function ErrorView({
   error,
@@ -45,11 +50,11 @@ export function ErrorView({
         <span className="ad-error-ic" aria-hidden="true">
           <TriangleAlert className="ad-ic" />
         </span>
-        <h1>{t("sh_error_title", locale)}</h1>
-        <p>{t(error.digest ? "sh_error_body_ref" : "sh_error_body", locale)}</p>
+        <h1>{errorString("sh_error_title", locale)}</h1>
+        <p>{errorString(error.digest ? "sh_error_body_ref" : "sh_error_body", locale)}</p>
         {error.digest ? (
           <p className="ad-ref">
-            {t("sh_error_ref", locale)}
+            {errorString("sh_error_ref", locale)}
             <span className="ad-mono" dir="ltr" translate="no">
               {error.digest}
             </span>
@@ -57,10 +62,10 @@ export function ErrorView({
         ) : null}
         <div className="ad-row">
           <Btn variant="primary" icon={RotateCcw} onClick={() => retry()}>
-            {t("retry", locale)}
+            {errorString("retry", locale)}
           </Btn>
           <BtnLink href="/admin" variant="secondary">
-            {t("sh_back_overview", locale)}
+            {errorString("sh_back_overview", locale)}
           </BtnLink>
         </div>
       </div>

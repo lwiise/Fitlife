@@ -16,6 +16,17 @@ import { useEffect, useEffectEvent, type RefObject } from "react";
  * when focus got out anyway.
  */
 
+/**
+ * Focus is nowhere: on <body> (or the document element), where an unmounted
+ * dialog drops it. A dialog that closes hands focus back only in this case —
+ * whatever the closing choice did (a panel opened, a view switched, a page
+ * arrived) may have put focus somewhere on purpose.
+ */
+export function focusIsLost(): boolean {
+  const current = document.activeElement;
+  return current == null || current === document.body || current === document.documentElement;
+}
+
 /** What Tab can land on, in DOM order: visible, enabled, in the tab order. */
 export function tabbablesIn(container: HTMLElement): HTMLElement[] {
   return Array.from(

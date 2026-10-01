@@ -15,9 +15,12 @@ import {
 import {
   COLUMN_LABEL,
   COLUMN_SORT,
+  SORT_ORDERS,
   STATUS_FILTERS,
   TYPING_WRITE_DELAY_MS,
+  adoptUrl,
   buildSearchIndex,
+  cardCorner,
   countFamilies,
   countsLine,
   countsParts,
@@ -25,6 +28,7 @@ import {
   familyPageHref,
   filterRows,
   hasFilters,
+  isAppPath,
   isPanelTab,
   listCounts,
   listSearch,
@@ -32,12 +36,18 @@ import {
   nextSort,
   pageOf,
   pageRange,
+  pageRows,
   panelTabLabel,
   parseHiddenColumns,
+  parseSortOrder,
   rangeText,
   revealOpenFamily,
   rowKeyCommand,
   serializeHiddenColumns,
+  sortOrderLabel,
+  sortOrderValue,
+  startingQuery,
+  startsNavigationAway,
   statusFilterValues,
   statusOptionLabel,
   stepRow,
@@ -45,7 +55,9 @@ import {
   urlWriteDelay,
   visibleColumns,
   workoutCardText,
+  type LinkClick,
 } from "./listModel";
+import { familyTabLabel } from "../_family/model";
 
 /** When the fixtures' dataset was "read" — the cancellation state is judged at it. */
 const NOW = Date.parse("2026-09-30T09:00:00Z");
@@ -143,6 +155,61 @@ describe("sorting", () => {
     expect(COLUMN_SORT.meal).toBeUndefined();
     expect(COLUMN_SORT.workout).toBeUndefined();
     expect(COLUMN_SORT.renewal).toBeUndefined();
+  });
+
+  describe("the narrow screens' sort select", () => {
+    it("offers every order a header click can give: each sortable column, both directions", () => {
+      expect(SORT_ORDERS).toHaveLength(Object.keys(COLUMN_SORT).length * 2);
+      for (const [column, sort] of Object.entries(COLUMN_SORT)) {
+        const orders = SORT_ORDERS.filter((o) => o.sort === sort);
+        // The header's first direction comes first, then the flip.
+        expect(orders.map((o) => o.dir)).toEqual([
+          defaultSortDir(sort),
+          nextSort({ sort, dir: defaultSortDir(sort) }, sort).dir,
+        ]);
+        expect(orders.every((o) => o.column === column)).toBe(true);
+      }
+      // Every query the URL can hold has its option, and the value reads back.
+      for (const order of SORT_ORDERS) {
+        expect(parseSortOrder(sortOrderValue(order))).toEqual({ sort: order.sort, dir: order.dir });
+      }
+      expect(sortOrderValue(DEFAULT_FAMILY_LIST_QUERY)).toBe("lastActivityAt:desc");
+      for (const bad of ["", "lastActivityAt", "lastActivityAt:up", "bogus:asc", "status:desc:x"]) {
+        expect(parseSortOrder(bad)).toBeNull();
+      }
+    });
+
+    it("names an order by its column header and its direction", () => {
+      const named = (sort: string, dir: string, locale: "ar" | "en") => {
+        const order = SORT_ORDERS.find((o) => o.sort === sort && o.dir === dir)!;
+        return sortOrderLabel(order, locale);
+      };
+      expect(named("lastActivityAt", "desc", "ar")).toBe("آخر نشاط: الأحدث أولاً");
+      expect(named("lifetimeAiCostUsd", "asc", "ar")).toBe("تكلفة الذكاء: الأقل أولاً");
+      expect(named("displayName", "asc", "ar")).toBe("العائلة: أ–ي");
+      expect(named("beneficiaries", "desc", "en")).toBe("Household: largest first");
+      expect(named("signupAt", "asc", "en")).toBe("Signup: oldest first");
+      expect(named("plansGenerated", "desc", "en")).toBe("Plans: most first");
+      expect(named("status", "desc", "en")).toBe("Status: descending");
+      // All fourteen differ.
+      const labels = SORT_ORDERS.map((o) => sortOrderLabel(o, "ar"));
+      expect(new Set(labels).size).toBe(labels.length);
+    });
+
+    it("shows on each card the value the list is sorted by, when the card does not already", () => {
+      const text = { signup: "٣٠ مايو ٢٠٢٦", cost: "‏٣٥٫٩٩ ر.س.‏", last: "قبل ٣ ساعات" };
+      const row = { plansGenerated: 3 };
+      expect(cardCorner("signupAt", row, text, "ar")).toBe("التسجيل ٣٠ مايو ٢٠٢٦");
+      expect(cardCorner("lifetimeAiCostUsd", row, text, "ar")).toBe("تكلفة الذكاء ‏٣٥٫٩٩ ر.س.‏");
+      expect(cardCorner("lifetimeAiCostUsd", row, { ...text, cost: null }, "ar")).toBe("تكلفة الذكاء —");
+      expect(cardCorner("plansGenerated", row, text, "en")).toBe("Plans 3");
+      // Otherwise the prototype's last activity («—» when never active).
+      for (const sort of ["lastActivityAt", "displayName", "status", "beneficiaries"] as const) {
+        expect(cardCorner(sort, row, text, "ar")).toBe("قبل ٣ ساعات");
+      }
+      expect(cardCorner("lastActivityAt", row, { ...text, last: null }, "ar")).toBe("—");
+      expect(cardCorner("signupAt", row, undefined, "ar")).toBe("التسجيل —");
+    });
   });
 });
 
@@ -250,6 +317,26 @@ describe("paging", () => {
     expect(revealOpenFamily(many, filtered, first!.userId, 50)).toBe(filtered);
   });
 
+  it("starts where the console's first render does: the open family's page, and its rows", () => {
+    const many = Array.from({ length: 60 }, (_, i) =>
+      fam({ lastActivityAt: new Date(Date.UTC(2026, 8, 1) + i * 60_000).toISOString() }),
+    );
+    const oldest = many[0]!;
+    // No open family: the URL's own page, as the list sorts and filters it.
+    expect(startingQuery(many, query(), null)).toEqual(query());
+    const first = pageRows(many, query());
+    expect(first).toHaveLength(50);
+    expect(first[0]).toBe(many[59]);
+    expect(pageRows(many, query({ page: 2 }))).toEqual(many.slice(0, 10).reverse());
+    // A family opened on page 2 starts the list there.
+    const start = startingQuery(many, query(), oldest.userId);
+    expect(start.page).toBe(2);
+    expect(pageRows(many, start)).toContain(oldest);
+    // A page past the end is the last page, as the console clamps it.
+    expect(pageRows(many, query({ page: 9 }))).toEqual(pageRows(many, query({ page: 2 })));
+    expect(pageRows(many, query({ status: "trialing" }))).toEqual([]);
+  });
+
   it("steps between the page's rows without wrapping", () => {
     const ids = ["a", "b", "c"];
     expect(stepRow(ids, "a", "next")).toBe("b");
@@ -321,6 +408,97 @@ describe("the URL", () => {
     expect(urlWriteDelay("open=x", "open=x&tab=meal")).toBe(0);
     expect(urlWriteDelay("page=2", "")).toBe(0);
   });
+
+  describe("a link's navigation, as the window sees the finished click", () => {
+    const here = { origin: "https://admin.test", pathname: "/admin/families" };
+    const click = (p: Partial<LinkClick> = {}): LinkClick => ({
+      defaultPrevented: true,
+      button: 0,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      link: { href: "https://admin.test/admin", target: "", download: false },
+      ...p,
+    });
+    const link = (href: string, p: Partial<NonNullable<LinkClick["link"]>> = {}) => ({
+      link: { href, target: "", download: false, ...p },
+    });
+
+    it("counts a <Link> that took a plain click to another page", () => {
+      expect(startsNavigationAway(click(), here)).toBe(true);
+      const id = "00000000-0000-4000-8000-00000000000a";
+      for (const href of [
+        `https://admin.test/admin/subscribers/${id}?tab=meal`,
+        `https://admin.test/admin/subscribers/${id}/plan/${id}`,
+        `https://admin.test/admin/subscribers/${id}/health`,
+      ]) {
+        expect(startsNavigationAway(click(link(href)), here)).toBe(true);
+      }
+      // `_self` is still this tab.
+      expect(startsNavigationAway(click(link("https://admin.test/admin", { target: "_self" })), here)).toBe(true);
+    });
+
+    it("leaves out what is not a navigation away", () => {
+      // Nobody took the click: the browser's own (a new tab, a download…).
+      expect(startsNavigationAway(click({ defaultPrevented: false }), here)).toBe(false);
+      // No link at all (a button, a row).
+      expect(startsNavigationAway(click({ link: null }), here)).toBe(false);
+      // Modified or not the primary button: the browser's (new tab, new window).
+      for (const p of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+        expect(startsNavigationAway(click(p), here)).toBe(false);
+      }
+      // Another tab or a download.
+      expect(startsNavigationAway(click(link("https://admin.test/admin", { target: "_blank" })), here)).toBe(false);
+      expect(startsNavigationAway(click(link("https://admin.test/admin", { download: true })), here)).toBe(false);
+      // The list's own path: a view the page handles itself.
+      expect(startsNavigationAway(click(link("https://admin.test/admin/families?view=ended")), here)).toBe(false);
+      // Another origin.
+      expect(startsNavigationAway(click(link("https://elsewhere.test/admin")), here)).toBe(false);
+    });
+
+    it("hands over only in-app paths", () => {
+      expect(isAppPath("/admin")).toBe(true);
+      expect(isAppPath("/admin/families?view=attention")).toBe(true);
+      for (const href of ["//evil.test/x", "/\\evil.test", "https://evil.test", "javascript:alert(1)", ""]) {
+        expect(isAppPath(href)).toBe(false);
+      }
+    });
+  });
+
+  describe("adopting a URL from outside", () => {
+    const A = "00000000-0000-4000-8000-00000000000a";
+    const B = "00000000-0000-4000-8000-00000000000b";
+    const shown = (search: string) => ({
+      search,
+      open: parseFamilyPanelState(new URLSearchParams(search)).open,
+    });
+
+    it("adopts nothing when the screen already shows what the URL says", () => {
+      expect(adoptUrl(`open=${A}&view=attention`, shown(`view=attention&open=${A}`))).toBeNull();
+      // Invalid or default params read as what the screen shows.
+      expect(adoptUrl("view=bogus&page=0", shown(""))).toBeNull();
+    });
+
+    it("adopts the list's state and keeps the panel when the same family stays open", () => {
+      const adopted = adoptUrl(`view=attention&open=${A}`, shown(`open=${A}`));
+      expect(adopted?.query).toEqual(query({ view: "attention" }));
+      expect(adopted?.panel).toEqual({ open: A, tab: "summary" });
+      expect(adopted?.resetSheet).toBe(false);
+      // Another tab of the same family keeps what the panel holds.
+      expect(adoptUrl(`open=${A}&tab=meal`, shown(`open=${A}`))?.resetSheet).toBe(false);
+    });
+
+    it("resets the panel when the URL names another family or none (back/forward)", () => {
+      // Back to a family whose load was dropped: the panel must ask again.
+      expect(adoptUrl(`open=${A}`, shown("view=attention"))?.resetSheet).toBe(true);
+      expect(adoptUrl("view=attention", shown(`open=${A}`))?.resetSheet).toBe(true);
+      expect(adoptUrl(`open=${B}`, shown(`open=${A}`))).toMatchObject({
+        panel: { open: B },
+        resetSheet: true,
+      });
+    });
+  });
 });
 
 // ── Column preference ───────────────────────────────────────────────────────
@@ -368,7 +546,10 @@ describe("links and tabs", () => {
     expect(panelTabLabel("meal", "ar")).toBe("الخطة الغذائية");
     expect(panelTabLabel("exercise", "en")).toBe("Exercise plan");
     expect(panelTabLabel("household", "ar")).toBe("الأسرة");
+    // Billing carries the full page's own tab name, in both languages.
     expect(panelTabLabel("billing", "ar")).toBe("الاشتراك");
+    expect(panelTabLabel("billing", "en")).toBe("Billing");
+    expect(panelTabLabel("billing", "en")).toBe(familyTabLabel("billing", "en"));
   });
 
   it("offers the old list's statuses, then valid others that occur, then the current one", () => {

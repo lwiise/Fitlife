@@ -22,7 +22,6 @@ import {
   FAMILY_VIEWS,
   type FamilyColumn,
   type FamilyListQuery,
-  type FamilyRow,
   type FamilySortKey,
   type FamilyTab,
   type FamilyView,
@@ -43,8 +42,10 @@ import { Btn, Count, Empty, IconBtn, Kbd, Ltr, Note, joinSep } from "../_ui";
 import {
   FAMILIES_VIEW_EVENT,
   FAMILY_OPEN_EVENT,
+  NAVIGATE_EVENT,
   type FamiliesViewDetail,
   type FamilyOpenDetail,
+  type NavigateDetail,
 } from "../_shell/events";
 import { VIEW_LABEL_KEY, WIDE_QUERY } from "../_shell/views";
 import { ColumnsMenu } from "./ColumnsMenu";
@@ -58,27 +59,38 @@ import { FamilyCards } from "./FamilyCards";
 import { FamilySheet, type SheetActions, type SheetView } from "./FamilySheet";
 import { FamilyTable } from "./FamilyTable";
 import {
+  adoptUrl,
   buildSearchIndex,
   countsLine,
   countsParts,
   familyPageHref,
   filterRows,
   hasFilters,
+  isAppPath,
   listCounts,
   listSearch,
   nextSort,
   pageOf,
   pageRange,
+  parseSortOrder,
   rangeText,
-  revealOpenFamily,
   rowKeyCommand,
+  SORT_ORDERS,
+  sortOrderLabel,
+  sortOrderValue,
+  startingQuery,
+  startsNavigationAway,
   statusOptionLabel,
   stepRow,
   toggleHidden,
   visibleColumns,
+  type LinkClick,
   type RowStep,
+  type SortOrder,
 } from "./listModel";
 import { PanelLoader } from "./panelLoader";
+import { unpackFamilyRows, type PackedFamilyRow } from "./rowCodec";
+import { rowTextFormatter, textsFor } from "./rowText";
 import type { FamilyRowText, SelectOption } from "./types";
 import { UrlSync } from "./urlSync";
 
@@ -88,6 +100,9 @@ const HOVER_PREFETCH_MS = 150;
 const FOCUS_PREFETCH_MS = 100;
 /** ↑/↓ open the row they land on after this pause, not on every step. */
 const ARROW_OPEN_MS = 150;
+
+/** The panel with nothing on it: closed, or about to load the family the URL names. */
+const NO_SHEET: SheetView = { id: null, entry: null, busy: false };
 
 // ── Media and preference stores (browser-only snapshots) ────────────────────
 
@@ -106,6 +121,12 @@ function toggleColumn(column: FamilyColumn): void {
 
 function isModifiedClick(event: MouseEvent): boolean {
   return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+}
+
+/** A finished click's button, keys and prevention, for startsNavigationAway. */
+function clickKeys(event: globalThis.MouseEvent): Omit<LinkClick, "link"> {
+  const { defaultPrevented, button, altKey, ctrlKey, metaKey, shiftKey } = event;
+  return { defaultPrevented, button, altKey, ctrlKey, metaKey, shiftKey };
 }
 
 type FocusRequest = { to: "panel" } | { to: "search" } | { to: "row"; id: string | null };
@@ -140,10 +161,12 @@ interface Leaving {
 }
 
 export interface FamiliesConsoleProps {
-  /** Every family, lean (the page slices, filters and sorts them here). */
-  rows: FamilyRow[];
-  /** Server-formatted display strings, by family id. */
+  /** Every family, lean, packed for the wire (rowCodec.ts); the console slices, filters and sorts them. */
+  rows: PackedFamilyRow[];
+  /** Server-formatted display strings, by family id: the rows the first render shows. */
   texts: Record<string, FamilyRowText>;
+  /** The server's "now" for those strings — the console formats every other row from it too. */
+  nowIso: string;
   /** The server's parse of the request URL: the fallback — the live URL seeds the state. */
   initialQuery: FamilyListQuery;
   initialPanel: FamilyPanelState;
@@ -170,19 +193,25 @@ export interface FamiliesConsoleProps {
  * lands while a navigation is pending makes Next discard the navigation. A
  * waiting write goes out on any pointer press and when the search box loses
  * focus, and everything that leaves the page — Enter on a row, a tapped card,
- * a phone arriving with a family open — goes through `leave()`: the waiting
- * timers are dropped, the URL is written first and then held, and the row or
- * card shows its pending state (spec §2.3.7) until the next page arrives.
+ * a phone arriving with a family open, a ⌘K destination — goes through
+ * `leave()`: the waiting timers are dropped, the URL is written first and
+ * then held, and the row or card shows its pending state (spec §2.3.7) until
+ * the next page arrives. A link that navigates on its own — the rail, the top
+ * bar, the panel's footer and history rows, the health dialog — pauses the
+ * writes too, from the moment its click reaches the window
+ * (startsNavigationAway): the list keeps answering, only the URL waits.
  *
- * The frame talks to the page through two cancelable window events: the rail
- * and the phone chips switch views (FAMILIES_VIEW_EVENT), ⌘K opens a family in
- * the panel (FAMILY_OPEN_EVENT); handling one calls preventDefault() so the
- * frame skips its own navigation. A URL change from anywhere else (back /
- * forward, a link) is adopted; the echo of the page's own write never is.
+ * The frame talks to the page through three cancelable window events: the
+ * rail and the phone chips switch views (FAMILIES_VIEW_EVENT), ⌘K opens a
+ * family in the panel (FAMILY_OPEN_EVENT) or hands over a navigation
+ * (NAVIGATE_EVENT); handling one calls preventDefault() so the frame skips
+ * its own navigation. A URL change from anywhere else (back / forward, a
+ * link) is adopted; the echo of the page's own write never is.
  */
 export function FamiliesConsole({
-  rows,
+  rows: packedRows,
   texts,
+  nowIso,
   initialQuery,
   initialPanel,
   locale,
@@ -195,6 +224,8 @@ export function FamiliesConsole({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlKey = searchParams?.toString() ?? "";
+  // Rebuilt once per server render (a new list), never per keystroke.
+  const rows = useMemo(() => unpackFamilyRows(packedRows), [packedRows]);
 
   // The state starts from the LIVE URL, not the server's parse of it. They
   // are the same on a fresh load; after back/forward the router may re-show
@@ -208,9 +239,9 @@ export function FamiliesConsole({
   const [query, setQuery] = useState<FamilyListQuery>(() => {
     const start = searchParams ? parseFamilyListQuery(searchParams) : initialQuery;
     const open = searchParams ? parseFamilyPanelState(searchParams).open : initialPanel.open;
-    return open ? revealOpenFamily(rows, start, open) : start;
+    return startingQuery(rows, start, open);
   });
-  const [sheet, setSheet] = useState<SheetView>({ id: null, entry: null, busy: false });
+  const [sheet, setSheet] = useState<SheetView>(NO_SHEET);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const [seenUrl, setSeenUrl] = useState(urlKey);
@@ -235,6 +266,8 @@ export function FamiliesConsole({
   const hoverIdRef = useRef<string | null>(null);
   const timersRef = useRef<Timers>({ hover: undefined, focus: undefined, arrow: undefined });
   const actionsRef = useRef<Actions | null>(null);
+  /** The last click the table or the cards handled themselves (see onClickDone). */
+  const ownClickRef = useRef<Event | null>(null);
 
   // ── The list, in memory ──
   const deferredQ = useDeferredValue(query.q);
@@ -259,6 +292,16 @@ export function FamiliesConsole({
   const pageIds = useMemo(() => pageData.rows.map((row) => row.userId), [pageData.rows]);
   const head = useMemo(() => listCounts(filtered), [filtered]);
   const columns = useMemo(() => visibleColumns(hidden), [hidden]);
+  // Display strings: the server's for the rows it rendered (hydrated as
+  // sent), this formatter's — same options, same "now" — for the rest.
+  const formatText = useMemo(
+    () => rowTextFormatter({ locale, currency, nowIso }),
+    [locale, currency, nowIso],
+  );
+  const pageTexts = useMemo(
+    () => textsFor(pageData.rows, texts, formatText),
+    [pageData.rows, texts, formatText],
+  );
   // The page the URL says, clamped to the pages that exist.
   const effectiveQuery = useMemo(
     () => (pageData.page === query.page ? query : { ...query, page: pageData.page }),
@@ -270,16 +313,17 @@ export function FamiliesConsole({
   // adopt it. Every write of the page's own comes back here too, later, as a
   // low-priority echo — by then the state may have moved on (a keystroke
   // between the write and its echo), so an echo is never adopted: that would
-  // put older text back into the search box.
+  // put older text back into the search box. A URL naming another open
+  // family (or none) also resets the panel, as closePanel and openFamily do:
+  // the load effect then asks the loader for the family the URL names.
   if (urlKey !== seenUrl) {
     setSeenUrl(urlKey);
     if (!sync.isOwnEcho(urlKey)) {
-      const params = new URLSearchParams(urlKey);
-      const nextQuery = parseFamilyListQuery(params);
-      const nextPanel = parseFamilyPanelState(params);
-      if (listSearch(nextQuery, nextPanel) !== stateSearch) {
-        setQuery(nextQuery);
-        setPanel(nextPanel);
+      const adopted = adoptUrl(urlKey, { search: stateSearch, open: panel.open });
+      if (adopted) {
+        setQuery(adopted.query);
+        setPanel(adopted.panel);
+        if (adopted.resetSheet) setSheet(NO_SHEET);
       }
     }
   }
@@ -373,7 +417,7 @@ export function FamiliesConsole({
     openIdRef.current = null;
     setPanel((current) => ({ ...current, open: null }));
     // Forget what was on screen: a later open (even by the URL) starts clean.
-    setSheet({ id: null, entry: null, busy: false });
+    setSheet(NO_SHEET);
     loader.abortOpen();
     if (restoreFocus) setFocusRequest({ to: "row", id });
   }
@@ -451,7 +495,8 @@ export function FamiliesConsole({
     const timers = timersRef.current;
     window.clearTimeout(timers[slot]);
     timers[slot] = window.setTimeout(() => {
-      if (isWideNow() && !sync.isHeld()) loader.prefetch(id);
+      // Not while a navigation is on its way: every fetch is an audited view.
+      if (isWideNow() && !sync.isPaused()) loader.prefetch(id);
     }, delay);
   }
 
@@ -479,6 +524,12 @@ export function FamiliesConsole({
 
   function sortBy(key: FamilySortKey) {
     setQuery((current) => ({ ...current, ...nextSort(current, key), page: 1 }));
+    resetListScroll();
+  }
+
+  /** The narrow screens' sort select: an order at once — what a header click sets, from page 1. */
+  function sortTo(order: SortOrder) {
+    setQuery((current) => ({ ...current, ...order, page: 1 }));
     resetListScroll();
   }
 
@@ -515,6 +566,9 @@ export function FamiliesConsole({
       if (selection && !selection.isCollapsed && row.contains(selection.anchorNode)) return;
     }
     event.preventDefault();
+    // Handled here — an open or leave() — so the window does not take the
+    // name link's click for a navigation someone else started.
+    ownClickRef.current = event.nativeEvent;
     if (isWideNow()) openFamily(id, { focus: "panel" });
     else leave(link?.getAttribute("href") ?? familyPageHref(id), id);
   }
@@ -582,24 +636,50 @@ export function FamiliesConsole({
     const href = card?.getAttribute("href");
     if (!card || !href) return;
     event.preventDefault();
+    ownClickRef.current = event.nativeEvent;
     leave(href, card.dataset.id ?? null);
   }
 
   // ── Window: the frame's requests, and the page's keys ──
-  // While the page is leaving, a request is left to the frame: its own
-  // navigation then replaces the one in flight, as any newer navigation does.
+  // While a navigation is on its way (the page leaving, or a link elsewhere),
+  // a request is left to the frame: its own navigation then replaces the one
+  // in flight, as any newer navigation does.
   const onOpenRequest = useEffectEvent((event: Event) => {
     const id = (event as CustomEvent<FamilyOpenDetail>).detail?.id;
-    if (typeof id !== "string" || !isFamilyId(id) || !isWideNow() || sync.isHeld()) return;
+    if (typeof id !== "string" || !isFamilyId(id) || !isWideNow() || sync.isPaused()) return;
     event.preventDefault();
     openFamily(id.toLowerCase(), { focus: "panel", tab: "summary", reveal: true });
   });
 
   const onViewRequest = useEffectEvent((event: Event) => {
     const view = (event as CustomEvent<FamiliesViewDetail>).detail?.view;
-    if (!view || !FAMILY_VIEWS.includes(view) || sync.isHeld()) return;
+    if (!view || !FAMILY_VIEWS.includes(view) || sync.isPaused()) return;
     event.preventDefault();
     changeView(view);
+  });
+
+  // A navigation the frame is about to start with the router (⌘K): the page
+  // takes it over, so its URL writes wait and the list shows it pending.
+  const onNavigateRequest = useEffectEvent((event: Event) => {
+    const href = (event as CustomEvent<NavigateDetail>).detail?.href;
+    if (typeof href !== "string" || !isAppPath(href)) return;
+    event.preventDefault();
+    leave(href, null);
+  });
+
+  // A link elsewhere on screen — the rail, the top bar, the panel and its
+  // blocks — started a navigation of its own: the URL waits until it ends,
+  // or a write landing meanwhile would discard it (urlSync.ts).
+  const onClickDone = useEffectEvent((event: globalThis.MouseEvent) => {
+    if (event === ownClickRef.current) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const anchor = target?.closest("a[href]");
+    const link =
+      anchor instanceof HTMLAnchorElement
+        ? { href: anchor.href, target: anchor.target, download: anchor.hasAttribute("download") }
+        : null;
+    const here = { origin: window.location.origin, pathname: window.location.pathname };
+    if (startsNavigationAway({ ...clickKeys(event), link }, here)) sync.navigationStarted();
   });
 
   const onWindowKey = useEffectEvent((event: globalThis.KeyboardEvent) => {
@@ -643,6 +723,10 @@ export function FamiliesConsole({
     const onKey = (event: globalThis.KeyboardEvent) => onWindowKey(event);
     const onOpen = (event: Event) => onOpenRequest(event);
     const onView = (event: Event) => onViewRequest(event);
+    const onNavigate = (event: Event) => onNavigateRequest(event);
+    // Bubble phase: by the time a click reaches the window, a <Link> has
+    // taken it and its navigation has started.
+    const onClick = (event: globalThis.MouseEvent) => onClickDone(event);
     // A press anywhere is the pointer taking over: a keyboard open still
     // waiting is dropped, and a URL write still waiting goes out now —
     // before whatever the press starts (a link, a card, the currency or
@@ -653,20 +737,28 @@ export function FamiliesConsole({
     };
     // Back/forward moved the browser to another entry: a write still
     // waiting for the old state must not land on it (the new URL is adopted
-    // when its render arrives).
-    const onHistory = () => sync.cancel();
+    // when its render arrives), and a link's navigation on its way was
+    // replaced by this one.
+    const onHistory = () => {
+      sync.cancel();
+      sync.navigationEnded();
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
+    window.addEventListener("click", onClick);
     window.addEventListener("popstate", onHistory);
     window.addEventListener(FAMILY_OPEN_EVENT, onOpen);
     window.addEventListener(FAMILIES_VIEW_EVENT, onView);
+    window.addEventListener(NAVIGATE_EVENT, onNavigate);
     onMount();
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPress, true);
+      window.removeEventListener("click", onClick);
       window.removeEventListener("popstate", onHistory);
       window.removeEventListener(FAMILY_OPEN_EVENT, onOpen);
       window.removeEventListener(FAMILIES_VIEW_EVENT, onView);
+      window.removeEventListener(NAVIGATE_EVENT, onNavigate);
       window.clearTimeout(timers.hover);
       window.clearTimeout(timers.focus);
       window.clearTimeout(timers.arrow);
@@ -676,6 +768,11 @@ export function FamiliesConsole({
   }, [loader, sync]);
 
   // ── Render ──
+  const openRow = openId ? (rowById.get(openId) ?? null) : null;
+  const openText = useMemo(
+    () => (openId ? (texts[openId] ?? (openRow ? formatText(openRow) : null)) : null),
+    [openId, openRow, texts, formatText],
+  );
   const viewLabel = t(VIEW_LABEL_KEY[query.view], locale);
   const line = countsLine(head, locale);
   const range = pageRange(pageData.page, pageData.pageSize, pageData.total);
@@ -766,6 +863,12 @@ export function FamiliesConsole({
               ref={searchRef}
               type="search"
               name="q"
+              // Names are Arabic, emails Latin: once there is text, its first
+              // strong character decides, so «hind.» reads «hind.» — never
+              // «.hind». Empty, the field keeps the page's direction (an empty
+              // dir=auto field is LTR, which would push the Arabic
+              // placeholder away from the icon).
+              dir={query.q ? "auto" : undefined}
               autoComplete="off"
               spellCheck={false}
               enterKeyHint="search"
@@ -804,6 +907,23 @@ export function FamiliesConsole({
               </option>
             ))}
           </select>
+          {/* Below 1024px the cards have no header row to sort by: every
+              order a header click gives, as one select. */}
+          <select
+            className="ad-select ad-phone-only"
+            aria-label={t("fl_sort", locale)}
+            value={sortOrderValue(query)}
+            onChange={(event) => {
+              const order = parseSortOrder(event.target.value);
+              if (order) sortTo(order);
+            }}
+          >
+            {SORT_ORDERS.map((order) => (
+              <option key={sortOrderValue(order)} value={sortOrderValue(order)}>
+                {sortOrderLabel(order, locale)}
+              </option>
+            ))}
+          </select>
           <ColumnsMenu
             hidden={hidden}
             onToggle={toggleColumn}
@@ -815,7 +935,7 @@ export function FamiliesConsole({
         <FamilyTable
           label={viewLabel}
           rows={pageData.rows}
-          texts={texts}
+          texts={pageTexts}
           columns={columns}
           sort={query.sort}
           dir={query.dir}
@@ -836,7 +956,8 @@ export function FamiliesConsole({
 
         <FamilyCards
           rows={pageData.rows}
-          texts={texts}
+          texts={pageTexts}
+          sort={query.sort}
           pendingId={leaving?.id ?? null}
           locale={locale}
           onClick={onCardsClick}
@@ -896,8 +1017,8 @@ export function FamiliesConsole({
           id={openId}
           tab={panel.tab}
           view={sheet}
-          row={rowById.get(openId) ?? null}
-          rowText={texts[openId] ?? null}
+          row={openRow}
+          rowText={openText}
           locale={locale}
           currency={currency}
           headingRef={headingRef}

@@ -22,6 +22,7 @@ import type {
   MealWeekProjection,
   PlanCellState,
   SessionMarkStatus,
+  SubscriptionCancelState,
   TraineeProfileSummary,
   WorkoutPlanCell,
   WorkoutSection,
@@ -293,6 +294,52 @@ export function subscriptionStatusTone(status: string | null): Tone {
   return (status && SUBSCRIPTION_TONE[status]) || "neu";
 }
 
+export type CancelMark = "scheduled" | "ended";
+
+/**
+ * The cancellation mark beside a renewal date — in the families list, the
+ * panel and the page alike (one rule): «إلغاء مجدول» while a cancellation is
+ * scheduled, and «انتهى الاشتراك» once a subscription has run out while its
+ * row still reads active or trialing. That is a missed expiry webhook
+ * (familyFlags.ts): the status pill says «نشط» and the date has passed, so
+ * without the mark nothing on the row says the family has lost access. A
+ * cancelled or expired row says it in its status pill already.
+ */
+export function cancelMark(
+  status: string | null,
+  cancelState: SubscriptionCancelState,
+): CancelMark | null {
+  if (cancelState === "scheduled") return "scheduled";
+  if (cancelState === "ended" && (status === "active" || status === "trialing")) return "ended";
+  return null;
+}
+
+/** The mark's text: «إلغاء مجدول» / «انتهى الاشتراك». */
+export function cancelMarkText(mark: CancelMark, locale: AdminLocale): string {
+  return mark === "scheduled"
+    ? t("cancel_scheduled", locale)
+    : fill(t("fm_sub_ended", locale), { when: "" });
+}
+
+/**
+ * The billing tab's «إلغاء مجدول» answer, in the header's terms (cancelState),
+ * with all three states told apart: «نعم» while a cancellation is scheduled,
+ * «لا» when none is, and «انتهى الاشتراك في <date>» once the subscription has
+ * run out — never a «لا» that hides it. `endedAt` is the date it ran out
+ * (renewalDateAt), when there is one.
+ */
+export function cancelFieldText(
+  cancelState: SubscriptionCancelState,
+  endedAt: string | null,
+  locale: AdminLocale,
+): string {
+  if (cancelState === "scheduled") return t("yes", locale);
+  if (cancelState === "none") return t("no", locale);
+  const day = endedAt ? fmtDay(endedAt, locale) : "—";
+  const when = day === "—" ? "" : fill(t("fm_on_date", locale), { date: day });
+  return fill(t("fm_sub_ended", locale), { when });
+}
+
 /** Tier display name (Arabic from the pricing config). "—" when missing. */
 export function tierName(tier: string | null, locale: AdminLocale): string {
   const arName = tier && tier in PRICING_TIERS ? PRICING_TIERS[tier as Tier].name_ar : null;
@@ -516,6 +563,12 @@ export interface DayTab {
   dayIndex: number;
   /** Short weekday («الأحد» / «Sun»); null when the week start is unknown. */
   short: string | null;
+  /**
+   * One-letter weekday («ح» / «S») for a phone's day strip, where a short
+   * Arabic name («الأربعاء», «الخميس») is wider than its button; null with
+   * `short`. The button's label keeps the full name.
+   */
+  narrow: string | null;
   /** Day of the month, or the day's ordinal («٣») without a week start. */
   num: string;
   /** Full label for assistive tech («الأحد ١٦ ربيع الآخر ١٤٤٨ هـ» / «اليوم ٣»). */
@@ -541,12 +594,19 @@ export function mealDayTabs(week: MealWeekProjection, locale: AdminLocale): DayT
       tabs.push({
         dayIndex: i,
         short: fmtWeekday(weekday, locale, "short"),
+        narrow: weekdayInitial(weekday, locale),
         num: fmtDayOfMonth(iso, locale),
         long: `${fmtWeekday(weekday, locale, "long")} ${fmtDay(iso, locale)}`,
       });
     } else {
       const num = fmtNumber(i + 1, locale);
-      tabs.push({ dayIndex: i, short: null, num, long: fill(t("fm_day_n", locale), { n: num }) });
+      tabs.push({
+        dayIndex: i,
+        short: null,
+        narrow: null,
+        num,
+        long: fill(t("fm_day_n", locale), { n: num }),
+      });
     }
   }
   return tabs;

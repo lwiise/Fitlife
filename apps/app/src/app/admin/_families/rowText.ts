@@ -1,15 +1,18 @@
 /**
- * The families list's display strings, formatted once on the server (see
- * FamilyRowText for why). Pure: the page passes the request's locale,
- * currency and "now"; nothing here reads the clock.
+ * The families list's display strings (see FamilyRowText). Pure: the caller
+ * passes the locale, the currency and "now"; nothing here reads the clock.
+ * The server page formats the rows its render shows — they are hydrated, so
+ * the browser must print the server's text — and sends those strings only;
+ * the console formats every other row with the same options and the same
+ * "now" when it first shows (`textsFor`).
  *
- * Every family is formatted per request, so the Intl formatters are built
- * ONCE per call, not once per value: the shared helpers (fmtMoney, fmtDay,
- * fmtRelativeTo) construct a new formatter on every call, ~0.1ms each —
- * about a second for two thousand families, against ~30ms here. The output
- * is theirs exactly; rowText.test.ts compares the two over a spread of
- * values, so a change to the helpers' options fails the suite instead of
- * quietly splitting the list's text from the rest of the console.
+ * The Intl formatters are built ONCE per formatter, not once per value: the
+ * shared helpers (fmtMoney, fmtDay, fmtRelativeTo) construct a new formatter
+ * on every call, ~0.1ms each — about a second for two thousand families,
+ * against ~30ms here. The output is theirs exactly; rowText.test.ts compares
+ * the two over a spread of values, so a change to the helpers' options fails
+ * the suite instead of quietly splitting the list's text from the rest of
+ * the console.
  */
 
 import type { FamilyRow } from "@/lib/admin/console-types";
@@ -41,7 +44,7 @@ const RELATIVE_STEPS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, numbe
   ["minute", 60_000],
 ];
 
-type RowTextFormatter = (row: FamilyRow) => FamilyRowText;
+export type RowTextFormatter = (row: FamilyRow) => FamilyRowText;
 
 /** One row's strings, with the formatters built once for every row after it. */
 export function rowTextFormatter({ locale, currency, nowIso }: RowTextOptions): RowTextFormatter {
@@ -78,10 +81,15 @@ export function rowTextFormatter({ locale, currency, nowIso }: RowTextOptions): 
     return relative.format(0, "minute");
   };
 
+  // A row formatted once keeps its strings (and their identity, so a memoised
+  // table row or card that shows it again does not re-render).
+  const done = new WeakMap<FamilyRow, FamilyRowText>();
   return (row) => {
+    const known = done.get(row);
+    if (known) return known;
     const last = row.lastActivityAt;
     const cost = row.lifetimeAiCostUsd;
-    return {
+    const text: FamilyRowText = {
       // The old list's cost column: two decimals, «—» when nothing was spent.
       cost: cost > 0 ? money.format(currency === "usd" ? cost : usdToSar(cost)) : null,
       signup: day(row.signupAt),
@@ -89,6 +97,8 @@ export function rowTextFormatter({ locale, currency, nowIso }: RowTextOptions): 
       lastDay: last ? day(last) : null,
       renewal: day(renewalDateAt(row)),
     };
+    done.set(row, text);
+    return text;
   };
 }
 
@@ -104,5 +114,21 @@ export function familyRowTexts(
   const format = rowTextFormatter(options);
   const out: Record<string, FamilyRowText> = {};
   for (const row of rows) out[row.userId] = format(row);
+  return out;
+}
+
+/**
+ * The strings for `rows`: the server's where it sent them (the rows it
+ * rendered, which hydrate with exactly that text), else formatted here with
+ * `format` — built from the server's options and "now", so a row formatted
+ * in the browser reads like its neighbours.
+ */
+export function textsFor(
+  rows: readonly FamilyRow[],
+  sent: Readonly<Record<string, FamilyRowText>>,
+  format: RowTextFormatter,
+): Record<string, FamilyRowText> {
+  const out: Record<string, FamilyRowText> = {};
+  for (const row of rows) out[row.userId] = sent[row.userId] ?? format(row);
   return out;
 }

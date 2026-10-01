@@ -1,9 +1,10 @@
+import type { ReactElement } from "react";
 import type { FamilyHeaderData, SubscriptionCancelState } from "@/lib/admin/console-types";
 import { renewalDateAt } from "@/lib/admin/familyFlags";
 import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { joinSep } from "../_ui/Sep";
-import { fmtDay, fmtRelativeTo } from "./helpers";
+import { cancelMark, cancelMarkText, fmtDay, fmtRelativeTo } from "./helpers";
 import { DateText, Field, FlagChip } from "./parts";
 
 /**
@@ -42,11 +43,27 @@ export function HouseholdCell({
 }
 
 /**
+ * The cancellation mark a renewal cell ends with (cancelMark): «إلغاء مجدول»
+ * while a cancellation is scheduled, «انتهى الاشتراك» once a row that still
+ * reads active or trialing has run out; null when there is none, so it can
+ * go straight into joinSep. Shared with the families table, so the list and
+ * the family's own pages can never disagree.
+ */
+export function cancelMarkNode(
+  status: string | null,
+  cancelState: SubscriptionCancelState,
+  locale: AdminLocale,
+): ReactElement | null {
+  const mark = cancelMark(status, cancelState);
+  return mark ? <span className="ad-bad">{cancelMarkText(mark, locale)}</span> : null;
+}
+
+/**
  * The renewal cell (the prototype's `renewalCell`): a trial shows when it
  * ends; anything else the date it is paid through (`renewalDateAt` — the
  * next renewal, or the day a cancelled subscription runs out) — and either
- * way «إلغاء مجدول» behind a separator while the cancellation is scheduled. `cancelState` is
- * the loader's verdict (subscriptionCancelState), never re-judged here. No
+ * way the cancellation mark behind a separator (cancelMarkNode). `cancelState`
+ * is the loader's verdict (subscriptionCancelState), never re-judged here. No
  * subscription reads «—».
  */
 export function RenewalCell({
@@ -68,10 +85,7 @@ export function RenewalCell({
   const date = (
     <DateText iso={renewalDateAt({ status, trialEndsAt, currentPeriodEnd, endsAt })} locale={locale} />
   );
-  const cancelling =
-    cancelState === "scheduled" ? (
-      <span className="ad-bad">{t("cancel_scheduled", locale)}</span>
-    ) : null;
+  const cancelling = cancelMarkNode(status, cancelState, locale);
   if (status === "trialing") {
     return (
       <>

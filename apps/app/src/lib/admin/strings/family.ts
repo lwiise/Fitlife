@@ -229,6 +229,8 @@ export const FAMILY_STRINGS = {
 
   // ── Billing / account / engagement ──
   fm_cancelled_at: { ar: "تاريخ الإلغاء", en: "Cancelled on" },
+  // The subscription has run out (cancelState "ended"). {when}: "" or fm_on_date.
+  fm_sub_ended: { ar: "انتهى الاشتراك{when}", en: "Ended{when}" },
   fm_col_created: { ar: "أُنشئ", en: "Created" },
   fm_sign_in: { ar: "الدخول", en: "Sign-in" },
   fm_chat_last: { ar: "آخر محادثة", en: "Last chat" },

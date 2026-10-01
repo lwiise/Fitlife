@@ -10,6 +10,7 @@ import { SUPPORTED_LANGUAGES } from "@fitlife/config";
 import type { AdminLocale } from "./format";
 import type { Entry } from "./strings/types";
 import { SHELL_STRINGS } from "./strings/shell";
+import { ERROR_STRINGS } from "./strings/errors";
 import { FAMILIES_STRINGS } from "./strings/families";
 import { FAMILY_STRINGS } from "./strings/family";
 import { FAMILY_PAGE_STRINGS } from "./strings/familyPage";
@@ -23,6 +24,7 @@ export type { AdminLocale };
  */
 const STRINGS = {
   ...SHELL_STRINGS,
+  ...ERROR_STRINGS,
   ...FAMILIES_STRINGS,
   ...FAMILY_STRINGS,
   ...FAMILY_PAGE_STRINGS,
@@ -224,7 +226,6 @@ const STRINGS = {
   field_days: { ar: "الأيام", en: "Days" },
   field_cost: { ar: "التكلفة", en: "Cost" },
   field_model: { ar: "النموذج", en: "Model" },
-  inspect_plan: { ar: "عرض الخطة", en: "View plan" },
   no_plans: { ar: "لا توجد خطط", en: "No plans yet" },
   plan_generating: { ar: "قيد الإنشاء", en: "Generating" },
   plan_ready: { ar: "جاهزة", en: "Ready" },
@@ -271,8 +272,7 @@ const STRINGS = {
     en: "No plan content yet (not generated or failed).",
   },
 
-  // States
-  retry: { ar: "إعادة المحاولة", en: "Try again" },
+  // States («retry» lives in ./strings/errors, which the error screen reads directly)
   truncated_warning: {
     ar: "بعض الإحصاءات قد تكون غير مكتملة (تم بلوغ حد التحميل).",
     en: "Some figures may be incomplete (load ceiling reached).",
@@ -439,7 +439,6 @@ const STRINGS = {
   customize_metrics: { ar: "تخصيص المؤشرات", en: "Customize metrics" },
   currency_label: { ar: "ر.س", en: "SAR" },
   currency_usd_label: { ar: "دولار", en: "USD" },
-  currency_group_label: { ar: "عملة التكلفة", en: "Cost currency" },
 
   // ── Overview: metric labels ──
   metric_gross_revenue: { ar: "إجمالي الإيراد", en: "Gross revenue" },

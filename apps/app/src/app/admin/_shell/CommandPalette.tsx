@@ -12,13 +12,19 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, Search, Users, X } from "lucide-react";
-import { FAMILY_VIEWS, type FamilyView } from "@/lib/admin/console-types";
+import { FAMILY_VIEWS, type FamilySearchEntry, type FamilyView } from "@/lib/admin/console-types";
 import { normalizeSearch } from "@/lib/admin/familyList";
 import { initialOf } from "../_ui/Avatar";
 import { IconBtn } from "../_ui/Button";
 import { joinSep } from "../_ui/Sep";
-import { trapTab, useEscapedKeys } from "../_ui/modalFocus";
-import { PALETTE_OPEN_EVENT, requestFamiliesView, requestFamilyOpen } from "./events";
+import { focusIsLost, trapTab, useEscapedKeys } from "../_ui/modalFocus";
+import {
+  PALETTE_OPEN_EVENT,
+  requestFamiliesView,
+  requestFamilyOpen,
+  requestNavigation,
+} from "./events";
+import { fetchFamilyIndex } from "./familyIndex";
 import type { ShellLabels } from "./labels";
 import type { NavPromise } from "./Rail";
 import type { ShellNav } from "./navData";
@@ -34,15 +40,13 @@ function matchesAllTokens(haystack: string, normalizedQuery: string): boolean {
   return normalizedQuery.split(" ").every((word) => haystack.includes(word));
 }
 
-type NavFamily = ShellNav["families"][number];
-
 /** A family with its search keys: normalised name + email, lower-cased id. */
-interface IndexedFamily extends NavFamily {
+interface IndexedFamily extends FamilySearchEntry {
   hay: string;
   idKey: string;
 }
 
-function buildIndex(families: readonly NavFamily[]): IndexedFamily[] {
+function buildIndex(families: readonly FamilySearchEntry[]): IndexedFamily[] {
   return families.map((f) => ({
     ...f,
     hay: normalizeSearch(`${f.name ?? ""} ${f.email ?? ""}`),
@@ -50,10 +54,27 @@ function buildIndex(families: readonly NavFamily[]): IndexedFamily[] {
   }));
 }
 
+/**
+ * The family index as the palette holds it, keyed by the frame render (`nav`)
+ * it was fetched under: a new render of the console layout — a hard load, a
+ * refresh, an account erased — makes the next opening fetch it afresh.
+ */
+type IndexState =
+  | { source: NavPromise; status: "loading" }
+  | { source: NavPromise; status: "ready"; families: IndexedFamily[] }
+  | { source: NavPromise; status: "failed" };
+
 type Item =
   | { kind: "family"; id: string; name: string | null; email: string | null }
   | { kind: "overview" }
   | { kind: "view"; view: FamilyView };
+
+/** An option's identity, so the highlighted one stays put when the list changes under it. */
+function itemKey(item: Item): string {
+  if (item.kind === "family") return `f-${item.id}`;
+  if (item.kind === "view") return `v-${item.view}`;
+  return "overview";
+}
 
 type PaletteLabels = Pick<
   ShellLabels,
@@ -87,22 +108,24 @@ type PaletteLabels = Pick<
  * click outside) closes and returns focus to where it was.
  *
  * Always mounted and never suspended, so the shortcut works the moment the
- * frame paints; the family list arrives from the layout's promise and the
- * palette says "loading" until it does. Its normalised search index is built
- * lazily — the first time the palette opens with the list in hand, never at
- * page load — and cached in a ref for every re-opening until the list itself
- * changes.
+ * frame paints, and the destinations are there at once. The family index is
+ * subscriber data, so no page carries it: the palette fetches it from GET
+ * /api/admin/families the first time it opens (the route writes the audit
+ * row), says "loading" until it arrives — a query typed meanwhile applies as
+ * soon as it does — and keeps it, normalised for search, for every
+ * re-opening until the frame itself is rendered afresh.
  */
 export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: NavPromise }) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
+  // The highlighted option, by identity; null = the first one.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  // The rail's counts, for the saved views' options.
   const [data, setData] = useState<ShellNav | null | undefined>(undefined);
-  // What render reads; set from the cache below when the palette opens.
-  const [index, setIndex] = useState<IndexedFamily[] | null>(null);
-  const indexCache = useRef<{ source: ShellNav; index: IndexedFamily[] } | null>(null);
+  const [indexState, setIndexState] = useState<IndexState | null>(null);
+  const fetchRef = useRef<AbortController | null>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -111,21 +134,8 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
   const listId = `${baseId}-list`;
   const optionId = useCallback((i: number) => `${baseId}-opt-${i}`, [baseId]);
 
-  /** The search index for this family list — built once, then from the cache. */
-  function indexFor(source: ShellNav): IndexedFamily[] {
-    const cached = indexCache.current;
-    if (cached && cached.source === source) return cached.index;
-    const built = buildIndex(source.families);
-    indexCache.current = { source, index: built };
-    return built;
-  }
-
-  // The family list: resolved from the layout's promise (never suspends). The
-  // index is only built here when the palette is already open and waiting.
-  const onNavData = useEffectEvent((value: ShellNav | null) => {
-    setData(value);
-    if (open && value) setIndex(indexFor(value));
-  });
+  // The counts: resolved from the layout's promise (never suspends).
+  const onNavData = useEffectEvent((value: ShellNav | null) => setData(value));
   useEffect(() => {
     let alive = true;
     nav.then(
@@ -141,13 +151,56 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     };
   }, [nav]);
 
+  // Leaving the console (signing out) drops a fetch still on its way.
+  useEffect(
+    () => () => {
+      const pending = fetchRef.current;
+      fetchRef.current = null;
+      pending?.abort();
+    },
+    [],
+  );
+
+  /**
+   * Fetches the family index for this frame render, once: re-opening reuses
+   * it (or the fetch still on its way), and a failed fetch is tried again on
+   * the next opening.
+   */
+  function ensureIndex() {
+    if (indexState && indexState.source === nav && indexState.status !== "failed") return;
+    fetchRef.current?.abort();
+    const controller = new AbortController();
+    fetchRef.current = controller;
+    const source = nav;
+    setIndexState({ source, status: "loading" });
+    fetchFamilyIndex(controller.signal).then(
+      (families) => {
+        if (fetchRef.current !== controller) return;
+        fetchRef.current = null;
+        setIndexState({ source, status: "ready", families: buildIndex(families) });
+      },
+      () => {
+        // Superseded or aborted: whoever replaced it owns the state.
+        if (fetchRef.current !== controller) return;
+        fetchRef.current = null;
+        setIndexState({ source, status: "failed" });
+      },
+    );
+  }
+
+  // An index fetched under an earlier frame render stays usable while the
+  // palette is open; the next opening replaces it (ensureIndex).
+  const families = indexState?.status === "ready" ? indexState.families : null;
+  const indexLoading = indexState?.status === "loading";
+  const indexFailed = indexState?.status === "failed";
+
   const q = normalizeSearch(query);
   const matched = useMemo(() => {
-    if (!index) return [];
+    if (!families) return [];
     return q
-      ? index.filter((f) => matchesAllTokens(f.hay, q) || (q.length >= 4 && f.idKey.startsWith(q)))
-      : index;
-  }, [index, q]);
+      ? families.filter((f) => matchesAllTokens(f.hay, q) || (q.length >= 4 && f.idKey.startsWith(q)))
+      : families;
+  }, [families, q]);
 
   const navItems = useMemo(() => {
     if (!open) return [];
@@ -170,7 +223,10 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     .slice(0, MAX_FAMILIES)
     .map((f) => ({ kind: "family", id: f.id, name: f.name, email: f.email }));
   const items: Item[] = [...familyItems, ...navItems];
-  const activeIndex = items.length ? Math.min(active, items.length - 1) : -1;
+  // Families arriving while the palette is open push the destinations down;
+  // the option the operator moved to stays highlighted.
+  const keyed = activeKey === null ? -1 : items.findIndex((item) => itemKey(item) === activeKey);
+  const activeIndex = items.length ? Math.max(keyed, 0) : -1;
 
   const nf = useMemo(
     () => new Intl.NumberFormat(labels.locale === "ar" ? "ar-SA" : "en-US"),
@@ -181,8 +237,8 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     restoreRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery("");
-    setActive(0);
-    if (data) setIndex(indexFor(data));
+    setActiveKey(null);
+    ensureIndex();
     setOpen(true);
   }
 
@@ -198,10 +254,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
     restoreRef.current = null;
     if (back) {
       requestAnimationFrame(() => {
-        const current = document.activeElement;
-        const lost =
-          current == null || current === document.body || current === document.documentElement;
-        if (lost && back.isConnected) back.focus({ preventScroll: true });
+        if (focusIsLost() && back.isConnected) back.focus({ preventScroll: true });
       });
     }
   }
@@ -247,15 +300,20 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
       // On the families page the panel opens client-side when the page
       // handles the request; otherwise navigate.
       if (wide && onFamilies && requestFamilyOpen(item.id)) return;
-      router.push(familyHref(item.id, wide));
+      navigate(familyHref(item.id, wide));
       return;
     }
     if (item.kind === "view") {
       if (onFamilies && requestFamiliesView(item.view)) return;
-      router.push(familiesViewHref(item.view));
+      navigate(familiesViewHref(item.view));
       return;
     }
-    router.push("/admin");
+    navigate("/admin");
+  }
+
+  /** A page that must settle first (the families list) takes the navigation over; else the router. */
+  function navigate(href: string) {
+    if (!requestNavigation(href)) router.push(href);
   }
 
   /** ↑ ↓ move the active option, ⏎ opens it; true when the key was one of them. */
@@ -264,7 +322,8 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
       event.preventDefault();
       if (items.length) {
         const step = event.key === "ArrowDown" ? 1 : -1;
-        setActive((activeIndex + step + items.length) % items.length);
+        const next = items[(activeIndex + step + items.length) % items.length];
+        if (next) setActiveKey(itemKey(next));
       }
       return true;
     }
@@ -326,7 +385,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
       "aria-selected": selected,
       className: "ad-opt",
       onMouseMove: () => {
-        if (i !== activeIndex) setActive(i);
+        if (i !== activeIndex) setActiveKey(itemKey(item));
       },
       onClick: () => choose(item),
     };
@@ -420,6 +479,10 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
             aria-autocomplete="list"
             aria-label={labels.searchAny}
             placeholder={labels.searchAny}
+            // A name, an email or an id: once there is text, its first strong
+            // character sets the direction («hind.» never reads «.hind»);
+            // empty, the page's direction keeps the placeholder by the icon.
+            dir={query ? "auto" : undefined}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -428,7 +491,7 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
-              setActive(0);
+              setActiveKey(null);
             }}
             onKeyDown={onInputKey}
           />
@@ -457,12 +520,12 @@ export function CommandPalette({ labels, nav }: { labels: PaletteLabels; nav: Na
               </div>
             ) : null}
           </div>
-          {data === undefined ? (
+          {indexLoading ? (
             <p className="ad-grp">{labels.palLoading}</p>
-          ) : data === null ? (
+          ) : indexFailed ? (
             <p className="ad-grp">{labels.palUnavailable}</p>
           ) : null}
-          {!items.length && data !== undefined ? (
+          {!items.length && !indexLoading ? (
             <div className="ad-empty">
               <b>{labels.palNoMatch}</b>
               {labels.palNoMatchHint}

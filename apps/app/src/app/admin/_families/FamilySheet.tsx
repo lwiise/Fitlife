@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { ChevronRight, Dumbbell, ExternalLink, RotateCw, Soup, X } from "lucide-react";
+import { ChevronRight, Dumbbell, ExternalLink, KeyRound, RotateCw, Soup, X } from "lucide-react";
 import {
   PANEL_TABS,
   type AttentionReason,
@@ -69,6 +69,9 @@ import type { FamilyRowText } from "./types";
 const MEAL_HISTORY_LIMIT = 3;
 const PROGRAM_HISTORY_LIMIT = 5;
 
+/** The admin sign-in page (lib/admin/auth's ADMIN_LOGIN_PATH, which is server-only). */
+const SIGN_IN_HREF = "/admin/login";
+
 /** What the panel shows: the entry for `id`, and whether a request is running. */
 export interface SheetView {
   id: string | null;
@@ -91,8 +94,10 @@ export interface SheetActions {
  *
  * The head paints at once from the list row; the body comes from ONE JSON
  * fetch (the console's PanelLoader) and shows a skeleton until then, a
- * "no longer exists" state on a 404 and a retry on a failure. A cached answer
- * being refreshed stays on screen, dimmed (`aria-busy`).
+ * "no longer exists" state when the route says the family is gone, a
+ * sign-in-again state with a retry when it no longer takes the operator for
+ * an admin, and a retry on any other failure. A cached answer being
+ * refreshed stays on screen, dimmed (`aria-busy`).
  *
  * Tabs are a real tablist: ←/→ move in reading order (so they flip in RTL),
  * Home/End jump, selection follows focus. The footer opens the served meal
@@ -212,6 +217,25 @@ export const FamilySheet = memo(function FamilySheet({
         <Btn variant="secondary" className="ad-fl-state-act" onClick={actions.close}>
           {t("fl_close_panel", locale)}
         </Btn>
+      </div>
+    );
+  } else if (entry?.result.kind === "denied") {
+    // The route no longer took the operator for an admin (a session that
+    // ended): nothing is known about the family, so no "gone" — sign in
+    // again, then retry (never cached, so a retry asks the route afresh).
+    body = (
+      <div className="ad-fl-state">
+        <Note tone="warn" role="alert">
+          <b>{t("fl_denied", locale)}</b> {t("fl_denied_b", locale)}
+        </Note>
+        <div className="ad-fl-state-acts">
+          <Btn variant="secondary" icon={RotateCw} onClick={retry}>
+            {t("retry", locale)}
+          </Btn>
+          <BtnLink href={SIGN_IN_HREF} prefetch={false} variant="ghost" icon={KeyRound}>
+            {t("fl_sign_in_again", locale)}
+          </BtnLink>
+        </div>
       </div>
     );
   } else if (entry?.result.kind === "error") {

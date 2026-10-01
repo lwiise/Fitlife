@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FamilyPanelData } from "@/lib/admin/console-types";
+import { PANEL_FAMILY_GONE, PANEL_NOT_FOUND, PANEL_UNAVAILABLE } from "@/lib/admin/panelResponse";
 import {
   PANEL_CACHE_MAX,
   PANEL_TTL_MS,
@@ -70,12 +71,42 @@ describe("PanelLoader", () => {
     expect(loader.isLoading(id(1))).toBe(false);
   });
 
-  it("treats a 404 as an answer (the family is gone) and caches it", async () => {
+  it("treats the route's marked 404 as an answer (the family is gone) and caches it", async () => {
     const { calls, loader } = setup();
     const pending = loader.load(id(2));
-    calls[0]?.respond(404, { error: "Not found" });
+    calls[0]?.respond(404, PANEL_FAMILY_GONE);
     expect((await pending)?.result).toEqual({ kind: "missing" });
     expect(loader.peek(id(2))?.result.kind).toBe("missing");
+  });
+
+  it("reads a bare 404 as lost access, not a missing family — never cached, asked again", async () => {
+    const { calls, loader } = setup();
+    // A session that ended: the route answers every family with its bare 404.
+    for (const body of [PANEL_NOT_FOUND, "not json", undefined]) {
+      const pending = loader.load(id(30));
+      calls[calls.length - 1]?.respond(404, body);
+      expect((await pending)?.result).toEqual({ kind: "denied" });
+      expect(loader.peek(id(30))).toBeUndefined();
+    }
+    // An unseen hover prefetch that met it leaves nothing behind: the open
+    // that follows asks the route again, and gets the family.
+    loader.prefetch(id(31));
+    calls[calls.length - 1]?.respond(404, PANEL_NOT_FOUND);
+    await flush();
+    expect(loader.peek(id(31))).toBeUndefined();
+    const before = calls.length;
+    const open = loader.load(id(31));
+    expect(calls).toHaveLength(before + 1);
+    calls[calls.length - 1]?.respond(200, PANEL);
+    expect((await open)?.result.kind).toBe("ok");
+  });
+
+  it("asks again after a 503 (the admin lookup failed)", async () => {
+    const { calls, loader } = setup();
+    const pending = loader.load(id(32));
+    calls[0]?.respond(503, PANEL_UNAVAILABLE);
+    expect((await pending)?.result).toEqual({ kind: "error" });
+    expect(loader.peek(id(32))).toBeUndefined();
   });
 
   it("never caches a failure, so the next open tries again", async () => {

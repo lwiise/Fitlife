@@ -6,14 +6,16 @@ import type { ShellLabels } from "./labels";
 import { LocaleToggle } from "./LocaleToggle";
 import { MobileDrawer } from "./MobileDrawer";
 import { PaletteTrigger } from "./PaletteTrigger";
+import { PhoneBarTitle } from "./PhoneBarTitle";
 import type { NavPromise } from "./Rail";
 
 /**
  * The 64px top bar spanning the frame: brand block aligned to the rail, the
  * palette field starting at the main column's gutter, then currency,
- * language and the signed-in admin. Below 1024px it becomes a 56px sticky bar
- * with the drawer's menu button and a search icon; the switches move into the
- * drawer.
+ * language and the signed-in admin. Below 1024px it becomes the phone bar —
+ * 56px, sticky — with the drawer's menu button, the page's title or its way
+ * back (PhoneBarTitle) and a search icon; the brand and the switches move
+ * into the drawer.
  */
 export function TopBar({
   labels,
@@ -38,12 +40,13 @@ export function TopBar({
           currency={currency}
           adminEmail={adminEmail}
         />
-        <Link href="/admin" className="ad-brand">
+        <Link href="/admin" className="ad-brand ad-desk-only">
           <span className="ad-logo" translate="no" aria-hidden="true">
             FL
           </span>
           <span className="ad-brand-name">{labels.app}</span>
         </Link>
+        <PhoneBarTitle labels={labels} />
       </div>
       <PaletteTrigger
         variant="bar"

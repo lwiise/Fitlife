@@ -26,7 +26,9 @@ import {
   familyListQueryToParams,
   filterFamilies,
   normalizeSearch,
+  paginateFamilies,
   parseFamilyListQuery,
+  parseFamilyPanelState,
   sortFamilies,
   type FamilyPanelState,
 } from "@/lib/admin/familyList";
@@ -34,6 +36,7 @@ import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { statusLabel, t, type AdminStringKey } from "@/lib/admin/i18n";
 import { joinText } from "@/lib/admin/separators";
 import { fill, planStateLabel } from "../_blocks/helpers";
+import type { FamilyRowText } from "./types";
 
 // ── Columns and sorting ─────────────────────────────────────────────────────
 
@@ -82,6 +85,56 @@ export function nextSort(
 ): Pick<FamilyListQuery, "sort" | "dir"> {
   if (current.sort === key) return { sort: key, dir: current.dir === "asc" ? "desc" : "asc" };
   return { sort: key, dir: defaultSortDir(key) };
+}
+
+/** A sort with its direction: what one header click — or one option of the narrow sort select — sets. */
+export type SortOrder = Pick<FamilyListQuery, "sort" | "dir">;
+
+/** How each key reads in each direction: a date «الأحدث أولاً», an amount «الأعلى أولاً», a name «أ–ي». */
+const ORDER_WORDS: Readonly<Record<FamilySortKey, Record<"asc" | "desc", AdminStringKey>>> = {
+  displayName: { asc: "fl_order_az", desc: "fl_order_za" },
+  status: { asc: "fl_order_asc", desc: "fl_order_desc" },
+  beneficiaries: { desc: "fl_order_largest", asc: "fl_order_smallest" },
+  lastActivityAt: { desc: "fl_order_newest", asc: "fl_order_oldest" },
+  lifetimeAiCostUsd: { desc: "fl_order_highest", asc: "fl_order_lowest" },
+  signupAt: { desc: "fl_order_newest", asc: "fl_order_oldest" },
+  plansGenerated: { desc: "fl_order_most", asc: "fl_order_fewest" },
+};
+
+/**
+ * Every order the table's headers can produce — each sortable column in the
+ * table's order, its first direction (defaultSortDir) then the other. Below
+ * 1024px there is no header row (the cards replace the table), so the
+ * toolbar's sort select offers exactly these, and nothing a header click can
+ * do is lost on a phone or a tablet in portrait.
+ */
+export const SORT_ORDERS: ReadonlyArray<SortOrder & { column: TableColumn }> = (
+  Object.entries(COLUMN_SORT) as Array<[TableColumn, FamilySortKey]>
+).flatMap(([column, sort]) => {
+  const first = defaultSortDir(sort);
+  return [
+    { column, sort, dir: first },
+    { column, sort, dir: first === "asc" ? "desc" : "asc" },
+  ];
+});
+
+/** An order as a select value («lastActivityAt:desc»). */
+export function sortOrderValue(order: SortOrder): string {
+  return `${order.sort}:${order.dir}`;
+}
+
+/** A select value back to its order; null when it names none. */
+export function parseSortOrder(value: string): SortOrder | null {
+  const order = SORT_ORDERS.find((o) => sortOrderValue(o) === value);
+  return order ? { sort: order.sort, dir: order.dir } : null;
+}
+
+/** An order's name: the column's header, then the direction («آخر نشاط: الأحدث أولاً»). */
+export function sortOrderLabel(order: SortOrder & { column: TableColumn }, locale: AdminLocale): string {
+  return fill(t("fl_order", locale), {
+    col: t(COLUMN_LABEL[order.column], locale),
+    dir: t(ORDER_WORDS[order.sort][order.dir], locale),
+  });
 }
 
 // ── Search ──────────────────────────────────────────────────────────────────
@@ -195,6 +248,29 @@ export function revealOpenFamily(
   return page !== null && page !== query.page ? { ...query, page } : query;
 }
 
+/**
+ * The query the console starts from for a URL's query and open family: on
+ * the page the open family sits on, so its row shows selected (a shared
+ * link, ⌘K from another page).
+ */
+export function startingQuery(
+  rows: readonly FamilyRow[],
+  query: FamilyListQuery,
+  openId: string | null,
+): FamilyListQuery {
+  return openId ? revealOpenFamily(rows, query, openId) : query;
+}
+
+/**
+ * The rows a query shows — the page of the filtered, sorted list. For the
+ * starting query these are the rows the server renders and the browser then
+ * hydrates: the only ones whose display strings the server page formats.
+ */
+export function pageRows(rows: readonly FamilyRow[], query: FamilyListQuery): FamilyRow[] {
+  return paginateFamilies(sortFamilies(filterFamilies(rows, query), query.sort, query.dir), query.page)
+    .rows;
+}
+
 export type RowStep = "next" | "prev" | "first" | "last";
 
 /**
@@ -275,6 +351,37 @@ export function listSearch(query: FamilyListQuery, panel: FamilyPanelState): str
   return familyListQueryToParams(query, panel).toString();
 }
 
+/** A URL from outside, as the state the console takes on. */
+export interface AdoptedUrl {
+  query: FamilyListQuery;
+  panel: FamilyPanelState;
+  /**
+   * The URL names another open family, or none: the panel must start clean,
+   * as closing or opening one leaves it. What it showed, or was loading,
+   * belongs to the family it leaves — and a load still on its way for that
+   * family is dropped when it lands, so a panel left waiting for it would
+   * wait forever if the URL came back to that family.
+   */
+  resetSheet: boolean;
+}
+
+/**
+ * The state to adopt when the URL changed under the console (back/forward, a
+ * link, a redirect): null when the screen already shows what `search` says.
+ * `shown` is what the screen shows now — its canonical search and the open
+ * family.
+ */
+export function adoptUrl(
+  search: string,
+  shown: { search: string; open: string | null },
+): AdoptedUrl | null {
+  const params = new URLSearchParams(search);
+  const query = parseFamilyListQuery(params);
+  const panel = parseFamilyPanelState(params);
+  if (listSearch(query, panel) === shown.search) return null;
+  return { query, panel, resetSheet: panel.open !== shown.open };
+}
+
 /** How long typing waits before the URL catches up. */
 export const TYPING_WRITE_DELAY_MS = 300;
 
@@ -293,6 +400,53 @@ export function urlWriteDelay(current: string | null, next: string): number | nu
   a.delete("q");
   b.delete("q");
   return a.toString() === b.toString() ? TYPING_WRITE_DELAY_MS : 0;
+}
+
+/** A click as the window sees it once every handler has run. */
+export interface LinkClick {
+  /** preventDefault() was called — by Next's <Link> when it navigates. */
+  defaultPrevented: boolean;
+  button: number;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  /** The closest a[href]: its resolved URL, target and download attribute; null without one. */
+  link: { href: string; target: string; download: boolean } | null;
+}
+
+/**
+ * Did this click start a client-side navigation to another page? Next's
+ * <Link> takes a plain primary click on an in-app link: it calls
+ * preventDefault() and starts the navigation before the click reaches the
+ * window. So a click that ends prevented, unmodified, on a same-tab link to
+ * another path of this origin is one — a rail or top-bar link, the panel's
+ * footer, its plan history, the health dialog's «متابعة». A link to the
+ * list's own path is not: the rail's views are handled in-page (or, while
+ * the page is leaving, come back as a URL the console adopts). Clicks the
+ * console handles itself (the table's and the cards') are told apart by
+ * the caller.
+ */
+export function startsNavigationAway(
+  click: LinkClick,
+  here: { origin: string; pathname: string },
+): boolean {
+  const { link } = click;
+  if (!link || !click.defaultPrevented || click.button !== 0) return false;
+  if (click.altKey || click.ctrlKey || click.metaKey || click.shiftKey) return false;
+  if ((link.target && link.target !== "_self") || link.download) return false;
+  let url: URL;
+  try {
+    url = new URL(link.href, here.origin);
+  } catch {
+    return false;
+  }
+  return url.origin === here.origin && url.pathname !== here.pathname;
+}
+
+/** An in-app path the console may navigate to (`/…`, never `//host` or a scheme). */
+export function isAppPath(href: string): boolean {
+  return href.startsWith("/") && !href.startsWith("//") && !href.startsWith("/\\");
 }
 
 // ── Column preference ───────────────────────────────────────────────────────
@@ -346,13 +500,18 @@ export function isPanelTab(tab: string): tab is FamilyTab {
   return (PANEL_TABS as readonly string[]).includes(tab);
 }
 
-/** The panel's tab names («ملخص», «الخطة الغذائية», …). */
+/**
+ * The panel's tab names («ملخص», «الخطة الغذائية», …). Billing is the full
+ * page's own tab name (fp_tab_billing: «الاشتراك» / «Billing»), so a section
+ * is called the same in the panel and on the page — and the English row of
+ * five tabs fits the 440px panel (the prototype's «Billing»).
+ */
 export const PANEL_TAB_LABEL: Readonly<Partial<Record<FamilyTab, AdminStringKey>>> = {
   summary: "fl_tab_summary",
   meal: "fl_meal_plan",
   exercise: "fl_exercise_plan",
   household: "section_household",
-  billing: "section_subscription",
+  billing: "fp_tab_billing",
 };
 
 export function panelTabLabel(tab: FamilyTab, locale: AdminLocale): string {
@@ -417,6 +576,31 @@ export function rangeText(
     to: fmtNumber(range.to, locale),
     total: fmtNumber(total, locale),
   });
+}
+
+/**
+ * A phone card's corner value. The prototype's card shows the last activity
+ * there; when the list is sorted by something the card does not otherwise
+ * show — the signup date, the AI cost, the plans generated — the corner shows
+ * that instead, named, so an order picked in the sort select can be read off
+ * the cards. (Status, household and name are on the card already.)
+ */
+export function cardCorner(
+  sort: FamilySortKey,
+  row: Pick<FamilyRow, "plansGenerated">,
+  text: Pick<FamilyRowText, "signup" | "cost" | "last"> | null | undefined,
+  locale: AdminLocale,
+): string {
+  switch (sort) {
+    case "signupAt":
+      return `${t("col_signup", locale)} ${text?.signup ?? "—"}`;
+    case "lifetimeAiCostUsd":
+      return `${t("col_ai_cost", locale)} ${text?.cost ?? "—"}`;
+    case "plansGenerated":
+      return `${t("col_plans", locale)} ${fmtNumber(row.plansGenerated, locale)}`;
+    default:
+      return text?.last ?? "—";
+  }
 }
 
 /**

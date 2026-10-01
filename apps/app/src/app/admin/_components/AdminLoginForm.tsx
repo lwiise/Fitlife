@@ -3,14 +3,31 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { AdminLocale } from "@/lib/admin/format";
-import { t } from "@/lib/admin/i18n";
 
-function authError(message: string): "login_error_credentials" | "login_error_unconfirmed" | "login_error_generic" {
+type AuthErrorKind = "credentials" | "unconfirmed" | "generic";
+
+/**
+ * The form's text, resolved through t() by the (server) login page — so the
+ * sign-in page does not ship the admin dictionary to the browser.
+ */
+export interface AdminLoginLabels {
+  title: string;
+  subtitle: string;
+  email: string;
+  password: string;
+  signIn: string;
+  signingIn: string;
+  noAccessTitle: string;
+  noAccessBody: string;
+  signOut: string;
+  errors: Record<AuthErrorKind, string>;
+}
+
+function authError(message: string): AuthErrorKind {
   const m = message.toLowerCase();
-  if (m.includes("invalid login credentials")) return "login_error_credentials";
-  if (m.includes("email not confirmed")) return "login_error_unconfirmed";
-  return "login_error_generic";
+  if (m.includes("invalid login credentials")) return "credentials";
+  if (m.includes("email not confirmed")) return "unconfirmed";
+  return "generic";
 }
 
 /**
@@ -21,18 +38,16 @@ function authError(message: string): "login_error_credentials" | "login_error_un
  * state.
  */
 export function AdminLoginForm({
-  locale,
+  labels,
   deniedEmail,
 }: {
-  locale: AdminLocale;
+  labels: AdminLoginLabels;
   deniedEmail?: string | null;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [errorKey, setErrorKey] = useState<
-    "login_error_credentials" | "login_error_unconfirmed" | "login_error_generic" | null
-  >(null);
+  const [errorKey, setErrorKey] = useState<AuthErrorKind | null>(null);
 
   async function signOut() {
     const supabase = createClient();
@@ -48,10 +63,10 @@ export function AdminLoginForm({
     return (
       <div className="text-center">
         <h1 className="text-xl font-extrabold text-brand-ink">
-          {t("no_access_title", locale)}
+          {labels.noAccessTitle}
         </h1>
         <p className="mt-2 text-sm leading-7 text-brand-ink-muted">
-          {t("no_access_body", locale)}
+          {labels.noAccessBody}
         </p>
         <p className="mt-1 text-sm text-brand-ink-muted" dir="ltr">
           {deniedEmail}
@@ -61,7 +76,7 @@ export function AdminLoginForm({
           onClick={signOut}
           className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-brand-purple-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-purple-700"
         >
-          {t("action_sign_out", locale)}
+          {labels.signOut}
         </button>
       </div>
     );
@@ -90,17 +105,17 @@ export function AdminLoginForm({
     <div>
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-extrabold leading-tight text-brand-ink">
-          {t("admin_login_title", locale)}
+          {labels.title}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-brand-ink-muted">
-          {t("admin_login_subtitle", locale)}
+          {labels.subtitle}
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="admin-email" className="mb-2 block text-sm font-bold text-brand-ink">
-            {t("field_email", locale)}
+            {labels.email}
           </label>
           <input
             id="admin-email"
@@ -121,7 +136,7 @@ export function AdminLoginForm({
             htmlFor="admin-password"
             className="mb-2 block text-sm font-bold text-brand-ink"
           >
-            {t("field_password", locale)}
+            {labels.password}
           </label>
           <input
             id="admin-password"
@@ -139,7 +154,7 @@ export function AdminLoginForm({
 
         {errorKey ? (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3" role="alert">
-            <p className="text-sm leading-relaxed text-red-700">{t(errorKey, locale)}</p>
+            <p className="text-sm leading-relaxed text-red-700">{labels.errors[errorKey]}</p>
           </div>
         ) : null}
 
@@ -154,10 +169,10 @@ export function AdminLoginForm({
                 className="size-4 animate-spin motion-reduce:animate-none"
                 aria-hidden="true"
               />
-              {t("signing_in", locale)}
+              {labels.signingIn}
             </>
           ) : (
-            t("action_sign_in", locale)
+            labels.signIn
           )}
         </button>
       </form>

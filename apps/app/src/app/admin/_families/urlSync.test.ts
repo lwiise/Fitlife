@@ -168,6 +168,77 @@ describe("UrlSync — leaving (hold)", () => {
   });
 });
 
+describe("UrlSync — a navigation the console did not start (a link elsewhere)", () => {
+  it("writes nothing while it is on its way — a sort, a filter, a keystroke all wait", () => {
+    const f = fakeHost();
+    const sync = new UrlSync(f.host);
+    sync.navigationStarted(); // the rail's «نظرة عامة» took the click
+    sync.push(PATH, "sort=beneficiaries");
+    sync.push(PATH, "tier=starter");
+    sync.push(PATH, "tier=starter&q=hind");
+    f.tick(TYPING_WRITE_DELAY_MS * 2);
+    sync.flush(); // a pointer press, the search box losing focus
+    expect(f.writes).toEqual([]);
+    expect(sync.isPaused()).toBe(true);
+    // Only the console's own leaving refuses a panel open; a pause does not.
+    expect(sync.isHeld()).toBe(false);
+  });
+
+  it("drops a typed write that was waiting when the link took the click", () => {
+    const f = fakeHost();
+    const sync = new UrlSync(f.host);
+    sync.push(PATH, "q=hin");
+    sync.navigationStarted();
+    f.tick(TYPING_WRITE_DELAY_MS * 2);
+    expect(f.writes).toEqual([]);
+  });
+
+  it("ends when a URL from outside arrives, and the list writes again", () => {
+    const f = fakeHost();
+    const sync = new UrlSync(f.host);
+    sync.navigationStarted();
+    // The frame's own push replaced the navigation and landed on this page.
+    f.doc.search = "?view=attention";
+    sync.settle("view=attention");
+    expect(sync.isPaused()).toBe(false);
+    sync.push(PATH, "view=attention&sort=status&dir=asc");
+    expect(f.writes).toEqual([`${PATH}?view=attention&sort=status&dir=asc`]);
+  });
+
+  it("is not ended by the echo of the console's own earlier write", () => {
+    const f = fakeHost();
+    const sync = new UrlSync(f.host);
+    sync.push(PATH, "view=active"); // written before the click
+    sync.navigationStarted();
+    sync.settle("view=active"); // its echo renders while the link's page loads
+    expect(sync.isPaused()).toBe(true);
+    sync.push(PATH, "view=active&sort=status");
+    expect(f.writes).toEqual([`${PATH}?view=active`]);
+  });
+
+  it("ends when the browser moves to another entry (back/forward replaced it)", () => {
+    const f = fakeHost();
+    const sync = new UrlSync(f.host);
+    sync.navigationStarted();
+    sync.navigationEnded();
+    sync.push(PATH, "page=2");
+    expect(f.writes).toEqual([`${PATH}?page=2`]);
+  });
+
+  it("gives way to the console's own leaving, whose hold then decides", () => {
+    const f = fakeHost();
+    const sync = new UrlSync(f.host);
+    sync.navigationStarted();
+    const token = sync.hold(); // Enter on a row: a newer navigation
+    expect(sync.isHeld()).toBe(true);
+    sync.holdShown(token);
+    sync.holdGone(); // that navigation settled and the page stayed
+    expect(sync.isPaused()).toBe(false);
+    sync.push(PATH, "view=ended");
+    expect(f.writes).toEqual([`${PATH}?view=ended`]);
+  });
+});
+
 describe("UrlSync — echoes", () => {
   it("knows its own writes until their echo is seen", () => {
     const f = fakeHost();

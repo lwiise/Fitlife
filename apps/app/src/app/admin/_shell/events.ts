@@ -44,3 +44,23 @@ export function requestFamiliesView(view: FamilyView): boolean {
     }),
   );
 }
+
+/**
+ * Cancelable. detail: { href } — the frame is about to navigate with the
+ * router (⌘K). The families page takes such a navigation over: its own URL
+ * writes would discard a navigation still on its way, so it holds them, then
+ * navigates itself and shows the list as pending. Anywhere else nothing
+ * listens, and the frame navigates.
+ */
+export const NAVIGATE_EVENT = "ad:navigate";
+
+export interface NavigateDetail {
+  href: string;
+}
+
+/** True when a listener handled it (called preventDefault). */
+export function requestNavigation(href: string): boolean {
+  return !window.dispatchEvent(
+    new CustomEvent<NavigateDetail>(NAVIGATE_EVENT, { detail: { href }, cancelable: true }),
+  );
+}

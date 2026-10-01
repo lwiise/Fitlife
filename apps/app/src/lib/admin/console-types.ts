@@ -170,15 +170,35 @@ export interface FamilyListQuery {
   page: number;
 }
 
-/** What the console frame needs: rail counts + the ⌘K search index. */
+/**
+ * What the console frame needs on every page: the rail counts. It names no
+ * family — it rides along with every console page, so it must carry nothing
+ * an audit row would have to account for. The ⌘K family index is
+ * FamilySearchIndex, fetched (and audited) only when the palette opens.
+ */
 export interface ConsoleNavData {
   counts: Record<FamilyView, number>;
-  /** Every family, for the command palette. */
-  searchIndex: Array<{ id: string; name: string | null; email: string | null }>;
   /** ISO time the underlying dataset was loaded (the rail footer shows it). */
   loadedAt: string;
   /** Tables where the row ceiling was hit — counts may undercount. */
   truncated: string[];
+}
+
+/** One family in the command palette's index. */
+export interface FamilySearchEntry {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
+
+/**
+ * GET /api/admin/families — every family's id, name and email, for ⌘K. An
+ * audited subscriber-list view (`section: "palette"`), served only on request.
+ */
+export interface FamilySearchIndex {
+  families: FamilySearchEntry[];
+  /** ISO time the underlying dataset was loaded. */
+  loadedAt: string;
 }
 
 // ── One family ─────────────────────────────────────────────────────────────

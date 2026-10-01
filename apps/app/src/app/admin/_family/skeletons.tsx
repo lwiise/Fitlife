@@ -210,15 +210,15 @@ function PageHeadSkeleton({ chips }: { chips: number }) {
 }
 
 /**
- * The whole family page while its head loads: the phone band below 1024px;
- * from 1024px the crumb, the head, the seven tabs, and the summary's shape
- * (the body a direct link most often opens on).
+ * The whole family page while its head loads: the phone band below 1024px
+ * (its way back is already in the top bar); from 1024px the crumb, the head,
+ * the seven tabs, and the summary's shape (the body a direct link most often
+ * opens on).
  */
 export function FamilyPageSkeleton({ label }: { label: string }) {
   return (
     <div className="ad-a-page">
       <div className="ad-ph-top ad-phone-only" aria-hidden="true">
-        <Skeleton shape="text" className="ad-fp-skel-crumb" />
         <PageHeadSkeleton chips={3} />
         <div className="ad-fp-skel-tabs">
           {Array.from({ length: 5 }, (_, i) => (

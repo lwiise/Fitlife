@@ -17,7 +17,6 @@ import {
 } from "@/lib/admin/detail";
 import {
   buildFamilyRows,
-  loadFamilyList,
   paginate,
   type AdminDataset,
   type PlanProbeLite,
@@ -59,9 +58,8 @@ import {
   newestGenerationByKind,
   runFailureAt,
 } from "@/lib/admin/familyFlags";
-import { isUuid, viewCounts } from "@/lib/admin/familyList";
+import { isUuid } from "@/lib/admin/familyList";
 import type {
-  ConsoleNavData,
   FamilyHeaderData,
   FamilyPanelData,
   HouseholdMember,
@@ -1181,19 +1179,3 @@ export const loadWorkoutForInspect = cache(
     };
   },
 );
-
-// ── The console frame ───────────────────────────────────────────────────────
-
-/**
- * Rail counts and the ⌘K search index, from the same per-request families list
- * the families page renders (one build per request, 60s-cached tables).
- */
-export const loadConsoleNavData = cache(async (): Promise<ConsoleNavData> => {
-  const { rows, loadedAt, truncated } = await loadFamilyList();
-  return {
-    counts: viewCounts(rows),
-    searchIndex: rows.map((r) => ({ id: r.userId, name: r.displayName, email: r.email })),
-    loadedAt,
-    truncated,
-  };
-});

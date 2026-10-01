@@ -21,7 +21,6 @@ import {
   fmtWeekday,
   focusLabel,
   joinList,
-  localizeDigits,
   locationLabel,
   markView,
   sessionMinutesLabel,
@@ -30,7 +29,7 @@ import {
   weekdaysText,
   type MarkView,
 } from "./helpers";
-import { ArText, Pill } from "./parts";
+import { Pill, PlanText } from "./parts";
 
 const WEEK = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -161,7 +160,7 @@ function Explorer({
             >
               {dn}
               <b>
-                <ArText>{session.name}</ArText>
+                <PlanText text={session.name} locale={locale} />
               </b>
               {session.durationMin != null ? (
                 <span className="ad-muted">{countMinutes(session.durationMin, locale)}</span>
@@ -241,7 +240,7 @@ function SessionDetail({
         <div>
           {joinSep(
             <b>
-              <ArText>{session.name}</ArText>
+              <PlanText text={session.name} locale={locale} />
             </b>,
             <span className="ad-muted">{fmtWeekday(session.dayIndex, locale)}</span>,
             session.durationMin != null ? (
@@ -273,17 +272,17 @@ function SessionDetail({
       ) : null}
       {session.warmup ? (
         <p className="ad-pl-sum">
-          {t("fm_warmup", locale)}: <ArText>{session.warmup}</ArText>
+          {t("fm_warmup", locale)}: <PlanText text={session.warmup} locale={locale} />
         </p>
       ) : null}
       {session.cooldown ? (
         <p className="ad-pl-sum">
-          {t("fm_cooldown", locale)}: <ArText>{session.cooldown}</ArText>
+          {t("fm_cooldown", locale)}: <PlanText text={session.cooldown} locale={locale} />
         </p>
       ) : null}
       {trainee.progressionNotes ? (
         <p className="ad-pl-sum">
-          {t("fm_progression", locale)}: <ArText>{trainee.progressionNotes}</ArText>
+          {t("fm_progression", locale)}: <PlanText text={trainee.progressionNotes} locale={locale} />
         </p>
       ) : null}
     </div>
@@ -301,11 +300,11 @@ function ExerciseRow({
 }) {
   // Muscles, rest, effort — whichever the program states, in that order.
   const details: ReactNode[] = joinSep(
-    exercise.targetMuscles ? <ArText>{exercise.targetMuscles}</ArText> : null,
+    exercise.targetMuscles ? <PlanText text={exercise.targetMuscles} locale={locale} /> : null,
     exercise.restSeconds != null
       ? fill(t("fm_rest_s", locale), { n: fmtNumber(exercise.restSeconds, locale) })
       : null,
-    exercise.rir ? <ArText>{localizeDigits(exercise.rir, locale)}</ArText> : null,
+    exercise.rir ? <PlanText text={exercise.rir} locale={locale} /> : null,
   );
 
   return (
@@ -313,18 +312,18 @@ function ExerciseRow({
       <span className="ad-n ad-num">{fmtNumber(index + 1, locale)}</span>
       <span>
         <b>
-          <ArText>{exercise.name}</ArText>
+          <PlanText text={exercise.name} locale={locale} />
         </b>
         {details.length > 0 ? <small>{details}</small> : null}
         {exercise.homeVariant ? (
           <small>
-            {t("fm_home_variant", locale)}: <ArText>{exercise.homeVariant}</ArText>
+            {t("fm_home_variant", locale)}: <PlanText text={exercise.homeVariant} locale={locale} />
           </small>
         ) : null}
       </span>
       <span className="ad-sets ad-num">
         {exercise.sets != null ? fmtNumber(exercise.sets, locale) : "—"} ×{" "}
-        <ArText>{exercise.reps ? localizeDigits(exercise.reps, locale) : "—"}</ArText>
+        {exercise.reps ? <PlanText text={exercise.reps} locale={locale} /> : "—"}
       </span>
     </li>
   );

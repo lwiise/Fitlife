@@ -68,7 +68,7 @@ export function FamilyDeskHead({
   const name = familyName(header.displayName, locale);
   return (
     <>
-      <FamiliesCrumb label={t("sh_families", locale)} variant="crumb" />
+      <FamiliesCrumb label={t("sh_families", locale)} />
       <div className="ad-p-head ad-desk-only">
         <div>
           <h1>
@@ -109,9 +109,11 @@ export function FamilyDeskHead({
 
 /**
  * The page head below 1024px (the prototype's phone family screen): a white
- * band with the back link, the name, the chips and the tab bar. The email and
- * the health entry live in the summary and household tabs there. Its tabs
- * close the band, so a pending switch dims everything after it.
+ * band with the name, the chips and the tab bar, under the top bar that
+ * carries the way back («‹ العائلات», _shell/PhoneBarTitle) — one bar, as the
+ * prototype has it. The email and the health entry live in the summary and
+ * household tabs there. Its tabs close the band, so a pending switch dims
+ * everything after it.
  */
 export function FamilyPhoneHead({
   header,
@@ -124,9 +126,6 @@ export function FamilyPhoneHead({
 }) {
   return (
     <div className="ad-ph-top ad-phone-only">
-      <div className="ad-ph-bar">
-        <FamiliesCrumb label={t("sh_families", locale)} variant="phone" />
-      </div>
       <div>
         <h1 className="ad-ph-title">
           <bdi>{familyName(header.displayName, locale)}</bdi>

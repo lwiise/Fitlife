@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { subscriberRouteKind } from "./model";
+import { subscriberRouteKind } from "./routeKind";
 import { FamilyPageSkeleton, HealthPageSkeleton, ViewerPageSkeleton } from "./skeletons";
 
 /**

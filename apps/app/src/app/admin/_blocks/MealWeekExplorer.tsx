@@ -23,7 +23,7 @@ import {
   slotLabel,
   widthClass,
 } from "./helpers";
-import { ArText } from "./parts";
+import { PlanText } from "./parts";
 
 /**
  * The served meal week, one person and one day at a time (the prototype's
@@ -132,7 +132,9 @@ function Week({
               className={clsx(isToday && "ad-today", !ready && "ad-missing")}
               onClick={() => setPickedDay(d.dayIndex)}
             >
-              {d.short}
+              {/* Short names on wide strips, one letter on a phone's (admin.css). */}
+              {d.short ? <span className="ad-dt-short">{d.short}</span> : null}
+              {d.narrow ? <span className="ad-dt-narrow">{d.narrow}</span> : null}
               <b>{d.num}</b>
             </button>
           );
@@ -176,7 +178,7 @@ function DayMeals({
         <div key={`${meal.slot}-${i}`} className="ad-meal">
           <span className="ad-slot">{slotLabel(meal.slot, locale)}</span>
           <span className="ad-dish">
-            <ArText>{meal.name}</ArText>
+            <PlanText text={meal.name} locale={locale} />
           </span>
           <span className="ad-share">
             {meal.sharedBy > 1 ? (

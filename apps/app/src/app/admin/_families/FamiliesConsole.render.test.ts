@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 
 const { FamiliesConsole } = await import("./FamiliesConsole");
 const { familyRowTexts } = await import("./rowText");
+const { packFamilyRows } = await import("./rowCodec");
 
 let seq = 0;
 function fam(p: Partial<FamilyRow> = {}): FamilyRow {
@@ -54,17 +55,21 @@ function fam(p: Partial<FamilyRow> = {}): FamilyRow {
   };
 }
 
-function render(rows: FamilyRow[], url = "") {
+const NOW_ISO = "2026-09-30T09:00:00Z";
+
+/** `sent`: the rows the "server" formatted (all of them by default). */
+function render(rows: FamilyRow[], url = "", sent: readonly FamilyRow[] = rows) {
   search.current = new URLSearchParams(url);
-  const texts = familyRowTexts(rows, {
+  const texts = familyRowTexts(sent, {
     locale: "ar",
     currency: "sar",
-    nowIso: "2026-09-30T09:00:00Z",
+    nowIso: NOW_ISO,
   });
   return renderToString(
     createElement(FamiliesConsole, {
-      rows,
+      rows: packFamilyRows(rows),
       texts,
+      nowIso: NOW_ISO,
       initialQuery: parseFamilyListQuery(search.current),
       initialPanel: parseFamilyPanelState(search.current),
       locale: "ar",
@@ -185,5 +190,27 @@ describe("FamiliesConsole (server render)", () => {
         `^<span class="ad-muted">تنتهي التجربة</span> <time dateTime="2026-10-04T00:00:00Z">[^<]+</time> ${SEP} ${CANCEL}$`,
       ),
     );
+  });
+
+  it("sorts below 1024px too: one select with every order a header gives, the cards showing its value", () => {
+    const html = render(rows, "sort=lifetimeAiCostUsd&dir=asc").replace(/<!-- -->/g, "");
+    const select = html.match(/<select class="ad-select ad-phone-only" aria-label="ترتيب العائلات"[\s\S]*?<\/select>/)?.[0] ?? "";
+    expect(select).not.toBe("");
+    // Seven columns, both directions; the URL's order is the one selected.
+    expect(count(select, /<option /g)).toBe(14);
+    expect(select).toMatch(/<option value="lifetimeAiCostUsd:asc" selected="">تكلفة الذكاء: الأقل أولاً<\/option>/);
+    expect(select).toContain('<option value="lastActivityAt:desc">آخر نشاط: الأحدث أولاً</option>');
+    // Sorted by cost, each card's corner names and shows the cost.
+    expect(count(html, /<span class="ad-r1"><b><bdi>[^<]+<\/bdi><\/b><span>تكلفة الذكاء [^<]+<\/span>/g)).toBe(3);
+  });
+
+  it("formats a row the server sent no strings for exactly as the server would", () => {
+    // The server formats only the rows its render shows; any other row (a
+    // later page, another filter) is formatted by the console from the same
+    // options and the same "now" — and must read the same.
+    const fromServer = render(rows);
+    const fromConsole = render(rows, "", []);
+    expect(fromConsole).toBe(fromServer);
+    expect(fromConsole).toContain("١ أكتوبر ٢٠٢٦"); // a renewal date, formatted in the console
   });
 });

@@ -1,6 +1,6 @@
 /**
  * URL search-param helpers for the (fully server-rendered, hidden) Insights
- * page and its top bar's toggles, whose state lives in the query string.
+ * page and its 30/90 period control, whose state lives in the query string.
  */
 
 export type RawParams = Record<string, string | string[] | undefined>;

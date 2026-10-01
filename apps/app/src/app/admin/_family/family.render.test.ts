@@ -434,14 +434,17 @@ describe("family head", () => {
     expect(out).toContain("No flags");
   });
 
-  it("phone: the back link, the name, the chips and the tabs — no email line", () => {
+  it("phone: the name, the chips and the tabs — no email line, no second bar", () => {
     const out = html(FamilyPhoneHead, { header: header(), tab: "summary", locale: "ar" });
     expect(out).toContain("ad-ph-top ad-phone-only");
-    expect(out).toContain("ad-ph-back");
+    // The way back is in the top bar (_shell/PhoneBarTitle): one bar, as the
+    // prototype's phone family screen has it.
+    expect(out).not.toContain("ad-ph-back");
+    expect(out).not.toContain("ad-ph-bar");
     expect(out).toContain("ad-ph-title");
     expect(out).toContain("هند العتيبي");
     expect(out).not.toContain("hind@example.com");
-    expect(count(out, "href=")).toBe(1 + FAMILY_TABS.length);
+    expect(count(out, "href=")).toBe(FAMILY_TABS.length);
   });
 
   it("names a nameless family", () => {

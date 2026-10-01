@@ -1,25 +1,29 @@
+import { getAdminLocale } from "@/lib/admin/locale";
 import { t } from "@/lib/admin/i18n";
+import { Skeleton, SkeletonGroup } from "../../_ui/Skeleton";
 
-/** Insights loading skeleton (respects prefers-reduced-motion via globals.css). */
-export default function InsightsLoading() {
+/**
+ * Insights' loading state, inside the console frame like the page itself:
+ * the frame already draws the top bar and owns <main>, so this is only the
+ * page's heading and three sections of chart blocks (the pulse stops under
+ * reduced motion).
+ */
+export default async function InsightsLoading() {
+  const locale = await getAdminLocale();
   return (
-    <>
-      <div className="h-[4.5rem] border-b border-brand-ink/10 bg-surface-elevated" />
-      <main
-        className="container-app space-y-8 py-6"
-        aria-busy="true"
-        aria-label={t("loading_label", "ar")}
-      >
-        {Array.from({ length: 3 }).map((_, s) => (
-          <div key={s} className="space-y-3">
-            <div className="h-6 w-48 animate-pulse rounded bg-surface-elevated" />
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="h-64 animate-pulse rounded-xl border border-brand-ink/10 bg-surface-elevated" />
-              <div className="h-64 animate-pulse rounded-xl border border-brand-ink/10 bg-surface-elevated" />
+    <div className="ad-a-ov">
+      <SkeletonGroup label={t("loading_label", locale)} className="ad-a-ov-in">
+        <Skeleton shape="title" width={30} />
+        {[0, 1, 2].map((s) => (
+          <div key={s} className="ad-stack">
+            <Skeleton shape="text" width={20} />
+            <div className="ad-grid-2">
+              <Skeleton shape="block" />
+              <Skeleton shape="block" />
             </div>
           </div>
         ))}
-      </main>
-    </>
+      </SkeletonGroup>
+    </div>
   );
 }

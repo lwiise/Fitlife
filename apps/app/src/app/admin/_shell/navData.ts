@@ -2,10 +2,14 @@ import { FAMILY_VIEWS, type ConsoleNavData, type FamilyView } from "@/lib/admin/
 import type { AdminLocale } from "@/lib/admin/format";
 
 /**
- * What the frame's client pieces receive: ConsoleNavData with its display
- * strings already formatted on the server, so the Arabic-Indic digits and the
- * Riyadh clock time are rendered once, identically for SSR and hydration
- * (Node's and the browser's ICU can disagree on spacing in times).
+ * What the frame's client pieces receive on every console page: the rail
+ * counts with their display strings already formatted on the server, so the
+ * Arabic-Indic digits and the Riyadh clock time are rendered once, identically
+ * for SSR and hydration (Node's and the browser's ICU can disagree on spacing
+ * in times).
+ *
+ * It names no family. The ⌘K family index is not part of it: the palette
+ * fetches that from the audited GET /api/admin/families when it opens.
  */
 export interface ShellNav {
   counts: Record<FamilyView, number>;
@@ -15,7 +19,6 @@ export interface ShellNav {
   updatedText: string;
   /** Some table hit the load ceiling — counts may undercount. */
   partial: boolean;
-  families: ConsoleNavData["searchIndex"];
 }
 
 const TAG: Record<AdminLocale, string> = { ar: "ar-SA", en: "en-US" };
@@ -42,6 +45,5 @@ export function toShellNav(data: ConsoleNavData, locale: AdminLocale): ShellNav 
     countText,
     updatedText,
     partial: (data.truncated?.length ?? 0) > 0,
-    families: data.searchIndex ?? [],
   };
 }

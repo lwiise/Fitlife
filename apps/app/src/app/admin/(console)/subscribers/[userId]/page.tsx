@@ -10,10 +10,40 @@ import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 import { Note } from "@/app/admin/_ui";
 import { preloadFamilyTab } from "@/app/admin/_family/data";
 import { FamilyDeskHead, FamilyPhoneHead } from "@/app/admin/_family/FamilyHead";
-import { isAuditFailure, parseFamilyTab } from "@/app/admin/_family/model";
+import {
+  familyName,
+  familyTabLabel,
+  isAuditFailure,
+  parseFamilyTab,
+} from "@/app/admin/_family/model";
 import { TabSkeleton } from "@/app/admin/_family/skeletons";
 import { FamilyTabBody } from "@/app/admin/_family/tabs";
+import { familyPageMetadata } from "@/app/admin/_shell/titles";
 import "@/app/admin/_family/family.css";
+
+/** «هند القحطاني، الخطة الغذائية | لوحة تحكم Fit Life» — the family, then its tab. */
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ userId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ userId }, query] = await Promise.all([params, searchParams]);
+  const tab = parseFamilyTab(query.tab);
+  return familyPageMetadata(
+    userId,
+    // The page's own header read (cached per request).
+    async (id) => {
+      const header = await loadFamilyHeader(id);
+      return header ? header.displayName ?? "" : null;
+    },
+    (name, locale) => [
+      name !== null ? familyName(name, locale) : null,
+      tab !== "summary" && familyTabLabel(tab, locale),
+    ],
+  );
+}
 
 /**
  * /admin/subscribers/<id> — one family, in full (Concept A · Console): the

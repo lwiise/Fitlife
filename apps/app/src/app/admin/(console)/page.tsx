@@ -13,7 +13,13 @@ import { OverviewScope } from "../_overview/OverviewScope";
 import { RangeControls } from "../_overview/RangeControls";
 import { boardLabels, buildOverviewModel, rangeLabels } from "../_overview/model";
 import { flattenParams, overviewAuditDetail, type RawParams } from "../_overview/urls";
+import { pageMetadata } from "../_shell/titles";
 import "../_overview/overview.css";
+
+/** «نظرة عامة | لوحة تحكم Fit Life». */
+export function generateMetadata() {
+  return pageMetadata("nav_overview");
+}
 
 /**
  * /admin — the Overview (Concept A · Console): headline metrics, the chart,

@@ -88,6 +88,8 @@
 .admin-root .ad-fl .ad-fl-state { display: flex; flex-direction: column; gap: 12px; }
 .admin-root .ad-fl .ad-fl-state .ad-empty { padding-block: 24px 8px; }
 .admin-root .ad-fl .ad-fl-state .ad-fl-state-act { align-self: center; }
+/* Signed out: retry beside the way back in, at the start under the note. */
+.admin-root .ad-fl .ad-fl-state-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .admin-root .ad-fl .ad-fl-sheet-skel { gap: 16px; }
 .admin-root .ad-fl .ad-skel.ad-fl-skel-name { width: 180px; }
 .admin-root .ad-fl .ad-skel.ad-fl-skel-meta { width: 240px; margin-block-start: 8px; }
@@ -109,6 +111,10 @@
 .admin-root .ad-fl .ad-skel.ad-fl-skel-row-name { width: 140px; height: 14px; }
 .admin-root .ad-fl .ad-skel.ad-fl-skel-row-email { width: 176px; }
 .admin-root .ad-fl .ad-skel.ad-fl-skel-card-line { width: 60%; }
+
+/* The cards' icon symbols (FamilyCards): drawn once, out of the flow and
+   unseen — but not display:none, which some engines also apply to <use>. */
+.admin-root .ad-fl .ad-fl-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 /* ── Below 1024px: the phone list ───────────────────────────────────────── */
 @media (max-width: 1023px) {

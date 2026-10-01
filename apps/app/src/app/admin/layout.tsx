@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { getAdminLocale } from "@/lib/admin/locale";
+import { consoleLayoutMetadata } from "./_shell/titles";
 import "./admin.css";
 
 /**
@@ -13,6 +15,17 @@ import "./admin.css";
  * never statically cached or prerendered.
  */
 export const dynamic = "force-dynamic";
+
+/**
+ * The admin's <title>: «لوحة تحكم Fit Life», and «<page> | لوحة تحكم Fit Life»
+ * for every page that names itself — never the consumer app's title. Set
+ * here, not on the (console) group: a route group's layout shares its segment
+ * with the group's own page (/admin), and a template never applies to a page
+ * of its own segment.
+ */
+export function generateMetadata(): Promise<Metadata> {
+  return consoleLayoutMetadata();
+}
 
 export default async function AdminLayout({
   children,

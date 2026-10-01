@@ -130,14 +130,6 @@ export function yesNo(value: boolean | null | undefined, locale: AdminLocale): s
 
 // ── Route skeleton ──────────────────────────────────────────────────────────
 
-/** Which screen under /admin/subscribers/<id> a path is. */
-export type SubscriberRouteKind = "family" | "health" | "viewer";
-
-export function subscriberRouteKind(pathname: string): SubscriberRouteKind {
-  const parts = pathname.split("/").filter(Boolean);
-  const at = parts.indexOf("subscribers");
-  const child = at >= 0 ? parts[at + 2] : undefined;
-  if (child === "health") return "health";
-  if (child === "plan" || child === "workout") return "viewer";
-  return "family";
-}
+// Kept in ./routeKind, which the loading skeleton imports without this
+// module's dictionary.
+export { subscriberRouteKind, type SubscriberRouteKind } from "./routeKind";

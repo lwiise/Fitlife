@@ -4,12 +4,14 @@
  */
 
 /**
- * One family row's display strings, formatted ONCE on the server (see
- * rowText.ts). Dates, money and relative times depend on the ICU build that
- * formats them; Node's and the browser's can differ (currency symbols, date
- * patterns), and a list that is server-rendered and then hydrated must print
- * the same text both times. The same reason the frame formats its rail
- * counts on the server (_shell/navData.ts).
+ * One family row's display strings (rowText.ts). Dates, money and relative
+ * times depend on the ICU build that formats them; Node's and the browser's
+ * can differ (currency symbols, date patterns), and a row that is
+ * server-rendered and then hydrated must print the same text both times. So
+ * the server formats the rows its render shows and sends those strings; any
+ * other row is never hydrated, and the console formats it in the browser
+ * from the same options and "now". The same reason the frame formats its
+ * rail counts on the server (_shell/navData.ts).
  */
 export interface FamilyRowText {
   /** Lifetime AI cost in the operator's currency; null when nothing was spent. */

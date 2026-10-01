@@ -5,6 +5,7 @@ import { createElement, isValidElement, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { joinText, listSep } from "@/lib/admin/separators";
+import { INSIGHTS_HIDDEN } from "../_shell/insightsFlag";
 import { Count, Sep, joinSep } from "./Sep";
 
 /**
@@ -128,8 +129,8 @@ function localImports(file: string): string[] {
  * Insights page counts as an importer again as soon as its flag is flipped.
  */
 function liveComponentFiles(adminFiles: readonly string[]): Set<string> {
-  const insightsHidden =
-    existsSync(INSIGHTS_PAGE) && /INSIGHTS_HIDDEN: boolean = true/.test(readFileSync(INSIGHTS_PAGE, "utf8"));
+  // The flag itself (_shell/insightsFlag.ts), not a reading of the page's source.
+  const insightsHidden = INSIGHTS_HIDDEN;
   const queue = adminFiles.filter(
     (file) => !file.startsWith(COMPONENTS + path.sep) && !(insightsHidden && file === INSIGHTS_PAGE),
   );

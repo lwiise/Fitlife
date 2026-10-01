@@ -361,4 +361,20 @@ describe("FamilySheet (render)", () => {
     expect(failed).toContain("تعذّر تحميل بيانات هذه العائلة");
     expect(failed).toContain("إعادة المحاولة");
   });
+
+  it("never calls a family gone when the route stopped taking the operator for an admin", () => {
+    const denied = render("summary", {
+      id: ID,
+      entry: { ...ENTRY, result: { kind: "denied" } },
+      busy: false,
+    });
+    expect(denied).not.toContain("لم تعد هذه العائلة موجودة");
+    expect(denied).toContain("تعذّر التحقق من صلاحية الوصول");
+    expect(denied).toContain('role="alert"');
+    // A retry, and the way back in (a plain link — nothing prefetched).
+    expect(denied).toContain("إعادة المحاولة");
+    expect(denied).toMatch(/<a[^>]* href="\/admin\/login"[^>]*>[\s\S]*?تسجيل الدخول من جديد/);
+    // The family may well exist: its footer stays.
+    expect(denied).toContain("ad-sh-foot");
+  });
 });

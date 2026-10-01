@@ -1,10 +1,10 @@
 import type { SubscriptionRow } from "@/lib/admin/detail";
 import type { FamilyHeaderData } from "@/lib/admin/console-types";
-import { paidThroughAt } from "@/lib/admin/familyFlags";
+import { paidThroughAt, renewalDateAt } from "@/lib/admin/familyFlags";
 import type { AdminLocale } from "@/lib/admin/format";
 import { cadenceLabel, t } from "@/lib/admin/i18n";
-import { rangeArrow } from "./helpers";
-import { DateText, Field, Ltr, SubscriptionStatusPill, TierTag } from "./parts";
+import { cancelFieldText, cancelMark, rangeArrow } from "./helpers";
+import { DateText, Field, Ltr, SubscriptionStatusPill, TableScroll, TierTag } from "./parts";
 
 /** A LemonSqueezy id, or «—». */
 function LsId({ id }: { id: string | null }) {
@@ -19,9 +19,12 @@ function LsId({ id }: { id: string | null }) {
  *
  * The cancel_scheduled reason sends the operator here, so the two
  * cancellation fields say what the header and the list say: «إلغاء مجدول»
- * is the header's `cancelState` (subscriptionCancelState), never the raw
- * flag, and the period end is what the subscription is paid through — its
- * ends_at when a portal cancellation arrived without a period end.
+ * answers from the header's `cancelState` (subscriptionCancelState), never
+ * the raw flag — «نعم», «لا», or «انتهى الاشتراك في <date>» once it has run
+ * out (cancelFieldText), which on a row still reading «نشط» is the one fact
+ * that explains why the family lost access — and the period end is what the
+ * subscription is paid through: its ends_at when a portal cancellation
+ * arrived without a period end.
  */
 export function BillingFields({
   header,
@@ -33,6 +36,7 @@ export function BillingFields({
   const sub = header.subscription;
   if (!sub) return <p className="ad-muted">{t("status_none", locale)}</p>;
   const hasTrial = sub.trialStartedAt != null || sub.trialEndsAt != null;
+  const cancelText = cancelFieldText(header.cancelState, renewalDateAt(sub), locale);
   return (
     <dl className="ad-kv">
       <Field label={t("col_tier", locale)}>
@@ -56,7 +60,12 @@ export function BillingFields({
         <DateText iso={paidThroughAt(sub)} locale={locale} />
       </Field>
       <Field label={t("cancel_scheduled", locale)}>
-        {header.cancelState === "scheduled" ? t("yes", locale) : t("no", locale)}
+        {/* Marked where the status pill contradicts it (a row still «نشط»). */}
+        {cancelMark(sub.status, header.cancelState) === "ended" ? (
+          <span className="ad-bad">{cancelText}</span>
+        ) : (
+          cancelText
+        )}
       </Field>
       {sub.cancelledAt ? (
         <Field label={t("fm_cancelled_at", locale)}>
@@ -91,33 +100,31 @@ export function SubscriptionHistory({
 }) {
   if (rows.length <= 1) return null;
   return (
-    <div className="ad-tbl-wrap">
-      <table className="ad-tbl" aria-label={t("section_sub_history", locale)}>
-        <thead>
-          <tr>
-            <th scope="col">{t("col_status", locale)}</th>
-            <th scope="col">{t("col_tier", locale)}</th>
-            <th scope="col">{t("field_cadence", locale)}</th>
-            <th scope="col">{t("fm_col_created", locale)}</th>
+    <TableScroll label={t("section_sub_history", locale)}>
+      <thead>
+        <tr>
+          <th scope="col">{t("col_status", locale)}</th>
+          <th scope="col">{t("col_tier", locale)}</th>
+          <th scope="col">{t("field_cadence", locale)}</th>
+          <th scope="col">{t("fm_col_created", locale)}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={`${row.createdAt}-${i}`}>
+            <td>
+              <SubscriptionStatusPill status={row.status} locale={locale} />
+            </td>
+            <td>
+              <TierTag tier={row.tier} locale={locale} />
+            </td>
+            <td>{cadenceLabel(row.cadence, locale)}</td>
+            <td>
+              <DateText iso={row.createdAt} locale={locale} />
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={`${row.createdAt}-${i}`}>
-              <td>
-                <SubscriptionStatusPill status={row.status} locale={locale} />
-              </td>
-              <td>
-                <TierTag tier={row.tier} locale={locale} />
-              </td>
-              <td>{cadenceLabel(row.cadence, locale)}</td>
-              <td>
-                <DateText iso={row.createdAt} locale={locale} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </TableScroll>
   );
 }

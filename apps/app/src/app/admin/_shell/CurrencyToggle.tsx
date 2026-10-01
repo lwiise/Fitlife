@@ -4,20 +4,22 @@ import { useFormStatus } from "react-dom";
 import type { Currency } from "@/lib/admin/format";
 import { setAdminCurrency } from "../actions";
 import type { ShellLabels } from "./labels";
-import { stampReturnPath, useReturnPath } from "./useReturnPath";
+import { SCRIPTED_FIELD } from "./toggleReturn";
+import { markScripted, useReturnPath } from "./useReturnPath";
 
 type Labels = Pick<ShellLabels, "currency" | "sar" | "usd">;
 
 /**
- * SAR | USD display-currency switch around the existing setAdminCurrency
- * server action. Global: every money value in the console honours it.
- * Pending state as in LocaleToggle.
+ * SAR | USD display-currency switch around the setAdminCurrency server
+ * action. Global: every money value in the console honours it. Return path
+ * and pending state as in LocaleToggle.
  */
 export function CurrencyToggle({ currency, labels }: { currency: Currency; labels: Labels }) {
   const next = useReturnPath();
   return (
-    <form action={setAdminCurrency} onSubmit={stampReturnPath}>
+    <form action={setAdminCurrency} onSubmit={markScripted}>
       <input type="hidden" name="next" value={next} />
+      <input type="hidden" name={SCRIPTED_FIELD} defaultValue="" />
       <Options currency={currency} labels={labels} />
     </form>
   );

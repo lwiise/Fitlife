@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin/auth";
-import { loadConsoleNavData } from "@/lib/admin/family";
+import { loadConsoleNavData } from "@/lib/admin/consoleNav";
 import { getAdminCurrency, getAdminLocale } from "@/lib/admin/locale";
 import { ConsoleFrame } from "../_shell/ConsoleFrame";
 import { toShellNav, type ShellNav } from "../_shell/navData";
@@ -11,10 +11,11 @@ import { toShellNav, type ShellNav } from "../_shell/navData";
  * a layout is not re-run on client-side navigation, so it cannot be the only
  * gate.
  *
- * The nav data (rail counts + the ⌘K family index) is started here but NOT
- * awaited: the frame paints immediately and the counts stream in. A failed
- * load resolves to null — the rail shows no counts and says so — instead of
- * taking every console page down with it.
+ * The nav data (the rail counts — no family's name or email; ⌘K fetches its
+ * index from the audited GET /api/admin/families when it opens) is started
+ * here but NOT awaited: the frame paints immediately and the counts stream
+ * in. A failed load resolves to null — the rail shows no counts and says so —
+ * instead of taking every console page down with it.
  */
 export default async function ConsoleLayout({
   children,

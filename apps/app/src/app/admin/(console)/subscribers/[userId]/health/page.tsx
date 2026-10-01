@@ -7,10 +7,20 @@ import { isUuid } from "@/lib/admin/familyList";
 import { t } from "@/lib/admin/i18n";
 import { getAdminLocale } from "@/lib/admin/locale";
 import { LinkPending, Note } from "@/app/admin/_ui";
-import { logHealthView } from "@/app/admin/_family/data";
+import { loadFamilyName, logHealthView } from "@/app/admin/_family/data";
 import { HealthCards } from "@/app/admin/_family/HealthCards";
 import { familyTabHref } from "@/app/admin/_family/model";
+import { familyPageMetadata } from "@/app/admin/_shell/titles";
 import "@/app/admin/_family/family.css";
+
+/** «التفاصيل الصحية، هند القحطاني | لوحة تحكم Fit Life». */
+export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }) {
+  const { userId } = await params;
+  return familyPageMetadata(userId, loadFamilyName, (name, locale) => [
+    t("health_title", locale),
+    name,
+  ]);
+}
 
 /**
  * Sensitive health detail — the "extra click" behind data minimisation. It is

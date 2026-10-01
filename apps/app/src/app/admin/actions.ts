@@ -1,6 +1,6 @@
 "use server";
 
-import { updateTag } from "next/cache";
+import { refresh, updateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
@@ -9,6 +9,7 @@ import { logAdminAccessRequired } from "@/lib/admin/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { eraseUserAccount } from "@/lib/account/erase";
 import { ADMIN_CURRENCY_COOKIE, ADMIN_LOCALE_COOKIE } from "@/lib/admin/locale";
+import { toggleReturn } from "./_shell/toggleReturn";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,16 +42,25 @@ async function isTargetAdmin(userId: string): Promise<boolean> {
 }
 
 /**
- * Persist the admin's language choice (cookie) and return to the page they were
- * on. Gated by requireAdmin (defense in depth — server actions re-check), and
- * `next` is constrained to /admin paths to prevent open redirects.
+ * After a switch has set its cookie: posted by the running app, re-render the
+ * route the router is on now (a navigation the switch was queued behind has
+ * landed by then); posted without JavaScript, redirect to the form's `next`,
+ * constrained to /admin paths to prevent open redirects. See toggleReturn.ts.
+ */
+function returnFromToggle(formData: FormData): void {
+  const back = toggleReturn(formData);
+  if (back.kind === "refresh") refresh();
+  else redirect(back.to);
+}
+
+/**
+ * Persist the admin's language choice (cookie) and stay on the page they are
+ * on. Gated by requireAdmin (defense in depth — server actions re-check).
  */
 export async function setAdminLocale(formData: FormData) {
   await requireAdmin();
 
   const locale = formData.get("locale") === "en" ? "en" : "ar";
-  const nextRaw = String(formData.get("next") ?? "/admin");
-  const next = nextRaw.startsWith("/admin") ? nextRaw : "/admin";
 
   const store = await cookies();
   store.set(ADMIN_LOCALE_COOKIE, locale, {
@@ -59,20 +69,17 @@ export async function setAdminLocale(formData: FormData) {
     sameSite: "lax",
   });
 
-  redirect(next);
+  returnFromToggle(formData);
 }
 
 /**
- * Persist the admin's display-currency choice (cookie) and return to the page
- * they were on. Mirrors setAdminLocale exactly — requireAdmin gate, `next`
- * constrained to /admin paths to prevent open redirects.
+ * Persist the admin's display-currency choice (cookie) and stay on the page
+ * they are on. Mirrors setAdminLocale exactly.
  */
 export async function setAdminCurrency(formData: FormData) {
   await requireAdmin();
 
   const currency = formData.get("currency") === "usd" ? "usd" : "sar";
-  const nextRaw = String(formData.get("next") ?? "/admin");
-  const next = nextRaw.startsWith("/admin") ? nextRaw : "/admin";
 
   const store = await cookies();
   store.set(ADMIN_CURRENCY_COOKIE, currency, {
@@ -81,7 +88,7 @@ export async function setAdminCurrency(formData: FormData) {
     sameSite: "lax",
   });
 
-  redirect(next);
+  returnFromToggle(formData);
 }
 
 /**

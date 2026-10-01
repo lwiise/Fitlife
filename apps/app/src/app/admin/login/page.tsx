@@ -1,8 +1,30 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminContext } from "@/lib/admin/auth";
+import type { AdminLocale } from "@/lib/admin/format";
+import { t } from "@/lib/admin/i18n";
 import { getAdminLocale } from "@/lib/admin/locale";
-import { AdminLoginForm } from "../_components/AdminLoginForm";
+import { AdminLoginForm, type AdminLoginLabels } from "../_components/AdminLoginForm";
+
+/** The form's text, resolved here so the client form never imports the dictionary. */
+function loginLabels(locale: AdminLocale): AdminLoginLabels {
+  return {
+    title: t("admin_login_title", locale),
+    subtitle: t("admin_login_subtitle", locale),
+    email: t("field_email", locale),
+    password: t("field_password", locale),
+    signIn: t("action_sign_in", locale),
+    signingIn: t("signing_in", locale),
+    noAccessTitle: t("no_access_title", locale),
+    noAccessBody: t("no_access_body", locale),
+    signOut: t("action_sign_out", locale),
+    errors: {
+      credentials: t("login_error_credentials", locale),
+      unconfirmed: t("login_error_unconfirmed", locale),
+      generic: t("login_error_generic", locale),
+    },
+  };
+}
 
 /**
  * Admin sign-in page. Public (this is the one /admin route that doesn't gate) —
@@ -32,7 +54,7 @@ export default async function AdminLoginPage() {
           </span>
         </div>
         <div className="rounded-xl border border-brand-ink/10 bg-surface-elevated p-6 shadow-sm">
-          <AdminLoginForm locale={locale} deniedEmail={user?.email ?? null} />
+          <AdminLoginForm labels={loginLabels(locale)} deniedEmail={user?.email ?? null} />
         </div>
       </div>
     </main>

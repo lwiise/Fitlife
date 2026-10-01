@@ -20,6 +20,13 @@
  *    has been on screen and gone again (`holdShown` / `holdGone`), i.e. the
  *    navigation settled without leaving; the console then writes what the
  *    list wants by then.
+ *  - A navigation the console did not start — a link in the rail, the top
+ *    bar, the panel or its blocks — pauses the writes the same way
+ *    (`navigationStarted`): the list still answers every sort, filter and
+ *    keystroke, only the URL waits. The pause lasts until the page is gone,
+ *    the browser moves to another entry (`navigationEnded`), or a URL from
+ *    outside arrives (`settle`): whatever was on its way has then resolved
+ *    to this page, and that URL says what the screen shows.
  *  - A write happens only while the document is still on the list's own
  *    path — never onto another page's history entry.
  *  - Every search written is remembered until its echo comes back through
@@ -66,6 +73,8 @@ export class UrlSync {
   private waiting: string | null = null;
   private held: { token: number; shown: boolean } | null = null;
   private holds = 0;
+  /** A navigation the console did not start is on its way. */
+  private away = false;
   /** Searches written whose echo has not been seen yet, oldest first. */
   private readonly unechoed: string[] = [];
 
@@ -74,11 +83,13 @@ export class UrlSync {
   /**
    * The list now wants `search` (canonical, without "?") in the URL of
    * `path`: written after a pause when only the search text changed, at once
-   * otherwise, not at all when the URL already says it. Held: nothing.
+   * otherwise, not at all when the URL already says it. Held or paused:
+   * nothing — the console pushes again when a hold ends, and a pause ends
+   * with a URL the console adopts.
    */
   push(path: string, search: string): void {
     this.path = path;
-    if (this.held) return;
+    if (this.isPaused()) return;
     const here = this.here();
     const delay = here === null ? null : urlWriteDelay(here, search);
     // Whatever waited is outdated now (or, off the list's path, unwanted).
@@ -106,16 +117,43 @@ export class UrlSync {
     this.waiting = null;
   }
 
-  /** On the way to another page: write what waits, then nothing. Returns the hold's token. */
+  /**
+   * On the way to another page: write what waits, then nothing. Returns the
+   * hold's token. The console's own navigation replaces any other still on
+   * its way, so its hold takes over from a pause.
+   */
   hold(): number {
     this.flush();
+    this.away = false;
     this.holds += 1;
     this.held = { token: this.holds, shown: false };
     return this.holds;
   }
 
+  /** The console itself is on its way to another page (`hold`). */
   isHeld(): boolean {
     return this.held !== null;
+  }
+
+  /** Nothing may be written: the console is leaving, or another navigation is on its way. */
+  isPaused(): boolean {
+    return this.held !== null || this.away;
+  }
+
+  /**
+   * A navigation the console did not start has begun (a link took the
+   * click). Writes pause until it ends; a write that waited is dropped — the
+   * page is leaving, and if it stays after all, the URL then says what the
+   * screen shows.
+   */
+  navigationStarted(): void {
+    this.cancel();
+    this.away = true;
+  }
+
+  /** The browser moved to another history entry: that replaces whatever was on its way. */
+  navigationEnded(): void {
+    this.away = false;
   }
 
   /** The hold's pending state has rendered. */
@@ -141,9 +179,12 @@ export class UrlSync {
    * The page now shows `search`. An own echo retires that write and every
    * earlier one (echoes come back in order, and several can arrive as one);
    * any other URL came from outside, and no earlier write can echo after it.
+   * A URL from outside also ends a pause: a navigation reached this page —
+   * the one on its way, or a newer one that replaced it.
    */
   settle(search: string): void {
     const i = this.unechoed.lastIndexOf(search);
+    if (i < 0) this.away = false;
     this.unechoed.splice(0, i >= 0 ? i + 1 : this.unechoed.length);
   }
 
@@ -154,6 +195,7 @@ export class UrlSync {
   }
 
   private write(search: string): void {
+    if (this.isPaused()) return;
     const here = this.here();
     // The document moved on (a navigation committed first), or already says it.
     if (here === null || here === search) return;

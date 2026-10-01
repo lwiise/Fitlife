@@ -12,13 +12,12 @@ import {
   doneThisWeek,
   effectiveMark,
   fmtWeekday,
-  localizeDigits,
   traineeProfileParts,
   traineeRoleLabel,
   weekdayInitial,
   weekdaysText,
 } from "./helpers";
-import { ArText } from "./parts";
+import { PlanText } from "./parts";
 
 const WEEK = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -93,7 +92,7 @@ function Trainee({
         {parts.length === 0 && !trainee.splitName ? t("fm_no_answers", locale) : null}
         {joinSep(
           ...parts,
-          trainee.splitName ? <ArText>{localizeDigits(trainee.splitName, locale)}</ArText> : null,
+          trainee.splitName ? <PlanText text={trainee.splitName} locale={locale} /> : null,
         )}
       </p>
       <div className="ad-wdays" aria-hidden="true">

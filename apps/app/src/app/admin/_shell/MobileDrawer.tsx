@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import type { AdminLocale, Currency } from "@/lib/admin/format";
 import { IconBtn } from "../_ui/Button";
-import { tabbablesIn, trapTab, useEscapedKeys } from "../_ui/modalFocus";
+import { focusIsLost, tabbablesIn, trapTab, useEscapedKeys } from "../_ui/modalFocus";
 import { CurrencyToggle } from "./CurrencyToggle";
 import type { ShellLabels } from "./labels";
 import { LocaleToggle } from "./LocaleToggle";
@@ -19,6 +19,12 @@ import { WIDE_QUERY } from "./views";
  * Tab stays in, Esc / a tap outside / choosing a link closes it and focus
  * returns to the menu button. Growing past 1024px, or a browser back/forward,
  * closes it too.
+ *
+ * Choosing a link returns focus only if nothing else took it: the families
+ * page handles «العائلات» in place (a view switch, no navigation) and may
+ * move focus itself, and a navigation can land focus in the new page — but
+ * neither is guaranteed, and the unmounted drawer would otherwise leave a
+ * keyboard or screen-reader user on <body>, nowhere in the page.
  *
  * The panel itself is focusable (tabIndex -1), so a tap on its plain text or
  * padding keeps focus inside it — the keys keep working — instead of dropping
@@ -42,9 +48,15 @@ export function MobileDrawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
-  function close(restoreFocus = true) {
+  /** `ifLost`: give focus back only when the closing left it nowhere. */
+  function close(restore: "always" | "ifLost" = "always") {
     setOpen(false);
-    if (restoreFocus) requestAnimationFrame(() => buttonRef.current?.focus());
+    requestAnimationFrame(() => {
+      const button = buttonRef.current;
+      if (!button?.isConnected) return;
+      if (restore === "ifLost" && !focusIsLost()) return;
+      button.focus();
+    });
   }
 
   useEffect(() => {
@@ -109,8 +121,8 @@ export function MobileDrawer({
             aria-label={labels.menu}
             tabIndex={-1}
             onClick={(event) => {
-              // Choosing a destination closes the drawer; the new page takes focus.
-              if ((event.target as HTMLElement).closest("a[href]")) close(false);
+              // Choosing a destination closes the drawer.
+              if ((event.target as HTMLElement).closest("a[href]")) close("ifLost");
             }}
           >
             <div className="ad-drawer-top">

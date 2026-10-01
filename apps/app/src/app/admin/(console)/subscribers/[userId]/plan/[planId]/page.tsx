@@ -10,7 +10,21 @@ import { PlanViewer } from "@/app/plan/PlanViewer";
 import { Card, Empty } from "@/app/admin/_ui";
 import { loadFamilyName } from "@/app/admin/_family/data";
 import { ViewerHead } from "@/app/admin/_family/ViewerHead";
+import { familyPageMetadata } from "@/app/admin/_shell/titles";
 import "@/app/admin/_family/family.css";
+
+/** «الخطة الغذائية، هند القحطاني | لوحة تحكم Fit Life». */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ userId: string; planId: string }>;
+}) {
+  const { userId } = await params;
+  return familyPageMetadata(userId, loadFamilyName, (name, locale) => [
+    t("fp_tab_meal", locale),
+    name,
+  ]);
+}
 
 /**
  * A family's meal plan as the family sees it — the real PlanViewer, read-only

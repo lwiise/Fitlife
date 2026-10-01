@@ -16,16 +16,30 @@
  *    by `peek`, so it can be shown while it is refreshed), at most
  *    PANEL_CACHE_MAX families, least recently used first out. Failures are
  *    never cached: the next open tries again.
- *  - A 404 is an answer ("missing": the family is gone), not a failure.
+ *  - Only the route's MARKED 404 (lib/admin/panelResponse.ts: the requester
+ *    is an admin and the family does not exist) is an answer — "missing",
+ *    cached like data. A bare 404 is what anyone who is not (or no longer)
+ *    an admin gets — a session that ended, a sign-out in another tab — and
+ *    says nothing about the family: "denied", never cached, so the next
+ *    open asks again.
  */
 
 import type { FamilyPanelData } from "@/lib/admin/console-types";
+import { isFamilyGone } from "@/lib/admin/panelResponse";
 import { riyadhTodayISO } from "@/lib/plans/dayMapping";
 
 export type PanelResult =
   | { kind: "ok"; data: FamilyPanelData }
+  /** The family does not exist (the route's marked 404). */
   | { kind: "missing" }
+  /** The route no longer takes the operator for an admin (a bare 404). */
+  | { kind: "denied" }
   | { kind: "error" };
+
+/** Answers worth keeping: the data, or that the family is gone. */
+function isCacheable(result: PanelResult): boolean {
+  return result.kind === "ok" || result.kind === "missing";
+}
 
 export interface PanelEntry {
   id: string;
@@ -162,7 +176,7 @@ export class PanelLoader {
         nowIso: new Date(fetchedAt).toISOString(),
         todayIso: this.clock.todayIso(),
       };
-      if (result.kind !== "error") this.remember(entry);
+      if (isCacheable(result)) this.remember(entry);
       return entry;
     });
     this.inflight.set(id, request);
@@ -178,7 +192,11 @@ export class PanelLoader {
         headers: { accept: "application/json" },
       });
       if (signal.aborted) return null;
-      if (res.status === 404) return { kind: "missing" };
+      if (res.status === 404) {
+        const body: unknown = await res.json().catch(() => null);
+        if (signal.aborted) return null;
+        return isFamilyGone(body) ? { kind: "missing" } : { kind: "denied" };
+      }
       if (!res.ok) return { kind: "error" };
       const body: unknown = await res.json();
       if (signal.aborted) return null;

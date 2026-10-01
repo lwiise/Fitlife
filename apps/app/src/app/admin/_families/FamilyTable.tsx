@@ -13,7 +13,7 @@ import { renewalDateAt } from "@/lib/admin/familyFlags";
 import { fmtNumber, type AdminLocale } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { Flag, Ltr, StatusPill, TierBadge, joinSep } from "../_ui";
-import { HouseholdCell, MealPlanPill, WorkoutPlanPill } from "../_blocks";
+import { HouseholdCell, MealPlanPill, WorkoutPlanPill, cancelMarkNode } from "../_blocks";
 import { COLUMN_LABEL, COLUMN_SORT, familyPageHref, type TableColumn } from "./listModel";
 import type { FamilyRowText } from "./types";
 
@@ -311,18 +311,15 @@ function cell(column: FamilyColumn, row: FamilyRow, text: FamilyRowText, locale:
 
 /**
  * The renewal cell — RenewalCell's rule (the trial end while trialing, else
- * the paid-through date: `renewalDateAt`; plus «إلغاء مجدول» behind a
- * separator while the row's cancelState is scheduled), printing the
- * server-formatted date.
+ * the paid-through date: `renewalDateAt`; plus the cancellation mark behind a
+ * separator — cancelMarkNode, the same function RenewalCell uses), printing
+ * the server-formatted date.
  */
 function renewal(row: FamilyRow, text: FamilyRowText, locale: AdminLocale) {
   if (!row.status) return "—";
   const iso = renewalDateAt(row);
   const date = iso ? <time dateTime={iso}>{text.renewal}</time> : "—";
-  const cancelling =
-    row.cancelState === "scheduled" ? (
-      <span className="ad-bad">{t("cancel_scheduled", locale)}</span>
-    ) : null;
+  const cancelling = cancelMarkNode(row.status, row.cancelState, locale);
   if (row.status === "trialing") {
     return (
       <>

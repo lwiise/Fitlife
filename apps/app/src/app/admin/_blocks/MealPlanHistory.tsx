@@ -3,8 +3,8 @@ import type { MealPlanListItem } from "@/lib/admin/console-types";
 import { fmtMoney, fmtNumber, type AdminLocale, type Currency } from "@/lib/admin/format";
 import { t } from "@/lib/admin/i18n";
 import { joinSep } from "../_ui/Sep";
-import { mealPlanHref } from "./helpers";
-import { DateText, Ltr, PlanStatePill } from "./parts";
+import { fmtDay, mealPlanHref } from "./helpers";
+import { DateText, Ltr, PlanStatePill, TableScroll } from "./parts";
 
 /*
  * Links to the plan view never prefetch: opening a plan is an audited access,
@@ -69,6 +69,11 @@ export function MealPlanHistory({
  * Every meal plan with its full run detail — date, status, days, tokens
  * in/out, cost, model — and an open link on every row (the old detail page's
  * plans table). Costs keep four decimals so a small run never reads as zero.
+ *
+ * Each row is named by its date: a row header, and the date again (visually
+ * hidden) in the row's link, so a screen reader's list of links reads
+ * «فتح الخطة: ٢٠ سبتمبر ٢٠٢٦» per plan rather than one name N times — the
+ * same name the compact list gives the same link.
  */
 export function MealPlanTable({
   plans,
@@ -84,53 +89,52 @@ export function MealPlanTable({
   if (plans.length === 0) return <div className="ad-empty">{t("no_plans", locale)}</div>;
   const n = (v: number | null) => (v != null ? fmtNumber(v, locale) : "—");
   return (
-    <div className="ad-tbl-wrap">
-      <table className="ad-tbl" aria-label={t("section_plans", locale)}>
-        <thead>
-          <tr>
-            <th scope="col">{t("fm_col_date", locale)}</th>
-            <th scope="col">{t("col_status", locale)}</th>
-            <th scope="col" className="ad-end">
-              {t("field_days", locale)}
+    <TableScroll label={t("section_plans", locale)}>
+      <thead>
+        <tr>
+          <th scope="col">{t("fm_col_date", locale)}</th>
+          <th scope="col">{t("col_status", locale)}</th>
+          <th scope="col" className="ad-end">
+            {t("field_days", locale)}
+          </th>
+          <th scope="col" className="ad-end">
+            {t("fm_tokens_head", locale)}
+          </th>
+          <th scope="col" className="ad-end">
+            {t("field_cost", locale)}
+          </th>
+          <th scope="col">{t("field_model", locale)}</th>
+          <th scope="col" className="ad-end">
+            <span className="ad-sr">{t("fm_open_plan", locale)}</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {plans.map((p) => (
+          <tr key={p.id}>
+            <th scope="row">
+              <DateText iso={dateOf(p)} locale={locale} />
             </th>
-            <th scope="col" className="ad-end">
-              {t("fm_tokens_head", locale)}
-            </th>
-            <th scope="col" className="ad-end">
-              {t("field_cost", locale)}
-            </th>
-            <th scope="col">{t("field_model", locale)}</th>
-            <th scope="col" className="ad-end">
-              <span className="ad-sr">{t("fm_open_plan", locale)}</span>
-            </th>
+            <td>
+              <PlanStatePill state={p.status} locale={locale} />
+            </td>
+            <td className="ad-end ad-num">{daysText(p, locale)}</td>
+            <td className="ad-end ad-num ad-muted">
+              {n(p.aiInputTokens)} / {n(p.aiOutputTokens)}
+            </td>
+            <td className="ad-end ad-num">
+              {p.costUsd != null ? fmtMoney(p.costUsd, currency, locale, 4, 4) : "—"}
+            </td>
+            <td className="ad-muted">{p.aiModel ? <Ltr mono>{p.aiModel}</Ltr> : "—"}</td>
+            <td className="ad-end">
+              <Link className="ad-link" href={mealPlanHref(userId, p.id)} prefetch={false}>
+                {t("fm_open_plan", locale)}
+                <span className="ad-sr">: {fmtDay(dateOf(p), locale)}</span>
+              </Link>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {plans.map((p) => (
-            <tr key={p.id}>
-              <td>
-                <DateText iso={dateOf(p)} locale={locale} />
-              </td>
-              <td>
-                <PlanStatePill state={p.status} locale={locale} />
-              </td>
-              <td className="ad-end ad-num">{daysText(p, locale)}</td>
-              <td className="ad-end ad-num ad-muted">
-                {n(p.aiInputTokens)} / {n(p.aiOutputTokens)}
-              </td>
-              <td className="ad-end ad-num">
-                {p.costUsd != null ? fmtMoney(p.costUsd, currency, locale, 4, 4) : "—"}
-              </td>
-              <td className="ad-muted">{p.aiModel ? <Ltr mono>{p.aiModel}</Ltr> : "—"}</td>
-              <td className="ad-end">
-                <Link className="ad-link" href={mealPlanHref(userId, p.id)} prefetch={false}>
-                  {t("inspect_plan", locale)}
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </TableScroll>
   );
 }
